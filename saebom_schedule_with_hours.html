@@ -291,6 +291,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
     <button class="tab-btn" onclick="showSection('hours',this)">누적시간</button>
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
+    <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
 </div>
@@ -356,17 +357,17 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
       <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px">
-  <span style="font-size:11px;color:#8B6010">자동문 릴레이:</span>
-  <button id="relay-connect-btn" onclick="connectSerial()"
-    style="padding:5px 12px;background:#E0B020;color:#5C3D08;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
-    🔌 포트 연결
-  </button>
-  <button onclick="window.doorOpenTimed(3)"
-    style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
-    🚪 수동 열기
-  </button>
-</div>
-<div class="checkin-header">
+        <span style="font-size:11px;color:#8B6010">자동문 릴레이:</span>
+        <button id="relay-connect-btn" onclick="connectSerial()"
+          style="padding:5px 12px;background:#E0B020;color:#5C3D08;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+          🔌 포트 연결
+        </button>
+        <button onclick="window.doorOpenTimed(3)"
+          style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+          🚪 수동 열기
+        </button>
+      </div>
+      <div class="checkin-header">
         <i class="ti ti-door-enter" style="font-size:28px;color:#C8900A"></i>
         <div class="checkin-title">입실 · 퇴실</div>
         <div class="checkin-sub">휴대폰 번호 뒷자리 4자리를 입력하세요</div>
@@ -467,6 +468,52 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 
 </div>
 
+<!-- 문자 발신내역 -->
+<div id="sec-smslog" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700;color:#5C3D08">📨 문자 발신내역</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="smslog-filter" onchange="filterSmsLog()" style="padding:6px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#FFFDF5;color:#5C3D08">
+        <option value="all">전체</option>
+        <option value="success">성공만</option>
+        <option value="fail">실패만</option>
+        <option value="in">입실 문자</option>
+        <option value="out">퇴실 문자</option>
+        <option value="absent">미입실 알림</option>
+      </select>
+      <button onclick="refreshSmsLog()" style="padding:6px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010;cursor:pointer;font-weight:600">🔄 새로고침</button>
+      <button onclick="clearOldSmsLogs()" style="padding:6px 12px;background:#FCEBEB;border:1.5px solid #F09595;border-radius:8px;font-size:12px;color:#C62828;cursor:pointer;font-weight:600">🗑️ 오래된 내역 삭제</button>
+    </div>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="smslog-stats">
+    <div style="background:linear-gradient(135deg,#FFF8DC,#FFF3B0);border:1.5px solid #E0B020;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#8B6010;font-weight:700;margin-bottom:4px">총 발송</div>
+      <div style="font-size:22px;font-weight:700;color:#C8900A" id="smslog-total">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">성공</div>
+      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="smslog-success">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">실패</div>
+      <div style="font-size:22px;font-weight:700;color:#C62828" id="smslog-fail">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#F3E5F5,#E1BEE7);border:1.5px solid #CE93D8;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-bottom:4px">오늘</div>
+      <div style="font-size:22px;font-weight:700;color:#6A1B9A" id="smslog-today">0</div>
+    </div>
+  </div>
+
+  <!-- 내역 목록 -->
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+    <div id="smslog-list" style="min-height:200px">
+      <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
 <!-- 관리자설정 -->
 <div id="sec-settings" class="section">
   <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
@@ -546,21 +593,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       </div>
     </div>
 
-    <!-- 픽코 -->
-    <div class="card">
-      <div class="card-title" style="margin-bottom:4px">
-        <i class="ti ti-qrcode" style="font-size:15px;color:#C8900A"></i> 픽코 — 출입관리 시스템
-      </div>
-      <div style="font-size:12px;color:#8B6010;margin-bottom:10px">
-        학생 입실·퇴실 QR 스캔 관리에 사용됩니다.
-        <a href="https://pikko.kr" target="_blank" style="color:#C8900A;font-weight:600;margin-left:4px">pikko.kr →</a>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <div style="padding:6px 12px;background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010">
-          수원영통점 연동중
-        </div>
-      </div>
-    </div>
+
 
     <!-- 학생앱 -->
     <div class="card">
@@ -702,6 +735,7 @@ function showSection(id,btn){
   document.getElementById('sec-'+id).classList.add('active');
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); loadNoticesAdmin(); }
+  if (id === 'smslog') { loadSmsLog(); }
 }
 function loadSettingsTab() {
   const k = document.getElementById('cfg-key');
@@ -1262,6 +1296,9 @@ function checkinConfirm() {
   // Firebase에 입퇴실 기록 저장
   saveCheckinToFirebase(student, isCheckout, timeStr);
 
+  // 📱 학부모 자동 문자 발송
+  sendCheckinSMS(student, isCheckout, timeStr);
+
   buildCheckinTodayList();
   buildDashboard();
   if (document.getElementById('fp-room')) buildFloorplan();
@@ -1272,6 +1309,32 @@ function checkinConfirm() {
   setTimeout(() => {
     checkinReset();
   }, 2200);
+}
+
+// ── 학부모 자동 문자 발송 ──
+async function sendCheckinSMS(student, isCheckout, timeStr) {
+  const parentPhone = student.parent || '';
+  if (!parentPhone) {
+    console.log(`[SMS] ${student.name} 학부모 번호 없음 - 발송 생략`);
+    return;
+  }
+  const type = isCheckout ? 'out' : 'in';
+  const typeLabel = isCheckout ? '퇴실' : '입실';
+  const today = new Date().toLocaleDateString('ko-KR', {month:'long', day:'numeric', weekday:'short'});
+  const text = isCheckout
+    ? `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 퇴실하였습니다.`
+    : `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 입실하였습니다.`;
+
+  try {
+    const result = await solapiSend(parentPhone, text);
+    const success = result === true;
+    saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(result), time: timeStr });
+    if (success) console.log(`[SMS] ✅ ${student.name} ${typeLabel} 문자 발송 성공`);
+    else showAdminToast(`⚠️ ${student.name} 학부모 문자 실패`);
+  } catch(e) {
+    saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
+    console.error('[SMS] 발송 오류:', e);
+  }
 }
 
 // Firebase에 입퇴실 기록 저장
@@ -1295,15 +1358,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr) {
       date: today,
       createdAt: serverTimestamp()
     });
-    // pikko_sync도 업데이트 (관리자앱이 픽코 대체)
-    await setDoc(doc(db, 'pikko_sync', 'present'), {
-      names: JSON.stringify(PRESENT),
-      seats: JSON.stringify(PRESENT.map(n => STUDENTS.find(s=>s.name===n)?.seat||'')),
-      count: String(PRESENT.length),
-      rawData: JSON.stringify(PRESENT.map(n=>({name:n}))),
-      syncTime: timeStr,
-      updatedAt: serverTimestamp()
-    });
+
   } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
 }
 
@@ -1342,7 +1397,6 @@ function buildCheckinTodayList() {
 
 // ===== 배치도 =====
 let _fpDragDist = 0;
-// 픽코 도면 정밀 재현
 //
 // 그리드 10행 × 9열:
 //  C1: 관리자석 63→54 (r1~r10)
@@ -2653,17 +2707,150 @@ ${a.name} 학생이 ${a.period}(${a.time}) 미입실 상태입니다.
   showAdminToast(`📤 ${a.name} 학부모님께 발송 중...`);
   try {
     const result = await solapiSend(parentPhone, text);
-    if (result === true) {
-      showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
-    } else {
-      showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
-    }
+    const success = result === true;
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
+    if (success) showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
+    else showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
   } catch(e) {
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
     showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
     console.error(e);
   }
 };
 
+
+// ── SMS 발신내역 로그 관리 ──
+let _smsLogs = JSON.parse(localStorage.getItem('saebom_sms_logs') || '[]');
+
+function saveSmsLog(entry) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  _smsLogs.unshift({
+    ...entry,
+    date: today,
+    id: Date.now()
+  });
+  // 최대 500건 유지
+  if (_smsLogs.length > 500) _smsLogs = _smsLogs.slice(0, 500);
+  localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
+  // Firebase에도 저장 (비동기)
+  saveSmsLogToFirebase(entry).catch(console.error);
+}
+
+async function saveSmsLogToFirebase(entry) {
+  if (!window._adminDb) return;
+  try {
+    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const id = `${Date.now()}_${entry.student}_${entry.type}`;
+    await setDoc(doc(window._adminDb, 'sms_logs', id), {
+      ...entry,
+      date: new Date().toLocaleDateString('ko-KR'),
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.error('SMS 로그 Firebase 저장 실패:', e); }
+}
+
+let _smsLogData = []; // 현재 표시 중인 데이터
+
+async function loadSmsLog() {
+  const list = document.getElementById('smslog-list');
+  list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
+
+  // Firebase에서 로드
+  let logs = [];
+  if (window._adminDb) {
+    try {
+      const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      const q = query(collection(window._adminDb, 'sms_logs'), orderBy('createdAt', 'desc'), limit(200));
+      const snap = await getDocs(q);
+      snap.forEach(d => logs.push({id: d.id, ...d.data()}));
+    } catch(e) {
+      // Firebase 실패 시 localStorage 사용
+      logs = _smsLogs;
+    }
+  } else {
+    logs = _smsLogs;
+  }
+
+  _smsLogData = logs;
+  renderSmsLog(logs);
+}
+
+function renderSmsLog(logs) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const todayLogs = logs.filter(l => l.date === today);
+  const successLogs = logs.filter(l => l.success);
+  const failLogs = logs.filter(l => !l.success);
+
+  document.getElementById('smslog-total').textContent = logs.length;
+  document.getElementById('smslog-success').textContent = successLogs.length;
+  document.getElementById('smslog-fail').textContent = failLogs.length;
+  document.getElementById('smslog-today').textContent = todayLogs.length;
+
+  if (logs.length === 0) {
+    document.getElementById('smslog-list').innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">📭 발신내역이 없습니다</div>';
+    return;
+  }
+
+  const typeBadge = {
+    in:     { label:'입실',     bg:'#FFF8DC', color:'#27500A', border:'#E0B020' },
+    out:    { label:'퇴실',     bg:'#E8F5E9', color:'#2D7A4F', border:'#A5D6A7' },
+    absent: { label:'미입실알림', bg:'#FCEBEB', color:'#C62828', border:'#F09595' }
+  };
+
+  document.getElementById('smslog-list').innerHTML = logs.map((log, i) => {
+    const t = typeBadge[log.type] || { label: log.typeLabel||'문자', bg:'#F5F5F5', color:'#555', border:'#E0E0E0' };
+    const successBadge = log.success
+      ? '<span style="font-size:11px;font-weight:700;color:#2D7A4F;background:#E8F5E9;border-radius:20px;padding:2px 8px">✅ 성공</span>'
+      : '<span style="font-size:11px;font-weight:700;color:#C62828;background:#FCEBEB;border-radius:20px;padding:2px 8px">❌ 실패</span>';
+    const errorHtml = !log.success && log.error
+      ? `<div style="font-size:11px;color:#C62828;background:#FCEBEB;border-radius:6px;padding:4px 8px;margin-top:6px">오류: ${log.error.slice(0,80)}</div>`
+      : '';
+    return `<div style="padding:14px 16px;border-bottom:0.5px solid var(--color-border-tertiary);${i===0?'':''}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span style="font-size:11px;font-weight:700;background:${t.bg};color:${t.color};border:1px solid ${t.border};border-radius:20px;padding:2px 9px">${t.label}</span>
+          <span style="font-size:14px;font-weight:700">${log.student||''}</span>
+          <span style="font-size:12px;color:var(--color-text-secondary)">${log.seat||''}</span>
+          ${successBadge}
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:11px;color:var(--color-text-tertiary)">${log.date||''}</div>
+          <div style="font-size:11px;color:var(--color-text-tertiary)">${log.time||''}</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border-radius:8px;padding:8px 10px;line-height:1.6;white-space:pre-wrap">${log.text||''}</div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:5px">수신: ${log.phone||''}</div>
+      ${errorHtml}
+    </div>`;
+  }).join('');
+}
+
+function filterSmsLog() {
+  const f = document.getElementById('smslog-filter').value;
+  let filtered = _smsLogData;
+  if (f === 'success') filtered = _smsLogData.filter(l => l.success);
+  else if (f === 'fail') filtered = _smsLogData.filter(l => !l.success);
+  else if (f === 'in') filtered = _smsLogData.filter(l => l.type === 'in');
+  else if (f === 'out') filtered = _smsLogData.filter(l => l.type === 'out');
+  else if (f === 'absent') filtered = _smsLogData.filter(l => l.type === 'absent');
+  renderSmsLog(filtered);
+}
+
+function refreshSmsLog() { loadSmsLog(); showAdminToast('🔄 새로고침 완료'); }
+
+function clearOldSmsLogs() {
+  if (!confirm('30일 이전 내역을 삭제할까요?')) return;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  _smsLogs = _smsLogs.filter(l => {
+    if (!l.date) return false;
+    const d = new Date(l.date.replace(/\./g, '-').replace(/ /g, '').replace(/-$/, ''));
+    return d >= cutoff;
+  });
+  localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
+  showAdminToast('🗑️ 오래된 내역 삭제 완료');
+  loadSmsLog();
+}
 
 // 솔라피 API 키 설정 (최초 1회 입력)
 let SOLAPI_API_KEY = localStorage.getItem('solapi_api_key') || '';
@@ -3006,11 +3193,10 @@ window.confirmDeleteStudent = function(seat, name) {
   showAdminToast(`🗑️ ${name} 학생이 삭제됐습니다`);
 };
 
-// ── Web Serial API 릴레이 제어 ──
+// ── Web Serial API 릴레이 제어 (자동문) ──
 let _serialPort = null;
 let _serialWriter = null;
 
-// 시리얼 포트 연결 (최초 1회 수동 선택)
 window.connectSerial = async function() {
   try {
     if (!('serial' in navigator)) {
@@ -3021,18 +3207,15 @@ window.connectSerial = async function() {
     await _serialPort.open({ baudRate: 9600 });
     _serialWriter = _serialPort.writable.getWriter();
     showAdminToast('✅ 릴레이 포트 연결됨');
-    // 연결 상태 표시
     const btn = document.getElementById('relay-connect-btn');
-    if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; }
+    if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; btn.style.color = '#fff'; }
     return true;
   } catch(e) {
-    console.error('시리얼 연결 실패:', e);
     showAdminToast('⚠️ 포트 연결 실패: ' + e.message);
     return false;
   }
 };
 
-// 릴레이 신호 전송
 async function sendRelay(bytes) {
   if (!_serialWriter) {
     const ok = await window.connectSerial();
@@ -3042,33 +3225,28 @@ async function sendRelay(bytes) {
     await _serialWriter.write(new Uint8Array(bytes));
     return true;
   } catch(e) {
-    console.error('릴레이 신호 전송 실패:', e);
-    _serialWriter = null;
-    _serialPort = null;
+    _serialWriter = null; _serialPort = null;
     return false;
   }
 }
 
-// 문 열기: A0 01 01 A2
 window.doorOpen = async function() {
   const ok = await sendRelay([0xA0, 0x01, 0x01, 0xA2]);
   if (ok) console.log('🚪 문 열림 신호 전송');
   return ok;
-}
+};
 
-// 문 닫기: A0 01 00 A1
 window.doorClose = async function() {
   const ok = await sendRelay([0xA0, 0x01, 0x00, 0xA1]);
   if (ok) console.log('🚪 문 닫힘 신호 전송');
   return ok;
-}
+};
 
-// 문 열고 N초 후 자동 닫기
 window.doorOpenTimed = async function(seconds = 3) {
   const ok = await window.doorOpen();
   if (ok) setTimeout(window.doorClose, seconds * 1000);
   return ok;
-}
+};
 
 function showAdminToast(msg) {
   const t = document.createElement('div');
@@ -3078,31 +3256,5 @@ function showAdminToast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
-window._fbDb = db; // 전역 노출 (checkin에서 사용)
 console.log('🔥 Firebase 연동 완료 — 학생 스케줄 변경을 실시간 감지합니다');
-
-// ── 픽코 연동: 입실자 실시간 동기화 ──
-onSnapshot(doc(db, 'pikko_sync', 'present'), (snap) => {
-  if (!snap.exists()) return;
-  const data = snap.data();
-  try {
-    const names = JSON.parse(data.names || '[]');
-    const seats = JSON.parse(data.seats || '[]');
-    const syncTime = data.syncTime || '';
-
-    // PRESENT 배열 업데이트
-    PRESENT.length = 0;
-    names.forEach(n => PRESENT.push(n));
-
-    // 픽코 동기화 시간 표시
-    const syncEl = document.getElementById('pikko-sync-time');
-    if (syncEl) syncEl.textContent = `픽코 ${syncTime} 동기화`;
-
-    // 대시보드 + 배치도 갱신
-    if (typeof buildDashboard === 'function') buildDashboard();
-    if (typeof buildFloorplan === 'function') buildFloorplan();
-
-    console.log(`[픽코] 입실자 업데이트: ${names.length}명`);
-  } catch(e) { console.error('픽코 데이터 파싱 오류:', e); }
-});
 </script>
