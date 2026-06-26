@@ -2,8 +2,20 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>새봄 면학관 — 학생</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>새봄 면학관</title>
+
+<!-- PWA 필수 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#F0D020">
+<meta name="mobile-web-app-capable" content="yes">
+
+<!-- iOS Safari PWA 지원 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="새봄 면학관">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
@@ -766,6 +778,53 @@ function buildMyStats() {
 
 // ── 초기화 ──
 document.getElementById('login-screen').style.display='flex';
+
+// ── PWA: 서비스 워커 등록 ──
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => console.log('SW 등록 완료:', reg.scope))
+      .catch(err => console.log('SW 등록 실패:', err));
+  });
+}
+
+// ── PWA: 홈 화면 추가 배너 ──
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  showInstallBanner();
+});
+
+function showInstallBanner() {
+  if (!deferredPrompt) return;
+  const banner = document.createElement('div');
+  banner.id = 'install-banner';
+  banner.innerHTML = `
+    <div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+      background:#1a1a1a;color:#fff;padding:12px 20px;border-radius:20px;
+      font-size:13px;font-weight:500;z-index:999;display:flex;align-items:center;gap:12px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.3);white-space:nowrap">
+      📲 홈 화면에 앱으로 설치하기
+      <button onclick="installApp()" style="background:#F0D020;color:#1a1a1a;border:none;
+        border-radius:12px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">설치</button>
+      <button onclick="dismissInstall()" style="background:rgba(255,255,255,0.15);color:#fff;border:none;
+        border-radius:12px;padding:6px 10px;font-size:12px;cursor:pointer">✕</button>
+    </div>`;
+  document.body.appendChild(banner);
+}
+
+async function installApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const { outcome } = await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  document.getElementById('install-banner')?.remove();
+}
+
+function dismissInstall() {
+  document.getElementById('install-banner')?.remove();
+}
 </script>
 </body>
 </html>
