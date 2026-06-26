@@ -62,18 +62,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .app-screen.visible{display:flex}
 
 /* 상단 헤더 */
-.app-header{background:#F0D020;padding:16px 20px 0;position:sticky;top:0;z-index:100}
+.app-header{background:linear-gradient(135deg,#C8900A 0%,#A87008 100%);padding:16px 20px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
 .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .header-info{display:flex;align-items:center;gap:10px}
-.header-avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.25);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff}
-.header-name{font-size:15px;font-weight:600;color:#fff}
-.header-seat{font-size:12px;color:rgba(255,255,255,0.7)}
-.logout-btn{background:rgba(255,255,255,0.2);border:none;color:#fff;padding:6px 12px;border-radius:20px;font-size:12px;cursor:pointer}
+.header-avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#A87008}
+.header-name{font-size:15px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.2)}
+.header-seat{font-size:12px;color:rgba(255,255,255,0.9);font-weight:500}
+.logout-btn{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
 
 /* 탭 */
 .app-tabs{display:flex;gap:0}
-.app-tab{flex:1;padding:10px 0;background:transparent;border:none;color:rgba(255,255,255,0.6);font-size:13px;font-weight:500;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
-.app-tab.active{color:#fff;border-bottom:2px solid #fff}
+.app-tab{flex:1;padding:10px 0;background:transparent;border:none;color:rgba(255,255,255,0.8);font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
+.app-tab.active{color:#fff;border-bottom:3px solid #fff;font-weight:700}
 
 /* 콘텐츠 */
 .app-content{flex:1;padding:16px;overflow-y:auto;max-width:480px;width:100%;margin:0 auto}
@@ -262,37 +262,36 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <script>
 // ── 학생 데이터 ──
 const STUDENTS = [
-  {seat:'1번', name:'박지윤', phone:'010-8260-9557',schedule:{월:'8,9,10',화:'7,8,9,10',수:'8,9,10',목:'x(수학)10',금:'7,8,9,10',토:'1~6,10,11'},hours:{3:142,4:158,5:171,6:224}},
-  {seat:'4번', name:'정은찬', phone:'010-7687-7186',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'7,8,9,10',토:'7~11'},hours:{3:138,4:149,5:163,6:210}},
-  {seat:'6번', name:'김태현', phone:'010-5944-7969',schedule:{월:'7,8(중간),9',화:'x(수학학원)7~9',수:'7,8,9',목:'7,8,9',금:'7,8,9,10',토:'1~10'},hours:{3:95,4:112,5:128,6:154}},
-  {seat:'7번', name:'김용찬', phone:'010-7137-3512',schedule:{월:'8,9,10',화:'7,8,9,10',수:'x(수학학원)7~9,10',목:'x(영어학원)7~9,10',금:'x(과학학원)7~8,9,10',토:'1~3,8~10'},hours:{3:120,4:135,5:144,6:171}},
-  {seat:'8번', name:'강민수', phone:'010-2476-5626',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'x(확통)7~8,9,10',금:'x(국어)7~8,9,10',토:'1~3,8~10'},hours:{3:155,4:162,5:178,6:200}},
-  {seat:'9번', name:'김은호', phone:'010-8308-9628',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'x(국어학원)7~9,10',금:'7,8,9,10',토:'2~3,8~10'},hours:{3:148,4:155,5:167,6:194}},
-  {seat:'10번',name:'박지윤A',phone:'010-3916-2271',schedule:{월:'7,8,9,10,11',화:'x(새봄)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어)7~8,9,10',토:'1~3,10'},hours:{3:162,4:170,5:185,6:215}},
-  {seat:'11번',name:'정은영', phone:'010-3351-5334',schedule:{월:'x(수학)7~9,10',화:'7,8,9,10',수:'x(소인수)7,9',목:'7,8,9,10',금:'x(수학)7~9',토:'1~2,6,8~9'},hours:{3:88,4:102,5:119,6:143}},
-  {seat:'12번',name:'김범수', phone:'010-8335-1790',schedule:{월:'7,8,9,10',화:'x(사탐학원)7,8,9,10',수:'x(영어)7~8,9,10',목:'x(수학)7~9,10',금:'x(국어학원)7,10',토:'4~6,10'},hours:{3:105,4:118,5:130,6:172}},
-  {seat:'13번',name:'권민지', phone:'010-3797-7469',schedule:{월:'7,8,9,10',화:'x(수학)7~9',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어학원)7~9',토:'1~3'},hours:{3:130,4:141,5:158,6:185}},
-  {seat:'15번',name:'이승석', phone:'010-8780-2426',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어)7~8,9,10',토:'1~10'},hours:{3:168,4:175,5:188,6:203}},
-  {seat:'16번',name:'유시훈', phone:'010-9481-2217',schedule:{월:'x(저녁)7,8,9',화:'x(학원)7~9',수:'x(저녁)7,8,9',목:'x(학원)7~9',금:'x(저녁)7,8,9',토:'x(학원)1~9'},hours:{3:60,4:72,5:81,6:98}},
-  {seat:'17번',name:'김지후', phone:'010-2403-7847',schedule:{월:'7,8,9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(수학학원)7~9,10',금:'7,8,9,10',토:'1~3,10'},hours:{3:175,4:182,5:195,6:211}},
-  {seat:'18번',name:'김리원', phone:'010-6596-1345',schedule:{월:'7,8,9,10',화:'x(영어)7~9,10',수:'x(수학)7~9,10',목:'x(영어)7~9,10',금:'x(국어)7~9,10',토:'7,8,9,10'},hours:{3:128,4:139,5:152,6:185}},
-  {seat:'19번',name:'장혜령', phone:'010-5131-0927',schedule:{월:'7,8,9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(수학)7~9,10',금:'x(국어)7~9,10',토:'1~3,10'},hours:{3:145,4:158,5:170,6:197}},
-  {seat:'20번',name:'변아인', phone:'010-4790-6863',schedule:{월:'x(수학학원)7~9,10',화:'8,10',수:'x(국어학원)7,8,9,10',목:'7,8,9,10',금:'x(수학학원)7~9,10',토:'1~6,9,10'},hours:{3:112,4:125,5:138,6:150}},
-  {seat:'21번',name:'박현진', phone:'010-5765-1486',schedule:{월:'7,8,9,10',화:'x(수업)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'7,8,9,10',토:'1~9'},hours:{3:158,4:165,5:179,6:189}},
-  {seat:'22번',name:'박준영', phone:'010-5375-7406',schedule:{월:'x(새봄)7~9,10,11',화:'x(영어)7~9,10,11',수:'7,8,9,10,11',목:'x(영어)7~9,10,11',금:'x(새봄)7~9,10,11',토:'1~11'},hours:{3:95,4:108,5:122,6:138}},
-  {seat:'23번',name:'신유담', phone:'010-4301-5683',schedule:{월:'x(수학)7~9,10',화:'x(영어)7~9,10',수:'x(국어)7~8,9,10',목:'x(영어)7~9,10',금:'x(수학)7~9,10',토:'10'},hours:{3:82,4:91,5:105,6:120}},
-  {seat:'27번',name:'이은혁', phone:'010-3071-2400',schedule:{월:'x(영어)7~9',화:'8,9,10,11',수:'x(수학학원)7~9,10,11',목:'8,9,10',금:'x(영어학원)7~9',토:'8,9,10,11'},hours:{3:135,4:148,5:162,6:178}},
-  {seat:'29번',name:'이준서', phone:'010-8774-7933',schedule:{월:'7,8,9',화:'x(영어)7~9',수:'x(수학)7~9',목:'7,8,9',금:'7,8,9',토:'-'},hours:{3:110,4:122,5:135,6:149}},
-  {seat:'30번',name:'신치원', phone:'010-7226-2813',schedule:{월:'x(수학학원)7~9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(영어)7~8,9,10',금:'x(수학수업)7~9,10',토:'1~10'},hours:{3:152,4:163,5:175,6:192}},
-  {seat:'32번',name:'유공명', phone:'010-9318-4789',schedule:{월:'x(야자)7~9,10,11',화:'x(학원)7~9,10,11',수:'x(야자)7~9,10,11',목:'x(학원)7~9,10,11',금:'x(야자)7~9,10,11',토:'-'},hours:{3:70,4:78,5:85,6:98}},
-  {seat:'34번',name:'김소윤', phone:'010-8713-6915',schedule:{월:'x(생명)7~8,9',화:'x(수학)7~9',수:'x(영어)7~9',목:'x(수학)7~9',금:'7,8,9',토:'-'},hours:{3:92,4:103,5:115,6:130}},
-  {seat:'35번',name:'김준현', phone:'010-4057-6238',schedule:{월:'7,8,9,10',화:'x(학원)7~9,10',수:'x(학원)7~9,10',목:'7,8,9,10',금:'x(학원)7~9,10',토:'-'},hours:{3:125,4:138,5:150,6:163}},
-  {seat:'39번',name:'김지윤', phone:'010-5361-3615',schedule:{월:'x(수학학원)7~9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(영어학원)7~9,10',금:'x(수학학원)7~9,10',토:'1~10'},hours:{3:138,4:150,5:162,6:184}},
-  {seat:'40번',name:'한수아', phone:'010-6830-1364',schedule:{월:'7,8,9,10,11',화:'x(수학)7~9,10,11',수:'7,8,9,10,11',목:'7,8,9,10,11',금:'7,8,9,10,11',토:'1~11'},hours:{3:180,4:192,5:205,6:243}},
-  {seat:'41번',name:'윤서정', phone:'010-4995-1709',schedule:{월:'x(수학학원)7~9,10',화:'x(영어학원)7~9,10',수:'7,8,9,10',목:'x(영어학원)7~9,10',금:'x(수학학원)7~9,10',토:'1~10'},hours:{3:118,4:130,5:142,6:156}},
-  {seat:'42번',name:'권세나', phone:'010-6373-3328',schedule:{월:'x(새봄수학)7~9',화:'x,7,8,9',수:'7,8,9',목:'7,8,9',금:'x(새봄수학)7~9',토:'-'},hours:{3:85,4:95,5:108,6:123}},
-  {seat:'45번',name:'조찬웅', phone:'010-5229-5421',schedule:{월:'x(영어)7~9,10',화:'7,8,9,10',수:'x(수학)7~9,10',목:'x(검도)7,8,9,10',금:'x(통사)7~9,10',토:'1~10'},hours:{3:128,4:142,5:157,6:172}},
-  {seat:'37번',name:'이우영', phone:'010-1234-1234',schedule:{월:'-',화:'-',수:'-',목:'-',금:'-',토:'-'},hours:{3:0,4:0,5:0,6:0}},
+  {seat:'1번',name:'박지윤',phone:'010-8260-9557',schedule:{월:'8,9,10',화:'7,8,9,10',수:'8,9,10',목:'x(수학)10',금:'7,8,9,10',토:'1~6,10,11'},hours:{3:142,4:158,5:171,6:224}},
+  {seat:'4번',name:'정은찬',phone:'',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'7,8,9,10',토:'7~11'},hours:{3:138,4:149,5:163,6:210}},
+  {seat:'6번',name:'김태현',phone:'',schedule:{월:'7,8(중간),9',화:'x(수학학원)7~9',수:'7,8,9',목:'7,8,9',금:'7,8,9,10',토:'1~10'},hours:{3:95,4:112,5:128,6:154}},
+  {seat:'7번',name:'김용찬',phone:'',schedule:{월:'8,9,10',화:'7,8,9,10',수:'x(수학학원)7~9,10',목:'x(영어학원)7~9,10',금:'x(과학학원)7~8,9,10',토:'1~3,8~10'},hours:{3:120,4:135,5:144,6:171}},
+  {seat:'8번',name:'강민수',phone:'',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'x(확통)7~8,9,10',금:'x(국어)7~8,9,10',토:'1~3,8~10'},hours:{3:155,4:162,5:178,6:200}},
+  {seat:'9번',name:'김은호',phone:'',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'x(국어학원)7~9,10',금:'7,8,9,10',토:'2~3,8~10'},hours:{3:148,4:155,5:167,6:194}},
+  {seat:'10번',name:'박지윤A',phone:'',schedule:{월:'7,8,9,10,11',화:'x(새봄)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어)7~8,9,10',토:'1~3,10'},hours:{3:162,4:170,5:185,6:215}},
+  {seat:'11번',name:'정은영',phone:'',schedule:{월:'x(수학)7~9,10',화:'7,8,9,10',수:'x(소인수)7,9',목:'7,8,9,10',금:'x(수학)7~9',토:'1~2,6,8~9'},hours:{3:88,4:102,5:119,6:143}},
+  {seat:'12번',name:'김범수',phone:'',schedule:{월:'7,8,9,10',화:'x(사탐학원)7,8,9,10',수:'x(영어)7~8,9,10',목:'x(수학)7~9,10',금:'x(국어학원)7,10',토:'4~6,10'},hours:{3:105,4:118,5:130,6:172}},
+  {seat:'13번',name:'권민지',phone:'',schedule:{월:'7,8,9,10',화:'x(수학)7~9',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어학원)7~9',토:'1~3'},hours:{3:130,4:141,5:158,6:185}},
+  {seat:'15번',name:'이승석',phone:'',schedule:{월:'7,8,9,10',화:'x(수학)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어)7~8,9,10',토:'1~10'},hours:{3:168,4:175,5:188,6:203}},
+  {seat:'16번',name:'유시훈',phone:'',schedule:{월:'x(저녁)7,8,9',화:'x(학원)7~9',수:'x(저녁)7,8,9',목:'x(학원)7~9',금:'x(저녁)7,8,9',토:'x(학원)1~9'},hours:{3:60,4:72,5:81,6:98}},
+  {seat:'17번',name:'김지후',phone:'',schedule:{월:'7,8,9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(수학학원)7~9,10',금:'7,8,9,10',토:'1~3,10'},hours:{3:175,4:182,5:195,6:211}},
+  {seat:'18번',name:'김리원',phone:'',schedule:{월:'7,8,9,10',화:'x(영어)7~9,10',수:'x(수학)7~9,10',목:'x(영어)7~9,10',금:'x(국어)7~9,10',토:'7,8,9,10'},hours:{3:128,4:139,5:152,6:185}},
+  {seat:'19번',name:'장혜령',phone:'',schedule:{월:'7,8,9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(수학)7~9,10',금:'x(국어)7~9,10',토:'1~3,10'},hours:{3:145,4:158,5:170,6:197}},
+  {seat:'20번',name:'변아인',phone:'',schedule:{월:'x(수학학원)7~9,10',화:'8,10',수:'x(국어학원)7,8,9,10',목:'7,8,9,10',금:'x(수학학원)7~9,10',토:'1~6,9,10'},hours:{3:112,4:125,5:138,6:150}},
+  {seat:'21번',name:'박현진',phone:'',schedule:{월:'7,8,9,10',화:'x(수업)7~9,10',수:'7,8,9,10',목:'7,8,9,10',금:'7,8,9,10',토:'1~9'},hours:{3:158,4:165,5:179,6:189}},
+  {seat:'22번',name:'박준영',phone:'',schedule:{월:'x(새봄)7~9,10,11',화:'x(영어)7~9,10,11',수:'7,8,9,10,11',목:'x(영어)7~9,10,11',금:'x(새봄)7~9,10,11',토:'1~11'},hours:{3:95,4:108,5:122,6:138}},
+  {seat:'23번',name:'신유담',phone:'',schedule:{월:'x(수학)7~9,10',화:'x(영어)7~9,10',수:'x(국어)7~8,9,10',목:'x(영어)7~9,10',금:'x(수학)7~9,10',토:'10'},hours:{3:82,4:91,5:105,6:120}},
+  {seat:'27번',name:'이은혁',phone:'',schedule:{월:'x(영어)7~9',화:'8,9,10,11',수:'x(수학학원)7~9,10,11',목:'8,9,10',금:'x(영어학원)7~9',토:'8,9,10,11'},hours:{3:135,4:148,5:162,6:178}},
+  {seat:'29번',name:'이준서',phone:'',schedule:{월:'7,8,9',화:'x(영어)7~9',수:'x(수학)7~9',목:'7,8,9',금:'7,8,9',토:'-'},hours:{3:110,4:122,5:135,6:149}},
+  {seat:'30번',name:'신치원',phone:'',schedule:{월:'x(수학학원)7~9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(영어)7~8,9,10',금:'x(수학수업)7~9,10',토:'1~10'},hours:{3:152,4:163,5:175,6:192}},
+  {seat:'32번',name:'유공명',phone:'',schedule:{월:'x(야자)7~9,10,11',화:'x(학원)7~9,10,11',수:'x(야자)7~9,10,11',목:'x(학원)7~9,10,11',금:'x(야자)7~9,10,11',토:'-'},hours:{3:70,4:78,5:85,6:98}},
+  {seat:'34번',name:'김소윤',phone:'',schedule:{월:'x(생명)7~8,9',화:'x(수학)7~9',수:'x(영어)7~9',목:'x(수학)7~9',금:'7,8,9',토:'-'},hours:{3:92,4:103,5:115,6:130}},
+  {seat:'35번',name:'김준현',phone:'',schedule:{월:'7,8,9,10',화:'x(학원)7~9,10',수:'x(학원)7~9,10',목:'7,8,9,10',금:'x(학원)7~9,10',토:'-'},hours:{3:125,4:138,5:150,6:163}},
+  {seat:'39번',name:'김지윤',phone:'',schedule:{월:'x(수학학원)7~9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(영어학원)7~9,10',금:'x(수학학원)7~9,10',토:'1~10'},hours:{3:138,4:150,5:162,6:184}},
+  {seat:'40번',name:'한수아',phone:'',schedule:{월:'7,8,9,10,11',화:'x(수학)7~9,10,11',수:'7,8,9,10,11',목:'7,8,9,10,11',금:'7,8,9,10,11',토:'1~11'},hours:{3:180,4:192,5:205,6:243}},
+  {seat:'41번',name:'윤서정',phone:'',schedule:{월:'x(수학학원)7~9,10',화:'x(영어학원)7~9,10',수:'7,8,9,10',목:'x(영어학원)7~9,10',금:'x(수학학원)7~9,10',토:'1~10'},hours:{3:118,4:130,5:142,6:156}},
+  {seat:'42번',name:'권세나',phone:'',schedule:{월:'x(새봄수학)7~9',화:'x,7,8,9',수:'7,8,9',목:'7,8,9',금:'x(새봄수학)7~9',토:'-'},hours:{3:85,4:95,5:108,6:123}},
+  {seat:'45번',name:'조찬웅',phone:'',schedule:{월:'x(영어)7~9,10',화:'7,8,9,10',수:'x(수학)7~9,10',목:'x(검도)7,8,9,10',금:'x(통사)7~9,10',토:'1~10'},hours:{3:128,4:142,5:157,6:172}},
 ];
 
 // ── 공지사항 데이터 (관리자가 추가) ──
@@ -351,7 +350,7 @@ function pinInput(d) {
   if (pinBuffer.length >= 4) return;
   pinBuffer += d;
   updatePinDisplay();
-  if (pinBuffer.length === 4) setTimeout(() => tryLogin(), 150);
+  if (pinBuffer.length === 4) setTimeout(tryLogin, 150);
 }
 function pinDel() { pinBuffer = pinBuffer.slice(0,-1); updatePinDisplay(); hideLoginError(); }
 function pinClear() { pinBuffer = ''; updatePinDisplay(); hideLoginError(); }
@@ -364,49 +363,17 @@ function updatePinDisplay() {
 
 function hideLoginError() { document.getElementById('login-error').style.display='none'; }
 
-async function tryLogin() {
-  // 로그인 중 표시
-  document.getElementById('login-error').style.display='none';
-
-  // 1) 로컬 STUDENTS 배열에서 먼저 매칭
-  let matched = STUDENTS.filter(s => {
+function tryLogin() {
+  const matched = STUDENTS.filter(s => {
     if (!s.phone) return false;
     return s.phone.replace(/\D/g,'').slice(-4) === pinBuffer;
   });
-
-  // 2) 로컬에 없으면 Firebase students 컬렉션에서 검색
-  if (matched.length === 0) {
-    try {
-      const waitFirebase = () => new Promise(res => {
-        if (window._firebaseReady) return res();
-        window.addEventListener('firebase-ready', res, { once: true });
-      });
-      await waitFirebase();
-
-      const db = window._db;
-      const fsGetDoc = window._fsGetDoc;
-      const fsCollection = window._fsCollection;
-      const { getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      const snap = await getDocs(fsCollection(db, 'students'));
-      snap.forEach(doc => {
-        const v = doc.data();
-        if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === pinBuffer) {
-          matched.push({
-            seat: v.seat, name: v.name,
-            phone: v.phone || '', parent: v.parent || '',
-            schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-            hours: v.hours || {}
-          });
-        }
-      });
-    } catch(e) { console.error('Firebase 로그인 검색 실패:', e); }
-  }
-
   if (matched.length === 0) {
     document.getElementById('login-error').style.display='block';
     pinBuffer=''; updatePinDisplay(); return;
   }
   currentStudent = matched[0];
+  // 스케줄 초기화
   initDraft();
   enterApp();
 }
@@ -500,6 +467,13 @@ function showTab(id, btn) {
   // 저장 버튼: daily, weekly 탭에서만 표시
   const showSave = (id==='daily'||id==='weekly') && isDirty;
   document.getElementById('save-fab').classList.toggle('show', showSave);
+
+  // 공지 탭 클릭 시 읽음 처리
+  if (id === 'notice') {
+    localStorage.setItem('saebom_notice_read', String(NOTICES.length));
+    const dot = document.querySelector('.notice-badge-dot');
+    if (dot) dot.remove();
+  }
 }
 
 // ── 공지사항 ──
@@ -706,19 +680,40 @@ async function loadStudentScheduleFromFirebase() {
   } catch(e) { console.error('스케줄 로드 실패:', e); }
 }
 
-async function loadNoticesFromFirebase() {
+function loadNoticesFromFirebase() {
   if (!window._firebaseReady) return;
   try {
     const db = window._db;
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'notices', 'list'));
-    if (snap.exists() && snap.data().items) {
-      const items = snap.data().items;
-      // NOTICES 배열 교체
-      NOTICES.length = 0;
-      items.forEach(n => NOTICES.push(n));
-      buildNotices();
-    }
+    // 실시간 감지: 공지가 추가/수정되면 즉시 반영
+    window._fsOnSnapshot(window._fsDoc(db, 'notices', 'list'), (snap) => {
+      if (snap.exists() && snap.data().items) {
+        const items = snap.data().items;
+        NOTICES.length = 0;
+        // 최신순 정렬
+        [...items].reverse().forEach(n => NOTICES.push(n));
+        buildNotices();
+        // 새 공지 알림 뱃지
+        updateNoticeBadge(items.length);
+      }
+    });
   } catch(e) { /* 실패 시 기본 공지 유지 */ }
+}
+
+// 공지 탭 뱃지 (읽지 않은 공지 수)
+function updateNoticeBadge(total) {
+  const lastRead = parseInt(localStorage.getItem('saebom_notice_read') || '0');
+  const unread = Math.max(0, total - lastRead);
+  const btn = document.querySelector('.app-tab[onclick*="notice"]');
+  if (!btn) return;
+  const existing = btn.querySelector('.notice-badge-dot');
+  if (existing) existing.remove();
+  if (unread > 0) {
+    const dot = document.createElement('span');
+    dot.className = 'notice-badge-dot';
+    dot.textContent = unread;
+    dot.style.cssText = 'display:inline-block;background:#C62828;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;margin-left:4px;vertical-align:middle';
+    btn.appendChild(dot);
+  }
 }
 
 function showToast(msg) {
