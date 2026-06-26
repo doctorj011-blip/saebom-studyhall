@@ -52,10 +52,10 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .period-fill{height:100%;background:linear-gradient(90deg,#E0B020,#C8900A);border-radius:4px}
 .period-count{font-size:12px;font-weight:700;color:#C8900A;width:24px;text-align:right}
 .period-count-btn{cursor:pointer;font-weight:600;color:#C8900A;text-decoration:underline dotted;text-underline-offset:2px}
-.student-list{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;align-items:start}
-.student-card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);padding:10px 12px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background 0.1s}
-.student-card:hover{background:var(--color-background-secondary)}
-.student-avatar{width:34px;height:34px;border-radius:50%;background:#FFF8DC;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:500;color:#8B6010;flex-shrink:0}
+.student-list{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start}
+.student-card{background:linear-gradient(135deg,#FFFDF0 0%,#FFF8DC 100%);border:1.5px solid #E8C840;border-radius:16px;padding:14px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all 0.15s;box-shadow:0 2px 8px rgba(200,144,10,0.08)}
+.student-card:hover{background:linear-gradient(135deg,#FFF8DC 0%,#FFF0A0 100%);box-shadow:0 4px 16px rgba(200,144,10,0.18);transform:translateY(-1px);border-color:#C8900A}
+.student-avatar{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(200,144,10,0.3)}
 .student-info{flex:1;min-width:0}
 .student-name{font-size:13px;font-weight:500}
 .student-meta{font-size:11px;color:var(--color-text-secondary)}
@@ -353,7 +353,18 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
   <div class="checkin-wrap">
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
-      <div class="checkin-header">
+      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px">
+  <span style="font-size:11px;color:#8B6010">자동문 릴레이:</span>
+  <button id="relay-connect-btn" onclick="connectSerial()"
+    style="padding:5px 12px;background:#E0B020;color:#5C3D08;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+    🔌 포트 연결
+  </button>
+  <button onclick="window.doorOpenTimed(3)"
+    style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+    🚪 수동 열기
+  </button>
+</div>
+<div class="checkin-header">
         <i class="ti ti-door-enter" style="font-size:28px;color:#C8900A"></i>
         <div class="checkin-title">입실 · 퇴실</div>
         <div class="checkin-sub">휴대폰 번호 뒷자리 4자리를 입력하세요</div>
@@ -1023,14 +1034,18 @@ function buildStudentList(filter=''){
     .map(s=>{
       const h=s.hours[currentMonth]||0;
       const idx=STUDENTS.indexOf(s);
+      const hColor = h>=180?'#27500A':h>=120?'#7A5008':'#A32D2D';
+      const hBg = h>=180?'#E8F5E9':h>=120?'#FFF8DC':'#FCEBEB';
       return `<div class="student-card" onclick="openScheduleModal(${idx})">
         <div class="student-avatar">${s.name[0]}</div>
-        <div class="student-info">
-          <div class="student-name"><span style="font-size:11px;color:var(--color-text-secondary);font-weight:400">${s.seat}</span> ${s.name}</div>
-          <div class="student-meta">${s.phone||'전화번호 미등록'} · 이번달 ${h}시간</div>
-
+        <div class="student-info" style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+            <span style="font-size:10px;background:#C8900A;color:#fff;border-radius:5px;padding:1px 5px;font-weight:700;flex-shrink:0">${s.seat}</span>
+            <span class="student-name" style="font-size:13px;font-weight:700">${s.name}</span>
+          </div>
+          <div class="student-meta" style="font-size:11px;color:#8B6010;margin-bottom:4px">${s.phone||'전화번호 미등록'}</div>
+          <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
         </div>
-        <i class="ti ti-chevron-right" style="font-size:16px;color:var(--color-text-tertiary)" aria-hidden="true"></i>
       </div>`;
     }).join('');
 }
@@ -1160,12 +1175,56 @@ function checkinConfirm() {
   document.getElementById('done-msg').textContent = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
   document.getElementById('done-time').textContent = timeStr;
 
+  // PRESENT 업데이트
+  if (isCheckout) {
+    const idx = PRESENT.indexOf(student.name);
+    if (idx !== -1) PRESENT.splice(idx, 1);
+  } else {
+    if (!PRESENT.includes(student.name)) PRESENT.push(student.name);
+  }
+
+  // Firebase에 입퇴실 기록 저장
+  saveCheckinToFirebase(student, isCheckout, timeStr);
+
   buildCheckinTodayList();
+  buildDashboard();
   if (document.getElementById('fp-room')) buildFloorplan();
+
+  // 🚪 자동문 열기 (3초 후 자동 닫힘)
+  if (window.doorOpenTimed) window.doorOpenTimed(3);
 
   setTimeout(() => {
     checkinReset();
   }, 2200);
+}
+
+// Firebase에 입퇴실 기록 저장
+async function saveCheckinToFirebase(student, isCheckout, timeStr) {
+  if (!window.saveStudentToFirebase) return;
+  try {
+    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const logId = `${today}_${student.seat}_${timeStr.replace(':','')}`;
+    const db = window._fbDb;
+    if (!db) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    await setDoc(doc(db, 'checkin_logs', logId), {
+      studentName: student.name,
+      seat: student.seat,
+      type: isCheckout ? 'out' : 'in',
+      time: timeStr,
+      date: today,
+      createdAt: serverTimestamp()
+    });
+    // pikko_sync도 업데이트 (관리자앱이 픽코 대체)
+    await setDoc(doc(db, 'pikko_sync', 'present'), {
+      names: JSON.stringify(PRESENT),
+      seats: JSON.stringify(PRESENT.map(n => STUDENTS.find(s=>s.name===n)?.seat||'')),
+      count: String(PRESENT.length),
+      rawData: JSON.stringify(PRESENT.map(n=>({name:n}))),
+      syncTime: timeStr,
+      updatedAt: serverTimestamp()
+    });
+  } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
 }
 
 function checkinReset() {
@@ -2705,6 +2764,70 @@ window.confirmDeleteStudent = function(seat, name) {
   showAdminToast(`🗑️ ${name} 학생이 삭제됐습니다`);
 };
 
+// ── Web Serial API 릴레이 제어 ──
+let _serialPort = null;
+let _serialWriter = null;
+
+// 시리얼 포트 연결 (최초 1회 수동 선택)
+window.connectSerial = async function() {
+  try {
+    if (!('serial' in navigator)) {
+      showAdminToast('⚠️ 이 브라우저는 Web Serial을 지원하지 않습니다 (크롬 필요)');
+      return false;
+    }
+    _serialPort = await navigator.serial.requestPort();
+    await _serialPort.open({ baudRate: 9600 });
+    _serialWriter = _serialPort.writable.getWriter();
+    showAdminToast('✅ 릴레이 포트 연결됨');
+    // 연결 상태 표시
+    const btn = document.getElementById('relay-connect-btn');
+    if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; }
+    return true;
+  } catch(e) {
+    console.error('시리얼 연결 실패:', e);
+    showAdminToast('⚠️ 포트 연결 실패: ' + e.message);
+    return false;
+  }
+};
+
+// 릴레이 신호 전송
+async function sendRelay(bytes) {
+  if (!_serialWriter) {
+    const ok = await window.connectSerial();
+    if (!ok) return false;
+  }
+  try {
+    await _serialWriter.write(new Uint8Array(bytes));
+    return true;
+  } catch(e) {
+    console.error('릴레이 신호 전송 실패:', e);
+    _serialWriter = null;
+    _serialPort = null;
+    return false;
+  }
+}
+
+// 문 열기: A0 01 01 A2
+window.doorOpen = async function() {
+  const ok = await sendRelay([0xA0, 0x01, 0x01, 0xA2]);
+  if (ok) console.log('🚪 문 열림 신호 전송');
+  return ok;
+}
+
+// 문 닫기: A0 01 00 A1
+window.doorClose = async function() {
+  const ok = await sendRelay([0xA0, 0x01, 0x00, 0xA1]);
+  if (ok) console.log('🚪 문 닫힘 신호 전송');
+  return ok;
+}
+
+// 문 열고 N초 후 자동 닫기
+window.doorOpenTimed = async function(seconds = 3) {
+  const ok = await window.doorOpen();
+  if (ok) setTimeout(window.doorClose, seconds * 1000);
+  return ok;
+}
+
 function showAdminToast(msg) {
   const t = document.createElement('div');
   t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);white-space:nowrap';
@@ -2713,6 +2836,7 @@ function showAdminToast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
+window._fbDb = db; // 전역 노출 (checkin에서 사용)
 console.log('🔥 Firebase 연동 완료 — 학생 스케줄 변경을 실시간 감지합니다');
 
 // ── 픽코 연동: 입실자 실시간 동기화 ──
