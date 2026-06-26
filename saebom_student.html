@@ -292,6 +292,7 @@ const STUDENTS = [
   {seat:'41번',name:'윤서정', phone:'010-4995-1709',schedule:{월:'x(수학학원)7~9,10',화:'x(영어학원)7~9,10',수:'7,8,9,10',목:'x(영어학원)7~9,10',금:'x(수학학원)7~9,10',토:'1~10'},hours:{3:118,4:130,5:142,6:156}},
   {seat:'42번',name:'권세나', phone:'010-6373-3328',schedule:{월:'x(새봄수학)7~9',화:'x,7,8,9',수:'7,8,9',목:'7,8,9',금:'x(새봄수학)7~9',토:'-'},hours:{3:85,4:95,5:108,6:123}},
   {seat:'45번',name:'조찬웅', phone:'010-5229-5421',schedule:{월:'x(영어)7~9,10',화:'7,8,9,10',수:'x(수학)7~9,10',목:'x(검도)7,8,9,10',금:'x(통사)7~9,10',토:'1~10'},hours:{3:128,4:142,5:157,6:172}},
+  {seat:'37번',name:'이우영', phone:'010-1234-1234',schedule:{월:'-',화:'-',수:'-',목:'-',금:'-',토:'-'},hours:{3:0,4:0,5:0,6:0}},
 ];
 
 // ── 공지사항 데이터 (관리자가 추가) ──
@@ -350,7 +351,7 @@ function pinInput(d) {
   if (pinBuffer.length >= 4) return;
   pinBuffer += d;
   updatePinDisplay();
-  if (pinBuffer.length === 4) setTimeout(tryLogin, 150);
+  if (pinBuffer.length === 4) setTimeout(() => tryLogin(), 150);
 }
 function pinDel() { pinBuffer = pinBuffer.slice(0,-1); updatePinDisplay(); hideLoginError(); }
 function pinClear() { pinBuffer = ''; updatePinDisplay(); hideLoginError(); }
@@ -363,17 +364,49 @@ function updatePinDisplay() {
 
 function hideLoginError() { document.getElementById('login-error').style.display='none'; }
 
-function tryLogin() {
-  const matched = STUDENTS.filter(s => {
+async function tryLogin() {
+  // 로그인 중 표시
+  document.getElementById('login-error').style.display='none';
+
+  // 1) 로컬 STUDENTS 배열에서 먼저 매칭
+  let matched = STUDENTS.filter(s => {
     if (!s.phone) return false;
     return s.phone.replace(/\D/g,'').slice(-4) === pinBuffer;
   });
+
+  // 2) 로컬에 없으면 Firebase students 컬렉션에서 검색
+  if (matched.length === 0) {
+    try {
+      const waitFirebase = () => new Promise(res => {
+        if (window._firebaseReady) return res();
+        window.addEventListener('firebase-ready', res, { once: true });
+      });
+      await waitFirebase();
+
+      const db = window._db;
+      const fsGetDoc = window._fsGetDoc;
+      const fsCollection = window._fsCollection;
+      const { getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      const snap = await getDocs(fsCollection(db, 'students'));
+      snap.forEach(doc => {
+        const v = doc.data();
+        if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === pinBuffer) {
+          matched.push({
+            seat: v.seat, name: v.name,
+            phone: v.phone || '', parent: v.parent || '',
+            schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+            hours: v.hours || {}
+          });
+        }
+      });
+    } catch(e) { console.error('Firebase 로그인 검색 실패:', e); }
+  }
+
   if (matched.length === 0) {
     document.getElementById('login-error').style.display='block';
     pinBuffer=''; updatePinDisplay(); return;
   }
   currentStudent = matched[0];
-  // 스케줄 초기화
   initDraft();
   enterApp();
 }
