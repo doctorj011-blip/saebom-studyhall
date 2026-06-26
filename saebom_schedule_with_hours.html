@@ -1392,8 +1392,8 @@ function buildSeatCard(seatNum) {
   }
 
   const onclick = student
-    ? `ondblclick="fpSeatClick(${seatNum})"`
-    : `onclick="openAddStudentModal(${seatNum})"`;
+    ? `ondblclick="if(!fpEditMode&&!_fpLastDragged)fpSeatClick(${seatNum})"`
+    : `onclick="if(!fpEditMode&&!_fpLastDragged)openAddStudentModal(${seatNum})"`;
   return `<div class="${cls}" ${onclick} style="cursor:pointer">
     <div class="fp-seat-num">${seatNum}번</div>
     ${nameHtml}${statusHtml}
@@ -1487,9 +1487,18 @@ function buildFloorplan() {
 // ===== 위치수정 모드 =====
 let fpEditMode = false;
 // 좌석 위치 저장: { seatId: {x, y} }
-let fpSeatPositions = {};
+let fpSeatPositions = (function() {
+  try {
+    const saved = localStorage.getItem('saebom_fp_positions');
+    return saved ? JSON.parse(saved) : {};
+  } catch(e) { return {}; }
+})();
 // 위치수정 모드에서 그리드를 absolute로 전환
 let fpEditInitialized = false;
+// 저장된 위치가 있으면 수정모드 진입 시 항상 최신 위치 적용
+function saveFpPositions() {
+  try { localStorage.setItem('saebom_fp_positions', JSON.stringify(fpSeatPositions)); } catch(e) {}
+}
 
 function toggleFpEditMode() {
   fpEditMode = !fpEditMode;
@@ -1650,6 +1659,10 @@ function attachSeatDragEvents() {
       draggingSeat.style.left = snapped.x + 'px';
       draggingSeat.style.top  = snapped.y + 'px';
       fpSeatPositions[draggingSeat.dataset.seatId] = snapped;
+      saveFpPositions();
+      // 드래그 직후 클릭 이벤트 차단
+      window._fpLastDragged = true;
+      setTimeout(() => { window._fpLastDragged = false; }, 300);
     }
     draggingSeat = null;
   });
@@ -1699,6 +1712,10 @@ function attachSeatDragEvents() {
       draggingSeat.style.left = snapped.x + 'px';
       draggingSeat.style.top  = snapped.y + 'px';
       fpSeatPositions[draggingSeat.dataset.seatId] = snapped;
+      saveFpPositions();
+      // 터치 드래그 직후 클릭 이벤트 차단
+      window._fpLastDragged = true;
+      setTimeout(() => { window._fpLastDragged = false; }, 300);
     }
     draggingSeat = null;
   });
@@ -1715,20 +1732,23 @@ function exitEditMode(save) {
   hint.style.display = '';
   room.classList.remove('edit-mode');
 
-  // 저장: draggable 핸들 제거, 위치 고정
+  // 위치 영구 저장
+  saveFpPositions();
+
+  // absolute 컨테이너 제거 후 그리드 재빌드 (저장된 위치는 fpSeatPositions에 남음)
   const abs = document.getElementById('fp-abs-container');
-  if (abs) {
-    abs.querySelectorAll('.draggable').forEach(el => el.classList.remove('draggable'));
-    abs.querySelectorAll('.fp-seat, .fp-studio').forEach(el => { el.style.cursor = ''; });
-  }
-  room.querySelectorAll('div[style*="grid-template"]').forEach(el => el.remove());
+  if (abs) abs.remove();
+  fpEditInitialized = false; // 다음 수정모드 진입 시 새로 측정
+
+  // 그리드 재빌드 (저장된 위치 반영됨)
+  buildFloorplan();
   showFpSaveToast();
 }
 
 function showFpSaveToast() {
   const toast = document.createElement('div');
   toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:toastIn 0.2s ease';
-  toast.textContent = '✅ 배치도 위치가 저장됐습니다';
+  toast.textContent = '✅ 배치도 위치가 저장됐습니다 (새로고침 후에도 유지)';
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2200);
 }
@@ -1743,10 +1763,10 @@ function fpSeatClick(seatNum) {
   const isOut = rec && rec.outTime;
   const statusText = isIn ? `입실 중 (${rec.inTime}~)` : isOut ? `퇴실 (${rec.inTime} → ${rec.outTime})` : '오늘 미입실';
   const statusColor = isIn ? '#C8900A' : isOut ? '#7A5008' : '#9CA3AF';
-  showFpPopup(student.name, student.seat, student.phone||'번호 미등록', statusText, statusColor);
+  showFpPopup(student.name, student.seat, student.phone||'번호 미등록', statusText, statusColor, isIn);
 }
 
-function showFpPopup(name, seat, phone, status, statusColor) {
+function showFpPopup(name, seat, phone, status, statusColor, isIn) {
   // 기존 팝업 제거
   const old = document.getElementById('fp-popup');
   if (old) old.remove();
@@ -1758,20 +1778,27 @@ function showFpPopup(name, seat, phone, status, statusColor) {
     background:var(--color-background-primary);
     border:0.5px solid var(--color-border-tertiary);
     border-radius:16px;padding:20px 22px;z-index:9999;
-    box-shadow:0 8px 32px rgba(0,0,0,0.18);min-width:220px;
+    box-shadow:0 8px 32px rgba(0,0,0,0.18);min-width:240px;
     animation:toastIn 0.15s ease;
   `;
+  const checkoutBtn = isIn
+    ? `<button onclick="adminForceCheckout('${name}');document.getElementById('fp-popup').remove()"
+        style="width:100%;padding:10px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">
+        👋 퇴실 처리
+      </button>`
+    : '';
   popup.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-      <div style="width:40px;height:40px;border-radius:50%;background:#FFF8DC;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;color:#C8900A;flex-shrink:0">${name[0]}</div>
+      <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0">${name[0]}</div>
       <div>
-        <div style="font-size:15px;font-weight:600">${name}</div>
+        <div style="font-size:15px;font-weight:700">${name}</div>
         <div style="font-size:11px;color:var(--color-text-secondary)">${seat}</div>
       </div>
     </div>
     <div style="font-size:12px;color:var(--color-text-secondary);margin-bottom:6px">📱 ${phone}</div>
-    <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px">● ${status}</div>
-    <button onclick="document.getElementById('fp-popup').remove()" style="width:100%;padding:9px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer">닫기</button>
+    <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#FFF8DC':'var(--color-background-secondary)'};border-radius:8px">● ${status}</div>
+    ${checkoutBtn}
+    <button onclick="document.getElementById('fp-popup').remove()" style="width:100%;padding:9px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer">닫기</button>
   `;
   document.body.appendChild(popup);
 
@@ -1839,6 +1866,10 @@ function initFpDrag() {
     if (!isDragging) return;
     isDragging = false;
     wrap.classList.remove('dragging');
+    if (dragDist > 5) {
+      window._fpLastDragged = true;
+      setTimeout(() => { window._fpLastDragged = false; }, 300);
+    }
     setTimeout(() => { _fpDragDist = 0; }, 50);
   });
 
@@ -1863,7 +1894,13 @@ function initFpDrag() {
     if (dragDist > 5) e.preventDefault();
   }, {passive: false});
 
-  wrap.addEventListener('touchend', () => { isDragging = false; });
+  wrap.addEventListener('touchend', () => {
+    if (dragDist > 5) {
+      window._fpLastDragged = true;
+      setTimeout(() => { window._fpLastDragged = false; }, 300);
+    }
+    isDragging = false;
+  });
 
   // 배치도 탭 열릴 때 초기 위치 중앙으로
   document.querySelector('[onclick*="floorplan"]').addEventListener('click', () => {
@@ -2902,30 +2939,59 @@ window.showTodayAttendees = function() {
   const modal = document.createElement('div');
   modal.id = 'today-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
-  const list = PRESENT.map(name => {
-    const s = STUDENTS.find(s => s.name === name);
-    return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#FFF8DC;border:1px solid #E0B020;border-radius:10px">
-      <div style="display:flex;align-items:center;gap:6px">
-        <div style="width:7px;height:7px;background:#C8900A;border-radius:50%"></div>
-        <span style="font-size:13px;font-weight:600;color:#5C3D08">${name}</span>
-      </div>
-      <span style="font-size:12px;color:#C8900A;font-weight:600">${s?.seat||''}</span>
-    </div>`;
-  }).join('');
+  function renderList() {
+    const list = PRESENT.map(name => {
+      const s = STUDENTS.find(s => s.name === name);
+      const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${name[0]}</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#5C3D08">${name}</div>
+            <div style="font-size:11px;color:#8B6010">${s?.seat||''} · 입실 ${rec?.inTime||''}</div>
+          </div>
+        </div>
+        <button onclick="adminForceCheckout('${name}')" style="background:#C62828;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">퇴실 처리</button>
+      </div>`;
+    }).join('');
+    const inner = document.getElementById('today-modal-list');
+    if (inner) inner.innerHTML = list || '<div style="text-align:center;padding:24px;color:#aaa;font-size:13px">현재 입실 중인 학생이 없습니다</div>';
+    const cnt = document.getElementById('today-modal-count');
+    if (cnt) cnt.textContent = `총 ${PRESENT.length}명 입실 중`;
+  }
   modal.innerHTML = `
-    <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,380px);max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+    <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,420px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div style="font-size:15px;font-weight:700;color:#5C3D08">🎓 오늘 등원 현황</div>
         <button onclick="document.getElementById('today-modal').remove()"
-          style="background:none;border:none;font-size:18px;cursor:pointer;color:#8B6010">✕</button>
+          style="background:none;border:none;font-size:20px;cursor:pointer;color:#8B6010;line-height:1">✕</button>
       </div>
-      <div style="font-size:12px;color:#8B6010;margin-bottom:12px;padding:6px 10px;background:#FFF3B0;border-radius:8px">
-        총 <strong>${PRESENT.length}명</strong> 등원중
-      </div>
-      <div style="display:flex;flex-direction:column;gap:5px">${list}</div>
+      <div id="today-modal-count" style="font-size:12px;color:#8B6010;margin-bottom:12px;padding:7px 12px;background:#FFF3B0;border-radius:8px;font-weight:600"></div>
+      <div id="today-modal-list" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto"></div>
     </div>`;
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
   document.body.appendChild(modal);
+  renderList();
+  window._todayModalRender = renderList;
+};
+
+// 관리자 강제 퇴실 처리
+window.adminForceCheckout = function(name) {
+  if (!confirm(`${name} 학생을 퇴실 처리할까요?`)) return;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+  if (rec) rec.outTime = timeStr;
+  const idx = PRESENT.indexOf(name);
+  if (idx !== -1) PRESENT.splice(idx, 1);
+  const student = STUDENTS.find(s => s.name === name);
+  if (student) saveCheckinToFirebase(student, true, timeStr);
+  buildDashboard();
+  buildCheckinTodayList();
+  if (document.getElementById('fp-room')) buildFloorplan();
+  showAdminToast(`👋 ${name} 퇴실 처리 완료 (${timeStr})`);
+  // 팝업 목록 새로고침
+  if (window._todayModalRender) window._todayModalRender();
 };
 
 window.confirmDeleteStudent = function(seat, name) {
