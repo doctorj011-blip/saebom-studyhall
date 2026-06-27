@@ -1566,32 +1566,33 @@ function buildFloorplan() {
     'r2_c2':1, 'r3_c2':2, 'r4_c2':3, 'r5_c2':4,
     // C3: 스터디룸 (2행×1열)
     'r2_c3':-1, 'r5_c3':-2, 'r8_c3':-3,
-    // C4: 9,8,7,6,5 / 45,36,35
-    'r1_c4':9,  'r2_c4':8,  'r3_c4':7,  'r4_c4':6,  'r5_c4':5,
-    'r8_c4':45, 'r9_c4':36, 'r11_c4':35,
-    // C5: 44,37,34
-    'r8_c5':44, 'r9_c5':37, 'r11_c5':34,
-    // C6: 10~14 / 43,38,33,30
-    'r1_c6':10, 'r2_c6':11, 'r3_c6':12, 'r4_c6':13, 'r5_c6':14,
-    'r8_c6':43, 'r9_c6':38, 'r10_c6':33, 'r11_c6':30,
-    // C7: 19~15 / 42,39,32,31
-    'r1_c7':19, 'r2_c7':18, 'r3_c7':17, 'r4_c7':16, 'r5_c7':15,
-    'r8_c7':42, 'r9_c7':39, 'r10_c7':32, 'r11_c7':31,
-    // C8: 41,40
-    'r8_c8':41, 'r9_c8':40,
-    // C9: 20~29
-    'r1_c9':20, 'r2_c9':21, 'r3_c9':22, 'r4_c9':23, 'r5_c9':24,
-    'r6_c9':25, 'r7_c9':26, 'r8_c9':27, 'r9_c9':28, 'r10_c9':29,
+    // C4: 빈 셀 열 (스터디룸과 학생 사이)
+    // C5: 9,8,7,6,5 / 45,36,35
+    'r1_c5':9,  'r2_c5':8,  'r3_c5':7,  'r4_c5':6,  'r5_c5':5,
+    'r8_c5':45, 'r9_c5':36, 'r11_c5':35,
+    // C6: 44,37,34
+    'r8_c6':44, 'r9_c6':37, 'r11_c6':34,
+    // C7: 10~14 / 43,38,33,30
+    'r1_c7':10, 'r2_c7':11, 'r3_c7':12, 'r4_c7':13, 'r5_c7':14,
+    'r8_c7':43, 'r9_c7':38, 'r10_c7':33, 'r11_c7':30,
+    // C8: 19~15 / 42,39,32,31
+    'r1_c8':19, 'r2_c8':18, 'r3_c8':17, 'r4_c8':16, 'r5_c8':15,
+    'r8_c8':42, 'r9_c8':39, 'r10_c8':32, 'r11_c8':31,
+    // C9: 41,40
+    'r8_c9':41, 'r9_c9':40,
+    // C10: 20~29
+    'r1_c10':20, 'r2_c10':21, 'r3_c10':22, 'r4_c10':23, 'r5_c10':24,
+    'r6_c10':25, 'r7_c10':26, 'r8_c10':27, 'r9_c10':28, 'r10_c10':29,
   };
 
   const layout = {...DEFAULT_SEATS, ...fpGridLayout};
-  const ROWS = 11, COLS = 9;
+  const ROWS = 11, COLS = 10;
 
   // 스터디룸 span 추적 (2행×1열이므로 아래 1칸 건너뜀)
   const studioSpan = {};
 
   // 그리드 CSS: C4는 복도(18px 고정)
-  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
+  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
   let html = `<style>
     #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
     .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
