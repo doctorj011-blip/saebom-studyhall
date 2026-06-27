@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, serverTimestamp }
+import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, serverTimestamp, addDoc, query, orderBy }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -29,6 +29,9 @@ window._fsSetDoc = setDoc;
 window._fsCollection = collection;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
+window._fsAddDoc = addDoc;
+window._fsQuery = query;
+window._fsOrderBy = orderBy;
 window._fsGetDoc = getDoc;
 window._firebaseReady = true;
 console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#F0D020;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
@@ -218,6 +221,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="app-tab" onclick="showTab('daily',this)">📅 요일별</button>
       <button class="app-tab" onclick="showTab('weekly',this)">📋 주간설정</button>
       <button class="app-tab" onclick="showTab('mystats',this)">📊 내 현황</button>
+      <button class="app-tab" onclick="showTab('message',this)">💬 메시지</button>
     </div>
   </div>
 
@@ -248,7 +252,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="mystats-content"></div>
     </div>
 
+    <!-- 메시지 -->
+    <div id="tab-message" style="display:none">
+      <div id="msg-list" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px"></div>
+    </div>
+
   </div>
+</div>
+
+<!-- 메시지 입력 FAB 영역 -->
+<div id="msg-input-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;z-index:100;display:flex;gap:8px;align-items:flex-end">
+  <textarea id="msg-text" placeholder="조교에게 메시지를 보내세요..." rows="2"
+    style="flex:1;border:1.5px solid #E0B020;border-radius:10px;padding:8px 10px;font-size:13px;resize:none;outline:none;font-family:inherit"></textarea>
+  <button onclick="sendMessage()" style="background:#C8900A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">전송</button>
 </div>
 
 <!-- 저장 버튼 (FAB) -->
@@ -445,61 +461,16 @@ function initDraft() {
   draftSchedule = {};
   DAYS.forEach(day => {
     const sched = currentStudent.schedule[day] || '';
-    draftSchedule[day] = { reasons: {}, periods: {} };
+    draftSchedule[day] = { reason: '', periods: {} };
 
-    // 새 형식: 토큰 순서 기반 교시별 파싱
-    // 예: "x(사유1),8,x(사유2),10,11"
-    const tokens = sched ? sched.split(',').map(t => t.trim()).filter(Boolean) : [];
-    const isSat = day === '토';
-    const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+    const reasonMatch = sched.match(/x\(([^)]+)\)/);
+    if (reasonMatch) draftSchedule[day].reason = reasonMatch[1];
 
-    // 구버전 형식 체크: x(사유)로 시작하고 뒤에 숫자
-    const legacyMatch = sched.match(/^x\(([^)]*)\)(.*)/);
-    const isLegacy = legacyMatch && (tokens[0] === 'x' || tokens[0]?.match(/^x\([^)]*\)$/));
-
-    if (isLegacy) {
-      const reason = legacyMatch ? legacyMatch[1] : '';
-      // 뒤에 나오는 숫자들은 출석
-      const attendNums = new Set();
-      tokens.forEach(t => {
-        if (t.startsWith('x')) return;
-        const m = t.match(/^(\d+)~(\d+)$/);
-        if (m) { for (let i=Number(m[1]);i<=Number(m[2]);i++) attendNums.add(i); return; }
-        const n = Number(t);
-        if (!isNaN(n) && n>=1 && n<=11) attendNums.add(n);
-      });
-      validPeriods.forEach(n => {
-        if (attendNums.has(n)) {
-          draftSchedule[day].periods[n] = 'attend';
-        } else if (sched !== '-' && sched !== '') {
-          draftSchedule[day].periods[n] = 'absent';
-          if (reason) draftSchedule[day].reasons[n] = reason;
-        } else {
-          draftSchedule[day].periods[n] = 'none';
-        }
-      });
-    } else {
-      // 새 형식: 토큰 순서가 validPeriods 순서와 대응
-      tokens.forEach((token, i) => {
-        const p = validPeriods[i];
-        if (p === undefined) return;
-        const absentM = token.match(/^x\(([^)]*)\)$/i);
-        if (absentM) {
-          draftSchedule[day].periods[p] = 'absent';
-          if (absentM[1]) draftSchedule[day].reasons[p] = absentM[1];
-        } else if (token === 'x') {
-          draftSchedule[day].periods[p] = 'absent';
-        } else {
-          const n = Number(token);
-          if (!isNaN(n) && n >= 1 && n <= 11) draftSchedule[day].periods[p] = 'attend';
-        }
-      });
-      // 언급 안 된 교시는 none
-      validPeriods.forEach(n => {
-        if (draftSchedule[day].periods[n] === undefined)
-          draftSchedule[day].periods[n] = 'none';
-      });
-    }
+    // 모든 교시(1~11) 파싱
+    const allPeriods = [1,2,3,4,5,6,7,8,9,10,11];
+    allPeriods.forEach(n => {
+      draftSchedule[day].periods[n] = parsePeriodStatus(sched, n);
+    });
   });
 }
 
@@ -525,6 +496,11 @@ function parsePeriodStatus(sched, pNum) {
 
 // ── 탭 전환 ──
 function showTab(id, btn) {
+  // 메시지 입력바 토글
+  const bar = document.getElementById('msg-input-bar');
+  if (bar) bar.style.display = id === 'message' ? 'flex' : 'none';
+  // 메시지 탭 진입 시 로드
+  if (id === 'message') loadMessages();
   ['notice','daily','weekly','mystats'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
@@ -615,7 +591,7 @@ function buildDailyPeriods() {
     <div class="absent-reason${status==='absent'?' show':''}" id="reason-${currentDayTab}-${p.n}">
       <span class="reason-label">불참 사유</span>
       <input class="reason-input" type="text" placeholder="예: 수학학원"
-        value="${dayDraft.reasons[p.n]||''}"
+        value="${dayDraft.reason||''}"
         oninput="setReason('${currentDayTab}','${p.n}',this.value)">
     </div>`;
   }).join('');
@@ -632,7 +608,7 @@ function setPeriod(day, pNum, status) {
 }
 
 function setReason(day, pNum, val) {
-  draftSchedule[day].reasons[pNum] = val;
+  draftSchedule[day].reason = val;
   isDirty = true;
 }
 
@@ -679,33 +655,28 @@ function wkToggle(day, pNum) {
 
 // ── 저장 ──
 async function saveSchedule() {
-  // draft → 스케줄 문자열로 변환해서 STUDENTS에 반영
+  // draft → 스케줄 문자열로 변환 (새 형식: 토큰 순서 = validPeriods 순서)
+  // 예: 7교시 출석, 8교시 결석(사유), 9교시 출석 → "7,x(사유),9"
   DAYS.forEach(day => {
     const dd = draftSchedule[day];
     const periods = day === '토' ? PERIODS_SAT : PERIODS_WEEK;
-    const attendList = periods.filter(p=>dd.periods[p.n]==='attend').map(p=>p.n);
-    const absentList = periods.filter(p=>dd.periods[p.n]==='absent').map(p=>p.n);
+    const tokens = [];
+    let hasAny = false;
 
-    let str = '-';
-    if (attendList.length === 0 && absentList.length === 0) {
-      str = '-';
-    } else {
-      // 새 형식: validPeriods 순서대로 토큰 나열
-      // 출석 → 숫자, 불참 → x(사유) 또는 x
-      const parts = [];
-      periods.forEach(p => {
-        const st = dd.periods[p.n];
-        if (st === 'attend') {
-          parts.push(String(p.n));
-        } else if (st === 'absent') {
-          const r = dd.reasons[p.n] || '';
-          parts.push(r ? `x(${r})` : 'x');
-        }
-        // none은 포함 안 함
-      });
-      str = parts.length ? parts.join(',') : '-';
-    }
-    currentStudent.schedule[day] = str;
+    periods.forEach(p => {
+      const state = dd.periods[p.n];
+      if (state === 'attend') {
+        tokens.push(String(p.n));
+        hasAny = true;
+      } else if (state === 'absent') {
+        const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
+        tokens.push(reason ? `x(${reason})` : 'x');
+        hasAny = true;
+      }
+      // 'none' 또는 미정의 → 토큰 추가 안 함
+    });
+
+    currentStudent.schedule[day] = hasAny ? tokens.join(',') : '-';
   });
 
   isDirty = false;
@@ -865,6 +836,80 @@ function buildMyStats() {
 
   html += '</div>';
   document.getElementById('mystats-content').innerHTML = html;
+}
+
+// ── 메시지 기능 ──
+let msgUnsubscribe = null;
+
+function loadMessages() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+
+  const listEl = document.getElementById('msg-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px">메시지를 불러오는 중...</div>';
+
+  if (msgUnsubscribe) msgUnsubscribe();
+
+  try {
+    const q = window._fsQuery(
+      window._fsCollection(db, 'messages'),
+      window._fsOrderBy('createdAt', 'asc')
+    );
+    msgUnsubscribe = window._fsOnSnapshot(q, snap => {
+      const msgs = [];
+      snap.forEach(d => {
+        const m = d.data();
+        // 이 학생이 보내거나 받은 메시지만
+        if (m.from === currentStudent.name || m.to === currentStudent.name || m.to === 'ALL') {
+          msgs.push({ id: d.id, ...m });
+        }
+      });
+      renderMessages(msgs);
+    });
+  } catch(e) {
+    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px">메시지를 불러올 수 없습니다.</div>';
+  }
+}
+
+function renderMessages(msgs) {
+  const listEl = document.getElementById('msg-list');
+  if (!listEl) return;
+  if (!msgs.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:40px 20px;font-size:13px">아직 메시지가 없습니다.<br>조교에게 메시지를 보내보세요!</div>';
+    return;
+  }
+  listEl.innerHTML = msgs.map(m => {
+    const isMe = m.from === currentStudent.name;
+    const time = m.createdAt ? new Date(m.createdAt.seconds * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+    return `<div style="display:flex;flex-direction:column;align-items:${isMe ? 'flex-end' : 'flex-start'}">
+      <div style="font-size:10px;color:#aaa;margin-bottom:3px">${isMe ? '' : (m.from || '조교') + ' · '}${time}</div>
+      <div style="max-width:80%;padding:10px 14px;border-radius:${isMe ? '16px 4px 16px 16px' : '4px 16px 16px 16px'};
+        background:${isMe ? '#C8900A' : '#F3F4F6'};color:${isMe ? '#fff' : '#1F2937'};
+        font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all">${m.text}</div>
+    </div>`;
+  }).join('');
+  listEl.scrollTop = listEl.scrollHeight;
+}
+
+async function sendMessage() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  const textarea = document.getElementById('msg-text');
+  const text = textarea.value.trim();
+  if (!text) return;
+  textarea.value = '';
+  try {
+    await window._fsAddDoc(window._fsCollection(db, 'messages'), {
+      from: currentStudent.name,
+      fromSeat: currentStudent.seat,
+      to: '조교',
+      text: text,
+      createdAt: window._fsServerTimestamp()
+    });
+  } catch(e) {
+    alert('메시지 전송 실패: ' + e.message);
+  }
 }
 
 // ── 초기화 ──

@@ -292,6 +292,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
     <button class="tab-btn" onclick="showSection('hours',this)">누적시간</button>
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
+    <button class="tab-btn" onclick="showSection('messages',this)">💬 학생메시지</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
@@ -468,6 +469,23 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 </div>
 
 <!-- 문자 발신내역 -->
+<div id="sec-messages" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+    <div style="font-size:15px;font-weight:700;color:#1F2937">💬 학생 메시지</div>
+    <button onclick="refreshMessages()" style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer">새로고침</button>
+  </div>
+  <div id="admin-msg-list" style="display:flex;flex-direction:column;gap:12px;margin-bottom:80px"></div>
+  <!-- 답장 패널 -->
+  <div id="admin-reply-bar" style="position:sticky;bottom:0;background:#fff;border-top:1px solid #eee;padding:12px 0;display:none;gap:8px;align-items:flex-end">
+    <div style="font-size:12px;color:#888;margin-bottom:6px">답장 대상: <span id="reply-target" style="font-weight:700;color:#C8900A"></span></div>
+    <div style="display:flex;gap:8px">
+      <textarea id="admin-reply-text" rows="2" placeholder="답장 내용..." style="flex:1;border:1.5px solid #E0B020;border-radius:10px;padding:8px 10px;font-size:13px;resize:none;outline:none;font-family:inherit"></textarea>
+      <button onclick="sendAdminReply()" style="background:#C8900A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer">전송</button>
+      <button onclick="closeReplyBar()" style="background:#eee;color:#666;border:none;border-radius:10px;padding:10px 12px;font-size:13px;cursor:pointer">취소</button>
+    </div>
+  </div>
+</div>
+
 <div id="sec-smslog" class="section">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:700;color:#5C3D08">📨 문자 발신내역</div>
@@ -740,6 +758,7 @@ window.showSection = function(id,btn){
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); loadNoticesAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
+  if (id === 'messages') { loadAdminMessages(); }
 }
 function loadSettingsTab() {
   const k = document.getElementById('cfg-key');
@@ -2463,7 +2482,7 @@ window.initApp();
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
+import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp, addDoc, query, orderBy }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2543,6 +2562,93 @@ window.deleteStudentFromFirebase = deleteStudentFromFirebase;
 
 // 앱 시작
 loadStudentsFromFirebase();
+
+// ── 학생 메시지 기능 ──
+let adminMsgUnsubscribe = null;
+let currentReplyTo = null;
+
+window.loadAdminMessages = function() {
+  const listEl = document.getElementById('admin-msg-list');
+  if (!listEl) return;
+  listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px">메시지 불러오는 중...</div>';
+  if (adminMsgUnsubscribe) adminMsgUnsubscribe();
+  const q = query(collection(db, 'messages'), orderBy('createdAt', 'asc'));
+  adminMsgUnsubscribe = onSnapshot(q, snap => {
+    const msgs = [];
+    snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
+    renderAdminMessages(msgs);
+  });
+};
+
+window.refreshMessages = window.loadAdminMessages;
+
+function renderAdminMessages(msgs) {
+  const listEl = document.getElementById('admin-msg-list');
+  if (!msgs.length) {
+    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:40px">학생 메시지가 없습니다.</div>';
+    return;
+  }
+  // 대화 스레드별로 그룹핑 (학생 이름 기준)
+  const threads = {};
+  msgs.forEach(m => {
+    const key = m.from === '조교' ? m.to : m.from;
+    if (!threads[key]) threads[key] = [];
+    threads[key].push(m);
+  });
+  let html = '';
+  Object.entries(threads).forEach(([student, thread]) => {
+    html += `<div style="border:1px solid #eee;border-radius:12px;overflow:hidden">
+      <div style="background:#FFF8DC;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-weight:700;color:#5C3D08;font-size:13px">👤 ${student}</span>
+        <button onclick="openReplyBar('${student}')" style="background:#C8900A;color:#fff;border:none;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer">답장</button>
+      </div>
+      <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">`;
+    thread.forEach(m => {
+      const isAdmin = m.from === '조교';
+      const time = m.createdAt ? new Date(m.createdAt.seconds * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      html += `<div style="display:flex;flex-direction:column;align-items:${isAdmin ? 'flex-end' : 'flex-start'}">
+        <div style="font-size:10px;color:#aaa;margin-bottom:2px">${isAdmin ? '조교 · ' : ''}${time}</div>
+        <div style="max-width:85%;padding:8px 12px;border-radius:${isAdmin ? '12px 4px 12px 12px' : '4px 12px 12px 12px'};
+          background:${isAdmin ? '#C8900A' : '#F3F4F6'};color:${isAdmin ? '#fff' : '#1F2937'};
+          font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all">${m.text}</div>
+      </div>`;
+    });
+    html += '</div></div>';
+  });
+  listEl.innerHTML = html;
+}
+
+window.openReplyBar = function(studentName) {
+  currentReplyTo = studentName;
+  document.getElementById('reply-target').textContent = studentName;
+  document.getElementById('admin-reply-bar').style.display = 'flex';
+  document.getElementById('admin-reply-bar').style.flexDirection = 'column';
+  document.getElementById('admin-reply-text').focus();
+};
+
+window.closeReplyBar = function() {
+  currentReplyTo = null;
+  document.getElementById('admin-reply-bar').style.display = 'none';
+  document.getElementById('admin-reply-text').value = '';
+};
+
+window.sendAdminReply = async function() {
+  if (!currentReplyTo) return;
+  const text = document.getElementById('admin-reply-text').value.trim();
+  if (!text) return;
+  try {
+    await addDoc(collection(db, 'messages'), {
+      from: '조교',
+      to: currentReplyTo,
+      text: text,
+      createdAt: serverTimestamp()
+    });
+    document.getElementById('admin-reply-text').value = '';
+    closeReplyBar();
+  } catch(e) {
+    alert('전송 실패: ' + e.message);
+  }
+};
 
 // ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
 // 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
@@ -2947,7 +3053,7 @@ window.clearOldSmsLogs = function() {
 // 솔라피 API 키 설정 (최초 1회 입력)
 let SOLAPI_API_KEY = localStorage.getItem('solapi_api_key') || '';
 let SOLAPI_API_SECRET = localStorage.getItem('solapi_api_secret') || '';
-let SOLAPI_SENDER = localStorage.getItem('solapi_sender') || '';
+let SOLAPI_SENDER = localStorage.getItem('solapi_sender') || '01041301139';
 
 window.openSolapiSettings = function() {
   const old = document.getElementById('solapi-modal');
