@@ -541,7 +541,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         </div>
         <div style="max-width:240px">
           <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:5px">발신번호 (등록된 번호)</div>
-          <input id="cfg-sender" type="text" placeholder="01012345678"
+          <input id="cfg-sender" type="text" placeholder="01041301139"
             style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;background:#FFFDF5;outline:none">
         </div>
         <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
@@ -1451,7 +1451,7 @@ let _fpDragDist = 0;
 //  C9: 26번(r6),27번(r7),28번(r8),30번(r9) | 29번(r9)→C10
 
 function getFpStudentBySeat(seatNum) {
-  return STUDENTS.find(s => s.seat === seatNum + '번') || null;
+  return STUDENTS.find(s => parseInt(s.seat) === seatNum) || null;
 }
 
 function getFpStatus(student) {
@@ -3019,7 +3019,14 @@ window.clearOldSmsLogs = function() {
 // 솔라피 API 키 설정 (최초 1회 입력)
 let SOLAPI_API_KEY = localStorage.getItem('solapi_api_key') || '';
 let SOLAPI_API_SECRET = localStorage.getItem('solapi_api_secret') || '';
-let SOLAPI_SENDER = localStorage.getItem('solapi_sender') || '01041301139';
+let SOLAPI_SENDER = (function() {
+  const saved = localStorage.getItem('solapi_sender');
+  if (!saved || saved === '01012345678') {
+    localStorage.setItem('solapi_sender', '01041301139');
+    return '01041301139';
+  }
+  return saved;
+})();
 
 window.openSolapiSettings = function() {
   const old = document.getElementById('solapi-modal');
@@ -3050,7 +3057,7 @@ window.openSolapiSettings = function() {
         <div>
           <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">발신번호 (등록된 번호)</div>
           <input id="sp-sender" type="text" value="${SOLAPI_SENDER}"
-            placeholder="01012345678"
+            placeholder="01041301139"
             style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
         </div>
       </div>
@@ -3420,10 +3427,10 @@ window.fpUnassignSeat = function(seatNum) {
   if (!student) return;
   if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
 
-  // STUDENTS 배열에서 seat 비움 (학생 정보 유지, 좌석번호만 제거)
-  const idx = STUDENTS.findIndex(s => s.seat === String(seatNum));
+  // seat 형식이 "37번" 또는 "37" 등 다양하므로 숫자 부분만 비교
+  const idx = STUDENTS.findIndex(s => parseInt(s.seat) === seatNum);
   if (idx !== -1) {
-    STUDENTS[idx].seat = '';
+    STUDENTS[idx].seat = ''; // 즉시 로컬 반영
     if (window.saveStudentToFirebase) window.saveStudentToFirebase(STUDENTS[idx]).catch(console.error);
   }
 
