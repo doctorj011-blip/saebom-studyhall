@@ -460,7 +460,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 <div id="sec-students" class="section">
   <div class="search-bar">
     <input type="text" id="student-search" placeholder="이름 또는 좌석 검색..." oninput="filterStudents()">
-    <button class="add-btn"><i class="ti ti-plus" aria-hidden="true"></i> 학생 추가</button>
+
   </div>
   <div class="student-list" id="student-list"></div>
 </div>
@@ -1131,9 +1131,8 @@ function buildStudentList(filter=''){
         <div class="student-avatar" style="font-size:12px;font-weight:800">${s.seat}</div>
         <div class="student-info" style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
-            <span style="font-size:10px;background:#C8900A;color:#fff;border-radius:5px;padding:1px 5px;font-weight:700;flex-shrink:0">${s.seat}</span>
             <span class="student-name" style="font-size:13px;font-weight:700">${s.name}</span>
-            <span style="font-size:11px">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
+            <span onclick="toggleGender(${idx},event)" style="font-size:13px;cursor:pointer;user-select:none" title="클릭해서 성별 변경">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
           </div>
           <div class="student-meta" style="font-size:11px;color:#8B6010;margin-bottom:4px">${s.phone||'전화번호 미등록'}</div>
           <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
@@ -1141,6 +1140,15 @@ function buildStudentList(filter=''){
       </div>`;
     }).join('');
 }
+
+window.toggleGender = function(idx, e) {
+  e.stopPropagation(); // 카드 클릭(모달 열기) 방지
+  const s = STUDENTS[idx];
+  s.gender = s.gender === 'm' ? 'f' : 'm';
+  buildStudentList(document.getElementById('student-search').value);
+  if (window.saveStudentToFirebase) window.saveStudentToFirebase(s).catch(console.error);
+  if (document.getElementById('fp-room')) buildFloorplan();
+};
 
 function filterStudents(){
   buildStudentList(document.getElementById('student-search').value);
