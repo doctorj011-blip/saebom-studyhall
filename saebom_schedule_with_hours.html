@@ -344,9 +344,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       <button class="fp-edit-btn" id="fp-edit-btn" onclick="toggleFpEditMode()">
         <i class="ti ti-pencil" style="font-size:13px"></i> 위치수정
       </button>
-      <button class="fp-edit-btn" onclick="resetFpPositions()" title="배치도 위치 초기화" style="color:#C62828;border-color:#F09595">
-        <i class="ti ti-refresh" style="font-size:13px"></i> 초기화
-      </button>
     </div>
   </div>
 
@@ -1470,7 +1467,7 @@ function buildSeatCard(seatNum) {
   if (!student) {
     // 공석
     const onclick = `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
-    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px">
       <div style="font-size:10px;color:#bbb;font-weight:500">${seatNum}번</div>
       <div style="font-size:10px;color:#ccc">공석</div>
     </div>`;
@@ -1500,7 +1497,7 @@ function buildSeatCard(seatNum) {
 
   const onclick = `ondblclick="if(!fpEditMode&&!_fpLastDragged)fpSeatClick(${seatNum})"`;
 
-  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0">
+  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0;height:100%;box-sizing:border-box">
     <!-- 상단 배지 -->
     <div style="background:${badgeBg};padding:2px 5px;display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:9px;color:${badgeColor};font-weight:600">고정석${expiryStr ? ' '+expiryStr : ''}</span>
@@ -1549,175 +1546,220 @@ function studio(label) {
 function buildFloorplan() {
   const el = document.getElementById('fp-room');
 
-  // 기본 슬롯 정의: { key: seatNum or 'admin_N' or 'studio_N' }
-  // key = "r{row}_c{col}"
-  const DEFAULT_SLOTS = [
-    // C1 관리자석
-    {r:1,c:1,type:'admin',n:63,name:'관리조교'},
-    {r:2,c:1,type:'admin',n:62,name:''},
-    {r:3,c:1,type:'admin',n:61,name:''},
-    {r:4,c:1,type:'admin',n:60,name:''},
-    {r:5,c:1,type:'admin',n:59,name:''},
-    {r:6,c:1,type:'admin',n:58,name:''},
-    {r:7,c:1,type:'admin',n:57,name:'이지은'},
-    {r:8,c:1,type:'admin',n:56,name:'남궁준'},
-    {r:9,c:1,type:'admin',n:55,name:'이우영'},
-    {r:10,c:1,type:'admin',n:54,name:'정원혁'},
-    // C2 1~4번
-    {r:2,c:2,type:'seat',n:1},{r:3,c:2,type:'seat',n:2},
-    {r:4,c:2,type:'seat',n:3},{r:5,c:2,type:'seat',n:4},
-    // C3 스터디룸
-    {r:3,c:3,type:'studio',n:1},{r:6,c:3,type:'studio',n:2},{r:8,c:3,type:'studio',n:3},
-    // C4
-    {r:1,c:4,type:'seat',n:9},{r:2,c:4,type:'seat',n:8},{r:3,c:4,type:'seat',n:7},
-    {r:4,c:4,type:'seat',n:6},{r:5,c:4,type:'seat',n:5},
-    {r:8,c:4,type:'seat',n:45},{r:9,c:4,type:'seat',n:36},{r:10,c:4,type:'seat',n:35},
-    // C5
-    {r:8,c:5,type:'seat',n:44},{r:9,c:5,type:'seat',n:37},{r:10,c:5,type:'seat',n:34},
-    // C6
-    {r:1,c:6,type:'seat',n:10},{r:2,c:6,type:'seat',n:11},{r:3,c:6,type:'seat',n:12},
-    {r:4,c:6,type:'seat',n:13},{r:5,c:6,type:'seat',n:14},
-    {r:8,c:6,type:'seat',n:43},{r:9,c:6,type:'seat',n:38},{r:10,c:6,type:'seat',n:33},{r:11,c:6,type:'seat',n:30},
-    // C7
-    {r:1,c:7,type:'seat',n:19},{r:2,c:7,type:'seat',n:18},{r:3,c:7,type:'seat',n:17},
-    {r:4,c:7,type:'seat',n:16},{r:5,c:7,type:'seat',n:15},
-    {r:8,c:7,type:'seat',n:42},{r:9,c:7,type:'seat',n:39},{r:10,c:7,type:'seat',n:32},{r:11,c:7,type:'seat',n:31},
-    // C8
-    {r:8,c:8,type:'seat',n:41},{r:9,c:8,type:'seat',n:40},
-    // C9
-    {r:1,c:9,type:'seat',n:20},{r:2,c:9,type:'seat',n:21},{r:3,c:9,type:'seat',n:22},
-    {r:4,c:9,type:'seat',n:23},{r:5,c:9,type:'seat',n:24},{r:6,c:9,type:'seat',n:25},
-    {r:7,c:9,type:'seat',n:26},{r:8,c:9,type:'seat',n:27},{r:9,c:9,type:'seat',n:28},
-    {r:10,c:9,type:'seat',n:29},
-  ];
+  // 고정 칸 정의 (admin=관리자석만 고정)
+  const FIXED = {
+    'r1_c1':{type:'admin',n:63,name:'관리조교'},
+    'r2_c1':{type:'admin',n:62,name:''},
+    'r3_c1':{type:'admin',n:61,name:''},
+    'r4_c1':{type:'admin',n:60,name:''},
+    'r5_c1':{type:'admin',n:59,name:''},
+    'r6_c1':{type:'admin',n:58,name:''},
+    'r7_c1':{type:'admin',n:57,name:'이지은'},
+    'r8_c1':{type:'admin',n:56,name:'남궁준'},
+    'r9_c1':{type:'admin',n:55,name:'이우영'},
+    'r10_c1':{type:'admin',n:54,name:'정원혁'},
+  };
 
-  // fpGridLayout에 저장된 위치 적용
-  // fpGridLayout = { "r2_c4": 8, "r1_c4": 9, ... } seat번호 교환 반영
-  const slotMap = {}; // key -> slot
-  DEFAULT_SLOTS.forEach(s => { slotMap[`r${s.r}_c${s.c}`] = {...s}; });
+  // 확정 배치
+  const DEFAULT_SEATS = {
+    // C2: 1~4번
+    'r2_c2':1, 'r3_c2':2, 'r4_c2':3, 'r5_c2':4,
+    // C3: 스터디룸 (2행×1열)
+    'r2_c3':-1, 'r5_c3':-2, 'r8_c3':-3,
+    // C4: 9,8,7,6,5 / 45,36,35
+    'r1_c4':9,  'r2_c4':8,  'r3_c4':7,  'r4_c4':6,  'r5_c4':5,
+    'r8_c4':45, 'r9_c4':36, 'r11_c4':35,
+    // C5: 44,37,34
+    'r8_c5':44, 'r9_c5':37, 'r11_c5':34,
+    // C6: 10~14 / 43,38,33,30
+    'r1_c6':10, 'r2_c6':11, 'r3_c6':12, 'r4_c6':13, 'r5_c6':14,
+    'r8_c6':43, 'r9_c6':38, 'r10_c6':33, 'r11_c6':30,
+    // C7: 19~15 / 42,39,32,31
+    'r1_c7':19, 'r2_c7':18, 'r3_c7':17, 'r4_c7':16, 'r5_c7':15,
+    'r8_c7':42, 'r9_c7':39, 'r10_c7':32, 'r11_c7':31,
+    // C8: 41,40
+    'r8_c8':41, 'r9_c8':40,
+    // C9: 20~29
+    'r1_c9':20, 'r2_c9':21, 'r3_c9':22, 'r4_c9':23, 'r5_c9':24,
+    'r6_c9':25, 'r7_c9':26, 'r8_c9':27, 'r9_c9':28, 'r10_c9':29,
+  };
 
-  // 저장된 레이아웃 반영: seat 번호만 교환 (admin/studio는 고정)
-  if (Object.keys(fpGridLayout).length > 0) {
-    Object.entries(fpGridLayout).forEach(([key, seatNum]) => {
-      if (slotMap[key] && slotMap[key].type === 'seat') {
-        slotMap[key].n = seatNum;
+  const layout = {...DEFAULT_SEATS, ...fpGridLayout};
+  const ROWS = 11, COLS = 9;
+
+  // 스터디룸 span 추적 (2행×1열이므로 아래 1칸 건너뜀)
+  const studioSpan = {};
+
+  // 그리드 CSS: C4는 복도(18px 고정)
+  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
+  let html = `<style>
+    #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
+    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
+    .fp-cell-admin { background:#FFF8DC; border:1px solid #E0B020; }
+    .fp-cell-studio { background:#F5F0FF; border:1px dashed #C4A4E0; align-items:center; justify-content:center; }
+    .fp-cell-in { background:#DCFCE7; border:1.5px solid #4ADE80; }
+    .fp-cell-out { background:#F9FAFB; border:1px solid #D1D5DB; }
+    .fp-cell-absent { background:#F9FAFB; border:1px solid #D1D5DB; }
+    .fp-cell-vacant { background:transparent; border:none; }
+    .fp-cell-vacant-seat { background:#F9FAFB; border:1px solid #E5E7EB; }
+    .fp-cell-empty-edit { background:#FAFAFA; border:1.5px dashed #E0E0E0; cursor:pointer; }
+    .fp-cell-edit { cursor:pointer; }
+    .fp-cell-selected { outline:3px solid #C8900A !important; outline-offset:-2px; }
+    .fp-num { font-size:9px; color:#9CA3AF; line-height:1; }
+    .fp-name { font-size:12px; font-weight:700; color:#1F2937; line-height:1.3; margin-top:1px; }
+    .fp-badge { font-size:9px; font-weight:600; padding:1px 4px; border-radius:3px; margin-top:2px; display:inline-block; }
+    .fp-badge-in { background:#16A34A; color:#fff; }
+    .fp-badge-out { background:#9CA3AF; color:#fff; }
+    .fp-badge-absent { background:#F3F4F6; color:#9CA3AF; }
+    .fp-dday { font-size:9px; color:#E07000; font-weight:600; }
+    .fp-gender-f { color:#E05C8A; }
+    .fp-gender-m { color:#4A90D9; }
+  </style>
+  <div id="fp-grid">`;
+
+  for (let r = 1; r <= ROWS; r++) {
+    for (let c = 1; c <= COLS; c++) {
+      const key = `r${r}_c${c}`;
+      // 스터디룸 2×2 병합으로 덮인 칸은 건너뜀
+      if (studioSpan[key]) continue;
+
+      const fixed = FIXED[key];
+      const isSelected = fpSelectedSlot && fpSelectedSlot.key === key;
+      const selClass = isSelected ? ' fp-cell-selected' : '';
+
+      if (fixed) {
+        if (fixed.type === 'admin') {
+          // 관리자석
+          const adminSt = STUDENTS.find(s => parseInt(s.seat) === fixed.n) || null;
+          const rec = adminSt ? todayRecords.find(r2 => r2.studentName === adminSt.name && !r2.outTime) : null;
+          const dday = adminSt?.expiry ? calcDday(adminSt.expiry) : null;
+          const ddayHtml = dday !== null ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '';
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c}">
+            <div class="fp-num">${fixed.n}번 관리</div>
+            <div class="fp-name" style="color:#7A5008;font-size:11px">${fixed.name||''}</div>
+            ${ddayHtml}
+          </div>`;
+        }
+      } else {
+        const seatNum = layout[key] || 0;
+        if (seatNum < 0) {
+          // 스터디룸 (-1,-2,-3) — 2행×2열 병합
+          const roomNum = Math.abs(seatNum);
+          // 나머지 1칸 studioSpan에 등록 (2행×1열)
+          studioSpan[`r${r+1}_c${c}`] = true;
+          const waiting = (studyRoomStudents[roomNum]||[]);
+          const cols = ['#7C3AED','#9F5AE0','#C084FC'];
+          const waitHtml = waiting.length
+            ? waiting.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
+            : `<div style="font-size:10px;color:#C4A4E0;margin-top:4px">비어있음</div>`;
+          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : '';
+          html += `<div class="fp-cell fp-cell-studio${fpEditMode?' fp-cell-edit':''}${selClass}"
+            style="grid-row:${r}/span 2;grid-column:${c};flex-direction:column;align-items:flex-start;padding:8px 10px"
+            data-slot-key="${key}" ${editAttr}>
+            <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${roomNum}</div>
+            ${waitHtml}
+          </div>`;
+        } else if (seatNum > 0) {
+          const student = getFpStudentBySeat(seatNum);
+          const status = getFpStatus(student);
+          const rec = student ? todayRecords.find(r2 => r2.studentName === student.name && !r2.outTime) : null;
+          const dday = student?.expiry ? calcDday(student.expiry) : null;
+          const ddayStr = dday !== null ? (dday <= 7 ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '') : '';
+          const genderIcon = student?.gender === 'm'
+            ? '<span class="fp-gender-m">♂</span>'
+            : student ? '<span class="fp-gender-f">♀</span>' : '';
+
+          let cellCls, badgeCls, badgeText;
+          if (!student) {
+            cellCls = 'fp-cell-vacant-seat'; badgeCls = ''; badgeText = '';
+          } else if (status === 'in') {
+            cellCls = 'fp-cell-in'; badgeCls = 'fp-badge-in'; badgeText = `●입실 ${rec?.inTime||''}`;
+          } else if (status === 'out') {
+            cellCls = 'fp-cell-out'; badgeCls = 'fp-badge-out'; badgeText = '퇴실';
+          } else {
+            cellCls = 'fp-cell-absent'; badgeCls = 'fp-badge-absent'; badgeText = '미입실';
+          }
+
+          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `ondblclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
+
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" ${editAttr}>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="fp-num">${seatNum}번</span>
+              ${genderIcon}
+            </div>
+            <div class="fp-name">${student ? student.name : '<span style="color:#D1D5DB">공석</span>'}</div>
+            <div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap">
+              ${badgeText ? `<span class="fp-badge ${badgeCls}">${badgeText}</span>` : ''}
+              ${ddayStr}
+            </div>
+          </div>`;
+        } else {
+          // 빈 칸
+          if (fpEditMode) {
+            html += `<div class="fp-cell fp-cell-empty-edit${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" onclick="fpSlotClick('${key}',0)">
+              <div style="color:#E0E0E0;font-size:10px;text-align:center;width:100%">＋</div>
+            </div>`;
+          } else {
+            html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
+          }
+        }
       }
-    });
-  }
-
-  let html = `<div id="fp-grid" style="
-    display:grid;
-    grid-template-columns:80px 78px 80px 78px 78px 78px 78px 78px 78px;
-    grid-template-rows:repeat(11,62px);
-    gap:5px;
-    min-width:860px;
-  ">`;
-
-  DEFAULT_SLOTS.forEach(defaultSlot => {
-    const key = `r${defaultSlot.r}_c${defaultSlot.c}`;
-    const slot = slotMap[key];
-    let cardHtml;
-    if (slot.type === 'admin') {
-      cardHtml = buildAdminCard(slot.n, slot.name);
-    } else if (slot.type === 'studio') {
-      cardHtml = studio('스터디룸 ' + slot.n);
-    } else {
-      cardHtml = buildSeatCard(slot.n);
     }
-    const draggable = (fpEditMode && slot.type === 'seat') ? 'draggable="true" data-slot-key="' + key + '" data-seat-num="' + slot.n + '"' : '';
-    const editStyle = (fpEditMode && slot.type === 'seat') ? 'outline:2px dashed #C8900A;outline-offset:-2px;cursor:grab;' : '';
-    html += `<div style="grid-row:${defaultSlot.r};grid-column:${defaultSlot.c};${editStyle}" ${draggable} data-slot-key="${key}">${cardHtml}</div>`;
-  });
+  }
 
   html += '</div>';
   el.innerHTML = html;
-
-  // 위치수정 모드면 드래그 이벤트 연결
-  if (fpEditMode) attachGridDragEvents();
 }
 
-function attachGridDragEvents() {
-  const grid = document.getElementById('fp-grid');
-  if (!grid) return;
-  let dragSrcKey = null;
-  let dragSrcNum = null;
-
-  // 카드 내부 요소가 드래그를 가로채지 못하게 pointer-events 차단
-  grid.querySelectorAll('[draggable="true"] *').forEach(el => {
-    el.style.pointerEvents = 'none';
-  });
-
-  grid.querySelectorAll('[draggable="true"]').forEach(cell => {
-    cell.addEventListener('dragstart', e => {
-      dragSrcKey = cell.dataset.slotKey;
-      dragSrcNum = parseInt(cell.dataset.seatNum);
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', dragSrcKey);
-      setTimeout(() => { cell.style.opacity = '0.4'; }, 0);
-    });
-    cell.addEventListener('dragend', () => {
-      cell.style.opacity = '';
-      grid.querySelectorAll('.fp-drag-over').forEach(c => c.classList.remove('fp-drag-over'));
-    });
-    cell.addEventListener('dragover', e => {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    });
-    cell.addEventListener('dragenter', e => {
-      e.preventDefault();
-      grid.querySelectorAll('.fp-drag-over').forEach(c => c.classList.remove('fp-drag-over'));
-      cell.classList.add('fp-drag-over');
-    });
-    cell.addEventListener('dragleave', e => {
-      // 자식 요소로 이동하는 경우 무시
-      if (!cell.contains(e.relatedTarget)) cell.classList.remove('fp-drag-over');
-    });
-    cell.addEventListener('drop', e => {
-      e.preventDefault();
-      cell.classList.remove('fp-drag-over');
-      const destKey = cell.dataset.slotKey;
-      const destNum = parseInt(cell.dataset.seatNum);
-      if (dragSrcKey && destKey && dragSrcKey !== destKey && !isNaN(destNum) && !isNaN(dragSrcNum)) {
-        fpGridLayout[dragSrcKey] = destNum;
-        fpGridLayout[destKey] = dragSrcNum;
-        dragSrcKey = null;
-        dragSrcNum = null;
-        buildFloorplan();
-      }
-    });
-  });
-}
-
-// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
+// ===== 위치수정 모드// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
 let fpEditMode = false;
 
 // 좌석 배치 순서 저장: { slot_key: seatNum } 예) "r1_c4": 9
 // slot_key = "r{row}_c{col}"
-let fpGridLayout = (function() {
-  try {
-    const s = localStorage.getItem('saebom_fp_grid_layout');
-    return s ? JSON.parse(s) : {};
-  } catch(e) { return {}; }
-})();
+let fpGridLayout = {};
 
 function saveFpGridLayout() {
-  try { localStorage.setItem('saebom_fp_grid_layout', JSON.stringify(fpGridLayout)); } catch(e) {}
+  // localStorage 미사용 (file:// 보안 제한)
 }
+
+let fpSelectedSlot = null;
 
 window.toggleFpEditMode = function() {
   fpEditMode = !fpEditMode;
+  fpSelectedSlot = null;
   const btn = document.getElementById('fp-edit-btn');
   if (fpEditMode) {
     btn.className = 'fp-edit-btn active';
     btn.innerHTML = '<i class="ti ti-check" style="font-size:13px"></i> 저장';
+    showAdminToast('💡 이동할 좌석 클릭 → 목적지 클릭으로 위치를 바꿔주세요');
   } else {
-    // 저장
     saveFpGridLayout();
     btn.className = 'fp-edit-btn';
     btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정';
     showFpSaveToast();
   }
   buildFloorplan();
+};
+
+window.fpSlotClick = function(key, seatNum) {
+  if (!fpEditMode) return;
+  // seatNum: 양수=좌석, 0=빈칸
+  if (fpSelectedSlot === null) {
+    fpSelectedSlot = { key, seatNum };
+    buildFloorplan(); // 선택 강조 반영
+  } else {
+    if (fpSelectedSlot.key === key) {
+      // 같은 칸 다시 클릭 → 취소
+      fpSelectedSlot = null;
+      buildFloorplan();
+      return;
+    }
+    // 두 칸 교환 (빈칸=0, 스터디룸=음수도 교환 가능)
+    fpGridLayout[fpSelectedSlot.key] = seatNum;
+    fpGridLayout[key] = fpSelectedSlot.seatNum;
+    fpSelectedSlot = null;
+    buildFloorplan();
+  }
 };
 
 window.resetFpPositions = function() {
