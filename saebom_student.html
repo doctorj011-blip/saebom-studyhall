@@ -445,16 +445,61 @@ function initDraft() {
   draftSchedule = {};
   DAYS.forEach(day => {
     const sched = currentStudent.schedule[day] || '';
-    draftSchedule[day] = { reason: '', periods: {} };
+    draftSchedule[day] = { reasons: {}, periods: {} };
 
-    const reasonMatch = sched.match(/x\(([^)]+)\)/);
-    if (reasonMatch) draftSchedule[day].reason = reasonMatch[1];
+    // 새 형식: 토큰 순서 기반 교시별 파싱
+    // 예: "x(사유1),8,x(사유2),10,11"
+    const tokens = sched ? sched.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const isSat = day === '토';
+    const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
 
-    // 모든 교시(1~11) 파싱
-    const allPeriods = [1,2,3,4,5,6,7,8,9,10,11];
-    allPeriods.forEach(n => {
-      draftSchedule[day].periods[n] = parsePeriodStatus(sched, n);
-    });
+    // 구버전 형식 체크: x(사유)로 시작하고 뒤에 숫자
+    const legacyMatch = sched.match(/^x\(([^)]*)\)(.*)/);
+    const isLegacy = legacyMatch && (tokens[0] === 'x' || tokens[0]?.match(/^x\([^)]*\)$/));
+
+    if (isLegacy) {
+      const reason = legacyMatch ? legacyMatch[1] : '';
+      // 뒤에 나오는 숫자들은 출석
+      const attendNums = new Set();
+      tokens.forEach(t => {
+        if (t.startsWith('x')) return;
+        const m = t.match(/^(\d+)~(\d+)$/);
+        if (m) { for (let i=Number(m[1]);i<=Number(m[2]);i++) attendNums.add(i); return; }
+        const n = Number(t);
+        if (!isNaN(n) && n>=1 && n<=11) attendNums.add(n);
+      });
+      validPeriods.forEach(n => {
+        if (attendNums.has(n)) {
+          draftSchedule[day].periods[n] = 'attend';
+        } else if (sched !== '-' && sched !== '') {
+          draftSchedule[day].periods[n] = 'absent';
+          if (reason) draftSchedule[day].reasons[n] = reason;
+        } else {
+          draftSchedule[day].periods[n] = 'none';
+        }
+      });
+    } else {
+      // 새 형식: 토큰 순서가 validPeriods 순서와 대응
+      tokens.forEach((token, i) => {
+        const p = validPeriods[i];
+        if (p === undefined) return;
+        const absentM = token.match(/^x\(([^)]*)\)$/i);
+        if (absentM) {
+          draftSchedule[day].periods[p] = 'absent';
+          if (absentM[1]) draftSchedule[day].reasons[p] = absentM[1];
+        } else if (token === 'x') {
+          draftSchedule[day].periods[p] = 'absent';
+        } else {
+          const n = Number(token);
+          if (!isNaN(n) && n >= 1 && n <= 11) draftSchedule[day].periods[p] = 'attend';
+        }
+      });
+      // 언급 안 된 교시는 none
+      validPeriods.forEach(n => {
+        if (draftSchedule[day].periods[n] === undefined)
+          draftSchedule[day].periods[n] = 'none';
+      });
+    }
   });
 }
 
@@ -570,7 +615,7 @@ function buildDailyPeriods() {
     <div class="absent-reason${status==='absent'?' show':''}" id="reason-${currentDayTab}-${p.n}">
       <span class="reason-label">불참 사유</span>
       <input class="reason-input" type="text" placeholder="예: 수학학원"
-        value="${dayDraft.reason||''}"
+        value="${dayDraft.reasons[p.n]||''}"
         oninput="setReason('${currentDayTab}','${p.n}',this.value)">
     </div>`;
   }).join('');
@@ -587,7 +632,7 @@ function setPeriod(day, pNum, status) {
 }
 
 function setReason(day, pNum, val) {
-  draftSchedule[day].reason = val;
+  draftSchedule[day].reasons[pNum] = val;
   isDirty = true;
 }
 
@@ -644,13 +689,21 @@ async function saveSchedule() {
     let str = '-';
     if (attendList.length === 0 && absentList.length === 0) {
       str = '-';
-    } else if (absentList.length > 0 && attendList.length === 0) {
-      str = dd.reason ? `x(${dd.reason})` : 'x';
     } else {
+      // 새 형식: validPeriods 순서대로 토큰 나열
+      // 출석 → 숫자, 불참 → x(사유) 또는 x
       const parts = [];
-      if (absentList.length > 0) parts.push(dd.reason ? `x(${dd.reason})` : 'x');
-      attendList.forEach(n => parts.push(String(n)));
-      str = parts.join(',');
+      periods.forEach(p => {
+        const st = dd.periods[p.n];
+        if (st === 'attend') {
+          parts.push(String(p.n));
+        } else if (st === 'absent') {
+          const r = dd.reasons[p.n] || '';
+          parts.push(r ? `x(${r})` : 'x');
+        }
+        // none은 포함 안 함
+      });
+      str = parts.length ? parts.join(',') : '-';
     }
     currentStudent.schedule[day] = str;
   });
