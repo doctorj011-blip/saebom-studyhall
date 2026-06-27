@@ -320,6 +320,14 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       <div class="card-title"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</div>
       <div id="period-chart"></div>
     </div>
+    <!-- 스터디룸 초과 경고 -->
+    <div class="card" id="studyroom-overflow-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-alert-triangle" style="font-size:14px;color:#C62828"></i> 스터디룸 초과 경고</span>
+        <button onclick="dismissStudyroomOverflow()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">닫기</button>
+      </div>
+      <div id="studyroom-overflow-list"></div>
+    </div>
     <!-- 학생 스케줄 변경 알림 (Firebase 실시간) -->
     <div class="card" id="schedule-change-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -1300,15 +1308,30 @@ window.checkinConfirm = function() {
 
   // 입실 시 교시 외 시간이면 스터디룸 배정
   let assignedRoom = null;
+  let isDuringPeriod = false;
   if (!isCheckout) {
     const curPeriod = getCurrentPeriod();
     if (!curPeriod) {
-      // 빈 자리 찾기 (최대 3명)
-      for (let r = 1; r <= 3; r++) {
-        if (studyRoomStudents[r].length < 3 && !studyRoomStudents[r].includes(student.name)) {
-          studyRoomStudents[r].push(student.name);
-          assignedRoom = r;
-          break;
+      // 쉬는 시간 — 바로 자리로 이동 (스터디룸 배정 없음)
+    } else {
+      // 교시 중 입실 — 1→2→3→1→2→3 순환 배정 (룸당 최대 4명, 총 12명)
+      isDuringPeriod = true;
+      const total = studyRoomStudents[1].length + studyRoomStudents[2].length + studyRoomStudents[3].length;
+      if (!Object.values(studyRoomStudents).flat().includes(student.name)) {
+        if (total < 12) {
+          // 가장 적게 찬 룸부터 순환 (1→2→3 순서 우선)
+          const counts = [studyRoomStudents[1].length, studyRoomStudents[2].length, studyRoomStudents[3].length];
+          const minCount = Math.min(...counts);
+          for (let r = 1; r <= 3; r++) {
+            if (studyRoomStudents[r].length === minCount && studyRoomStudents[r].length < 4) {
+              studyRoomStudents[r].push(student.name);
+              assignedRoom = r;
+              break;
+            }
+          }
+        } else {
+          // 12명 초과 — 경고 카드 표시
+          showStudyroomOverflowAlert(student.name, student.seat);
         }
       }
     }
@@ -1316,7 +1339,10 @@ window.checkinConfirm = function() {
 
   let doneMsg = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
   let doneIcon = isCheckout ? '👋' : '✅';
-  if (assignedRoom) {
+  if (assignedRoom && isDuringPeriod) {
+    doneMsg = `스터디룸 ${assignedRoom}번에서 공부를 하다가 쉬는 시간에 좌석으로 이동해 주세요`;
+    doneIcon = '📚';
+  } else if (assignedRoom) {
     doneMsg = `📚 ${assignedRoom}번 스터디룸에서 대기하세요`;
     doneIcon = '📚';
   }
@@ -3438,6 +3464,46 @@ window.fpUnassignSeat = function(seatNum) {
   buildStudentList(document.getElementById('student-search')?.value || '');
   buildDashboard();
   showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
+};
+
+// ── 스터디룸 초과 경고 ──
+const studyroomOverflowAlerts = [];
+
+function showStudyroomOverflowAlert(name, seat) {
+  studyroomOverflowAlerts.unshift({ name, seat, time: new Date() });
+  renderStudyroomOverflow();
+  // 대시보드 탭이 아니어도 보이게 섹션 활성화
+  const section = document.getElementById('studyroom-overflow-section');
+  if (section) section.style.display = 'block';
+  // 대시보드로 자동 이동
+  const dashBtn = document.querySelector('.tab-btn.active') || document.querySelector('.tab-btn');
+  showSection('dashboard', document.querySelector('[onclick*="dashboard"]'));
+}
+
+function renderStudyroomOverflow() {
+  const list = document.getElementById('studyroom-overflow-list');
+  if (!list) return;
+  list.innerHTML = studyroomOverflowAlerts.map((a, i) => {
+    const timeStr = a.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    return `<div style="position:relative;background:#FFF0F0;border:1.5px solid #F09595;border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <button onclick="studyroomOverflowAlerts.splice(${i},1);renderStudyroomOverflow();if(!studyroomOverflowAlerts.length)document.getElementById('studyroom-overflow-section').style.display='none'"
+        style="position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:12px;cursor:pointer">✕</button>
+      <div style="display:flex;align-items:center;gap:10px;padding-right:24px">
+        <div style="width:36px;height:36px;border-radius:10px;background:#C62828;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">${a.name[0]}</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#C62828">⚠️ 스터디룸 초과 — ${a.name} (${a.seat})</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">${timeStr} 입실 · 스터디룸 배정 불가 (12명 초과)</div>
+          <div style="font-size:12px;color:#C62828;margin-top:4px;font-weight:600">즉시 조치가 필요합니다</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.dismissStudyroomOverflow = function() {
+  studyroomOverflowAlerts.length = 0;
+  const section = document.getElementById('studyroom-overflow-section');
+  if (section) section.style.display = 'none';
 };
 
 window.confirmDeleteStudent = function(seat, name) {
