@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, serverTimestamp, addDoc, query, orderBy }
+import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -29,9 +29,6 @@ window._fsSetDoc = setDoc;
 window._fsCollection = collection;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
-window._fsAddDoc = addDoc;
-window._fsQuery = query;
-window._fsOrderBy = orderBy;
 window._fsGetDoc = getDoc;
 window._firebaseReady = true;
 console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#F0D020;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
@@ -221,7 +218,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="app-tab" onclick="showTab('daily',this)">📅 요일별</button>
       <button class="app-tab" onclick="showTab('weekly',this)">📋 주간설정</button>
       <button class="app-tab" onclick="showTab('mystats',this)">📊 내 현황</button>
-      <button class="app-tab" onclick="showTab('message',this)">💬 메시지</button>
     </div>
   </div>
 
@@ -252,19 +248,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <div id="mystats-content"></div>
     </div>
 
-    <!-- 메시지 -->
-    <div id="tab-message" style="display:none">
-      <div id="msg-list" style="display:flex;flex-direction:column;gap:10px;padding-bottom:80px"></div>
-    </div>
-
   </div>
-</div>
-
-<!-- 메시지 입력 FAB 영역 -->
-<div id="msg-input-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid #eee;padding:10px 14px;z-index:100;display:flex;gap:8px;align-items:flex-end">
-  <textarea id="msg-text" placeholder="조교에게 메시지를 보내세요..." rows="2"
-    style="flex:1;border:1.5px solid #E0B020;border-radius:10px;padding:8px 10px;font-size:13px;resize:none;outline:none;font-family:inherit"></textarea>
-  <button onclick="sendMessage()" style="background:#C8900A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">전송</button>
 </div>
 
 <!-- 저장 버튼 (FAB) -->
@@ -496,11 +480,6 @@ function parsePeriodStatus(sched, pNum) {
 
 // ── 탭 전환 ──
 function showTab(id, btn) {
-  // 메시지 입력바 토글
-  const bar = document.getElementById('msg-input-bar');
-  if (bar) bar.style.display = id === 'message' ? 'flex' : 'none';
-  // 메시지 탭 진입 시 로드
-  if (id === 'message') loadMessages();
   ['notice','daily','weekly','mystats'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
@@ -849,27 +828,34 @@ function loadMessages() {
   if (!listEl) return;
   listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px">메시지를 불러오는 중...</div>';
 
-  if (msgUnsubscribe) msgUnsubscribe();
+  if (msgUnsubscribe) { try { msgUnsubscribe(); } catch(e){} }
 
-  try {
-    const q = window._fsQuery(
-      window._fsCollection(db, 'messages'),
-      window._fsOrderBy('createdAt', 'asc')
-    );
-    msgUnsubscribe = window._fsOnSnapshot(q, snap => {
+  // 전체 messages 컬렉션을 실시간 감시 (orderBy 없이 — 서버타임스탬프 지연 문제 회피)
+  msgUnsubscribe = window._fsOnSnapshot(
+    window._fsCollection(db, 'messages'),
+    snap => {
       const msgs = [];
       snap.forEach(d => {
         const m = d.data();
-        // 이 학생이 보내거나 받은 메시지만
-        if (m.from === currentStudent.name || m.to === currentStudent.name || m.to === 'ALL') {
+        const myName = currentStudent.name;
+        // 이 학생이 보낸 메시지 또는 조교가 이 학생에게 보낸 메시지
+        if (m.from === myName || m.to === myName || m.to === 'ALL') {
           msgs.push({ id: d.id, ...m });
         }
       });
+      // 클라이언트 측에서 시간 정렬 (서버타임스탬프 null 안전 처리)
+      msgs.sort((a, b) => {
+        const ta = a.createdAt ? (a.createdAt.seconds || 0) : 0;
+        const tb = b.createdAt ? (b.createdAt.seconds || 0) : 0;
+        return ta - tb;
+      });
       renderMessages(msgs);
-    });
-  } catch(e) {
-    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px">메시지를 불러올 수 없습니다.</div>';
-  }
+    },
+    err => {
+      console.error('메시지 로드 오류:', err);
+      if (listEl) listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px;font-size:13px">메시지를 불러올 수 없습니다.</div>';
+    }
+  );
 }
 
 function renderMessages(msgs) {

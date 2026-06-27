@@ -292,7 +292,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
     <button class="tab-btn" onclick="showSection('hours',this)">누적시간</button>
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
-    <button class="tab-btn" onclick="showSection('messages',this)">💬 학생메시지</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
@@ -469,23 +468,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 </div>
 
 <!-- 문자 발신내역 -->
-<div id="sec-messages" class="section">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-    <div style="font-size:15px;font-weight:700;color:#1F2937">💬 학생 메시지</div>
-    <button onclick="refreshMessages()" style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:12px;cursor:pointer">새로고침</button>
-  </div>
-  <div id="admin-msg-list" style="display:flex;flex-direction:column;gap:12px;margin-bottom:80px"></div>
-  <!-- 답장 패널 -->
-  <div id="admin-reply-bar" style="position:sticky;bottom:0;background:#fff;border-top:1px solid #eee;padding:12px 0;display:none;gap:8px;align-items:flex-end">
-    <div style="font-size:12px;color:#888;margin-bottom:6px">답장 대상: <span id="reply-target" style="font-weight:700;color:#C8900A"></span></div>
-    <div style="display:flex;gap:8px">
-      <textarea id="admin-reply-text" rows="2" placeholder="답장 내용..." style="flex:1;border:1.5px solid #E0B020;border-radius:10px;padding:8px 10px;font-size:13px;resize:none;outline:none;font-family:inherit"></textarea>
-      <button onclick="sendAdminReply()" style="background:#C8900A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer">전송</button>
-      <button onclick="closeReplyBar()" style="background:#eee;color:#666;border:none;border-radius:10px;padding:10px 12px;font-size:13px;cursor:pointer">취소</button>
-    </div>
-  </div>
-</div>
-
 <div id="sec-smslog" class="section">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:700;color:#5C3D08">📨 문자 발신내역</div>
@@ -758,7 +740,6 @@ window.showSection = function(id,btn){
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); loadNoticesAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
-  if (id === 'messages') { loadAdminMessages(); }
 }
 function loadSettingsTab() {
   const k = document.getElementById('cfg-key');
@@ -1748,8 +1729,9 @@ function buildFloorplan() {
           }
 
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
+          const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" ${editAttr}>
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" ${editAttr} ${ctxAttr}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -2482,7 +2464,7 @@ window.initApp();
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp, addDoc, query, orderBy }
+import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -2563,22 +2545,6 @@ window.deleteStudentFromFirebase = deleteStudentFromFirebase;
 // 앱 시작
 loadStudentsFromFirebase();
 
-// ── 학생 메시지 기능 ──
-let adminMsgUnsubscribe = null;
-let currentReplyTo = null;
-
-window.loadAdminMessages = function() {
-  const listEl = document.getElementById('admin-msg-list');
-  if (!listEl) return;
-  listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:20px">메시지 불러오는 중...</div>';
-  if (adminMsgUnsubscribe) adminMsgUnsubscribe();
-  const q = query(collection(db, 'messages'), orderBy('createdAt', 'asc'));
-  adminMsgUnsubscribe = onSnapshot(q, snap => {
-    const msgs = [];
-    snap.forEach(d => msgs.push({ id: d.id, ...d.data() }));
-    renderAdminMessages(msgs);
-  });
-};
 
 window.refreshMessages = window.loadAdminMessages;
 
@@ -3394,6 +3360,77 @@ window.adminForceCheckout = function(name) {
   showAdminToast(`👋 ${name} 퇴실 처리 완료 (${timeStr})`);
   // 팝업 목록 새로고침
   if (window._todayModalRender) window._todayModalRender();
+};
+
+// ── 배치도 우클릭 컨텍스트 메뉴 ──
+window.fpSeatContextMenu = function(e, seatNum, key) {
+  e.preventDefault();
+  e.stopPropagation();
+  // 기존 메뉴 제거
+  const old = document.getElementById('fp-ctx-menu');
+  if (old) old.remove();
+
+  const student = getFpStudentBySeat(seatNum);
+  if (!student) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'fp-ctx-menu';
+  menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:#fff;
+    border:1px solid #E0B020;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15);
+    z-index:9999;min-width:160px;overflow:hidden;animation:toastIn 0.1s ease`;
+  menu.innerHTML = `
+    <div style="padding:8px 14px;font-size:11px;color:#888;border-bottom:1px solid #f0f0f0">
+      ${seatNum}번 · ${student.name}
+    </div>
+    <div onclick="fpUnassignSeat(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#C62828;display:flex;align-items:center;gap:8px"
+      onmouseover="this.style.background='#FFF0F0'" onmouseout="this.style.background=''">
+      🪑 배석 해제
+    </div>
+    <div onclick="fpSeatClick(${seatNum});document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#1F2937;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
+      👤 학생 정보 보기
+    </div>
+  `;
+  document.body.appendChild(menu);
+
+  // 화면 밖으로 넘어가면 위치 보정
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (e.clientX - rect.width) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (e.clientY - rect.height) + 'px';
+  });
+
+  // 바깥 클릭 시 닫기
+  setTimeout(() => {
+    document.addEventListener('click', function closeCtx() {
+      document.getElementById('fp-ctx-menu')?.remove();
+      document.removeEventListener('click', closeCtx);
+    });
+    document.addEventListener('contextmenu', function closeCtx2() {
+      document.getElementById('fp-ctx-menu')?.remove();
+      document.removeEventListener('contextmenu', closeCtx2);
+    });
+  }, 50);
+};
+
+window.fpUnassignSeat = function(seatNum) {
+  document.getElementById('fp-ctx-menu')?.remove();
+  const student = getFpStudentBySeat(seatNum);
+  if (!student) return;
+  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
+
+  // STUDENTS 배열에서 seat 비움 (학생 정보 유지, 좌석번호만 제거)
+  const idx = STUDENTS.findIndex(s => s.seat === String(seatNum));
+  if (idx !== -1) {
+    STUDENTS[idx].seat = '';
+    if (window.saveStudentToFirebase) window.saveStudentToFirebase(STUDENTS[idx]).catch(console.error);
+  }
+
+  buildFloorplan();
+  buildStudentList(document.getElementById('student-search')?.value || '');
+  buildDashboard();
+  showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
 };
 
 window.confirmDeleteStudent = function(seat, name) {
