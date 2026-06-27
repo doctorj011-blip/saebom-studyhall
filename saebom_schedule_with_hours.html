@@ -2811,9 +2811,10 @@ function renderSmsLog(logs) {
   }
 
   const typeBadge = {
-    in:     { label:'입실',     bg:'#FFF8DC', color:'#27500A', border:'#E0B020' },
-    out:    { label:'퇴실',     bg:'#E8F5E9', color:'#2D7A4F', border:'#A5D6A7' },
-    absent: { label:'미입실알림', bg:'#FCEBEB', color:'#C62828', border:'#F09595' }
+    in:       { label:'입실',     bg:'#FFF8DC', color:'#27500A', border:'#E0B020' },
+    out:      { label:'퇴실',     bg:'#E8F5E9', color:'#2D7A4F', border:'#A5D6A7' },
+    absent:   { label:'미입실알림', bg:'#FCEBEB', color:'#C62828', border:'#F09595' },
+    schedule: { label:'스케줄확인', bg:'#EDE7F6', color:'#4A148C', border:'#CE93D8' }
   };
 
   document.getElementById('smslog-list').innerHTML = logs.map((log, i) => {
@@ -2964,58 +2965,38 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
     byDay[c.day].push(c);
   });
 
-  // 변경된 교시별 before→after 파싱
-  function getPeriods(schedStr) {
-    const result = new Set();
-    if (!schedStr || schedStr === '-') return result;
-    const ranges = schedStr.match(/(\d+)~(\d+)/g) || [];
-    ranges.forEach(r => {
-      const [a,b] = r.split('~').map(Number);
-      for (let i=a; i<=b; i++) result.add(i);
-    });
-    const nums = schedStr.match(/\b(\d+)\b/g) || [];
-    nums.forEach(n => { const v=Number(n); if(v>=1&&v<=11) result.add(v); });
-    return result;
-  }
-
-  function getAbsentReason(schedStr) {
-    const m = schedStr?.match(/x\(([^)]+)\)/);
-    return m ? m[1] : '';
-  }
-
-  function isAbsentDay(schedStr) {
-    return schedStr?.startsWith('x(') || schedStr === 'x';
-  }
-
+  // parseScheduleStr()을 재활용해 교시별 상태를 정확히 파싱
   let changeLines = [];
   Object.keys(byDay).forEach(day => {
+    const isSat = day === '토';
+    const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
     const dayChanges = byDay[day];
     changeLines.push(`${dayMap[day]||day}`);
 
     dayChanges.forEach(c => {
-      const oldPeriods = getPeriods(c.oldVal);
-      const newPeriods = getPeriods(c.newVal);
-      const oldAbsent = isAbsentDay(c.oldVal);
-      const newAbsent = isAbsentDay(c.newVal);
-      const newReason = getAbsentReason(c.newVal);
-      const oldReason = getAbsentReason(c.oldVal);
+      const oldParsed = parseScheduleStr(c.oldVal);
+      const newParsed = parseScheduleStr(c.newVal);
 
-      // 모든 관련 교시 수집
-      const allPeriods = new Set([...oldPeriods, ...newPeriods]);
-      const sorted = [...allPeriods].sort((a,b)=>a-b);
+      validPeriods.forEach(p => {
+        const wasAttend = oldParsed.periods.has(p) && !oldParsed.absentPeriods.has(p);
+        const wasAbsent = oldParsed.absentPeriods.has(p);
+        const nowAttend = newParsed.periods.has(p) && !newParsed.absentPeriods.has(p);
+        const nowAbsent = newParsed.absentPeriods.has(p);
 
-      sorted.forEach(p => {
-        const wasAttend = oldPeriods.has(p) && !oldAbsent;
-        const wasAbsent = oldAbsent && !oldPeriods.has(p) || (oldAbsent && oldPeriods.has(p));
-        const nowAttend = newPeriods.has(p) && !newAbsent;
-        const nowAbsent = newAbsent && !newPeriods.has(p) || (newAbsent && newPeriods.has(p));
+        let before, after;
+        if (wasAttend)      before = '참여';
+        else if (wasAbsent) before = `불참${oldParsed.absentReasons[p] ? `(${oldParsed.absentReasons[p]})` : ''}`;
+        else                before = null;
 
-        let before = oldPeriods.has(p) ? (oldAbsent ? `불참${oldReason?`(${oldReason})`:''}` : '참여') : '미정';
-        let after  = newPeriods.has(p) ? (newAbsent ? `불참${newReason?`(${newReason})`:''}` : '참여') : '미정';
+        if (nowAttend)      after = '참여';
+        else if (nowAbsent) after = `불참${newParsed.absentReasons[p] ? `(${newParsed.absentReasons[p]})` : ''}`;
+        else                after = null;
 
-        if (before !== after) {
+        const beforeStr = before ?? '미등록';
+        const afterStr  = after  ?? '미등록';
+        if (beforeStr !== afterStr && (before !== null || after !== null)) {
           const time = periodTimes[p] || '';
-          changeLines.push(`${p}교시(${time}) : ${before} → ${after}`);
+          changeLines.push(`${p}교시(${time}) : ${beforeStr} → ${afterStr}`);
         }
       });
     });
@@ -3026,11 +3007,13 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
     `${studentName} 학생의 스케줄이 변경되었습니다. 확인해주세요~\n\n` +
     changeLines.join('\n');
 
+  const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   try {
     const result = await solapiSend(parentPhone, message);
-    if (result === true) {
+    const success = result === true;
+    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: message, success, error: success ? null : JSON.stringify(result), time: timeStr });
+    if (success) {
       showAdminToast(`✅ ${studentName} 학부모님께 문자를 발송했습니다`);
-      // 알림 카드 유지 — 문자 발송 완료 상태만 표시
       const alertObj = scheduleAlerts[idx];
       if (alertObj) {
         alertObj.smsSent = true;
@@ -3040,6 +3023,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
       showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
     }
   } catch(e) {
+    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: message, success: false, error: e.message, time: timeStr });
     showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
     console.error(e);
   }
