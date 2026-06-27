@@ -1447,7 +1447,7 @@ function buildSeatCard(seatNum) {
 
   const onclick = student
     ? `ondblclick="if(!fpEditMode&&!_fpLastDragged)fpSeatClick(${seatNum})"`
-    : `onclick="if(!fpEditMode&&!_fpLastDragged)openAddStudentModal(${seatNum})"`;
+    : `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
   return `<div class="${cls}" ${onclick} style="cursor:pointer">
     <div class="fp-seat-num">${seatNum}번</div>
     ${nameHtml}${statusHtml}
@@ -1922,7 +1922,7 @@ function initFpDrag() {
     wrap.classList.remove('dragging');
     if (dragDist > 5) {
       window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 300);
+      setTimeout(() => { window._fpLastDragged = false; }, 500);
     }
     setTimeout(() => { _fpDragDist = 0; }, 50);
   });
@@ -1949,11 +1949,12 @@ function initFpDrag() {
   }, {passive: false});
 
   wrap.addEventListener('touchend', () => {
-    if (dragDist > 5) {
+    if (dragDist > 8) {
       window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 300);
+      setTimeout(() => { window._fpLastDragged = false; }, 700);
     }
     isDragging = false;
+    dragDist = 0;
   });
 
   // 배치도 탭 열릴 때 초기 위치 중앙으로
