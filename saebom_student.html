@@ -350,7 +350,7 @@ function pinInput(d) {
   if (pinBuffer.length >= 4) return;
   pinBuffer += d;
   updatePinDisplay();
-  if (pinBuffer.length === 4) setTimeout(tryLogin, 150);
+  if (pinBuffer.length === 4) setTimeout(() => tryLogin(), 150);
 }
 function pinDel() { pinBuffer = pinBuffer.slice(0,-1); updatePinDisplay(); hideLoginError(); }
 function pinClear() { pinBuffer = ''; updatePinDisplay(); hideLoginError(); }
@@ -363,17 +363,39 @@ function updatePinDisplay() {
 
 function hideLoginError() { document.getElementById('login-error').style.display='none'; }
 
-function tryLogin() {
-  const matched = STUDENTS.filter(s => {
+async function tryLogin() {
+  document.getElementById('login-error').style.display='none';
+
+  // 1) 로컬 STUDENTS 배열에서 먼저 검색
+  let matched = STUDENTS.filter(s => {
     if (!s.phone) return false;
     return s.phone.replace(/\D/g,'').slice(-4) === pinBuffer;
   });
+
+  // 2) 없으면 Firebase students 컬렉션에서 검색
+  if (matched.length === 0 && window._db) {
+    try {
+      const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      const snap = await getDocs(collection(window._db, 'students'));
+      snap.forEach(doc => {
+        const v = doc.data();
+        if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === pinBuffer) {
+          matched.push({
+            seat: v.seat, name: v.name,
+            phone: v.phone || '', parent: v.parent || '',
+            schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+            hours: v.hours || {}
+          });
+        }
+      });
+    } catch(e) { console.error('Firebase 로그인 검색 실패:', e); }
+  }
+
   if (matched.length === 0) {
     document.getElementById('login-error').style.display='block';
     pinBuffer=''; updatePinDisplay(); return;
   }
   currentStudent = matched[0];
-  // 스케줄 초기화
   initDraft();
   enterApp();
 }
