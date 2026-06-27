@@ -1621,13 +1621,13 @@ function buildFloorplan() {
   };
 
   const layout = {...DEFAULT_SEATS};
-  const ROWS = 11, COLS = 9;
+  const ROWS = 11, COLS = 10;
 
   // 스터디룸 span 추적 (2행×1열이므로 아래 1칸 건너뜀)
   const studioSpan = {};
 
   // 그리드 CSS: C4는 복도(18px 고정)
-  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
+  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
   let html = `<style>
     #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
     .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
