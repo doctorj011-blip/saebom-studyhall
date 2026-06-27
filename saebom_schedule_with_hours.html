@@ -2041,28 +2041,27 @@ function parseScheduleStr(str) {
       if (!periods.has(n)) { absentPeriods.add(n); if(reason) absentReasons[n] = reason; }
     });
   } else {
-    // 새 형식: 토큰 순서가 7교시부터 교시별 상태
+    // 새 형식: draftToStr가 validPeriods 순서대로 저장
+    // "7,x(사유),9,x(사유2),11" → 토큰 i번째 = validPeriods[i]번째 교시
+    // 토요일 여부: 첫 숫자 토큰이 1~6이면 토요일
+    const firstNum = tokens.find(t => /^\d+$/.test(t));
+    const hasSatPeriod = firstNum && Number(firstNum) >= 1 && Number(firstNum) <= 6;
+    const validList = hasSatPeriod ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+
     tokens.forEach((token, i) => {
-      // x(사유) — 이 위치의 교시가 결석
+      const p = validList[i];
+      if (p === undefined) return;
       const absentM = token.match(/^x\(([^)]*)\)$/i);
       if (absentM) {
-        // 위치 기반으로 교시 번호 추론
-        const p = 7 + i; // 7교시부터 순서대로
-        if (p <= 11) { absentPeriods.add(p); absentReasons[p] = absentM[1]; }
+        absentPeriods.add(p);
+        if (absentM[1]) absentReasons[p] = absentM[1];
         return;
       }
       if (token === 'x') {
-        const p = 7 + i;
-        if (p <= 11) absentPeriods.add(p);
+        absentPeriods.add(p);
         return;
       }
-      // 범위
-      const rangeM = token.match(/^(\d+)~(\d+)$/);
-      if (rangeM) {
-        for (let n = Number(rangeM[1]); n <= Number(rangeM[2]); n++) periods.add(n);
-        return;
-      }
-      // 숫자
+      // 숫자 토큰 — 해당 교시 출석
       const num = Number(token);
       if (!isNaN(num) && num >= 1 && num <= 11) periods.add(num);
     });
@@ -2743,26 +2742,23 @@ let _smsLogs = JSON.parse(localStorage.getItem('saebom_sms_logs') || '[]');
 
 function saveSmsLog(entry) {
   const today = new Date().toLocaleDateString('ko-KR');
-  _smsLogs.unshift({
-    ...entry,
-    date: today,
-    id: Date.now()
-  });
+  const logId = `${Date.now()}_${(entry.student||'').replace(/[^a-zA-Z0-9가-힣]/g,'')}_${entry.type||'sms'}`;
+  const logEntry = { ...entry, date: today, id: logId };
+  _smsLogs.unshift(logEntry);
   // 최대 500건 유지
   if (_smsLogs.length > 500) _smsLogs = _smsLogs.slice(0, 500);
   localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
-  // Firebase에도 저장 (비동기)
-  saveSmsLogToFirebase(entry).catch(console.error);
+  // Firebase에도 저장 (비동기) — 같은 id 사용
+  saveSmsLogToFirebase(logEntry, logId).catch(console.error);
 }
 
-async function saveSmsLogToFirebase(entry) {
+async function saveSmsLogToFirebase(entry, logId) {
   if (!window._adminDb) return;
   try {
     const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-    const id = `${Date.now()}_${entry.student}_${entry.type}`;
+    const id = logId || entry.id || `${Date.now()}_${entry.type||'sms'}`;
     await setDoc(doc(window._adminDb, 'sms_logs', id), {
       ...entry,
-      date: new Date().toLocaleDateString('ko-KR'),
       createdAt: serverTimestamp()
     });
   } catch(e) { console.error('SMS 로그 Firebase 저장 실패:', e); }
@@ -2774,24 +2770,35 @@ async function loadSmsLog() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
 
-  // Firebase에서 로드
-  let logs = [];
+  // localStorage 먼저 즉시 표시
+  let logs = [..._smsLogs];
+  _smsLogData = logs;
+  renderSmsLog(logs);
+
+  // Firebase에서 추가 로드 후 병합
   if (window._adminDb) {
     try {
       const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      const q = query(collection(window._adminDb, 'sms_logs'), orderBy('createdAt', 'desc'), limit(200));
-      const snap = await getDocs(q);
-      snap.forEach(d => logs.push({id: d.id, ...d.data()}));
-    } catch(e) {
-      // Firebase 실패 시 localStorage 사용
-      logs = _smsLogs;
-    }
-  } else {
-    logs = _smsLogs;
-  }
+      // createdAt 없는 문서도 포함하기 위해 orderBy 제거, 전체 조회
+      const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
+      const fbLogs = [];
+      snap.forEach(d => fbLogs.push({ id: d.id, ...d.data() }));
 
-  _smsLogData = logs;
-  renderSmsLog(logs);
+      if (fbLogs.length > 0) {
+        // id 기준 중복 제거 후 병합, 최신순 정렬
+        const merged = [...fbLogs];
+        const fbIds = new Set(fbLogs.map(l => l.id));
+        _smsLogs.forEach(l => { if (!fbIds.has(l.id)) merged.push(l); });
+        merged.sort((a, b) => (b.id || 0) - (a.id || 0));
+        logs = merged.slice(0, 300);
+        _smsLogData = logs;
+        renderSmsLog(logs);
+      }
+    } catch(e) {
+      console.error('SMS 로그 Firebase 로드 실패:', e);
+      // localStorage 데이터는 이미 표시됨
+    }
+  }
 }
 
 function renderSmsLog(logs) {
