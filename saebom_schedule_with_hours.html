@@ -2558,10 +2558,26 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
       return;
     }
 
-    // modified: 이전값과 비교해서 변경된 요일만 알림
+    // modified: 파싱 결과로 비교 (형식 차이로 인한 오탐 방지)
     const prev = knownSchedules[seat] || {};
-    const dayChanges = DAYS.filter(d => (data[d] || '-') !== (prev[d] || '-'))
-                           .map(d => ({ day: d, oldVal: prev[d] || '-', newVal: data[d] || '-' }));
+    const dayChanges = DAYS.filter(d => {
+      const oldStr = prev[d] || '-';
+      const newStr = data[d] || '-';
+      if (oldStr === newStr) return false;
+      // 파싱 결과가 실질적으로 다른지 비교
+      const oldP = parseScheduleStr(oldStr);
+      const newP = parseScheduleStr(newStr);
+      // periods, absentPeriods, absentReasons 비교
+      const setsEqual = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
+      if (!setsEqual(oldP.periods, newP.periods)) return true;
+      if (!setsEqual(oldP.absentPeriods, newP.absentPeriods)) return true;
+      // 결석사유 비교
+      const allAbsent = new Set([...oldP.absentPeriods, ...newP.absentPeriods]);
+      for (const p of allAbsent) {
+        if ((oldP.absentReasons[p]||'') !== (newP.absentReasons[p]||'')) return true;
+      }
+      return false;
+    }).map(d => ({ day: d, oldVal: prev[d] || '-', newVal: data[d] || '-' }));
 
     knownSchedules[seat] = data;
 
