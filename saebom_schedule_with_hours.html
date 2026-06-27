@@ -206,6 +206,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-edit-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s}
 .fp-edit-btn:hover{background:var(--color-background-secondary)}
 .fp-edit-btn.active{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
+.fp-drag-over{outline:2px solid #C8900A!important;outline-offset:-2px;background:rgba(200,144,10,0.08)!important;}
 .fp-edit-btn.saving{background:#A87008;color:#fff;border-color:#A87008}
 
 /* 위치수정 모드: 좌석을 absolute로 자유 배치 */
@@ -1548,456 +1549,175 @@ function studio(label) {
 function buildFloorplan() {
   const el = document.getElementById('fp-room');
 
-  // ── 목표 배치 정확 재현 ──
-  // 열: C1=관리(80px) C2=1~4번(78px) C3=스터디룸레이블(60px)
-  //     C4=9~5번/45~35번(78px) C5=빈/44~34번(78px)
-  //     C6=10~14번/43~33번(78px) C7=19~15번/42~32번(78px)
-  //     C8=빈/20~24번/41~31번(78px) C9=20번/21번../25~29번(78px) C10=26~30번(78px)
-  //
-  // 행 배치 (목표이미지 기준):
-  //  r1:  63관리 | (빈) | (빈) | 9번  | (빈) | 10번 | 19번 | (빈) | 20번 | (빈)
-  //  r2:  62관리 | 1번  | (빈) | 8번  | (빈) | 11번 | 18번 | (빈) | 21번 | (빈)
-  //  r3:  61관리 | 2번  | 스터디룸1 | 7번  | (빈) | 12번 | 17번 | (빈) | 22번 | (빈)
-  //  r4:  60관리 | 3번  |      | 6번  | (빈) | 13번 | 16번 | (빈) | 23번 | (빈)
-  //  r5:  59관리 | 4번  |      | 5번  | (빈) | 14번 | 15번 | (빈) | 24번 | (빈)
-  //  r6:  58관리 | (빈) | 스터디룸2 | (빈) | (빈) | (빈) | (빈) | (빈) | 25번 | (빈)
-  //  r7:  57관리 | (빈) |      | (빈) | (빈) | (빈) | (빈) | (빈) | 26번 | (빈)
-  //  r8:  56관리 | (빈) | 스터디룸3 | 45번 | 44번 | 43번 | 42번 | 41번 | 27번 | (빈)
-  //  r9:  55관리 | (빈) |      | 36번 | 37번 | 38번 | 39번 | 40번 | 28번 | (빈)
-  // r10:  54관리 | (빈) |      | 35번 | 34번 | 33번 | 32번 | 31번 | 29번 | (빈)
-  // r11:  (빈)   | (빈) | (빈) | (빈) | (빈) | 30번 | 신치원 |      |      |
+  // 기본 슬롯 정의: { key: seatNum or 'admin_N' or 'studio_N' }
+  // key = "r{row}_c{col}"
+  const DEFAULT_SLOTS = [
+    // C1 관리자석
+    {r:1,c:1,type:'admin',n:63,name:'관리조교'},
+    {r:2,c:1,type:'admin',n:62,name:''},
+    {r:3,c:1,type:'admin',n:61,name:''},
+    {r:4,c:1,type:'admin',n:60,name:''},
+    {r:5,c:1,type:'admin',n:59,name:''},
+    {r:6,c:1,type:'admin',n:58,name:''},
+    {r:7,c:1,type:'admin',n:57,name:'이지은'},
+    {r:8,c:1,type:'admin',n:56,name:'남궁준'},
+    {r:9,c:1,type:'admin',n:55,name:'이우영'},
+    {r:10,c:1,type:'admin',n:54,name:'정원혁'},
+    // C2 1~4번
+    {r:2,c:2,type:'seat',n:1},{r:3,c:2,type:'seat',n:2},
+    {r:4,c:2,type:'seat',n:3},{r:5,c:2,type:'seat',n:4},
+    // C3 스터디룸
+    {r:3,c:3,type:'studio',n:1},{r:6,c:3,type:'studio',n:2},{r:8,c:3,type:'studio',n:3},
+    // C4
+    {r:1,c:4,type:'seat',n:9},{r:2,c:4,type:'seat',n:8},{r:3,c:4,type:'seat',n:7},
+    {r:4,c:4,type:'seat',n:6},{r:5,c:4,type:'seat',n:5},
+    {r:8,c:4,type:'seat',n:45},{r:9,c:4,type:'seat',n:36},{r:10,c:4,type:'seat',n:35},
+    // C5
+    {r:8,c:5,type:'seat',n:44},{r:9,c:5,type:'seat',n:37},{r:10,c:5,type:'seat',n:34},
+    // C6
+    {r:1,c:6,type:'seat',n:10},{r:2,c:6,type:'seat',n:11},{r:3,c:6,type:'seat',n:12},
+    {r:4,c:6,type:'seat',n:13},{r:5,c:6,type:'seat',n:14},
+    {r:8,c:6,type:'seat',n:43},{r:9,c:6,type:'seat',n:38},{r:10,c:6,type:'seat',n:33},{r:11,c:6,type:'seat',n:30},
+    // C7
+    {r:1,c:7,type:'seat',n:19},{r:2,c:7,type:'seat',n:18},{r:3,c:7,type:'seat',n:17},
+    {r:4,c:7,type:'seat',n:16},{r:5,c:7,type:'seat',n:15},
+    {r:8,c:7,type:'seat',n:42},{r:9,c:7,type:'seat',n:39},{r:10,c:7,type:'seat',n:32},{r:11,c:7,type:'seat',n:31},
+    // C8
+    {r:8,c:8,type:'seat',n:41},{r:9,c:8,type:'seat',n:40},
+    // C9
+    {r:1,c:9,type:'seat',n:20},{r:2,c:9,type:'seat',n:21},{r:3,c:9,type:'seat',n:22},
+    {r:4,c:9,type:'seat',n:23},{r:5,c:9,type:'seat',n:24},{r:6,c:9,type:'seat',n:25},
+    {r:7,c:9,type:'seat',n:26},{r:8,c:9,type:'seat',n:27},{r:9,c:9,type:'seat',n:28},
+    {r:10,c:9,type:'seat',n:29},
+  ];
 
-  let html = `<div style="
+  // fpGridLayout에 저장된 위치 적용
+  // fpGridLayout = { "r2_c4": 8, "r1_c4": 9, ... } seat번호 교환 반영
+  const slotMap = {}; // key -> slot
+  DEFAULT_SLOTS.forEach(s => { slotMap[`r${s.r}_c${s.c}`] = {...s}; });
+
+  // 저장된 레이아웃 반영: seat 번호만 교환 (admin/studio는 고정)
+  if (Object.keys(fpGridLayout).length > 0) {
+    Object.entries(fpGridLayout).forEach(([key, seatNum]) => {
+      if (slotMap[key] && slotMap[key].type === 'seat') {
+        slotMap[key].n = seatNum;
+      }
+    });
+  }
+
+  let html = `<div id="fp-grid" style="
     display:grid;
-    grid-template-columns:80px 78px 80px 78px 78px 78px 78px 78px 78px 78px;
+    grid-template-columns:80px 78px 80px 78px 78px 78px 78px 78px 78px;
     grid-template-rows:repeat(11,62px);
     gap:5px;
-    min-width:900px;
+    min-width:860px;
   ">`;
 
-  // ── C1: 관리자석 r1~r10 ──
-  const ADMIN = [
-    [1,63,'관리조교'],[2,62,''],[3,61,''],[4,60,''],[5,59,''],
-    [6,58,''],[7,57,'이지은'],[8,56,'남궁준'],[9,55,'이우영'],[10,54,'정원혁']
-  ];
-  ADMIN.forEach(([r,n,name]) => { html += G(r,1, buildAdminCard(n,name)); });
-
-  // ── C2: 1번(r2), 2번(r3), 3번(r4), 4번(r5) ──
-  [[2,1],[3,2],[4,3],[5,4]].forEach(([r,n]) => { html += G(r,2, buildSeatCard(n)); });
-
-  // ── C3: 스터디룸 레이블 ──
-  // 목표: 스터디룸1=r3(61관리), 스터디룸2=r6(58관리), 스터디룸3=r8(56관리)
-  html += G(3,3, studio('스터디룸 1'));
-  html += G(6,3, studio('스터디룸 2'));
-  html += G(8,3, studio('스터디룸 3'));
-
-  // ── C4: 9(r1),8(r2),7(r3),6(r4),5(r5) | 45(r8),36(r9),35(r10) ──
-  [[1,9],[2,8],[3,7],[4,6],[5,5],[8,45],[9,36],[10,35]].forEach(([r,n]) => { html += G(r,4, buildSeatCard(n)); });
-
-  // ── C5: 44(r8),37(r9),34(r10) ──
-  [[8,44],[9,37],[10,34]].forEach(([r,n]) => { html += G(r,5, buildSeatCard(n)); });
-
-  // ── C6: 10(r1),11(r2),12(r3),13(r4),14(r5) | 43(r8),38(r9),33(r10),30(r11) ──
-  [[1,10],[2,11],[3,12],[4,13],[5,14],[8,43],[9,38],[10,33],[11,30]].forEach(([r,n]) => { html += G(r,6, buildSeatCard(n)); });
-
-  // ── C7: 19(r1),18(r2),17(r3),16(r4),15(r5) | 42(r8),39(r9),32(r10),31(r11) ──
-  [[1,19],[2,18],[3,17],[4,16],[5,15],[8,42],[9,39],[10,32],[11,31]].forEach(([r,n]) => { html += G(r,7, buildSeatCard(n)); });
-
-  // ── C8: 41(r8),40(r9) ──
-  [[8,41],[9,40]].forEach(([r,n]) => { html += G(r,8, buildSeatCard(n)); });
-
-  // ── C9: 20(r1),21(r2),22(r3),23(r4),24(r5),25(r6),26(r7),27(r8),28(r9),29(r10) ──
-  [[1,20],[2,21],[3,22],[4,23],[5,24],[6,25],[7,26],[8,27],[9,28],[10,29]].forEach(([r,n]) => { html += G(r,9, buildSeatCard(n)); });
+  DEFAULT_SLOTS.forEach(defaultSlot => {
+    const key = `r${defaultSlot.r}_c${defaultSlot.c}`;
+    const slot = slotMap[key];
+    let cardHtml;
+    if (slot.type === 'admin') {
+      cardHtml = buildAdminCard(slot.n, slot.name);
+    } else if (slot.type === 'studio') {
+      cardHtml = studio('스터디룸 ' + slot.n);
+    } else {
+      cardHtml = buildSeatCard(slot.n);
+    }
+    const draggable = (fpEditMode && slot.type === 'seat') ? 'draggable="true" data-slot-key="' + key + '" data-seat-num="' + slot.n + '"' : '';
+    const editStyle = (fpEditMode && slot.type === 'seat') ? 'outline:2px dashed #C8900A;outline-offset:-2px;cursor:grab;' : '';
+    html += `<div style="grid-row:${defaultSlot.r};grid-column:${defaultSlot.c};${editStyle}" ${draggable} data-slot-key="${key}">${cardHtml}</div>`;
+  });
 
   html += '</div>';
   el.innerHTML = html;
 
-  // 저장된 위치가 있으면 그리드 대신 absolute 컨테이너로 즉시 복원
-  if (Object.keys(fpSeatPositions).length > 0) {
-    // 브라우저 레이아웃 완료 후 실행 (requestAnimationFrame 두 번으로 확실히)
-    requestAnimationFrame(() => requestAnimationFrame(() => applyFpSavedPositions()));
-  }
+  // 위치수정 모드면 드래그 이벤트 연결
+  if (fpEditMode) attachGridDragEvents();
 }
 
-// 저장된 fpSeatPositions를 absolute 컨테이너로 복원
-function applyFpSavedPositions() {
-  const room = document.getElementById('fp-room');
-  if (!room) return;
-  const gridDiv = room.querySelector('div[style*="grid"]');
-  if (!gridDiv) return;
+function attachGridDragEvents() {
+  const grid = document.getElementById('fp-grid');
+  if (!grid) return;
+  let dragSrcKey = null;
+  let dragSrcNum = null;
 
-  // 기존 absolute 컨테이너 제거
-  const oldAbs = document.getElementById('fp-abs-container');
-  if (oldAbs) oldAbs.remove();
-
-  const cells = gridDiv.querySelectorAll('[style*="grid-row"]');
-  const roomRect = gridDiv.getBoundingClientRect();
-
-  const absContainer = document.createElement('div');
-  absContainer.id = 'fp-abs-container';
-  absContainer.style.cssText = `position:relative;width:${gridDiv.offsetWidth}px;height:${gridDiv.offsetHeight}px;`;
-
-  cells.forEach(cell => {
-    const rect = cell.getBoundingClientRect();
-    const origX = rect.left - roomRect.left;
-    const origY = rect.top - roomRect.top;
-    const w = rect.width;
-    const h = rect.height;
-
-    // seatId 추출
-    const seatNumEl = cell.querySelector('.fp-seat-num');
-    const studioEl  = cell.querySelector('.fp-studio-label');
-    let seatId = null;
-    if (seatNumEl) {
-      seatId = seatNumEl.textContent.replace(/[^0-9]/g,'') + (seatNumEl.textContent.includes('관리') ? '_admin' : '');
-    } else if (studioEl) {
-      const m = studioEl.textContent.match(/(\d+)/);
-      seatId = m ? 'studio_' + m[1] : null;
-    }
-
-    const newCell = cell.cloneNode(true);
-    newCell.removeAttribute('style');
-    newCell.style.position = 'absolute';
-    // 저장된 위치 있으면 적용, 없으면 원본 위치
-    const saved = seatId && fpSeatPositions[seatId];
-    newCell.style.left = (saved ? saved.x : origX) + 'px';
-    newCell.style.top  = (saved ? saved.y : origY) + 'px';
-    newCell.style.width  = w + 'px';
-    newCell.style.height = h + 'px';
-    newCell.style.boxSizing = 'border-box';
-    newCell.style.margin = '0';
-    if (seatId) {
-      newCell.dataset.seatId = seatId;
-      newCell.dataset.origX = origX;
-      newCell.dataset.origY = origY;
-    }
-    absContainer.appendChild(newCell);
+  grid.querySelectorAll('[draggable="true"]').forEach(cell => {
+    cell.addEventListener('dragstart', e => {
+      dragSrcKey = cell.dataset.slotKey;
+      dragSrcNum = parseInt(cell.dataset.seatNum);
+      cell.style.opacity = '0.4';
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    cell.addEventListener('dragend', () => {
+      cell.style.opacity = '';
+      grid.querySelectorAll('[draggable]').forEach(c => c.classList.remove('fp-drag-over'));
+    });
+    cell.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      grid.querySelectorAll('[draggable]').forEach(c => c.classList.remove('fp-drag-over'));
+      cell.classList.add('fp-drag-over');
+    });
+    cell.addEventListener('dragleave', () => cell.classList.remove('fp-drag-over'));
+    cell.addEventListener('drop', e => {
+      e.preventDefault();
+      const destKey = cell.dataset.slotKey;
+      const destNum = parseInt(cell.dataset.seatNum);
+      if (dragSrcKey && destKey && dragSrcKey !== destKey) {
+        // 두 칸의 좌석번호 교환
+        fpGridLayout[dragSrcKey] = destNum;
+        fpGridLayout[destKey] = dragSrcNum;
+        buildFloorplan();
+      }
+    });
   });
-
-  gridDiv.style.display = 'none';
-  room.appendChild(absContainer);
-  fpEditInitialized = true;
 }
 
-// ===== 위치수정 모드 =====
+// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
 let fpEditMode = false;
-// 좌석 위치 저장: { seatId: {x, y} }
-let fpSeatPositions = (function() {
+
+// 좌석 배치 순서 저장: { slot_key: seatNum } 예) "r1_c4": 9
+// slot_key = "r{row}_c{col}"
+let fpGridLayout = (function() {
   try {
-    const saved = localStorage.getItem('saebom_fp_positions');
-    return saved ? JSON.parse(saved) : {};
+    const s = localStorage.getItem('saebom_fp_grid_layout');
+    return s ? JSON.parse(s) : {};
   } catch(e) { return {}; }
 })();
-// 위치수정 모드에서 그리드를 absolute로 전환
-let fpEditInitialized = false;
-// 저장된 위치가 있으면 수정모드 진입 시 항상 최신 위치 적용
-function saveFpPositions() {
-  try { localStorage.setItem('saebom_fp_positions', JSON.stringify(fpSeatPositions)); } catch(e) {}
+
+function saveFpGridLayout() {
+  try { localStorage.setItem('saebom_fp_grid_layout', JSON.stringify(fpGridLayout)); } catch(e) {}
 }
 
 window.toggleFpEditMode = function() {
   fpEditMode = !fpEditMode;
   const btn = document.getElementById('fp-edit-btn');
-  const room = document.getElementById('fp-room');
-  const wrap = document.getElementById('fp-drag-wrap');
-  const hint = document.getElementById('fp-drag-hint');
-
   if (fpEditMode) {
-    // 수정 모드 진입
     btn.className = 'fp-edit-btn active';
     btn.innerHTML = '<i class="ti ti-check" style="font-size:13px"></i> 저장';
-    hint.style.display = 'none';
-    room.classList.add('edit-mode');
-    wrap.style.overflow = 'hidden';
-    enterEditMode();
   } else {
-    // 다시 누르면 저장 & 고정
-    exitEditMode(true);
+    // 저장
+    saveFpGridLayout();
+    btn.className = 'fp-edit-btn';
+    btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정';
+    showFpSaveToast();
   }
-}
-
-function enterEditMode() {
-  const room = document.getElementById('fp-room');
-
-  // absolute 컨테이너가 이미 있으면(저장 후 or 복원 후) draggable만 다시 붙이기
-  const existingAbs = document.getElementById('fp-abs-container');
-  if (existingAbs) {
-    existingAbs.querySelectorAll('[data-seat-id]').forEach(cell => {
-      const draggableEl = cell.querySelector('.fp-seat') || cell.querySelector('.fp-studio') || cell;
-      draggableEl.classList.add('draggable');
-    });
-    existingAbs.style.display = 'block';
-    attachSeatDragEvents();
-    return;
-  }
-
-  // 그리드 안의 모든 좌석 div를 absolute로 전환
-  const gridDiv = room.querySelector('div[style*="grid"]');
-  if (!gridDiv) return;
-
-  // 이미 초기화됐으면 기존 위치 사용
-  if (!fpEditInitialized) {
-    // 각 셀의 현재 위치를 측정해서 absolute position으로 변환
-    const cells = gridDiv.querySelectorAll('[style*="grid-row"]');
-    const roomRect = gridDiv.getBoundingClientRect();
-
-    // absolute 컨테이너로 변환
-    const absContainer = document.createElement('div');
-    absContainer.id = 'fp-abs-container';
-    absContainer.style.cssText = `position:relative;width:${gridDiv.offsetWidth}px;height:${gridDiv.offsetHeight}px;`;
-
-    // 각 셀 복사
-    cells.forEach(cell => {
-      const rect = cell.getBoundingClientRect();
-      const x = rect.left - roomRect.left;
-      const y = rect.top - roomRect.top;
-      const w = rect.width;
-      const h = rect.height;
-
-      // 좌석 번호 추출
-      const seatNumEl = cell.querySelector('.fp-seat-num');
-      const studioEl  = cell.querySelector('.fp-studio-label');
-
-      let seatId = null;
-      if (seatNumEl) {
-        seatId = seatNumEl.textContent.replace(/[^0-9]/g,'') + (seatNumEl.textContent.includes('관리') ? '_admin' : '');
-      } else if (studioEl) {
-        // 스터디룸: 라벨에서 번호 추출 (스터디룸 1 → studio_1)
-        const m = studioEl.textContent.match(/(\d+)/);
-        seatId = m ? 'studio_' + m[1] : null;
-      }
-
-      const newCell = cell.cloneNode(true);
-      newCell.removeAttribute('style');
-      newCell.style.position = 'absolute';
-      newCell.style.left = (fpSeatPositions[seatId]?.x ?? x) + 'px';
-      newCell.style.top  = (fpSeatPositions[seatId]?.y ?? y) + 'px';
-      newCell.style.width = w + 'px';
-      newCell.style.height = h + 'px';
-      newCell.style.boxSizing = 'border-box';
-      newCell.style.margin = '0';
-
-      if (seatId) {
-        newCell.dataset.seatId = seatId;
-        newCell.dataset.origX = x;
-        newCell.dataset.origY = y;
-        // fp-seat 또는 fp-studio 모두 draggable
-        const draggableEl = newCell.querySelector('.fp-seat') || newCell.querySelector('.fp-studio') || newCell;
-        draggableEl.classList.add('draggable');
-      }
-
-      absContainer.appendChild(newCell);
-    });
-
-    // 원본 그리드를 숨기고 absolute 컨테이너 삽입
-    gridDiv.style.display = 'none';
-    room.appendChild(absContainer);
-    fpEditInitialized = true;
-  } else {
-    // 이미 있으면 보이기만
-    document.getElementById('fp-abs-container').style.display = 'block';
-    const gridDiv2 = room.querySelector('div[style*="grid"]');
-    if (gridDiv2) gridDiv2.style.display = 'none';
-  }
-
-  // 드래그 이벤트 연결
-  attachSeatDragEvents();
-}
-
-// 격자 스냅 단위 (좌석 크기 + gap 기준)
-const FP_SNAP_X = 83; // 78px 너비 + 5px gap
-const FP_SNAP_Y = 67; // 62px 높이 + 5px gap
-
-function snapToGrid(x, y) {
-  return {
-    x: Math.round(x / FP_SNAP_X) * FP_SNAP_X,
-    y: Math.round(y / FP_SNAP_Y) * FP_SNAP_Y
-  };
-}
-
-function attachSeatDragEvents() {
-  const container = document.getElementById('fp-abs-container');
-  if (!container) return;
-
-  let draggingSeat = null;
-  let dragOffX = 0, dragOffY = 0;
-  let hasMoved = false; // 실제로 움직였는지 여부
-
-  container.addEventListener('mousedown', e => {
-    const cell = e.target.closest('[data-seat-id]');
-    if (!cell) return;
-    e.stopPropagation();
-    draggingSeat = cell;
-    hasMoved = false;
-    const rect = cell.getBoundingClientRect();
-    dragOffX = e.clientX - rect.left;
-    dragOffY = e.clientY - rect.top;
-    cell.style.zIndex = 999;
-    cell.style.transition = 'none';
-    const seat = cell.querySelector('.fp-seat') || cell.querySelector('.fp-studio') || cell;
-    seat.classList.add('seat-dragging');
-  });
-
-  window.addEventListener('mousemove', e => {
-    if (!draggingSeat) return;
-    hasMoved = true;
-    const containerRect = container.getBoundingClientRect();
-    let nx = e.clientX - containerRect.left - dragOffX;
-    let ny = e.clientY - containerRect.top - dragOffY;
-    // 경계 제한
-    nx = Math.max(0, Math.min(container.offsetWidth - draggingSeat.offsetWidth, nx));
-    ny = Math.max(0, Math.min(container.offsetHeight - draggingSeat.offsetHeight, ny));
-    draggingSeat.style.left = nx + 'px';
-    draggingSeat.style.top  = ny + 'px';
-  });
-
-  window.addEventListener('mouseup', () => {
-    if (!draggingSeat) return;
-    const seat = draggingSeat.querySelector('.fp-seat') || draggingSeat.querySelector('.fp-studio') || draggingSeat;
-    seat.classList.remove('seat-dragging');
-    draggingSeat.style.zIndex = '';
-
-    if (hasMoved) {
-      // 격자 스냅
-      const snapped = snapToGrid(
-        parseFloat(draggingSeat.style.left),
-        parseFloat(draggingSeat.style.top)
-      );
-      draggingSeat.style.transition = 'left 0.12s, top 0.12s';
-      draggingSeat.style.left = snapped.x + 'px';
-      draggingSeat.style.top  = snapped.y + 'px';
-      fpSeatPositions[draggingSeat.dataset.seatId] = snapped;
-      saveFpPositions();
-      // 드래그 직후 클릭 이벤트 차단
-      window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 300);
-    }
-    draggingSeat = null;
-  });
-
-  // 터치
-  container.addEventListener('touchstart', e => {
-    const cell = e.target.closest('[data-seat-id]');
-    if (!cell) return;
-    e.stopPropagation();
-    draggingSeat = cell;
-    hasMoved = false;
-    const t = e.touches[0];
-    const rect = cell.getBoundingClientRect();
-    dragOffX = t.clientX - rect.left;
-    dragOffY = t.clientY - rect.top;
-    cell.style.zIndex = 999;
-    cell.style.transition = 'none';
-    const seat = cell.querySelector('.fp-seat') || cell.querySelector('.fp-studio') || cell;
-    seat.classList.add('seat-dragging');
-  }, {passive:true});
-
-  container.addEventListener('touchmove', e => {
-    if (!draggingSeat) return;
-    hasMoved = true;
-    const t = e.touches[0];
-    const containerRect = container.getBoundingClientRect();
-    let nx = t.clientX - containerRect.left - dragOffX;
-    let ny = t.clientY - containerRect.top - dragOffY;
-    nx = Math.max(0, Math.min(container.offsetWidth - draggingSeat.offsetWidth, nx));
-    ny = Math.max(0, Math.min(container.offsetHeight - draggingSeat.offsetHeight, ny));
-    draggingSeat.style.left = nx + 'px';
-    draggingSeat.style.top  = ny + 'px';
-    e.preventDefault();
-  }, {passive:false});
-
-  container.addEventListener('touchend', () => {
-    if (!draggingSeat) return;
-    const seat = draggingSeat.querySelector('.fp-seat') || draggingSeat.querySelector('.fp-studio') || draggingSeat;
-    seat.classList.remove('seat-dragging');
-    draggingSeat.style.zIndex = '';
-    if (hasMoved) {
-      const snapped = snapToGrid(
-        parseFloat(draggingSeat.style.left),
-        parseFloat(draggingSeat.style.top)
-      );
-      draggingSeat.style.transition = 'left 0.12s, top 0.12s';
-      draggingSeat.style.left = snapped.x + 'px';
-      draggingSeat.style.top  = snapped.y + 'px';
-      fpSeatPositions[draggingSeat.dataset.seatId] = snapped;
-      saveFpPositions();
-      // 터치 드래그 직후 클릭 이벤트 차단
-      window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 300);
-    }
-    draggingSeat = null;
-  });
-}
-
-function exitEditMode(save) {
-  fpEditMode = false;
-  const btn = document.getElementById('fp-edit-btn');
-  const room = document.getElementById('fp-room');
-  const hint = document.getElementById('fp-drag-hint');
-
-  btn.className = 'fp-edit-btn';
-  btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정';
-  hint.style.display = '';
-  room.classList.remove('edit-mode');
-
-  // 위치 영구 저장
-  saveFpPositions();
-
-  // abs 제거 후 buildFloorplan → applyFpSavedPositions로 재복원
-  const abs = document.getElementById('fp-abs-container');
-  if (abs) abs.remove();
-  fpEditInitialized = false;
   buildFloorplan();
-  showFpSaveToast();
-}
-
-function refreshFpCards() {
-  const abs = document.getElementById('fp-abs-container');
-  if (!abs) { buildFloorplan(); return; }
-  abs.querySelectorAll('[data-seat-id]').forEach(cell => {
-    const seatId = cell.dataset.seatId;
-    if (!seatId || seatId.includes('admin') || seatId.includes('studio')) return;
-    const seatNum = parseInt(seatId);
-    if (isNaN(seatNum)) return;
-
-    // 새 카드 HTML 생성
-    const tmp = document.createElement('div');
-    tmp.innerHTML = buildSeatCard(seatNum);
-    const newCard = tmp.firstElementChild;
-    if (!newCard) return;
-
-    // cell 자체의 position/left/top/width/height/dataset은 절대 건드리지 않음
-    // 안에 있는 .fp-seat 카드만 교체
-    const oldInner = cell.querySelector('.fp-seat');
-    if (oldInner) {
-      // newCard 자체가 .fp-seat — 그 내부를 복사
-      oldInner.innerHTML = newCard.innerHTML;
-      oldInner.className = newCard.className;
-      // onclick/ondblclick 재설정
-      if (newCard.hasAttribute('ondblclick')) {
-        oldInner.setAttribute('ondblclick', newCard.getAttribute('ondblclick'));
-        oldInner.removeAttribute('onclick');
-      } else if (newCard.hasAttribute('onclick')) {
-        oldInner.setAttribute('onclick', newCard.getAttribute('onclick'));
-        oldInner.removeAttribute('ondblclick');
-      }
-    }
-  });
-}
+};
 
 window.resetFpPositions = function() {
   if (!confirm('배치도 위치를 초기 상태로 되돌릴까요?')) return;
-  fpSeatPositions = {};
+  fpGridLayout = {};
+  localStorage.removeItem('saebom_fp_grid_layout');
   localStorage.removeItem('saebom_fp_positions');
-  const abs = document.getElementById('fp-abs-container');
-  if (abs) abs.remove();
-  fpEditInitialized = false;
   fpEditMode = false;
   const btn = document.getElementById('fp-edit-btn');
   if (btn) { btn.className = 'fp-edit-btn'; btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정'; }
   buildFloorplan();
   showAdminToast('✅ 배치도가 초기 위치로 돌아왔습니다');
 };
+
 
 function showFpSaveToast() {
   const toast = document.createElement('div');
