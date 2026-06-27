@@ -341,9 +341,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <span style="font-size:11px;color:var(--color-text-tertiary);display:none" id="fp-drag-hint"></span>
-      <button class="fp-edit-btn" id="fp-edit-btn" onclick="toggleFpEditMode()">
-        <i class="ti ti-pencil" style="font-size:13px"></i> 위치수정
-      </button>
+
     </div>
   </div>
 
@@ -1622,7 +1620,7 @@ function buildFloorplan() {
     'r11_c9':30,
   };
 
-  const layout = {...DEFAULT_SEATS, ...fpGridLayout};
+  const layout = {...DEFAULT_SEATS};
   const ROWS = 11, COLS = 10;
 
   // 스터디룸 span 추적 (2행×1열이므로 아래 1칸 건너뜀)
@@ -1750,7 +1748,7 @@ function buildFloorplan() {
 }
 
 // ===== 위치수정 모드// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
-let fpEditMode = false;
+const fpEditMode = false;
 
 // 좌석 배치 순서 저장: { slot_key: seatNum } 예) "r1_c4": 9
 // slot_key = "r{row}_c{col}"
