@@ -1096,22 +1096,20 @@ function buildDashboard(){
     </div>`;
   }).join('')+'</div>';
 
-  // 오늘 요일 기준 교시별 실제 출석 학생 계산
-  const todayPeriods = PERIODS_WEEKDAY; // 대시보드는 평일 기준
+  // 오늘 요일 기준 교시별 실제 입실 학생 기준 출석현황
+  const todayPeriods = PERIODS_WEEKDAY;
+  // 현재 입실 중인 학생 이름 목록
+  const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
+
   const periodStudents = todayPeriods.map((p, i) => {
-    const periodNum = i + 7; // 7~11교시
+    const periodNum = p.n;
     return STUDENTS.filter(s => {
+      // 실제 입실 중인 학생만
+      if (!presentNames.has(s.name)) return false;
       const sched = s.schedule[currentDay] || '';
       if (!sched || sched === '-') return false;
-      // getCellContent 로직과 동일하게 판단
-      const nums = sched.match(/\d+/g)?.map(Number) || [];
-      if (nums.includes(periodNum)) return true;
-      const ranges = sched.match(/(\d+)~(\d+)/g) || [];
-      for (const r of ranges) {
-        const [a, b] = r.split('~').map(Number);
-        if (periodNum >= a && periodNum <= b && !sched.startsWith('x(')) return true;
-      }
-      return false;
+      const parsed = parseScheduleStr(sched);
+      return parsed[periodNum] === 'attend';
     });
   });
 
@@ -2334,20 +2332,17 @@ function showPeriodStudents(periodIdx) {
   const old = document.getElementById('period-popup-overlay');
   if (old) old.remove();
 
-  const periodNum = periodIdx + 7;
+  const periodNum = PERIODS_WEEKDAY[periodIdx]?.n || (periodIdx + 7);
   const p = PERIODS_WEEKDAY[periodIdx];
 
+  // 실제 입실 중인 학생 중 해당 교시 출석 예정인 학생
+  const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
   const students = STUDENTS.filter(s => {
+    if (!presentNames.has(s.name)) return false;
     const sched = s.schedule[currentDay] || '';
     if (!sched || sched === '-') return false;
-    const nums = sched.match(/\d+/g)?.map(Number) || [];
-    if (nums.includes(periodNum)) return true;
-    const ranges = sched.match(/(\d+)~(\d+)/g) || [];
-    for (const r of ranges) {
-      const [a, b] = r.split('~').map(Number);
-      if (periodNum >= a && periodNum <= b && !sched.startsWith('x(')) return true;
-    }
-    return false;
+    const parsed = parseScheduleStr(sched);
+    return parsed[periodNum] === 'attend';
   });
 
   // 오버레이 없이 팝업만 화면 중앙에 고정
