@@ -2611,15 +2611,32 @@ function renderScheduleAlerts() {
       ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
       : '방금';
 
-    return `<div class="sc-alert-item" id="sc-item-${idx}">
-      <div class="sc-alert-avatar">${a.studentName?.[0]||'?'}</div>
-      <div class="sc-alert-body">
-        <div class="sc-alert-name">${a.studentName} · ${a.seat}</div>
-        <div class="sc-alert-change">${changeTexts}</div>
-        <div class="sc-alert-time">${time} 변경</div>
-        <div class="sc-alert-btns">
-          <button class="sc-apply-btn" onclick="applyStudentSchedule('${a.seat}',${idx})">적용</button>
-          <button class="sc-dismiss-btn sc-sms-btn" onclick="sendKakaoSMS('${a.studentName}','${a.seat}',${idx})">확인문자</button>
+    const applied = a.applied;
+
+    return `<div class="sc-alert-item" id="sc-item-${idx}" style="position:relative;background:#fff;border:1.5px solid ${applied?'#A5D6A7':'#F7C1C1'};border-radius:14px;padding:14px 16px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <!-- 우측 상단 X 버튼 -->
+      <button onclick="dismissAlert(${idx})" title="알림 닫기"
+        style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background 0.15s"
+        onmouseover="this.style.background='rgba(0,0,0,0.16)'" onmouseout="this.style.background='rgba(0,0,0,0.08)'">✕</button>
+
+      <div style="display:flex;align-items:flex-start;gap:10px;padding-right:24px">
+        <div class="sc-alert-avatar" style="flex-shrink:0">${a.studentName?.[0]||'?'}</div>
+        <div class="sc-alert-body" style="flex:1;min-width:0">
+          <div class="sc-alert-name">${a.studentName} · ${a.seat}
+            ${applied ? '<span style="font-size:10px;font-weight:700;color:#2D7A4F;background:#E8F5E9;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle">✅ 적용됨</span>' : ''}
+          </div>
+          <div class="sc-alert-change">${changeTexts}</div>
+          <div class="sc-alert-time">${time} 변경</div>
+          <div class="sc-alert-btns">
+            ${applied
+              ? `<button class="sc-apply-btn" style="background:#aaa;cursor:default" disabled>✅ 적용됨</button>`
+              : `<button class="sc-apply-btn" onclick="applyStudentSchedule('${a.seat}',${idx})">적용</button>`
+            }
+            ${a.smsSent
+              ? `<button class="sc-dismiss-btn sc-sms-btn" style="background:#d4edda;color:#2D7A4F;border:1px solid #A5D6A7;cursor:default" disabled>✅ 문자발송됨</button>`
+              : `<button class="sc-dismiss-btn sc-sms-btn" onclick="sendKakaoSMS('${a.studentName}','${a.seat}',${idx})">확인문자</button>`
+            }
+          </div>
         </div>
       </div>
     </div>`;
@@ -2634,7 +2651,9 @@ window.applyStudentSchedule = function(seat, idx) {
   alert.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
   buildScheduleTable(currentDay);
   buildStudentList(document.getElementById('student-search')?.value || '');
-  scheduleAlerts.splice(idx, 1);
+
+  // 알림은 유지하고 적용됨 상태만 표시
+  alert.applied = true;
   renderScheduleAlerts();
 
   const t = document.createElement('div');
@@ -3011,7 +3030,12 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
     const result = await solapiSend(parentPhone, message);
     if (result === true) {
       showAdminToast(`✅ ${studentName} 학부모님께 문자를 발송했습니다`);
-      dismissAlert(idx);
+      // 알림 카드 유지 — 문자 발송 완료 상태만 표시
+      const alertObj = scheduleAlerts[idx];
+      if (alertObj) {
+        alertObj.smsSent = true;
+        renderScheduleAlerts();
+      }
     } else {
       showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
     }
