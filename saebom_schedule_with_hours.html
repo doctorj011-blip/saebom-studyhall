@@ -2027,6 +2027,7 @@ function openScheduleModal(idx) {
   document.getElementById('sched-modal-seat').textContent = s.seat;
   document.getElementById('edit-phone').value = s.phone || '';
   document.getElementById('edit-parent').value = s.parent || '';
+  setEditGender(s.gender || 'f');
   renderScheduleModal();
   const ov = document.getElementById('schedule-modal-overlay');
   ov.style.display = 'flex';
