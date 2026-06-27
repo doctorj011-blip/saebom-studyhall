@@ -1888,23 +1888,28 @@ function refreshFpCards() {
     if (!seatId || seatId.includes('admin') || seatId.includes('studio')) return;
     const seatNum = parseInt(seatId);
     if (isNaN(seatNum)) return;
-    const newHtml = buildSeatCard(seatNum);
-    // 임시 div로 파싱해서 내부 내용 교체
+
+    // 새 카드 HTML 생성
     const tmp = document.createElement('div');
-    tmp.innerHTML = newHtml;
+    tmp.innerHTML = buildSeatCard(seatNum);
     const newCard = tmp.firstElementChild;
     if (!newCard) return;
-    // 위치/크기/dataset은 유지, 내용만 교체
-    cell.innerHTML = newCard.innerHTML;
-    cell.className = newCard.className;
-    // onclick 재설정
-    const onclickAttr = newCard.getAttribute('onclick') || newCard.getAttribute('ondblclick');
-    if (newCard.hasAttribute('ondblclick')) {
-      cell.setAttribute('ondblclick', newCard.getAttribute('ondblclick'));
-      cell.removeAttribute('onclick');
-    } else if (newCard.hasAttribute('onclick')) {
-      cell.setAttribute('onclick', newCard.getAttribute('onclick'));
-      cell.removeAttribute('ondblclick');
+
+    // cell 자체의 position/left/top/width/height/dataset은 절대 건드리지 않음
+    // 안에 있는 .fp-seat 카드만 교체
+    const oldInner = cell.querySelector('.fp-seat');
+    if (oldInner) {
+      // newCard 자체가 .fp-seat — 그 내부를 복사
+      oldInner.innerHTML = newCard.innerHTML;
+      oldInner.className = newCard.className;
+      // onclick/ondblclick 재설정
+      if (newCard.hasAttribute('ondblclick')) {
+        oldInner.setAttribute('ondblclick', newCard.getAttribute('ondblclick'));
+        oldInner.removeAttribute('onclick');
+      } else if (newCard.hasAttribute('onclick')) {
+        oldInner.setAttribute('onclick', newCard.getAttribute('onclick'));
+        oldInner.removeAttribute('ondblclick');
+      }
     }
   });
 }
