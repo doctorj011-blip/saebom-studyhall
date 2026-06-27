@@ -1642,32 +1642,46 @@ function attachGridDragEvents() {
   let dragSrcKey = null;
   let dragSrcNum = null;
 
+  // 카드 내부 요소가 드래그를 가로채지 못하게 pointer-events 차단
+  grid.querySelectorAll('[draggable="true"] *').forEach(el => {
+    el.style.pointerEvents = 'none';
+  });
+
   grid.querySelectorAll('[draggable="true"]').forEach(cell => {
     cell.addEventListener('dragstart', e => {
       dragSrcKey = cell.dataset.slotKey;
       dragSrcNum = parseInt(cell.dataset.seatNum);
-      cell.style.opacity = '0.4';
       e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', dragSrcKey);
+      setTimeout(() => { cell.style.opacity = '0.4'; }, 0);
     });
     cell.addEventListener('dragend', () => {
       cell.style.opacity = '';
-      grid.querySelectorAll('[draggable]').forEach(c => c.classList.remove('fp-drag-over'));
+      grid.querySelectorAll('.fp-drag-over').forEach(c => c.classList.remove('fp-drag-over'));
     });
     cell.addEventListener('dragover', e => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      grid.querySelectorAll('[draggable]').forEach(c => c.classList.remove('fp-drag-over'));
+    });
+    cell.addEventListener('dragenter', e => {
+      e.preventDefault();
+      grid.querySelectorAll('.fp-drag-over').forEach(c => c.classList.remove('fp-drag-over'));
       cell.classList.add('fp-drag-over');
     });
-    cell.addEventListener('dragleave', () => cell.classList.remove('fp-drag-over'));
+    cell.addEventListener('dragleave', e => {
+      // 자식 요소로 이동하는 경우 무시
+      if (!cell.contains(e.relatedTarget)) cell.classList.remove('fp-drag-over');
+    });
     cell.addEventListener('drop', e => {
       e.preventDefault();
+      cell.classList.remove('fp-drag-over');
       const destKey = cell.dataset.slotKey;
       const destNum = parseInt(cell.dataset.seatNum);
-      if (dragSrcKey && destKey && dragSrcKey !== destKey) {
-        // 두 칸의 좌석번호 교환
+      if (dragSrcKey && destKey && dragSrcKey !== destKey && !isNaN(destNum) && !isNaN(dragSrcNum)) {
         fpGridLayout[dragSrcKey] = destNum;
         fpGridLayout[destKey] = dragSrcNum;
+        dragSrcKey = null;
+        dragSrcNum = null;
         buildFloorplan();
       }
     });
