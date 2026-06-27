@@ -343,6 +343,9 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       <button class="fp-edit-btn" id="fp-edit-btn" onclick="toggleFpEditMode()">
         <i class="ti ti-pencil" style="font-size:13px"></i> 위치수정
       </button>
+      <button class="fp-edit-btn" onclick="resetFpPositions()" title="배치도 위치 초기화" style="color:#C62828;border-color:#F09595">
+        <i class="ti ti-refresh" style="font-size:13px"></i> 초기화
+      </button>
     </div>
   </div>
 
@@ -728,6 +731,8 @@ let currentView='table';
 
 let ALERTS = []; // 동적으로 계산됨
 const PRESENT=['박지윤','정은찬','강민수','김은호','박지윤A','김범수','권민지','이승석','김지후','장혜령','박현진','박준영','이준서','신치원','김소윤','김준현','한수아','윤서정'];
+// 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
+let studyRoomStudents = { 1: [], 2: [], 3: [] };
 
 window.showSection = function(id,btn){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -1271,6 +1276,11 @@ window.checkinConfirm = function() {
 
   if (isCheckout) {
     existing.outTime = timeStr;
+    // 퇴실 시 스터디룸에서도 제거
+    [1,2,3].forEach(r => {
+      const i = studyRoomStudents[r].indexOf(student.name);
+      if (i !== -1) studyRoomStudents[r].splice(i, 1);
+    });
   } else {
     todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null });
   }
@@ -1280,9 +1290,32 @@ window.checkinConfirm = function() {
   const donePanel = document.getElementById('checkin-done-panel');
   donePanel.style.display = 'block';
 
-  document.getElementById('done-icon').textContent = isCheckout ? '👋' : '✅';
+  // 입실 시 교시 외 시간이면 스터디룸 배정
+  let assignedRoom = null;
+  if (!isCheckout) {
+    const curPeriod = getCurrentPeriod();
+    if (!curPeriod) {
+      // 빈 자리 찾기 (최대 3명)
+      for (let r = 1; r <= 3; r++) {
+        if (studyRoomStudents[r].length < 3 && !studyRoomStudents[r].includes(student.name)) {
+          studyRoomStudents[r].push(student.name);
+          assignedRoom = r;
+          break;
+        }
+      }
+    }
+  }
+
+  let doneMsg = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
+  let doneIcon = isCheckout ? '👋' : '✅';
+  if (assignedRoom) {
+    doneMsg = `📚 ${assignedRoom}번 스터디룸에서 대기하세요`;
+    doneIcon = '📚';
+  }
+
+  document.getElementById('done-icon').textContent = doneIcon;
   document.getElementById('done-name').textContent = maskName(student.name);
-  document.getElementById('done-msg').textContent = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
+  document.getElementById('done-msg').textContent = doneMsg;
   document.getElementById('done-time').textContent = timeStr;
 
   // PRESENT 업데이트
@@ -1422,35 +1455,67 @@ function getFpStatus(student) {
   return 'registered';
 }
 
+function calcDday(expiry) {
+  if (!expiry) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(expiry); exp.setHours(0,0,0,0);
+  return Math.ceil((exp - today) / 86400000);
+}
+
 function buildSeatCard(seatNum) {
   const student = getFpStudentBySeat(seatNum);
   const status = getFpStatus(student);
-  let cls = 'fp-seat';
-  if (!student) cls += ' fp-vacant';
-  else if (status === 'in') cls += ' fp-in';
-  else cls += ' fp-out-today';
 
-  const nameHtml = student
-    ? `<div class="fp-seat-name">${student.name}</div>`
-    : `<div class="fp-seat-name" style="color:var(--color-text-tertiary);font-size:10px">공석</div>`;
-
-  let statusHtml = '';
-  if (status === 'in') {
-    const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
-    statusHtml = `<div class="fp-seat-status fp-status-in"><span class="fp-in-dot"></span>${rec?.inTime||''}</div>`;
-  } else if (status === 'out') {
-    const rec = todayRecords.find(r => r.studentName === student.name && r.outTime);
-    statusHtml = `<div class="fp-seat-status fp-status-out">퇴실 ${rec?.outTime||''}</div>`;
-  } else if (student) {
-    statusHtml = `<div class="fp-seat-status fp-status-empty">미입실</div>`;
+  if (!student) {
+    // 공석
+    const onclick = `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
+    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px">
+      <div style="font-size:10px;color:#bbb;font-weight:500">${seatNum}번</div>
+      <div style="font-size:10px;color:#ccc">공석</div>
+    </div>`;
   }
 
-  const onclick = student
-    ? `ondblclick="if(!fpEditMode&&!_fpLastDragged)fpSeatClick(${seatNum})"`
-    : `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
-  return `<div class="${cls}" ${onclick} style="cursor:pointer">
-    <div class="fp-seat-num">${seatNum}번</div>
-    ${nameHtml}${statusHtml}
+  // 만료일 D-day
+  const dday = calcDday(student.expiry);
+  const expiryStr = student.expiry ? student.expiry.replace(/^\d{2}(\d{2})-(\d{2})-(\d{2})$/, '$1/$2/$3') : '';
+  let badgeBg, badgeColor;
+  if (status === 'in') { badgeBg = '#2D7A4F'; badgeColor = '#fff'; }
+  else if (dday !== null && dday <= 7) { badgeBg = '#E07000'; badgeColor = '#fff'; }
+  else { badgeBg = '#9CA3AF'; badgeColor = '#fff'; }
+
+  const ddayLabel = dday !== null ? ` D${dday >= 0 ? '-' : '+'}${Math.abs(dday)}` : '';
+  const genderIcon = student.gender === 'm' ? '<span style="color:#4A90D9;font-size:10px">♂</span>' : '<span style="color:#E05C8A;font-size:10px">♀</span>';
+
+  // 스터디룸 대기 여부
+  const inStudyRoom = studyRoomStudents && Object.values(studyRoomStudents).some(arr => arr.includes(student.name));
+
+  const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
+
+  let cardBorder, cardBg;
+  if (status === 'in') { cardBorder = '#2D7A4F'; cardBg = '#F0FFF4'; }
+  else if (inStudyRoom) { cardBorder = '#C8900A'; cardBg = '#FFF8DC'; }
+  else { cardBorder = '#D1D5DB'; cardBg = '#fff'; }
+
+  const onclick = `ondblclick="if(!fpEditMode&&!_fpLastDragged)fpSeatClick(${seatNum})"`;
+
+  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0">
+    <!-- 상단 배지 -->
+    <div style="background:${badgeBg};padding:2px 5px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:9px;color:${badgeColor};font-weight:600">고정석${expiryStr ? ' '+expiryStr : ''}</span>
+      <span style="font-size:9px;color:${badgeColor};font-weight:700">${ddayLabel}</span>
+    </div>
+    <!-- 이름/번호 -->
+    <div style="padding:4px 6px 3px;flex:1;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:9px;color:#9CA3AF;margin-bottom:1px">${seatNum}번</div>
+      <div style="display:flex;align-items:center;gap:3px">
+        <span style="font-size:12px;font-weight:700;color:#1F2937">${student.name}</span>
+        ${genderIcon}
+      </div>
+      <div style="font-size:9px;margin-top:2px;color:${status==='in'?'#2D7A4F':inStudyRoom?'#C8900A':'#9CA3AF'}">
+        ${status==='in' ? `● 입실 ${rec?.inTime||''}` : inStudyRoom ? '📚 스터디룸 대기' : '미입실'}
+      </div>
+    </div>
   </div>`;
 }
 
@@ -1468,7 +1533,16 @@ function GS(r, c, rs, cs, html) {
   return `<div style="grid-row:${r}/span ${rs};grid-column:${c}/span ${cs}">${html}</div>`;
 }
 function studio(label) {
-  return `<div class="fp-studio" style="height:100%;min-height:0"><div class="fp-studio-label">🚪 ${label}</div></div>`;
+  const m = label.match(/(\d+)/);
+  const roomNum = m ? parseInt(m[1]) : 0;
+  const students = (studyRoomStudents && studyRoomStudents[roomNum]) || [];
+  const studentHtml = students.length > 0
+    ? students.map(n => `<div style="font-size:9px;background:#FFF8DC;color:#7A5008;border-radius:4px;padding:1px 5px;margin-top:2px;font-weight:600">${n}</div>`).join('')
+    : `<div style="font-size:9px;color:#ccc;margin-top:2px">비어있음</div>`;
+  return `<div class="fp-studio" style="height:100%;min-height:0;flex-direction:column;align-items:flex-start;padding:6px 8px">
+    <div class="fp-studio-label" style="font-size:11px">🚪 ${label}</div>
+    ${studentHtml}
+  </div>`;
 }
 
 function buildFloorplan() {
@@ -1540,8 +1614,8 @@ function buildFloorplan() {
 
   // 저장된 위치가 있으면 그리드 대신 absolute 컨테이너로 즉시 복원
   if (Object.keys(fpSeatPositions).length > 0) {
-    // 다음 틱에 실행 (DOM 렌더 후 크기 측정 가능)
-    setTimeout(() => applyFpSavedPositions(), 0);
+    // 브라우저 레이아웃 완료 후 실행 (requestAnimationFrame 두 번으로 확실히)
+    requestAnimationFrame(() => requestAnimationFrame(() => applyFpSavedPositions()));
   }
 }
 
@@ -1869,14 +1943,11 @@ function exitEditMode(save) {
   // 위치 영구 저장
   saveFpPositions();
 
-  // absolute 컨테이너 유지 — 그리드 위치가 리셋되지 않도록
-  // draggable 클래스만 제거해서 드래그 불가 상태로 전환
+  // abs 제거 후 buildFloorplan → applyFpSavedPositions로 재복원
   const abs = document.getElementById('fp-abs-container');
-  if (abs) {
-    abs.querySelectorAll('.draggable').forEach(el => el.classList.remove('draggable'));
-  }
-  // 카드 내용은 최신 학생 데이터로 갱신 (입실상태 등)
-  refreshFpCards();
+  if (abs) abs.remove();
+  fpEditInitialized = false;
+  buildFloorplan();
   showFpSaveToast();
 }
 
@@ -1913,6 +1984,20 @@ function refreshFpCards() {
     }
   });
 }
+
+window.resetFpPositions = function() {
+  if (!confirm('배치도 위치를 초기 상태로 되돌릴까요?')) return;
+  fpSeatPositions = {};
+  localStorage.removeItem('saebom_fp_positions');
+  const abs = document.getElementById('fp-abs-container');
+  if (abs) abs.remove();
+  fpEditInitialized = false;
+  fpEditMode = false;
+  const btn = document.getElementById('fp-edit-btn');
+  if (btn) { btn.className = 'fp-edit-btn'; btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정'; }
+  buildFloorplan();
+  showAdminToast('✅ 배치도가 초기 위치로 돌아왔습니다');
+};
 
 function showFpSaveToast() {
   const toast = document.createElement('div');
@@ -3216,10 +3301,26 @@ window.openAddStudentModal = function(seatNum) {
       <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">➕ ${seatNum}번 학생 추가</div>
       <div style="font-size:12px;color:#8B6010;margin-bottom:16px">새 학생을 이 자리에 배정합니다</div>
       <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이름 *</div>
+            <input id="new-st-name" type="text" placeholder="홍길동"
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+          </div>
+          <div style="flex:0 0 90px">
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">성별</div>
+            <div style="display:flex;border:1.5px solid #E0B020;border-radius:10px;overflow:hidden">
+              <button id="new-st-gender-f" onclick="selectGender('f')"
+                style="flex:1;padding:9px 0;border:none;font-size:13px;cursor:pointer;background:#FFF8DC;color:#C8900A;font-weight:700">♀</button>
+              <button id="new-st-gender-m" onclick="selectGender('m')"
+                style="flex:1;padding:9px 0;border:none;font-size:13px;cursor:pointer;background:#fff;color:#888">♂</button>
+            </div>
+          </div>
+        </div>
         <div>
-          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이름 *</div>
-          <input id="new-st-name" type="text" placeholder="홍길동"
-            style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none">
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이용 만료일</div>
+          <input id="new-st-expiry" type="date"
+            style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
         </div>
         <div>
           <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">학생 전화번호</div>
@@ -3258,10 +3359,21 @@ window.openAddStudentModal = function(seatNum) {
   setTimeout(() => document.getElementById('new-st-name')?.focus(), 100);
 };
 
+window._newStGender = 'f';
+window.selectGender = function(g) {
+  window._newStGender = g;
+  document.getElementById('new-st-gender-f').style.background = g==='f' ? '#FFF8DC' : '#fff';
+  document.getElementById('new-st-gender-f').style.color = g==='f' ? '#C8900A' : '#888';
+  document.getElementById('new-st-gender-m').style.background = g==='m' ? '#E8F0FF' : '#fff';
+  document.getElementById('new-st-gender-m').style.color = g==='m' ? '#1a5fcc' : '#888';
+};
+
 window.confirmAddStudent = function(seatNum) {
   const name   = document.getElementById('new-st-name').value.trim();
   const phone  = '010-' + document.getElementById('new-st-phone').value.trim();
   const parent = '010-' + document.getElementById('new-st-parent').value.trim();
+  const expiry = document.getElementById('new-st-expiry').value;
+  const gender = window._newStGender || 'f';
   const err    = document.getElementById('new-st-err');
 
   if (!name) { err.textContent = '이름을 입력해주세요'; return; }
@@ -3273,6 +3385,8 @@ window.confirmAddStudent = function(seatNum) {
     name,
     phone,
     parent,
+    gender,
+    expiry,
     schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
     hours: {}
   };
