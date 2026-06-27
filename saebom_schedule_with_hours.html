@@ -1577,6 +1577,18 @@ window.toggleFpEditMode = function() {
 
 function enterEditMode() {
   const room = document.getElementById('fp-room');
+
+  // 저장 후 absolute 컨테이너가 남아있으면 그걸 재활용
+  const existingAbs = document.getElementById('fp-abs-container');
+  if (existingAbs) {
+    existingAbs.querySelectorAll('[data-seat-id]').forEach(cell => {
+      const draggableEl = cell.querySelector('.fp-seat') || cell.querySelector('.fp-studio') || cell;
+      draggableEl.classList.add('draggable');
+    });
+    attachSeatDragEvents();
+    return;
+  }
+
   // 그리드 안의 모든 좌석 div를 absolute로 전환
   const gridDiv = room.querySelector('div[style*="grid"]');
   if (!gridDiv) return;
@@ -1789,14 +1801,44 @@ function exitEditMode(save) {
   // 위치 영구 저장
   saveFpPositions();
 
-  // absolute 컨테이너 제거 후 그리드 재빌드 (저장된 위치는 fpSeatPositions에 남음)
+  // absolute 컨테이너 유지 — 그리드 위치가 리셋되지 않도록
+  // draggable 클래스만 제거해서 드래그 불가 상태로 전환
   const abs = document.getElementById('fp-abs-container');
-  if (abs) abs.remove();
-  fpEditInitialized = false; // 다음 수정모드 진입 시 새로 측정
-
-  // 그리드 재빌드 (저장된 위치 반영됨)
-  buildFloorplan();
+  if (abs) {
+    abs.querySelectorAll('.draggable').forEach(el => el.classList.remove('draggable'));
+  }
+  // 카드 내용은 최신 학생 데이터로 갱신 (입실상태 등)
+  refreshFpCards();
   showFpSaveToast();
+}
+
+function refreshFpCards() {
+  const abs = document.getElementById('fp-abs-container');
+  if (!abs) { buildFloorplan(); return; }
+  abs.querySelectorAll('[data-seat-id]').forEach(cell => {
+    const seatId = cell.dataset.seatId;
+    if (!seatId || seatId.includes('admin') || seatId.includes('studio')) return;
+    const seatNum = parseInt(seatId);
+    if (isNaN(seatNum)) return;
+    const newHtml = buildSeatCard(seatNum);
+    // 임시 div로 파싱해서 내부 내용 교체
+    const tmp = document.createElement('div');
+    tmp.innerHTML = newHtml;
+    const newCard = tmp.firstElementChild;
+    if (!newCard) return;
+    // 위치/크기/dataset은 유지, 내용만 교체
+    cell.innerHTML = newCard.innerHTML;
+    cell.className = newCard.className;
+    // onclick 재설정
+    const onclickAttr = newCard.getAttribute('onclick') || newCard.getAttribute('ondblclick');
+    if (newCard.hasAttribute('ondblclick')) {
+      cell.setAttribute('ondblclick', newCard.getAttribute('ondblclick'));
+      cell.removeAttribute('onclick');
+    } else if (newCard.hasAttribute('onclick')) {
+      cell.setAttribute('onclick', newCard.getAttribute('onclick'));
+      cell.removeAttribute('ondblclick');
+    }
+  });
 }
 
 function showFpSaveToast() {
