@@ -729,7 +729,7 @@ let currentView='table';
 let ALERTS = []; // 동적으로 계산됨
 const PRESENT=['박지윤','정은찬','강민수','김은호','박지윤A','김범수','권민지','이승석','김지후','장혜령','박현진','박준영','이준서','신치원','김소윤','김준현','한수아','윤서정'];
 
-function showSection(id,btn){
+window.showSection = function(id,btn){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
@@ -756,7 +756,7 @@ window.saveSettingsFromTab = function() {
   if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
 };
 
-function setView(v,btn){
+window.setView = function(v,btn){
   currentView=v;
   document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -765,7 +765,7 @@ function setView(v,btn){
   if(v==='chart') buildHoursChart();
 }
 
-function selectMonth(m,el){
+window.selectMonth = function(m,el){
   currentMonth=m;
   document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
@@ -916,7 +916,7 @@ function buildDayTabs(){
   ).join('');
 }
 
-function selectDay(day,el){
+window.selectDay = function(day,el){
   currentDay=day;
   document.querySelectorAll('.day-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
@@ -1151,7 +1151,7 @@ function maskName(name) {
 }
 const todayRecords = [];
 
-function numpadInput(d) {
+window.numpadInput = function(d) {
   if (numpadBuffer.length >= 4) return;
   numpadBuffer += d;
   updateCheckinDisplay();
@@ -1160,13 +1160,13 @@ function numpadInput(d) {
   }
 }
 
-function numpadDelete() {
+window.numpadDelete = function() {
   numpadBuffer = numpadBuffer.slice(0, -1);
   updateCheckinDisplay();
   hideCheckinError();
 }
 
-function numpadClear() {
+window.numpadClear = function() {
   numpadBuffer = '';
   updateCheckinDisplay();
   hideCheckinError();
@@ -1261,7 +1261,7 @@ async function processCheckin() {
   document.getElementById('confirm-ok-btn')._existingRecord = existing;
 }
 
-function checkinConfirm() {
+window.checkinConfirm = function() {
   const btn = document.getElementById('confirm-ok-btn');
   const student = btn._student;
   const isCheckout = btn._isCheckout;
@@ -1362,7 +1362,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr) {
   } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
 }
 
-function checkinReset() {
+window.checkinReset = function() {
   numpadBuffer = '';
   updateCheckinDisplay();
   hideCheckinError();
@@ -1554,7 +1554,7 @@ function saveFpPositions() {
   try { localStorage.setItem('saebom_fp_positions', JSON.stringify(fpSeatPositions)); } catch(e) {}
 }
 
-function toggleFpEditMode() {
+window.toggleFpEditMode = function() {
   fpEditMode = !fpEditMode;
   const btn = document.getElementById('fp-edit-btn');
   const room = document.getElementById('fp-room');
@@ -1991,7 +1991,7 @@ function openScheduleModal(idx) {
   ov.style.display = 'flex';
 }
 
-function closeScheduleModal() {
+window.closeScheduleModal = function() {
   document.getElementById('schedule-modal-overlay').style.display = 'none';
   document.getElementById('absent-reason-popup')?.remove();
   _schedEditIdx = -1;
@@ -2766,7 +2766,7 @@ async function saveSmsLogToFirebase(entry, logId) {
 
 let _smsLogData = []; // 현재 표시 중인 데이터
 
-async function loadSmsLog() {
+window.loadSmsLog = async function() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
 
@@ -2801,7 +2801,7 @@ async function loadSmsLog() {
   }
 }
 
-function renderSmsLog(logs) {
+window.renderSmsLog = function(logs) {
   const today = new Date().toLocaleDateString('ko-KR');
   const todayLogs = logs.filter(l => l.date === today);
   const successLogs = logs.filter(l => l.success);
@@ -2852,7 +2852,7 @@ function renderSmsLog(logs) {
   }).join('');
 }
 
-function filterSmsLog() {
+window.filterSmsLog = function() {
   const f = document.getElementById('smslog-filter').value;
   let filtered = _smsLogData;
   if (f === 'success') filtered = _smsLogData.filter(l => l.success);
@@ -2863,9 +2863,9 @@ function filterSmsLog() {
   renderSmsLog(filtered);
 }
 
-function refreshSmsLog() { loadSmsLog(); showAdminToast('🔄 새로고침 완료'); }
+window.refreshSmsLog = function() { loadSmsLog(); showAdminToast('🔄 새로고침 완료'); }
 
-function clearOldSmsLogs() {
+window.clearOldSmsLogs = function() {
   if (!confirm('30일 이전 내역을 삭제할까요?')) return;
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - 30);
