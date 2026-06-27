@@ -1297,6 +1297,25 @@ window.checkinConfirm = function() {
       const i = studyRoomStudents[r].indexOf(student.name);
       if (i !== -1) studyRoomStudents[r].splice(i, 1);
     });
+
+    // ── 누적시간 계산 및 저장 ──
+    const parseTime = t => {
+      const [h, m] = t.replace(/[^0-9:]/g,'').split(':').map(Number);
+      return h * 60 + (m || 0);
+    };
+    let inMin  = parseTime(existing.inTime);
+    let outMin = parseTime(timeStr);
+    if (outMin < inMin) outMin += 24 * 60; // 자정 넘긴 경우
+    const diffMin = Math.max(0, outMin - inMin);
+    const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
+
+    const monthKey = new Date().getMonth() + 1; // 1~12
+    if (!student.hours) student.hours = {};
+    student.hours[monthKey] = Math.round(((student.hours[monthKey] || 0) + diffHr) * 10) / 10;
+
+    // Firebase 저장
+    if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
+    buildHoursTable();
   } else {
     todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null });
   }
@@ -2515,6 +2534,8 @@ async function saveStudentToFirebase(student) {
     name: student.name,
     phone: student.phone || '',
     parent: student.parent || '',
+    gender: student.gender || 'f',
+    expiry: student.expiry || '',
     월: student.schedule['월'] || '-',
     화: student.schedule['화'] || '-',
     수: student.schedule['수'] || '-',
@@ -2551,6 +2572,8 @@ async function loadStudentsFromFirebase() {
         STUDENTS.push({
           seat: v.seat, name: v.name,
           phone: v.phone || '', parent: v.parent || '',
+          gender: v.gender || 'f',
+          expiry: v.expiry || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
           hours: v.hours || {}
         });
