@@ -2722,7 +2722,9 @@ async function solapiSend(to, text) {
     body: JSON.stringify({ message: { from: SOLAPI_SENDER, to, text, type: 'LMS' } })
   });
   const data = await res.json();
-  return data.errorCount === 0 ? true : data;
+  // errorCount가 0이거나 없으면서 groupId가 있으면 성공
+  if (data.errorCount === 0 || (data.groupId && !data.errorCount)) return true;
+  return data;
 }
 
 // 미입실 알림 발송
@@ -2846,27 +2848,48 @@ window.renderSmsLog = function(logs) {
       ? '<span style="font-size:11px;font-weight:700;color:#2D7A4F;background:#E8F5E9;border-radius:20px;padding:2px 8px">✅ 성공</span>'
       : '<span style="font-size:11px;font-weight:700;color:#C62828;background:#FCEBEB;border-radius:20px;padding:2px 8px">❌ 실패</span>';
     const errorHtml = !log.success && log.error
-      ? `<div style="font-size:11px;color:#C62828;background:#FCEBEB;border-radius:6px;padding:4px 8px;margin-top:6px">오류: ${log.error.slice(0,80)}</div>`
+      ? `<div style="font-size:11px;color:#C62828;background:#FCEBEB;border-radius:6px;padding:4px 8px;margin-top:8px">오류: ${log.error.slice(0,120)}</div>`
       : '';
-    return `<div style="padding:14px 16px;border-bottom:0.5px solid var(--color-border-tertiary);${i===0?'':''}">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:11px;font-weight:700;background:${t.bg};color:${t.color};border:1px solid ${t.border};border-radius:20px;padding:2px 9px">${t.label}</span>
-          <span style="font-size:14px;font-weight:700">${log.student||''}</span>
-          <span style="font-size:12px;color:var(--color-text-secondary)">${log.seat||''}</span>
+    // 첫 줄(제목행) 미리보기: 문자 내용 첫 줄
+    const firstLine = (log.text||'').split('\n').filter(l=>l.trim())[0] || '';
+    const detailId = `sms-detail-${i}`;
+    return `<div style="border-bottom:0.5px solid var(--color-border-tertiary)">
+      <!-- 헤더: 항상 표시 -->
+      <div onclick="toggleSmsDetail('${detailId}')" style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;gap:10px;user-select:none"
+           onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:1;min-width:0">
+          <span style="font-size:11px;font-weight:700;background:${t.bg};color:${t.color};border:1px solid ${t.border};border-radius:20px;padding:2px 9px;flex-shrink:0">${t.label}</span>
+          <span style="font-size:13px;font-weight:700;flex-shrink:0">${log.student||''}</span>
+          <span style="font-size:11px;color:var(--color-text-secondary);flex-shrink:0">${log.seat||''}</span>
           ${successBadge}
+          <span style="font-size:11px;color:var(--color-text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${firstLine}</span>
         </div>
-        <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:11px;color:var(--color-text-tertiary)">${log.date||''}</div>
-          <div style="font-size:11px;color:var(--color-text-tertiary)">${log.time||''}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--color-text-tertiary)">${log.date||''}</div>
+            <div style="font-size:11px;color:var(--color-text-tertiary)">${log.time||''}</div>
+          </div>
+          <span id="${detailId}-arrow" style="font-size:13px;color:var(--color-text-tertiary);transition:transform 0.2s">▼</span>
         </div>
       </div>
-      <div style="font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border-radius:8px;padding:8px 10px;line-height:1.6;white-space:pre-wrap">${log.text||''}</div>
-      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:5px">수신: ${log.phone||''}</div>
-      ${errorHtml}
+      <!-- 상세: 접혀있음 -->
+      <div id="${detailId}" style="display:none;padding:0 16px 12px;border-top:0.5px solid var(--color-border-tertiary)">
+        <div style="font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border-radius:8px;padding:10px 12px;line-height:1.7;white-space:pre-wrap;margin-top:10px">${log.text||''}</div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">수신: ${log.phone||''}</div>
+        ${errorHtml}
+      </div>
     </div>`;
   }).join('');
 }
+
+window.toggleSmsDetail = function(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById(id + '-arrow');
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+};
 
 window.filterSmsLog = function() {
   const f = document.getElementById('smslog-filter').value;
