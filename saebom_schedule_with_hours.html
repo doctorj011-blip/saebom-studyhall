@@ -1128,7 +1128,7 @@ function buildStudentList(filter=''){
       const hColor = h>=180?'#27500A':h>=120?'#7A5008':'#A32D2D';
       const hBg = h>=180?'#E8F5E9':h>=120?'#FFF8DC':'#FCEBEB';
       return `<div class="student-card" onclick="openScheduleModal(${idx})">
-        <div class="student-avatar">${s.name[0]}</div>
+        <div class="student-avatar" style="font-size:12px;font-weight:800">${s.seat}</div>
         <div class="student-info" style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
             <span style="font-size:10px;background:#C8900A;color:#fff;border-radius:5px;padding:1px 5px;font-weight:700;flex-shrink:0">${s.seat}</span>
