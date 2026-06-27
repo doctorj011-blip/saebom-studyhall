@@ -1537,7 +1537,74 @@ function buildFloorplan() {
 
   html += '</div>';
   el.innerHTML = html;
+
+  // 저장된 위치가 있으면 그리드 대신 absolute 컨테이너로 즉시 복원
+  if (Object.keys(fpSeatPositions).length > 0) {
+    // 다음 틱에 실행 (DOM 렌더 후 크기 측정 가능)
+    setTimeout(() => applyFpSavedPositions(), 0);
+  }
 }
+
+// 저장된 fpSeatPositions를 absolute 컨테이너로 복원
+function applyFpSavedPositions() {
+  const room = document.getElementById('fp-room');
+  if (!room) return;
+  const gridDiv = room.querySelector('div[style*="grid"]');
+  if (!gridDiv) return;
+
+  // 기존 absolute 컨테이너 제거
+  const oldAbs = document.getElementById('fp-abs-container');
+  if (oldAbs) oldAbs.remove();
+
+  const cells = gridDiv.querySelectorAll('[style*="grid-row"]');
+  const roomRect = gridDiv.getBoundingClientRect();
+
+  const absContainer = document.createElement('div');
+  absContainer.id = 'fp-abs-container';
+  absContainer.style.cssText = `position:relative;width:${gridDiv.offsetWidth}px;height:${gridDiv.offsetHeight}px;`;
+
+  cells.forEach(cell => {
+    const rect = cell.getBoundingClientRect();
+    const origX = rect.left - roomRect.left;
+    const origY = rect.top - roomRect.top;
+    const w = rect.width;
+    const h = rect.height;
+
+    // seatId 추출
+    const seatNumEl = cell.querySelector('.fp-seat-num');
+    const studioEl  = cell.querySelector('.fp-studio-label');
+    let seatId = null;
+    if (seatNumEl) {
+      seatId = seatNumEl.textContent.replace(/[^0-9]/g,'') + (seatNumEl.textContent.includes('관리') ? '_admin' : '');
+    } else if (studioEl) {
+      const m = studioEl.textContent.match(/(\d+)/);
+      seatId = m ? 'studio_' + m[1] : null;
+    }
+
+    const newCell = cell.cloneNode(true);
+    newCell.removeAttribute('style');
+    newCell.style.position = 'absolute';
+    // 저장된 위치 있으면 적용, 없으면 원본 위치
+    const saved = seatId && fpSeatPositions[seatId];
+    newCell.style.left = (saved ? saved.x : origX) + 'px';
+    newCell.style.top  = (saved ? saved.y : origY) + 'px';
+    newCell.style.width  = w + 'px';
+    newCell.style.height = h + 'px';
+    newCell.style.boxSizing = 'border-box';
+    newCell.style.margin = '0';
+    if (seatId) {
+      newCell.dataset.seatId = seatId;
+      newCell.dataset.origX = origX;
+      newCell.dataset.origY = origY;
+    }
+    absContainer.appendChild(newCell);
+  });
+
+  gridDiv.style.display = 'none';
+  room.appendChild(absContainer);
+  fpEditInitialized = true;
+}
+
 // ===== 위치수정 모드 =====
 let fpEditMode = false;
 // 좌석 위치 저장: { seatId: {x, y} }
@@ -1578,13 +1645,14 @@ window.toggleFpEditMode = function() {
 function enterEditMode() {
   const room = document.getElementById('fp-room');
 
-  // 저장 후 absolute 컨테이너가 남아있으면 그걸 재활용
+  // absolute 컨테이너가 이미 있으면(저장 후 or 복원 후) draggable만 다시 붙이기
   const existingAbs = document.getElementById('fp-abs-container');
   if (existingAbs) {
     existingAbs.querySelectorAll('[data-seat-id]').forEach(cell => {
       const draggableEl = cell.querySelector('.fp-seat') || cell.querySelector('.fp-studio') || cell;
       draggableEl.classList.add('draggable');
     });
+    existingAbs.style.display = 'block';
     attachSeatDragEvents();
     return;
   }
