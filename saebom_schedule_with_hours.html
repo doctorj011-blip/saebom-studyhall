@@ -648,7 +648,10 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
   <div class="sched-modal">
     <div class="sched-modal-header">
       <div style="flex:1">
-        <div class="sched-modal-title" id="sched-modal-title"></div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div class="sched-modal-title" id="sched-modal-name"></div>
+          <div id="sched-modal-seat" style="font-size:16px;font-weight:700;color:#C8900A"></div>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
           <div>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
@@ -1130,6 +1133,7 @@ function buildStudentList(filter=''){
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
             <span style="font-size:10px;background:#C8900A;color:#fff;border-radius:5px;padding:1px 5px;font-weight:700;flex-shrink:0">${s.seat}</span>
             <span class="student-name" style="font-size:13px;font-weight:700">${s.name}</span>
+            <span style="font-size:11px">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
           </div>
           <div class="student-meta" style="font-size:11px;color:#8B6010;margin-bottom:4px">${s.phone||'전화번호 미등록'}</div>
           <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
@@ -1984,13 +1988,25 @@ function openScheduleModal(idx) {
     _schedDraft[day] = parseScheduleStr(s.schedule[day] || '');
   });
 
-  document.getElementById('sched-modal-title').textContent = `${s.seat} ${s.name}`;
+  document.getElementById('sched-modal-name').textContent = s.name;
+  document.getElementById('sched-modal-seat').textContent = s.seat;
   document.getElementById('edit-phone').value = s.phone || '';
   document.getElementById('edit-parent').value = s.parent || '';
   renderScheduleModal();
   const ov = document.getElementById('schedule-modal-overlay');
   ov.style.display = 'flex';
 }
+
+window.setEditGender = function(g) {
+  window._editGender = g;
+  const fBtn = document.getElementById('edit-gender-f');
+  const mBtn = document.getElementById('edit-gender-m');
+  if (!fBtn || !mBtn) return;
+  fBtn.style.background = g === 'f' ? '#FFF8DC' : 'var(--color-background-primary)';
+  fBtn.style.color = g === 'f' ? '#C8900A' : '#888';
+  mBtn.style.background = g === 'm' ? '#E8F0FF' : 'var(--color-background-primary)';
+  mBtn.style.color = g === 'm' ? '#1a5fcc' : '#888';
+};
 
 window.closeScheduleModal = function() {
   document.getElementById('schedule-modal-overlay').style.display = 'none';
@@ -2238,6 +2254,7 @@ function saveSchedule() {
   const newParent = document.getElementById('edit-parent').value.trim();
   if (newPhone  !== undefined) s.phone  = newPhone;
   if (newParent !== undefined) s.parent = newParent;
+  s.gender = window._editGender || s.gender || 'f';
 
   DAYS.forEach(day => {
     s.schedule[day] = draftToStr(_schedDraft[day], day === '토');
