@@ -1398,7 +1398,7 @@ window.checkinConfirm = function() {
 
   setTimeout(() => {
     checkinReset();
-  }, 2200);
+  }, isDuringPeriod && assignedRoom ? 6000 : 2200);
 }
 
 // ── 학부모 자동 문자 발송 ──
