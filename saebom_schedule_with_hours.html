@@ -708,20 +708,20 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
           <div>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
-            <div style="display:flex;align-items:center;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
-              <span style="padding:5px 0 5px 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap">010-</span>
+            <div style="display:flex;align-items:stretch;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
+              <span style="display:flex;align-items:center;padding:0 4px 0 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap;background:var(--color-background-primary)">010-</span>
               <input id="edit-phone" type="tel" placeholder="0000-0000" maxlength="9"
                 oninput="formatPhoneInput(this)"
-                style="flex:1;padding:5px 8px 5px 0;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;width:100%">
+                style="flex:1;padding:5px 8px;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;min-width:0">
             </div>
           </div>
           <div>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">👨‍👩‍👧 부모님 번호</div>
-            <div style="display:flex;align-items:center;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
-              <span style="padding:5px 0 5px 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap">010-</span>
+            <div style="display:flex;align-items:stretch;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
+              <span style="display:flex;align-items:center;padding:0 4px 0 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap;background:var(--color-background-primary)">010-</span>
               <input id="edit-parent" type="tel" placeholder="0000-0000" maxlength="9"
                 oninput="formatPhoneInput(this)"
-                style="flex:1;padding:5px 8px 5px 0;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;width:100%">
+                style="flex:1;padding:5px 8px;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;min-width:0">
             </div>
           </div>
         </div>
@@ -942,8 +942,9 @@ function getTrend(s,m){
 
 function buildHoursTable(){
   const sorted=[...STUDENTS].sort((a,b)=>(b.hours[currentMonth]||0)-(a.hours[currentMonth]||0));
+  if (!sorted.length) return;
   const vals=sorted.map(s=>s.hours[currentMonth]||0);
-  const maxH=Math.max(...vals);
+  const maxH=Math.max(...vals,0);
   const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
   const over180=vals.filter(v=>v>=180).length;
   const under100=vals.filter(v=>v<100).length;
@@ -952,7 +953,7 @@ function buildHoursTable(){
     <div class="summary-chip">평균 <span>${avg}시간</span></div>
     <div class="summary-chip">180h 이상 <span style="color:#C8900A">${over180}명</span></div>
     <div class="summary-chip">100h 미만 <span style="color:#C62828">${under100}명</span></div>
-    <div class="summary-chip">최고 <span>${maxH}h</span> (${sorted[0].name})</div>
+    <div class="summary-chip">최고 <span>${maxH}h</span> (${sorted[0]?.name||'-'})</div>
   `;
 
   let html=`<thead><tr>
@@ -984,7 +985,7 @@ function buildHoursTable(){
 
 function buildHoursChart(){
   const sorted=[...STUDENTS].sort((a,b)=>(b.hours[currentMonth]||0)-(a.hours[currentMonth]||0));
-  const maxH=Math.max(...sorted.map(s=>s.hours[currentMonth]||0));
+  const maxH=Math.max(...sorted.map(s=>s.hours[currentMonth]||0), 1);
   const chartH=120;
   document.getElementById('chart-month-label').textContent=`— ${currentMonth}월`;
 
@@ -1865,10 +1866,13 @@ function buildFloorplan() {
           const rec = adminSt ? todayRecords.find(r2 => r2.studentName === adminSt.name && !r2.outTime) : null;
           const dday = adminSt?.expiry ? calcDday(adminSt.expiry) : null;
           const ddayHtml = dday !== null ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '';
-          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c}">
+          const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
+          const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : `onclick="openAddStudentModal(${fixed.n})"`;
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:pointer" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
-            <div class="fp-name" style="color:#7A5008;font-size:11px">${fixed.name||''}</div>
+            <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : (fixed.name||'')}</div>
             ${ddayHtml}
+            ${rec ? `<div style="font-size:9px;color:#2D7A4F;margin-top:2px">● 입실 ${rec.inTime||''}</div>` : ''}
           </div>`;
         }
       } else {
@@ -3060,6 +3064,52 @@ window.loadStudentsFromFirebase = loadStudentsFromFirebase;
 
 // 앱 시작
 loadStudentsFromFirebase();
+
+// ── 입퇴실 기록 실시간 감시 (다중 기기 동기화) ──
+const _todayStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+
+onSnapshot(
+  collection(db, 'checkin_logs'),
+  (snapshot) => {
+    let changed = false;
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'removed') return;
+      const d = change.doc.data();
+      // 오늘 날짜 기록만 처리
+      if (!d.date || d.date !== _todayStr) return;
+
+      const name = d.studentName;
+      const seat = d.seat;
+      const type = d.type; // 'in' or 'out'
+      const time = d.time;
+      if (!name || !type || !time) return;
+
+      if (type === 'in') {
+        // 이미 로컬에 있으면 중복 추가 안 함
+        const exists = todayRecords.find(r => r.studentName === name && r.inTime === time);
+        if (!exists) {
+          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null });
+          if (!PRESENT.includes(name)) PRESENT.push(name);
+          changed = true;
+        }
+      } else if (type === 'out') {
+        const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+        if (rec && rec.outTime !== time) {
+          rec.outTime = time;
+          const idx = PRESENT.indexOf(name);
+          if (idx !== -1) PRESENT.splice(idx, 1);
+          changed = true;
+        }
+      }
+    });
+
+    if (changed) {
+      buildDashboard();
+      buildCheckinTodayList();
+      if (document.getElementById('fp-room')) buildFloorplan();
+    }
+  }
+);
 
 // ── 스터디룸 신청 실시간 감시 ──
 const _studyroomReqAlerts = [];
