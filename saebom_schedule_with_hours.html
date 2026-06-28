@@ -1889,11 +1889,12 @@ function buildFloorplan() {
           const rec = adminSt ? todayRecords.find(r2 => r2.studentName === adminSt.name && !r2.outTime) : null;
           const dday = adminSt?.expiry ? calcDday(adminSt.expiry) : null;
           const ddayHtml = dday !== null ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '';
+          // 관리자석: 학생 있으면 우클릭으로 배석해제만 가능, 빈자리 클릭 불가
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
-          const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : `onclick="openAddStudentModal(${fixed.n})"`;
-          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:pointer" ${clickAttr} ${ctxAttr}>
+          const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : '';
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'pointer':'default'}" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
-            <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : (fixed.name||'')}</div>
+            <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : ''}</div>
             ${ddayHtml}
             ${rec ? `<div style="font-size:9px;color:#2D7A4F;margin-top:2px">● 입실 ${rec.inTime||''}</div>` : ''}
           </div>`;
@@ -3015,6 +3016,8 @@ async function loadStudentsFromFirebase() {
       snap.forEach(d => {
         const v = d.data();
         if (!v.name) return; // 빈 자리 문서 제외
+        const seatNum = parseInt(String(v.seat).replace('번',''));
+        if (seatNum >= 54 && seatNum <= 63) return; // 관리자석 제외
         STUDENTS.push({
           seat: String(v.seat).replace('번',''), name: v.name,
           phone: v.phone || '', parent: v.parent || '',
@@ -3049,6 +3052,7 @@ async function loadStudentsFromFirebase() {
         return;
       }
       const vSeat = String(v.seat).replace('번','');
+      if (parseInt(vSeat) >= 54 && parseInt(vSeat) <= 63) return; // 관리자석 제외
       const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       const updated = {
         seat: String(v.seat).replace('번',''), name: v.name,
