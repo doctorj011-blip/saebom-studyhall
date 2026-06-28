@@ -655,10 +655,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 
   </div>
 </div>
-
-</div>
-
-<!-- 관리자 토스트 -->
 <div id="admin-toast" class="admin-toast"></div>
 
 <!-- 스케줄 편집 모달 -->
@@ -1234,7 +1230,7 @@ async function processCheckin() {
               seat: v.seat, name: v.name,
               phone: v.phone || '', parent: v.parent || '',
               schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-              hours: v.hours || {}
+              hours: {}  // 누적시간은 이번 달 입퇴실 기록으로만 계산
             });
           }
           matched.push(STUDENTS.find(s => s.seat === v.seat) || STUDENTS[STUDENTS.length-1]);
