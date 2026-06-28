@@ -27,6 +27,7 @@ window._db = db;
 window._fsDoc = doc;
 window._fsSetDoc = setDoc;
 window._fsCollection = collection;
+window._fsGetDocs = getDocs;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
 window._fsGetDoc = getDoc;
@@ -218,7 +219,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="app-tab" onclick="showTab('daily',this)">📅 요일별</button>
       <button class="app-tab" onclick="showTab('weekly',this)">📋 주간설정</button>
       <button class="app-tab" onclick="showTab('mystats',this)">📊 내 현황</button>
-      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)" style="display:none">🪑 자리선택</button>
+      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">🪑 자리선택</button>
     </div>
   </div>
 
@@ -843,19 +844,23 @@ async function checkSeatSelectionActive() {
   try {
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
     const tabBtn = document.getElementById('seat-tab-btn');
-    if (!snap.exists || !snap.exists()) {
-      if (tabBtn) tabBtn.style.display = 'none';
+    if (!snap.exists()) {
+      document.getElementById('student-seatmap').innerHTML = '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.</div>';
       return;
     }
-    const d = snap.data();
+    const d = snap.data ? snap.data() : null;
     const now = new Date();
-    const active = d.active && new Date(d.start) <= now && new Date(d.end) >= now;
-    if (tabBtn) tabBtn.style.display = active ? '' : 'none';
+    const active = d && d.active && new Date(d.start) <= now && new Date(d.end) >= now;
     if (active) {
       const deadline = new Date(d.end);
       document.getElementById('seatmap-deadline').textContent =
         `⏰ 선택 마감: ${deadline.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`;
+      document.getElementById('student-seatmap').innerHTML = '';
       buildStudentSeatmap();
+    } else {
+      document.getElementById('seatmap-deadline').textContent = '';
+      document.getElementById('student-seatmap').innerHTML =
+        '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div>';
     }
   } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
 }
