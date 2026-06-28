@@ -1273,8 +1273,26 @@ function buildStudentList(filter=''){
     .map(s=>{
       const h=s.hours[currentMonth]||0;
       const idx=STUDENTS.indexOf(s);
+      const isAdmin = parseInt(s.seat) >= 54;
       const hColor = h>=180?'#27500A':h>=120?'#7A5008':'#A32D2D';
       const hBg = h>=180?'#E8F5E9':h>=120?'#FFF8DC':'#FCEBEB';
+
+      if (isAdmin) {
+        // 관리자 카드: 회색 계열, 이용시간 미표시
+        return `<div class="student-card" onclick="openScheduleModal(${idx})"
+          style="background:linear-gradient(135deg,#F3F4F6 0%,#E5E7EB 100%);border:1.5px solid #D1D5DB">
+          <div class="student-avatar" style="font-size:12px;font-weight:800;background:linear-gradient(135deg,#6B7280,#374151)">${s.seat}</div>
+          <div class="student-info" style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+              <span class="student-name" style="font-size:13px;font-weight:700;color:#374151">${s.name}</span>
+              <span onclick="toggleGender(${idx},event)" style="font-size:13px;cursor:pointer;user-select:none" title="클릭해서 성별 변경">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
+            </div>
+            <div class="student-meta" style="font-size:11px;color:#6B7280;margin-bottom:2px">${s.phone||'전화번호 미등록'}</div>
+            <span style="font-size:10px;font-weight:600;background:#E5E7EB;color:#6B7280;border-radius:20px;padding:2px 8px;display:inline-block">관리자</span>
+          </div>
+        </div>`;
+      }
+
       return `<div class="student-card" onclick="openScheduleModal(${idx})">
         <div class="student-avatar" style="font-size:12px;font-weight:800">${s.seat}</div>
         <div class="student-info" style="flex:1;min-width:0">
@@ -1737,22 +1755,26 @@ function studio(label) {
   </div>`;
 }
 
+// ── 관리자석 전역 정의 (배석 해제 시 수정 가능) ──
+window.ADMIN_FIXED = {
+  'r1_c1':{type:'admin',n:63,name:'관리조교'},
+  'r2_c1':{type:'admin',n:62,name:''},
+  'r3_c1':{type:'admin',n:61,name:''},
+  'r4_c1':{type:'admin',n:60,name:''},
+  'r5_c1':{type:'admin',n:59,name:''},
+  'r6_c1':{type:'admin',n:58,name:''},
+  'r7_c1':{type:'admin',n:57,name:'이지은'},
+  'r8_c1':{type:'admin',n:56,name:'남궁준'},
+  'r9_c1':{type:'admin',n:55,name:'이우영'},
+  'r10_c1':{type:'admin',n:54,name:'정원혁'},
+};
+
 function buildFloorplan() {
   const el = document.getElementById('fp-room');
 
   // 고정 칸 정의 (admin=관리자석만 고정)
-  const FIXED = {
-    'r1_c1':{type:'admin',n:63,name:'관리조교'},
-    'r2_c1':{type:'admin',n:62,name:''},
-    'r3_c1':{type:'admin',n:61,name:''},
-    'r4_c1':{type:'admin',n:60,name:''},
-    'r5_c1':{type:'admin',n:59,name:''},
-    'r6_c1':{type:'admin',n:58,name:''},
-    'r7_c1':{type:'admin',n:57,name:'이지은'},
-    'r8_c1':{type:'admin',n:56,name:'남궁준'},
-    'r9_c1':{type:'admin',n:55,name:'이우영'},
-    'r10_c1':{type:'admin',n:54,name:'정원혁'},
-  };
+  // FIXED는 전역 window.ADMIN_FIXED 사용
+  const FIXED = window.ADMIN_FIXED;
 
   // 확정 배치 (사용자 위치수정 반영)
   const DEFAULT_SEATS = {
@@ -3955,10 +3977,15 @@ window.fpUnassignSeat = function(seatNum) {
   if (idx !== -1) {
     const oldSeat = STUDENTS[idx].seat;
     STUDENTS[idx].seat = '';
-    // Firebase에서 기존 seat 문서 삭제 (공석 처리)
     if (oldSeat && window.deleteStudentFromFirebase) {
       window.deleteStudentFromFirebase(String(seatNum)).catch(console.error);
     }
+  }
+
+  // 관리자석인 경우 ADMIN_FIXED name도 비우기
+  if (window.ADMIN_FIXED) {
+    const fixedKey = Object.keys(window.ADMIN_FIXED).find(k => window.ADMIN_FIXED[k].n === seatNum);
+    if (fixedKey) window.ADMIN_FIXED[fixedKey].name = '';
   }
 
   buildFloorplan();
