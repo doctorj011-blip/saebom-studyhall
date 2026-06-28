@@ -950,6 +950,8 @@ function buildMonthTabs(){
 // 현재 시간 기준 교시 번호 계산
 function getCurrentPeriod() {
   const now = new Date();
+  // 일요일은 교시 없음
+  if (now.getDay() === 0) return null;
   const h = now.getHours();
   const m = now.getMinutes();
   const t = h * 60 + m;
