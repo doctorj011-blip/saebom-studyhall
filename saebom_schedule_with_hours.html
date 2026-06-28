@@ -349,12 +349,22 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <span style="font-size:11px;color:var(--color-text-tertiary);display:none" id="fp-drag-hint"></span>
-      <!-- 위치수정/초기화 버튼 숨김 (배치 확정) -->
     </div>
   </div>
 
-  <div class="fp-drag-wrap" id="fp-drag-wrap">
-    <div class="fp-room" id="fp-room" style="position:relative"></div>
+  <div style="display:flex;gap:14px;align-items:flex-start">
+    <div class="fp-drag-wrap" id="fp-drag-wrap" style="flex:1;min-width:0">
+      <div class="fp-room" id="fp-room" style="position:relative"></div>
+    </div>
+
+    <!-- 입실 현황 사이드패널 -->
+    <div id="fp-side-panel" style="width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;max-height:80vh;overflow-y:auto">
+      <div style="font-size:12px;font-weight:700;color:#5C3D08;padding:4px 2px;display:flex;align-items:center;justify-content:space-between">
+        <span>📋 입실 현황</span>
+        <span id="fp-side-count" style="font-size:11px;color:#888"></span>
+      </div>
+      <div id="fp-side-list"></div>
+    </div>
   </div>
 </div>
 
@@ -1801,6 +1811,7 @@ function buildFloorplan() {
 
   html += '</div>';
   el.innerHTML = html;
+  buildFpSidePanel();
 }
 
 // ===== 위치수정 모드// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
@@ -1873,6 +1884,62 @@ function showFpSaveToast() {
   toast.textContent = '✅ 배치도 위치가 저장됐습니다 (새로고침 후에도 유지)';
   document.body.appendChild(toast);
   setTimeout(() => toast.remove(), 2200);
+}
+
+// ── 배치도 사이드패널 ──
+function buildFpSidePanel() {
+  const listEl = document.getElementById('fp-side-list');
+  const countEl = document.getElementById('fp-side-count');
+  if (!listEl) return;
+
+  // 전체 학생 (입실중 → 미입실 순)
+  const sorted = [...STUDENTS]
+    .filter(s => s.seat && parseInt(s.seat) > 0)
+    .sort((a, b) => {
+      const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
+      const bIn = todayRecords.some(r => r.studentName === b.name && !r.outTime);
+      if (aIn && !bIn) return -1;
+      if (!aIn && bIn) return 1;
+      return parseInt(a.seat) - parseInt(b.seat);
+    });
+
+  const inCount = sorted.filter(s => todayRecords.some(r => r.studentName === s.name && !r.outTime)).length;
+  if (countEl) countEl.textContent = `${inCount}명 입실중`;
+
+  listEl.innerHTML = sorted.map(s => {
+    const isIn = todayRecords.some(r => r.studentName === s.name && !r.outTime);
+    const rec = todayRecords.find(r => r.studentName === s.name && !r.outTime);
+    const genderIcon = s.gender === 'm'
+      ? '<span style="color:#4A90D9;font-size:11px">♂</span>'
+      : '<span style="color:#E05C8A;font-size:11px">♀</span>';
+
+    // 만료일 D-day
+    let expiryStr = '';
+    if (s.expiry) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const exp = new Date(s.expiry);
+      const diff = Math.round((exp - today) / 86400000);
+      expiryStr = diff >= 0
+        ? `<span style="font-size:10px;color:#888">📅 ${s.expiry.replace(/-/g,'.')} (D-${diff})</span>`
+        : `<span style="font-size:10px;color:#C62828">📅 만료</span>`;
+    }
+
+    return `<div onclick="fpSeatClick(${parseInt(s.seat)})" style="background:${isIn ? '#FFFBEA' : '#F9FAFB'};border:1.5px solid ${isIn ? '#E0B020' : '#E5E7EB'};border-radius:10px;padding:8px 10px;cursor:pointer;transition:box-shadow 0.1s"
+      onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${isIn ? '#C8900A' : '#9CA3AF'};color:#fff">${isIn ? '이용중' : '미입실'}</span>
+        </div>
+        <span style="font-size:10px;color:#6B7280">${s.seat}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+        <span style="font-size:13px;font-weight:700;color:#1F2937">${s.name}</span>
+        ${genderIcon}
+      </div>
+      ${expiryStr ? `<div style="margin-top:2px">${expiryStr}</div>` : ''}
+      ${isIn && rec ? `<div style="font-size:10px;color:#C8900A;margin-top:2px">⏱ ${rec.inTime} 입실</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 function fpSeatClick(seatNum) {
