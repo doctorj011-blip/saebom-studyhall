@@ -329,6 +329,15 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       <div id="studyroom-overflow-list"></div>
     </div>
     <!-- 학생 스케줄 변경 알림 (Firebase 실시간) -->
+    <!-- 스터디룸 신청 알림 -->
+    <div class="card" id="studyroom-req-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-door-enter" style="font-size:14px;color:#7C3AED"></i> 스터디룸 신청 알림</span>
+        <button onclick="clearAllStudyroomAlerts()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">모두 지우기</button>
+      </div>
+      <div id="studyroom-req-list"></div>
+    </div>
+
     <div class="card" id="schedule-change-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
         <span><i class="ti ti-refresh" style="font-size:14px;color:#A87008"></i> 학생 스케줄 변경 알림</span>
@@ -778,6 +787,101 @@ document.addEventListener('keydown', function(e) {
     // 데이터만 새로고침
     if (window._adminDb) {
       loadStudentsFromFirebase && loadStudentsFromFirebase();
+
+// ── 스터디룸 신청 실시간 감시 ──
+const studyroomReqAlerts = [];
+const knownStudyroomReqs = {};
+
+onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
+  let changed = false;
+  snapshot.docChanges().forEach(change => {
+    if (change.type === 'removed') {
+      delete knownStudyroomReqs[change.doc.id];
+      const idx = studyroomReqAlerts.findIndex(a => a.id === change.doc.id);
+      if (idx !== -1) { studyroomReqAlerts.splice(idx, 1); changed = true; }
+      return;
+    }
+    const data = { id: change.doc.id, ...change.doc.data() };
+    // 최초 로딩은 기준값만 등록
+    if (change.type === 'added' && knownStudyroomReqs[data.id] === undefined) {
+      knownStudyroomReqs[data.id] = data;
+      // 대기중 상태이면 알림 표시
+      if (data.status === 'pending') {
+        studyroomReqAlerts.unshift(data);
+        changed = true;
+      }
+      return;
+    }
+    knownStudyroomReqs[data.id] = data;
+    const existIdx = studyroomReqAlerts.findIndex(a => a.id === data.id);
+    if (existIdx !== -1) studyroomReqAlerts[existIdx] = data;
+    else if (data.status === 'pending') { studyroomReqAlerts.unshift(data); changed = true; }
+    else changed = true;
+    changed = true;
+  });
+  if (changed) renderStudyroomAlerts();
+});
+
+function renderStudyroomAlerts() {
+  const section = document.getElementById('studyroom-req-section');
+  const list = document.getElementById('studyroom-req-list');
+  if (!section || !list) return;
+  const pending = studyroomReqAlerts.filter(a => a.status === 'pending');
+  section.style.display = studyroomReqAlerts.length ? 'block' : 'none';
+  if (!studyroomReqAlerts.length) { list.innerHTML = ''; return; }
+  list.innerHTML = studyroomReqAlerts.map(a => {
+    const statusBadge = a.status === 'approved'
+      ? '<span style="background:#2D7A4F;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">✅ 승인됨</span>'
+      : a.status === 'rejected'
+      ? '<span style="background:#C62828;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">❌ 거절됨</span>'
+      : '<span style="background:#E0B020;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">⏳ 대기중</span>';
+    const actionBtns = a.status === 'pending' ? `
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="approveStudyroomReq('${a.id}')"
+          style="flex:1;padding:7px;background:#2D7A4F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ 승인</button>
+        <button onclick="rejectStudyroomReq('${a.id}')"
+          style="flex:1;padding:7px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">❌ 거절</button>
+      </div>` : `
+      <button onclick="removeStudyroomAlert('${a.id}')"
+        style="margin-top:6px;padding:4px 10px;background:none;border:1px solid #ddd;border-radius:6px;font-size:11px;color:#888;cursor:pointer">닫기</button>`;
+    return `<div style="background:#FAF5FF;border:1.5px solid #C084FC;border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:34px;height:34px;border-radius:10px;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">${(a.name||'?')[0]}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${a.name} <span style="color:#888;font-weight:400">${a.seat}번</span></div>
+          <div style="font-size:11px;color:#7C3AED;font-weight:600">${a.period}교시 · 스터디룸 ${a.room}번 신청</div>
+        </div>
+        ${statusBadge}
+      </div>
+      ${a.reason ? `<div style="font-size:12px;color:#555;background:#F3E8FF;border-radius:6px;padding:6px 10px;margin-bottom:4px">📝 ${a.reason}</div>` : ''}
+      ${actionBtns}
+    </div>`;
+  }).join('');
+}
+
+window.approveStudyroomReq = async function(id) {
+  try {
+    await setDoc(doc(db, 'studyroom_requests', id), { status: 'approved' }, { merge: true });
+    showAdminToast('✅ 스터디룸 신청 승인됨');
+  } catch(e) { alert('실패: ' + e.message); }
+};
+
+window.rejectStudyroomReq = async function(id) {
+  try {
+    await setDoc(doc(db, 'studyroom_requests', id), { status: 'rejected' }, { merge: true });
+    showAdminToast('❌ 스터디룸 신청 거절됨');
+  } catch(e) { alert('실패: ' + e.message); }
+};
+
+window.removeStudyroomAlert = function(id) {
+  const idx = studyroomReqAlerts.findIndex(a => a.id === id);
+  if (idx !== -1) { studyroomReqAlerts.splice(idx, 1); renderStudyroomAlerts(); }
+};
+
+window.clearAllStudyroomAlerts = function() {
+  studyroomReqAlerts.length = 0;
+  renderStudyroomAlerts();
+};
     }
     buildDashboard();
     if (activeId === 'floorplan' && document.getElementById('fp-room')) buildFloorplan();
@@ -2852,6 +2956,101 @@ window.deleteStudentFromFirebase = deleteStudentFromFirebase;
 
 // 앱 시작
 loadStudentsFromFirebase();
+
+// ── 스터디룸 신청 실시간 감시 ──
+const studyroomReqAlerts = [];
+const knownStudyroomReqs = {};
+
+onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
+  let changed = false;
+  snapshot.docChanges().forEach(change => {
+    if (change.type === 'removed') {
+      delete knownStudyroomReqs[change.doc.id];
+      const idx = studyroomReqAlerts.findIndex(a => a.id === change.doc.id);
+      if (idx !== -1) { studyroomReqAlerts.splice(idx, 1); changed = true; }
+      return;
+    }
+    const data = { id: change.doc.id, ...change.doc.data() };
+    // 최초 로딩은 기준값만 등록
+    if (change.type === 'added' && knownStudyroomReqs[data.id] === undefined) {
+      knownStudyroomReqs[data.id] = data;
+      // 대기중 상태이면 알림 표시
+      if (data.status === 'pending') {
+        studyroomReqAlerts.unshift(data);
+        changed = true;
+      }
+      return;
+    }
+    knownStudyroomReqs[data.id] = data;
+    const existIdx = studyroomReqAlerts.findIndex(a => a.id === data.id);
+    if (existIdx !== -1) studyroomReqAlerts[existIdx] = data;
+    else if (data.status === 'pending') { studyroomReqAlerts.unshift(data); changed = true; }
+    else changed = true;
+    changed = true;
+  });
+  if (changed) renderStudyroomAlerts();
+});
+
+function renderStudyroomAlerts() {
+  const section = document.getElementById('studyroom-req-section');
+  const list = document.getElementById('studyroom-req-list');
+  if (!section || !list) return;
+  const pending = studyroomReqAlerts.filter(a => a.status === 'pending');
+  section.style.display = studyroomReqAlerts.length ? 'block' : 'none';
+  if (!studyroomReqAlerts.length) { list.innerHTML = ''; return; }
+  list.innerHTML = studyroomReqAlerts.map(a => {
+    const statusBadge = a.status === 'approved'
+      ? '<span style="background:#2D7A4F;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">✅ 승인됨</span>'
+      : a.status === 'rejected'
+      ? '<span style="background:#C62828;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">❌ 거절됨</span>'
+      : '<span style="background:#E0B020;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">⏳ 대기중</span>';
+    const actionBtns = a.status === 'pending' ? `
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="approveStudyroomReq('${a.id}')"
+          style="flex:1;padding:7px;background:#2D7A4F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ 승인</button>
+        <button onclick="rejectStudyroomReq('${a.id}')"
+          style="flex:1;padding:7px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">❌ 거절</button>
+      </div>` : `
+      <button onclick="removeStudyroomAlert('${a.id}')"
+        style="margin-top:6px;padding:4px 10px;background:none;border:1px solid #ddd;border-radius:6px;font-size:11px;color:#888;cursor:pointer">닫기</button>`;
+    return `<div style="background:#FAF5FF;border:1.5px solid #C084FC;border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:34px;height:34px;border-radius:10px;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0">${(a.name||'?')[0]}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${a.name} <span style="color:#888;font-weight:400">${a.seat}번</span></div>
+          <div style="font-size:11px;color:#7C3AED;font-weight:600">${a.period}교시 · 스터디룸 ${a.room}번 신청</div>
+        </div>
+        ${statusBadge}
+      </div>
+      ${a.reason ? `<div style="font-size:12px;color:#555;background:#F3E8FF;border-radius:6px;padding:6px 10px;margin-bottom:4px">📝 ${a.reason}</div>` : ''}
+      ${actionBtns}
+    </div>`;
+  }).join('');
+}
+
+window.approveStudyroomReq = async function(id) {
+  try {
+    await setDoc(doc(db, 'studyroom_requests', id), { status: 'approved' }, { merge: true });
+    showAdminToast('✅ 스터디룸 신청 승인됨');
+  } catch(e) { alert('실패: ' + e.message); }
+};
+
+window.rejectStudyroomReq = async function(id) {
+  try {
+    await setDoc(doc(db, 'studyroom_requests', id), { status: 'rejected' }, { merge: true });
+    showAdminToast('❌ 스터디룸 신청 거절됨');
+  } catch(e) { alert('실패: ' + e.message); }
+};
+
+window.removeStudyroomAlert = function(id) {
+  const idx = studyroomReqAlerts.findIndex(a => a.id === id);
+  if (idx !== -1) { studyroomReqAlerts.splice(idx, 1); renderStudyroomAlerts(); }
+};
+
+window.clearAllStudyroomAlerts = function() {
+  studyroomReqAlerts.length = 0;
+  renderStudyroomAlerts();
+};
 
 
 window.refreshMessages = window.loadAdminMessages;
