@@ -1985,6 +1985,10 @@ function buildFloorplan() {
             : student ? '<span class="fp-gender-f">♀</span>' : '';
 
           let cellCls, badgeCls, badgeText;
+          // 스터디룸 사용 여부 확인
+          const inStudyRoomGrid = student && Object.entries(studyRoomStudents).some(([room, arr]) => arr.includes(student.name));
+          const studyRoomNum = inStudyRoomGrid ? Object.entries(studyRoomStudents).find(([r,arr]) => arr.includes(student.name))?.[0] : null;
+
           if (!student) {
             cellCls = 'fp-cell-vacant-seat'; badgeCls = ''; badgeText = '';
           } else if (status === 'in') {
@@ -1994,11 +1998,15 @@ function buildFloorplan() {
           } else {
             cellCls = 'fp-cell-absent'; badgeCls = 'fp-badge-absent'; badgeText = '미입실';
           }
+          // 스터디룸 사용중이면 배지 추가
+          const studyroomBadge = inStudyRoomGrid
+            ? `<span class="fp-badge" style="background:#7C3AED;color:#fff">📚 스터디룸${studyRoomNum}번</span>`
+            : '';
 
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
           const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -2006,6 +2014,7 @@ function buildFloorplan() {
             <div class="fp-name">${student ? student.name : '<span style="color:#D1D5DB">공석</span>'}</div>
             <div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap">
               ${badgeText ? `<span class="fp-badge ${badgeCls}">${badgeText}</span>` : ''}
+              ${studyroomBadge}
               ${ddayStr}
             </div>
           </div>`;
@@ -3268,6 +3277,27 @@ onSnapshot(
 const _studyroomReqAlerts = [];
 const _knownStudyroomReqs = {};
 
+function _syncStudyRoomStudents() {
+  // studyRoomStudents 초기화 후 approved 항목으로 재구성
+  studyRoomStudents = { 1: [], 2: [], 3: [] };
+  const today = new Date().toISOString().slice(0,10);
+  Object.values(_knownStudyroomReqs).forEach(data => {
+    if (data.status !== 'approved') return;
+    if (data.date !== today) return;
+    // 현재 교시가 지난 것은 제외
+    const now = new Date();
+    const curMin = now.getHours() * 60 + now.getMinutes();
+    const adjMin = now.getHours() < 3 ? curMin + 1440 : curMin;
+    const PERIOD_END = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
+    if (adjMin > (PERIOD_END[data.period] || 0)) return;
+    const room = data.room;
+    if (studyRoomStudents[room] && !studyRoomStudents[room].includes(data.name)) {
+      studyRoomStudents[room].push(data.name);
+    }
+  });
+  if (document.getElementById('fp-room')) buildFloorplan();
+}
+
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;
   snapshot.docChanges().forEach(change => {
@@ -3275,19 +3305,24 @@ onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
       delete _knownStudyroomReqs[change.doc.id];
       const idx = _studyroomReqAlerts.findIndex(a => a.id === change.doc.id);
       if (idx !== -1) { _studyroomReqAlerts.splice(idx, 1); changed = true; }
+      _syncStudyRoomStudents();
       return;
     }
     const data = { id: change.doc.id, ...change.doc.data() };
     if (change.type === 'added' && _knownStudyroomReqs[data.id] === undefined) {
       _knownStudyroomReqs[data.id] = data;
       if (data.status === 'pending') { _studyroomReqAlerts.unshift(data); changed = true; }
+      if (data.status === 'approved') _syncStudyRoomStudents();
       return;
     }
+    const prevStatus = _knownStudyroomReqs[data.id]?.status;
     _knownStudyroomReqs[data.id] = data;
     const existIdx = _studyroomReqAlerts.findIndex(a => a.id === data.id);
     if (existIdx !== -1) { _studyroomReqAlerts[existIdx] = data; changed = true; }
     else if (data.status === 'pending') { _studyroomReqAlerts.unshift(data); changed = true; }
     else changed = true;
+    // 승인/거절 상태 변경 시 배치도 동기화
+    if (prevStatus !== data.status) _syncStudyRoomStudents();
   });
   if (changed) renderStudyroomAlerts();
 });
