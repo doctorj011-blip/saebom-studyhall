@@ -725,6 +725,18 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
             </div>
           </div>
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📅 이용 시작일</div>
+            <input id="edit-start-date" type="date"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📅 이용 만료일</div>
+            <input id="edit-expiry" type="date"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
+          </div>
+        </div>
       </div>
       <button class="sched-modal-close" onclick="closeScheduleModal()">✕</button>
     </div>
@@ -1329,6 +1341,7 @@ function buildStudentList(filter=''){
             <span onclick="toggleGender(${idx},event)" style="font-size:13px;cursor:pointer;user-select:none" title="클릭해서 성별 변경">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
           </div>
           <div class="student-meta" style="font-size:11px;color:#8B6010;margin-bottom:4px">${s.phone||'전화번호 미등록'}</div>
+          ${s.expiry ? `<div style="font-size:10px;color:${new Date(s.expiry)<new Date()?'#C62828':'#888'};margin-bottom:3px">📅 ${s.startDate?s.startDate+' ~ ':''}${s.expiry}${new Date(s.expiry)<new Date()?' (만료)':''}</div>` : ''}
           <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
         </div>
       </div>`;
@@ -2289,7 +2302,7 @@ async function _saveSeatDoc(student, oldDocId) {
   await window._fsSetDoc(window._fsDoc(db, 'students', ns), {
     seat: ns, name: student.name,
     phone: student.phone||'', parent: student.parent||'',
-    gender: student.gender||'f', expiry: student.expiry||'',
+    gender: student.gender||'f', expiry: student.expiry||'', startDate: student.startDate||'',
     월: student.schedule?.['월']||'-', 화: student.schedule?.['화']||'-',
     수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
     금: student.schedule?.['금']||'-', 토: student.schedule?.['토']||'-',
@@ -2486,6 +2499,8 @@ function openScheduleModal(idx) {
   const stripPhone = p => (p||'').replace(/^010-?/,'');
   document.getElementById('edit-phone').value = stripPhone(s.phone);
   document.getElementById('edit-parent').value = stripPhone(s.parent);
+  document.getElementById('edit-expiry').value = s.expiry || '';
+  document.getElementById('edit-start-date').value = s.startDate || '';
   setEditGender(s.gender || 'f');
   renderScheduleModal();
   const ov = document.getElementById('schedule-modal-overlay');
@@ -2752,7 +2767,9 @@ function saveSchedule() {
   const newParent = addPrefix(document.getElementById('edit-parent').value.trim());
   if (newPhone  !== undefined) s.phone  = newPhone;
   if (newParent !== undefined) s.parent = newParent;
-  s.gender = window._editGender || s.gender || 'f';
+  s.gender    = window._editGender || s.gender || 'f';
+  s.expiry    = document.getElementById('edit-expiry').value || '';
+  s.startDate = document.getElementById('edit-start-date').value || '';
 
   DAYS.forEach(day => {
     s.schedule[day] = draftToStr(_schedDraft[day], day === '토');
@@ -3034,6 +3051,7 @@ async function saveStudentToFirebase(student) {
     parent: student.parent || '',
     gender: student.gender || 'f',
     expiry: student.expiry || '',
+    startDate: student.startDate || '',
     월: student.schedule['월'] || '-',
     화: student.schedule['화'] || '-',
     수: student.schedule['수'] || '-',
@@ -3072,6 +3090,7 @@ async function loadStudentsFromFirebase() {
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f',
           expiry: v.expiry || '',
+          startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
           hours: v.hours || {}
         });
@@ -3107,7 +3126,7 @@ async function loadStudentsFromFirebase() {
       const updated = {
         seat: String(v.seat).replace('번',''), name: v.name,
         phone: v.phone || '', parent: v.parent || '',
-        gender: v.gender || 'f', expiry: v.expiry || '',
+        gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: v.hours || {}
       };
