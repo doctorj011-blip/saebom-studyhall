@@ -872,7 +872,8 @@ window.sendAdminReply = async function() {
 // 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
 
 
-function renderScheduleAlerts() {
+window.renderScheduleAlerts = function() {
+  const scheduleAlerts = window._scheduleAlerts || [];
   const section = document.getElementById('schedule-change-section');
   const list = document.getElementById('schedule-change-list');
   if (!section || !list) return;
@@ -924,9 +925,10 @@ function renderScheduleAlerts() {
       </div>
     </div>`;
   }).join('');
-}
+};
 
 window.applyStudentSchedule = function(seat, idx) {
+  const scheduleAlerts = window._scheduleAlerts || [];
   const alert = scheduleAlerts[idx];
   if (!alert) return;
   const student = STUDENTS.find(s => s.seat === seat);
@@ -947,8 +949,8 @@ window.applyStudentSchedule = function(seat, idx) {
 };
 
 window.dismissAlert = function(idx) {
-  scheduleAlerts.splice(idx, 1);
-  renderScheduleAlerts();
+  (window._scheduleAlerts||[]).splice(idx, 1);
+  window.renderScheduleAlerts && window.renderScheduleAlerts();
 };
 
 window.clearAllScheduleAlerts = function() {
@@ -1849,6 +1851,23 @@ loadStudentsFromFirebase();
 // ── 스케줄 변경 실시간 감지 ──
 const knownSchedules = {};
 const scheduleAlerts = [];
+window._scheduleAlerts = scheduleAlerts;
+
+// renderScheduleAlerts를 Firebase 모듈에서 실행 (scheduleAlerts 접근 가능)
+function _renderScheduleAlerts() {
+  const section = document.getElementById('schedule-change-section');
+  const list = document.getElementById('schedule-change-list');
+  if (!section || !list) return;
+  if (scheduleAlerts.length === 0) { section.style.display='none'; return; }
+  section.style.display = 'block';
+  // 일반 스크립트의 renderScheduleAlerts 호출
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+}
+
+// studyroomReqAlerts 렌더도 여기서
+function _renderStudyroomAlerts() {
+  if (window.renderStudyroomAlerts) window.renderStudyroomAlerts();
+}
 
 async function saveScheduleToFirebase(student) {
   try {
@@ -1889,12 +1908,13 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     else scheduleAlerts.unshift(alertObj);
     changed = true;
   });
-  if (changed) renderScheduleAlerts();
+  if (changed) _renderScheduleAlerts();
 }, err => console.error('schedules 오류:', err));
 
 // ── 스터디룸 신청 실시간 감시 ──
 const studyroomReqAlerts = [];
 const knownStudyroomReqs = {};
+window._studyroomReqAlerts = studyroomReqAlerts;
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;
@@ -1916,10 +1936,11 @@ onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
     if (existIdx !== -1) { studyroomReqAlerts[existIdx] = data; changed = true; }
     else if (data.status === 'pending') { studyroomReqAlerts.unshift(data); changed = true; }
   });
-  if (changed) renderStudyroomAlerts();
+  if (changed) _renderStudyroomAlerts();
 });
 
-function renderStudyroomAlerts() {
+window.renderStudyroomAlerts = function() {
+  const studyroomReqAlerts = window._studyroomReqAlerts || [];
   const section = document.getElementById('studyroom-req-section');
   const list = document.getElementById('studyroom-req-list');
   if (!section || !list) return;
