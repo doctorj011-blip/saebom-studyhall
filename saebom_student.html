@@ -574,7 +574,7 @@ function selectDayTab(day, btn) {
 
 // ── 요일별 교시 목록 ──
 function buildDailyPeriods() {
-  const periods = currentDayTab === '토' ? PERIODS_SAT : [...PERIODS_SAT]; // 모든 요일 1~11교시
+  const periods = currentDayTab === '토' ? PERIODS_SAT : PERIODS_WEEK;
   const dayDraft = draftSchedule[currentDayTab];
   const el = document.getElementById('daily-periods');
 
