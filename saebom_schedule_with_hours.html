@@ -207,6 +207,15 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-edit-btn:hover{background:var(--color-background-secondary)}
 .fp-edit-btn.active{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
 .fp-drag-over{outline:2px solid #C8900A!important;outline-offset:-2px;background:rgba(200,144,10,0.08)!important;}
+
+/* ── 학생카드 드래그&드롭 좌석변경 ── */
+.fp-side-card-drag{cursor:grab;transition:box-shadow 0.12s,transform 0.12s}
+.fp-side-card-drag:active{cursor:grabbing}
+.fp-side-card-drag.dragging-card{opacity:0.55;transform:scale(0.97)}
+.fp-cell-drop-ready{outline:2.5px dashed #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.06) !important;cursor:copy !important;}
+.fp-cell-drop-hover{outline:3px solid #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.18) !important;box-shadow:0 0 0 4px rgba(200,144,10,0.15) !important;transform:scale(1.04);transition:all 0.1s;}
+.fp-side-drag-hint{font-size:10px;color:#9CA3AF;text-align:center;padding:6px 4px;border-top:1px solid #F3F4F6;margin-top:4px;display:none}
+.fp-side-drag-hint.visible{display:block}
 .fp-edit-btn.saving{background:#A87008;color:#fff;border-color:#A87008}
 
 /* 위치수정 모드: 좌석을 absolute로 자유 배치 */
@@ -373,6 +382,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         <span id="fp-side-count" style="font-size:11px;color:#888"></span>
       </div>
       <div id="fp-side-list"></div>
+      <div class="fp-side-drag-hint" id="fp-side-drag-hint">✋ 카드를 배치도 좌석에 드롭하면 좌석이 변경됩니다</div>
     </div>
   </div>
 </div>
@@ -1898,7 +1908,7 @@ function buildFloorplan() {
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
           const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" ${editAttr} ${ctxAttr}>
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -2038,13 +2048,20 @@ function buildFpSidePanel() {
         : `<span style="font-size:10px;color:#C62828">📅 만료</span>`;
     }
 
-    return `<div onclick="fpSeatClick(${parseInt(s.seat)})" style="background:${isIn ? '#FFFBEA' : '#F9FAFB'};border:1.5px solid ${isIn ? '#E0B020' : '#E5E7EB'};border-radius:10px;padding:8px 10px;cursor:pointer;transition:box-shadow 0.1s"
-      onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''">
+    return `<div
+      class="fp-side-card-drag"
+      data-student-name="${s.name}"
+      data-student-seat="${s.seat}"
+      draggable="true"
+      onclick="fpSeatClick(${parseInt(s.seat)})"
+      onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
+      style="background:${isIn ? '#FFFBEA' : '#F9FAFB'};border:1.5px solid ${isIn ? '#E0B020' : '#E5E7EB'};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative;user-select:none">
+      <div style="position:absolute;top:6px;right:8px;font-size:14px;color:#D1D5DB;line-height:1">⠿</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="display:flex;align-items:center;gap:5px">
           <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${isIn ? '#C8900A' : '#9CA3AF'};color:#fff">${isIn ? '이용중' : '미입실'}</span>
         </div>
-        <span style="font-size:10px;color:#6B7280">${s.seat}</span>
+        <span style="font-size:10px;color:#6B7280;margin-right:14px">${s.seat}번</span>
       </div>
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
         <span style="font-size:13px;font-weight:700;color:#1F2937">${s.name}</span>
@@ -2054,7 +2071,225 @@ function buildFpSidePanel() {
       ${isIn && rec ? `<div style="font-size:10px;color:#C8900A;margin-top:2px">⏱ ${rec.inTime} 입실</div>` : ''}
     </div>`;
   }).join('');
+
+  // 드래그 이벤트 바인딩
+  bindSideCardDragEvents();
 }
+
+
+// ══════════════════════════════════════════════════════════════
+// ── 학생카드 → 배치도 드래그&드롭 좌석 변경 ──
+// ══════════════════════════════════════════════════════════════
+
+let _dragStudentName = null;  // 드래그 중인 학생 이름
+let _dragFromSeat = null;     // 드래그 원본 좌석
+
+function bindSideCardDragEvents() {
+  const cards = document.querySelectorAll('.fp-side-card-drag');
+  cards.forEach(card => {
+    card.addEventListener('dragstart', e => {
+      _dragStudentName = card.dataset.studentName;
+      _dragFromSeat = card.dataset.studentSeat;
+      e.dataTransfer.setData('text/plain', _dragStudentName);
+      e.dataTransfer.effectAllowed = 'move';
+      card.classList.add('dragging-card');
+      // 배치도 그리드 셀들을 드롭 가능 표시
+      setTimeout(() => activateSeatDropTargets(), 0);
+      // 힌트 표시
+      const hint = document.getElementById('fp-side-drag-hint');
+      if (hint) hint.classList.add('visible');
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging-card');
+      deactivateSeatDropTargets();
+      _dragStudentName = null;
+      _dragFromSeat = null;
+      const hint = document.getElementById('fp-side-drag-hint');
+      if (hint) hint.classList.remove('visible');
+    });
+    // 클릭과 드래그 충돌 방지: mousedown 시 click 이벤트는 드래그 거리 없을 때만 발생
+  });
+}
+
+function activateSeatDropTargets() {
+  const grid = document.getElementById('fp-grid');
+  if (!grid) return;
+  // data-seat-num 속성이 있는 모든 학생좌석 셀 (관리자석, 스터디룸 제외)
+  const cells = grid.querySelectorAll('[data-seat-num]');
+  cells.forEach(cell => {
+    cell.classList.add('fp-cell-drop-ready');
+    cell.addEventListener('dragover', onCellDragOver, { passive: false });
+    cell.addEventListener('dragenter', onCellDragEnter);
+    cell.addEventListener('dragleave', onCellDragLeave);
+    cell.addEventListener('drop', onCellDrop);
+  });
+}
+
+function deactivateSeatDropTargets() {
+  const grid = document.getElementById('fp-grid');
+  if (!grid) return;
+  const cells = grid.querySelectorAll('[data-seat-num]');
+  cells.forEach(cell => {
+    cell.classList.remove('fp-cell-drop-ready', 'fp-cell-drop-hover');
+    cell.removeEventListener('dragover', onCellDragOver);
+    cell.removeEventListener('dragenter', onCellDragEnter);
+    cell.removeEventListener('dragleave', onCellDragLeave);
+    cell.removeEventListener('drop', onCellDrop);
+  });
+}
+
+function onCellDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function onCellDragEnter(e) {
+  e.preventDefault();
+  this.classList.add('fp-cell-drop-hover');
+}
+
+function onCellDragLeave(e) {
+  // 자식 요소로 이동할 때 leave 이벤트가 발생하는 것 방지
+  if (this.contains(e.relatedTarget)) return;
+  this.classList.remove('fp-cell-drop-hover');
+}
+
+async function onCellDrop(e) {
+  e.preventDefault();
+  this.classList.remove('fp-cell-drop-hover');
+  deactivateSeatDropTargets();
+
+  if (!_dragStudentName || !_dragFromSeat) return;
+
+  // 드롭된 셀의 좌석 번호 파악 (data-seat-num 속성으로 안정적 추출)
+  const targetSeat = this.dataset.seatNum;
+  if (!targetSeat || parseInt(targetSeat) <= 0) {
+    showAdminToast('💡 유효하지 않은 좌석입니다');
+    return;
+  }
+
+  const targetSeatStr = String(targetSeat);
+  const studentName = _dragStudentName;
+  const fromSeat = _dragFromSeat;
+
+  if (targetSeatStr === fromSeat) {
+    showAdminToast('💡 같은 좌석입니다');
+    return;
+  }
+
+  // 목표 좌석에 이미 다른 학생이 있는지 확인
+  const occupant = STUDENTS.find(s => s.seat === targetSeatStr);
+
+  let confirmMsg = `${studentName} 학생을 ${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경하시겠습니까?`;
+  if (occupant) {
+    confirmMsg += `\n\n⚠️ ${targetSeatStr}번에는 현재 "${occupant.name}" 학생이 있습니다.\n두 학생의 좌석이 서로 교환됩니다.`;
+  }
+  if (!confirm(confirmMsg)) return;
+
+  await executeSeatChange(studentName, fromSeat, targetSeatStr, occupant);
+}
+
+/**
+ * 좌석 변경 실행 - Firebase + STUDENTS 배열 + schedules + todayRecords 전부 업데이트
+ */
+async function executeSeatChange(studentName, oldSeat, newSeat, occupant) {
+  const db = window._adminDb;
+  try {
+    showAdminToast('⏳ 좌석 변경 중...');
+
+    const student = STUDENTS.find(s => s.name === studentName);
+    if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
+
+    // 교환 상황: occupant의 새 좌석 = oldSeat
+    if (occupant) {
+      // 1) occupant → oldSeat 이동
+      const occUpdated = { ...occupant, seat: oldSeat };
+      await _saveStudentWithSchedule(occUpdated, newSeat /* 기존 문서 ID */);
+      // occupant의 로컬 데이터 업데이트
+      const occIdx = STUDENTS.findIndex(s => s.name === occupant.name);
+      if (occIdx !== -1) STUDENTS[occIdx].seat = oldSeat;
+      // todayRecords 업데이트
+      todayRecords.forEach(r => { if (r.studentName === occupant.name) r.seat = oldSeat; });
+    } else {
+      // 기존 좌석 문서 삭제 (oldSeat 번호 문서 제거)
+      await window._fsDeleteDoc(window._fsDoc(db, 'students', oldSeat));
+      await window._fsDeleteDoc(window._fsDoc(db, 'schedules', oldSeat));
+    }
+
+    // 2) 드래그한 학생 → newSeat 이동
+    const updatedStudent = { ...student, seat: newSeat };
+    await _saveStudentWithSchedule(updatedStudent, oldSeat /* 기존 문서 ID */);
+
+    // 로컬 STUDENTS 배열 업데이트
+    const idx = STUDENTS.findIndex(s => s.name === studentName);
+    if (idx !== -1) STUDENTS[idx].seat = newSeat;
+    // todayRecords 좌석 업데이트
+    todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
+
+    STUDENTS.sort((a, b) => parseInt(a.seat || 0) - parseInt(b.seat || 0));
+
+    // UI 전체 갱신
+    buildFloorplan();
+    buildStudentList(document.getElementById('student-search')?.value || '');
+    buildDashboard();
+
+    const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat}) 교환` : '';
+    showAdminToast(`✅ ${studentName} 학생 좌석 변경 완료: ${oldSeat}번 → ${newSeat}번${swapMsg}`);
+  } catch (err) {
+    console.error('좌석 변경 실패:', err);
+    showAdminToast('❌ 좌석 변경 중 오류가 발생했습니다');
+  }
+}
+
+/**
+ * 학생 데이터를 students + schedules 컬렉션에 새 좌석 번호로 저장하고
+ * 기존 좌석 문서(oldDocId)는 삭제한다
+ */
+async function _saveStudentWithSchedule(student, oldDocId) {
+  const db = window._adminDb;
+  const newSeat = student.seat;
+
+  // students 문서 저장 (newSeat가 문서 ID)
+  const docRef = window._fsDoc(db, 'students', newSeat);
+  await window._fsSetDoc(docRef, {
+    seat: newSeat,
+    name: student.name,
+    phone: student.phone || '',
+    parent: student.parent || '',
+    gender: student.gender || 'f',
+    expiry: student.expiry || '',
+    월: student.schedule?.['월'] || '-',
+    화: student.schedule?.['화'] || '-',
+    수: student.schedule?.['수'] || '-',
+    목: student.schedule?.['목'] || '-',
+    금: student.schedule?.['금'] || '-',
+    토: student.schedule?.['토'] || '-',
+    hours: student.hours || {},
+    updatedAt: window._fsServerTimestamp()
+  });
+
+  // schedules 문서도 새 좌석으로 이동
+  try {
+    const schedSnap = await window._fsGetDoc(window._fsDoc(db, 'schedules', oldDocId));
+    if (schedSnap.exists()) {
+      const schedData = schedSnap.data();
+      await window._fsSetDoc(window._fsDoc(db, 'schedules', newSeat), {
+        ...schedData,
+        seat: newSeat,
+        name: student.name,
+        updatedAt: window._fsServerTimestamp()
+      });
+    }
+  } catch(e) { /* schedules 없어도 무관 */ }
+
+  // 기존 문서 삭제 (다른 좌석 번호였을 때만)
+  if (oldDocId && oldDocId !== newSeat) {
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'students', oldDocId)); } catch(e) {}
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'schedules', oldDocId)); } catch(e) {}
+  }
+}
+
+// ──────────────────────────────────────────────────────────────
 
 function fpSeatClick(seatNum) {
   if (fpEditMode) return; // 수정 모드 중엔 정보창 안 띄움
@@ -2756,6 +2991,7 @@ window._fsDoc = doc;
 window._fsGetDoc = getDoc;
 window._fsServerTimestamp = serverTimestamp;
 window._fsCollection = collection;
+window._fsDeleteDoc = deleteDoc;
 
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
