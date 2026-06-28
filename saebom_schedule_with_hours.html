@@ -3918,12 +3918,14 @@ window.adminForceCheckout = function(name) {
   const idx = PRESENT.indexOf(name);
   if (idx !== -1) PRESENT.splice(idx, 1);
   const student = STUDENTS.find(s => s.name === name);
-  if (student) saveCheckinToFirebase(student, true, timeStr);
+  // STUDENTS에 없어도 (관리자 등) todayRecords에서 seat 찾아서 Firebase 저장
+  const seat = student?.seat || rec?.seat || '';
+  const studentObj = student || { name, seat };
+  saveCheckinToFirebase(studentObj, true, timeStr);
   buildDashboard();
   buildCheckinTodayList();
   if (document.getElementById('fp-room')) buildFloorplan();
   showAdminToast(`👋 ${name} 퇴실 처리 완료 (${timeStr})`);
-  // 팝업 목록 새로고침
   if (window._todayModalRender) window._todayModalRender();
 };
 
