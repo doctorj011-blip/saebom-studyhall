@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, collection, onSnapshot, serverTimestamp }
+import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -29,6 +29,7 @@ window._fsSetDoc = setDoc;
 window._fsCollection = collection;
 window._fsGetDocs = getDocs;
 window._fsDeleteDoc = deleteDoc;
+window._fsAddDoc = addDoc;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
 window._fsGetDoc = getDoc;
@@ -220,6 +221,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="app-tab" onclick="showTab('daily',this)">📅 요일별</button>
       <button class="app-tab" onclick="showTab('weekly',this)">📋 주간설정</button>
       <button class="app-tab" onclick="showTab('mystats',this)">📊 내 현황</button>
+      <button class="app-tab" onclick="showTab('studyroom',this)">📚 스터디룸</button>
       <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">🪑 자리선택</button>
     </div>
   </div>
@@ -252,6 +254,24 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <!-- 자리선택 배치도 -->
+    <!-- 스터디룸 신청 -->
+    <div id="tab-studyroom" style="display:none;padding:16px">
+      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">📚 스터디룸 신청</div>
+      <div style="font-size:12px;color:#888;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
+      <div style="margin-bottom:20px">
+        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">오늘 교시 선택</div>
+        <div id="studyroom-period-btns" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">내 신청 현황</div>
+        <div id="studyroom-my-requests"><div style="font-size:13px;color:#aaa">신청 내역 없음</div></div>
+      </div>
+      <div>
+        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">스터디룸 현황</div>
+        <div id="studyroom-status" style="display:flex;flex-direction:column;gap:8px"></div>
+      </div>
+    </div>
+
     <div id="tab-seatmap" style="display:none;padding:12px">
       <div id="seatmap-header" style="margin-bottom:12px">
         <div style="font-size:14px;font-weight:700;color:#5C3D08;margin-bottom:4px">🪑 자리 선택</div>
@@ -506,7 +526,9 @@ function showTab(id, btn) {
   if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
   // 현재 탭 저장
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
-  ['notice','daily','weekly','mystats','seatmap'].forEach(t => {
+  if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
+  if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
+  ['notice','daily','weekly','mystats','seatmap','studyroom'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -1003,6 +1025,160 @@ window.selectSeat = async function(seatNum) {
     currentStudent.seat = oldSeat;
     alert('자리 선택 실패: ' + e.message);
   }
+};
+
+
+// ── 스터디룸 신청 ──
+let studyroomUnsubscribe = null;
+
+function buildStudyroomPeriodBtns() {
+  const dn = ['일','월','화','수','목','금','토'];
+  const today = dn[new Date().getDay()];
+  const isSat = today === '토';
+  const isSun = today === '일';
+  const el = document.getElementById('studyroom-period-btns');
+  if (!el) return;
+
+  if (isSun) {
+    el.innerHTML = '<div style="color:#aaa;font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
+    return;
+  }
+
+  const periods = isSat
+    ? [{n:1,t:'09:00~10:00'},{n:2,t:'10:10~11:10'},{n:3,t:'11:20~12:30'},
+       {n:4,t:'13:30~14:30'},{n:5,t:'14:40~15:40'},{n:6,t:'15:50~17:00'},
+       {n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
+       {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}]
+    : [{n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
+       {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
+
+  el.innerHTML = periods.map(p =>
+    `<button onclick="applyStudyroom(${p.n})"
+      style="padding:8px 14px;border:1.5px solid #E0B020;border-radius:10px;background:#FFFDF5;
+             color:#5C3D08;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
+      ${p.n}교시<br><span style="font-size:10px;color:#888;font-weight:400">${p.t}</span>
+    </button>`
+  ).join('');
+}
+
+async function applyStudyroom(periodNum) {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  try {
+    const snap = await window._fsGetDocs(window._fsCollection(db, 'studyroom_requests'));
+    const today = new Date().toISOString().slice(0,10);
+    const roomCounts = {1:[], 2:[], 3:[]};
+    let alreadyApplied = false;
+    snap.forEach(d => {
+      const r = d.data();
+      if (r.date !== today || r.period !== periodNum) return;
+      if (roomCounts[r.room]) roomCounts[r.room].push(r.name);
+      if (r.name === currentStudent.name) alreadyApplied = true;
+    });
+    if (alreadyApplied) { alert(`이미 ${periodNum}교시 스터디룸을 신청하셨습니다.`); return; }
+    const totalCount = roomCounts[1].length + roomCounts[2].length + roomCounts[3].length;
+    showStudyroomModal(periodNum, totalCount, roomCounts);
+  } catch(e) { alert('오류: ' + e.message); }
+}
+
+function showStudyroomModal(periodNum, totalCount, roomCounts) {
+  document.getElementById('studyroom-apply-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'studyroom-apply-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  const countMsg = totalCount === 0 ? '현재 신청 인원이 없습니다.' : `현재 ${totalCount}명이 사용 대기중입니다.`;
+  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:#1F2937;margin-bottom:4px">📚 스터디룸 신청</div>
+    <div style="font-size:13px;color:#7C3AED;font-weight:600;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
+    <div style="font-size:12px;color:#555;margin-bottom:6px">사용 사유 <span style="color:#C62828">*</span></div>
+    <textarea id="studyroom-reason-input" placeholder="사용 사유를 입력하세요" rows="3"
+      style="width:100%;border:1.5px solid #E0B020;border-radius:10px;padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="document.getElementById('studyroom-apply-modal').remove()"
+        style="flex:1;padding:10px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:13px;cursor:pointer">취소</button>
+      <button onclick="submitStudyroomReq(${periodNum},${JSON.stringify(roomCounts).replace(/"/g,'&quot;')})"
+        style="flex:2;padding:10px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+  setTimeout(() => document.getElementById('studyroom-reason-input')?.focus(), 100);
+}
+
+async function submitStudyroomReq(periodNum, roomCounts) {
+  const db = window._db;
+  const reason = document.getElementById('studyroom-reason-input')?.value.trim();
+  if (!reason) { alert('사용 사유를 입력해주세요'); return; }
+  document.getElementById('studyroom-apply-modal')?.remove();
+  let assignRoom = 1, minCount = (roomCounts[1]||[]).length;
+  for (let r = 2; r <= 3; r++) {
+    if ((roomCounts[r]||[]).length < minCount) { minCount = (roomCounts[r]||[]).length; assignRoom = r; }
+  }
+  try {
+    await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
+      name: currentStudent.name, seat: currentStudent.seat,
+      period: periodNum, room: assignRoom, reason,
+      date: new Date().toISOString().slice(0,10),
+      status: 'pending', createdAt: window._fsServerTimestamp()
+    });
+    showToast(`✅ ${periodNum}교시 스터디룸 ${assignRoom}번 신청 완료!`);
+  } catch(e) { alert('신청 실패: ' + e.message); }
+}
+
+function loadStudyroomData() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  if (studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} }
+  const today = new Date().toISOString().slice(0,10);
+  studyroomUnsubscribe = window._fsOnSnapshot(
+    window._fsCollection(db, 'studyroom_requests'),
+    snap => {
+      const all = [];
+      snap.forEach(d => all.push({ id: d.id, ...d.data() }));
+      const todayReqs = all.filter(r => r.date === today);
+      const myReqs = todayReqs.filter(r => r.name === currentStudent.name).sort((a,b) => a.period - b.period);
+      const myEl = document.getElementById('studyroom-my-requests');
+      if (myEl) {
+        myEl.innerHTML = myReqs.length === 0
+          ? '<div style="font-size:13px;color:#aaa">신청 내역 없음</div>'
+          : myReqs.map(r => {
+              const sc = r.status==='approved'?'#2D7A4F':r.status==='rejected'?'#C62828':'#C8900A';
+              const st = r.status==='approved'?'✅ 사용가능':r.status==='rejected'?'❌ 거절됨':'⏳ 대기중';
+              const bg = r.status==='approved'?'#F0FDF4':r.status==='rejected'?'#FFF0F0':'#FFFDF5';
+              const bd = r.status==='approved'?'#4CAF50':r.status==='rejected'?'#F09595':'#E0B020';
+              return `<div style="padding:10px 12px;background:${bg};border:1.5px solid ${bd};border-radius:10px;margin-bottom:6px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                  <span style="font-size:13px;font-weight:600">${r.period}교시 · 스터디룸 ${r.room}번</span>
+                  <span style="font-size:11px;font-weight:700;color:${sc}">${st}</span>
+                </div>
+                ${r.reason?`<div style="font-size:11px;color:#666">📝 ${r.reason}</div>`:''}
+                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:#C62828;background:none;border:1px solid #F09595;border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
+              </div>`;
+            }).join('');
+      }
+      const rc = {1:[],2:[],3:[]};
+      todayReqs.forEach(r => { if(rc[r.room]) rc[r.room].push(r); });
+      const stEl = document.getElementById('studyroom-status');
+      if (stEl) {
+        stEl.innerHTML = [1,2,3].map(room =>
+          `<div style="background:#F3E8FF;border:1.5px solid #C084FC;border-radius:10px;padding:10px 14px">
+            <div style="font-size:12px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
+            ${rc[room].length===0?'<div style="font-size:12px;color:#aaa">신청자 없음</div>'
+              :rc[room].map(m=>`<div style="font-size:12px;color:#5C3D08">${m.period}교시 · 이용자</div>`).join('')}
+          </div>`
+        ).join('');
+      }
+    }
+  );
+}
+
+window.cancelStudyroom = async function(reqId) {
+  const db = window._db;
+  if (!db || !confirm('신청을 취소하시겠습니까?')) return;
+  try {
+    await window._fsDeleteDoc(window._fsDoc(db, 'studyroom_requests', reqId));
+    showToast('신청이 취소됐습니다');
+  } catch(e) { alert('취소 실패: ' + e.message); }
 };
 
 // ── 초기화 ──
