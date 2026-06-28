@@ -770,6 +770,34 @@ const PRESENT=[];
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 
+// ── F5 새로고침 가로채기 ──
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+    e.preventDefault();
+    const activeId = document.querySelector('.section.active')?.id?.replace('sec-', '') || 'dashboard';
+    // 데이터만 새로고침
+    if (window._adminDb) {
+      loadStudentsFromFirebase && loadStudentsFromFirebase();
+    }
+    buildDashboard();
+    if (activeId === 'floorplan' && document.getElementById('fp-room')) buildFloorplan();
+    if (activeId === 'hours') buildHoursTable();
+    if (activeId === 'smslog') loadSmsLog();
+    showAdminToast('🔄 새로고침됨');
+  }
+});
+
+// 페이지 로드 시 마지막 탭 복원
+window.addEventListener('load', function() {
+  try {
+    const saved = sessionStorage.getItem('saebom_active_tab');
+    if (saved && saved !== 'dashboard') {
+      const btn = document.querySelector('.tab-btn[onclick*="\'' + saved + '\'"]');
+      if (btn) setTimeout(() => showSection(saved, btn), 800);
+    }
+  } catch(e) {}
+});
+
 window.showSection = function(id,btn){
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
@@ -777,6 +805,7 @@ window.showSection = function(id,btn){
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); loadNoticesAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
+  try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
 // ── 자리선택 허용 관리 ──
 window.saveSeatSelection = async function() {
@@ -3691,11 +3720,14 @@ window.fpUnassignSeat = function(seatNum) {
   if (!student) return;
   if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
 
-  // seat 형식이 "37번" 또는 "37" 등 다양하므로 숫자 부분만 비교
   const idx = STUDENTS.findIndex(s => parseInt(s.seat) === seatNum);
   if (idx !== -1) {
-    STUDENTS[idx].seat = ''; // 즉시 로컬 반영
-    if (window.saveStudentToFirebase) window.saveStudentToFirebase(STUDENTS[idx]).catch(console.error);
+    const oldSeat = STUDENTS[idx].seat;
+    STUDENTS[idx].seat = '';
+    // Firebase에서 기존 seat 문서 삭제 (공석 처리)
+    if (oldSeat && window.deleteStudentFromFirebase) {
+      window.deleteStudentFromFirebase(String(seatNum)).catch(console.error);
+    }
   }
 
   buildFloorplan();

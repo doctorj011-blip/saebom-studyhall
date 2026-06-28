@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, collection, onSnapshot, serverTimestamp }
+import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -28,6 +28,7 @@ window._fsDoc = doc;
 window._fsSetDoc = setDoc;
 window._fsCollection = collection;
 window._fsGetDocs = getDocs;
+window._fsDeleteDoc = deleteDoc;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
 window._fsGetDoc = getDoc;
@@ -985,13 +986,9 @@ window.selectSeat = async function(seatNum) {
       hours: currentStudent.hours || {},
     });
 
-    // 2. 기존 자리 공석 처리 (이름만 지움)
+    // 2. 기존 자리 문서 삭제 (공석 처리)
     if (oldSeat && oldSeat !== String(seatNum)) {
-      await window._fsSetDoc(window._fsDoc(db, 'students', oldSeat), {
-        seat: oldSeat, name: '', phone: '', parent: '',
-        gender: 'f', expiry: '',
-        월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-', hours:{}
-      });
+      await window._fsDeleteDoc(window._fsDoc(db, 'students', oldSeat)).catch(()=>{});
     }
 
     alert(`✅ ${seatNum}번 자리로 이동됐습니다!`);
