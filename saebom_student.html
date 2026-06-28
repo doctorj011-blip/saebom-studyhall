@@ -74,8 +74,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .logout-btn{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
 
 /* 탭 */
-.app-tabs{display:flex;gap:0}
-.app-tab{flex:1;padding:10px 0;background:transparent;border:none;color:rgba(255,255,255,0.8);font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s}
+.app-tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none}
+.app-tabs::-webkit-scrollbar{display:none}
+.app-tab{flex:0 0 auto;padding:10px 10px;background:transparent;border:none;color:rgba(255,255,255,0.8);font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
 .app-tab.active{color:#fff;border-bottom:3px solid #fff;font-weight:700}
 
 /* 콘텐츠 */
@@ -217,12 +218,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="logout-btn" onclick="logout()">로그아웃</button>
     </div>
     <div class="app-tabs">
-      <button class="app-tab active" onclick="showTab('notice',this)">📢 공지사항</button>
-      <button class="app-tab" onclick="showTab('daily',this)">📅 요일별</button>
-      <button class="app-tab" onclick="showTab('weekly',this)">📋 주간설정</button>
-      <button class="app-tab" onclick="showTab('mystats',this)">📊 내 현황</button>
-      <button class="app-tab" onclick="showTab('studyroom',this)">📚 스터디룸</button>
-      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">🪑 자리선택</button>
+      <button class="app-tab active" onclick="showTab('notice',this)">공지</button>
+      <button class="app-tab" onclick="showTab('daily',this)">요일별</button>
+      <button class="app-tab" onclick="showTab('weekly',this)">주간설정</button>
+      <button class="app-tab" onclick="showTab('mystats',this)">내 현황</button>
+      <button class="app-tab" onclick="showTab('studyroom',this)">스터디룸</button>
+      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">자리선택</button>
     </div>
   </div>
 
@@ -1180,6 +1181,16 @@ window.cancelStudyroom = async function(reqId) {
     showToast('신청이 취소됐습니다');
   } catch(e) { alert('취소 실패: ' + e.message); }
 };
+
+// ── 대기 모드 후 재연결 처리 ──
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) return;
+  if (!currentStudent) return;
+  // 현재 탭이 자리선택이면 재구독
+  const activeTab = sessionStorage.getItem('saebom_active_tab_student');
+  if (activeTab === 'seatmap') buildStudentSeatmap();
+  if (activeTab === 'studyroom') loadStudyroomData();
+});
 
 // ── 초기화 ──
 // 새로고침 후 자동 로그인 복원
