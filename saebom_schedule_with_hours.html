@@ -1584,7 +1584,8 @@ async function sendCheckinSMS(student, isCheckout, timeStr) {
 async function saveCheckinToFirebase(student, isCheckout, timeStr) {
   try {
     const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    const logId = `${today}_${student.seat}_${timeStr.replace(':','')}`;
+    const type = isCheckout ? 'out' : 'in';
+    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(':','')}`;
     // Firebase가 준비될 때까지 대기
     const waitDb = () => new Promise(res => {
       if (window._adminDb) return res(window._adminDb);
@@ -3116,11 +3117,22 @@ onSnapshot(
         }
       } else if (type === 'out') {
         const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
-        if (rec && rec.outTime !== time) {
-          rec.outTime = time;
-          const idx = PRESENT.indexOf(name);
-          if (idx !== -1) PRESENT.splice(idx, 1);
-          changed = true;
+        if (rec) {
+          if (rec.outTime !== time) {
+            rec.outTime = time;
+            const idx = PRESENT.indexOf(name);
+            if (idx !== -1) PRESENT.splice(idx, 1);
+            changed = true;
+          }
+        } else {
+          // 입실 기록 없이 퇴실만 온 경우 - 입실 기록 생성 후 퇴실 처리
+          const alreadyOut = todayRecords.find(r => r.studentName === name && r.outTime === time);
+          if (!alreadyOut) {
+            todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
+            const idx = PRESENT.indexOf(name);
+            if (idx !== -1) PRESENT.splice(idx, 1);
+            changed = true;
+          }
         }
       }
     });
