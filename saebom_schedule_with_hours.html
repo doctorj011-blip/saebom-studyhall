@@ -708,13 +708,21 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
           <div>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
-            <input id="edit-phone" type="tel" placeholder="010-0000-0000"
-              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)">
+            <div style="display:flex;align-items:center;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
+              <span style="padding:5px 0 5px 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap">010-</span>
+              <input id="edit-phone" type="tel" placeholder="0000-0000" maxlength="9"
+                oninput="formatPhoneInput(this)"
+                style="flex:1;padding:5px 8px 5px 0;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;width:100%">
+            </div>
           </div>
           <div>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">👨‍👩‍👧 부모님 번호</div>
-            <input id="edit-parent" type="tel" placeholder="010-0000-0000"
-              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)">
+            <div style="display:flex;align-items:center;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
+              <span style="padding:5px 0 5px 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap">010-</span>
+              <input id="edit-parent" type="tel" placeholder="0000-0000" maxlength="9"
+                oninput="formatPhoneInput(this)"
+                style="flex:1;padding:5px 8px 5px 0;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;width:100%">
+            </div>
           </div>
         </div>
       </div>
@@ -2200,7 +2208,7 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
 
 async function _saveSeatDoc(student, oldDocId) {
   const db = window._adminDb;
-  const ns = student.seat;
+  const ns = String(student.seat).replace('번',''); // 항상 숫자 형태로
   await window._fsSetDoc(window._fsDoc(db, 'students', ns), {
     seat: ns, name: student.name,
     phone: student.phone||'', parent: student.parent||'',
@@ -2220,10 +2228,13 @@ async function _saveSeatDoc(student, oldDocId) {
       });
     }
   } catch(e) {}
-  // 구 문서 삭제
+  // 구 문서 삭제 ("1"과 "1번" 형태 둘 다 삭제 시도)
   if (oldDocId && oldDocId !== ns) {
-    try { await window._fsDeleteDoc(window._fsDoc(db, 'students', oldDocId)); } catch(e){}
-    try { await window._fsDeleteDoc(window._fsDoc(db, 'schedules', oldDocId)); } catch(e){}
+    const oldIds = [oldDocId, oldDocId + '번', oldDocId.replace('번','')].filter((v,i,a) => a.indexOf(v)===i && v !== ns);
+    for (const id of oldIds) {
+      try { await window._fsDeleteDoc(window._fsDoc(db, 'students', id)); } catch(e){}
+      try { await window._fsDeleteDoc(window._fsDoc(db, 'schedules', id)); } catch(e){}
+    }
   }
 }
 
@@ -2394,8 +2405,10 @@ function openScheduleModal(idx) {
 
   document.getElementById('sched-modal-name').textContent = s.name;
   document.getElementById('sched-modal-seat').textContent = s.seat;
-  document.getElementById('edit-phone').value = s.phone || '';
-  document.getElementById('edit-parent').value = s.parent || '';
+  // 010- 제거하고 뒷자리만 표시
+  const stripPhone = p => (p||'').replace(/^010-?/,'');
+  document.getElementById('edit-phone').value = stripPhone(s.phone);
+  document.getElementById('edit-parent').value = stripPhone(s.parent);
   setEditGender(s.gender || 'f');
   renderScheduleModal();
   const ov = document.getElementById('schedule-modal-overlay');
@@ -2656,8 +2669,10 @@ function saveSchedule() {
   const s = STUDENTS[_schedEditIdx];
 
   // 전화번호 저장
-  const newPhone  = document.getElementById('edit-phone').value.trim();
-  const newParent = document.getElementById('edit-parent').value.trim();
+  // 010- 앞에 붙여서 저장
+  const addPrefix = v => v ? ('010-' + v.replace(/^010-?/,'')) : '';
+  const newPhone  = addPrefix(document.getElementById('edit-phone').value.trim());
+  const newParent = addPrefix(document.getElementById('edit-parent').value.trim());
   if (newPhone  !== undefined) s.phone  = newPhone;
   if (newParent !== undefined) s.parent = newParent;
   s.gender = window._editGender || s.gender || 'f';
