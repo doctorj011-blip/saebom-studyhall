@@ -2703,6 +2703,14 @@ window.initApp = function(){
   buildCheckinTodayList();
   buildFloorplan();
   initFpDrag();
+  // 새로고침 후 탭 복원
+  try {
+    const saved = sessionStorage.getItem('saebom_active_tab');
+    if (saved && saved !== 'dashboard') {
+      const btn = document.querySelector('.tab-btn[onclick*="' + saved + '"]');
+      if (btn) showSection(saved, btn);
+    }
+  } catch(e) {}
 };
 window.initApp();
 </script>

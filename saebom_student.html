@@ -413,12 +413,15 @@ async function tryLogin() {
     pinBuffer=''; updatePinDisplay(); return;
   }
   currentStudent = matched[0];
+  // 새로고침 후 자동 로그인을 위해 저장
+  try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
   initDraft();
   enterApp();
 }
 
 function logout() {
   currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false;
+  try { sessionStorage.removeItem('saebom_student'); sessionStorage.removeItem('saebom_active_tab_student'); } catch(e) {}
   updatePinDisplay();
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app-screen').classList.remove('visible');
@@ -501,6 +504,8 @@ function parsePeriodStatus(sched, pNum) {
 function showTab(id, btn) {
   // 자리선택 탭 이탈 시 구독 해제
   if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
+  // 현재 탭 저장
+  try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   ['notice','daily','weekly','mystats','seatmap'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
@@ -1000,7 +1005,35 @@ window.selectSeat = async function(seatNum) {
 };
 
 // ── 초기화 ──
-document.getElementById('login-screen').style.display='flex';
+// 새로고침 후 자동 로그인 복원
+(function restoreSession() {
+  try {
+    const saved = sessionStorage.getItem('saebom_student');
+    if (!saved) { document.getElementById('login-screen').style.display='flex'; return; }
+    currentStudent = JSON.parse(saved);
+    document.getElementById('login-screen').style.display='none';
+    initDraft();
+    // Firebase 준비 후 enterApp
+    if (window._firebaseReady) {
+      enterApp();
+      restoreTab();
+    } else {
+      window.addEventListener('firebase-ready', () => { enterApp(); restoreTab(); }, { once: true });
+    }
+  } catch(e) {
+    document.getElementById('login-screen').style.display='flex';
+  }
+})();
+
+function restoreTab() {
+  try {
+    const tab = sessionStorage.getItem('saebom_active_tab_student');
+    if (tab && tab !== 'notice') {
+      const btn = document.querySelector('.app-tab[onclick*="' + tab + '"]');
+      if (btn) setTimeout(() => showTab(tab, btn), 500);
+    }
+  } catch(e) {}
+}
 </script>
 </body>
 </html>
