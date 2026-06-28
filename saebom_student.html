@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, serverTimestamp }
+import { getFirestore, doc, setDoc, getDoc, getDocs, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -218,6 +218,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="app-tab" onclick="showTab('daily',this)">📅 요일별</button>
       <button class="app-tab" onclick="showTab('weekly',this)">📋 주간설정</button>
       <button class="app-tab" onclick="showTab('mystats',this)">📊 내 현황</button>
+      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)" style="display:none">🪑 자리선택</button>
     </div>
   </div>
 
@@ -246,6 +247,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <!-- 내 현황 -->
     <div id="tab-mystats" style="display:none">
       <div id="mystats-content"></div>
+    </div>
+
+    <!-- 자리선택 배치도 -->
+    <div id="tab-seatmap" style="display:none;padding:12px">
+      <div id="seatmap-header" style="margin-bottom:12px">
+        <div style="font-size:14px;font-weight:700;color:#5C3D08;margin-bottom:4px">🪑 자리 선택</div>
+        <div id="seatmap-deadline" style="font-size:12px;color:#C62828;font-weight:600"></div>
+        <div style="font-size:12px;color:#888;margin-top:4px">
+          <span style="display:inline-block;width:14px;height:14px;background:#4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
+          <span style="display:inline-block;width:14px;height:14px;background:#E5E7EB;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
+          <span style="display:inline-block;width:14px;height:14px;background:#C8900A;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
+        </div>
+      </div>
+      <div id="student-seatmap" style="overflow-x:auto"></div>
     </div>
 
   </div>
@@ -431,10 +446,12 @@ function enterApp() {
   // Firebase에서 기존 스케줄 & 공지 로드
   if (window._firebaseReady) {
     loadStudentScheduleFromFirebase();
+    checkSeatSelectionActive();
     loadNoticesFromFirebase();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
+    checkSeatSelectionActive();
       loadNoticesFromFirebase();
     }, { once: true });
   }
@@ -480,7 +497,7 @@ function parsePeriodStatus(sched, pNum) {
 
 // ── 탭 전환 ──
 function showTab(id, btn) {
-  ['notice','daily','weekly','mystats'].forEach(t => {
+  ['notice','daily','weekly','mystats','seatmap'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -818,6 +835,138 @@ function buildMyStats() {
 }
 
 // ── 메시지 기능 ──
+
+// ── 자리선택 배치도 ──
+async function checkSeatSelectionActive() {
+  const db = window._db;
+  if (!db) return;
+  try {
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
+    const tabBtn = document.getElementById('seat-tab-btn');
+    if (!snap.exists || !snap.exists()) {
+      if (tabBtn) tabBtn.style.display = 'none';
+      return;
+    }
+    const d = snap.data();
+    const now = new Date();
+    const active = d.active && new Date(d.start) <= now && new Date(d.end) >= now;
+    if (tabBtn) tabBtn.style.display = active ? '' : 'none';
+    if (active) {
+      const deadline = new Date(d.end);
+      document.getElementById('seatmap-deadline').textContent =
+        `⏰ 선택 마감: ${deadline.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`;
+      buildStudentSeatmap();
+    }
+  } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
+}
+
+async function buildStudentSeatmap() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  const el = document.getElementById('student-seatmap');
+  if (!el) return;
+
+  // Firebase에서 현재 학생 배정 현황 가져오기
+  let takenSeats = {};
+  try {
+    const snap = await window._fsGetDocs(window._fsCollection(db, 'students'));
+    snap.forEach(d => {
+      const s = d.data();
+      if (s.seat && parseInt(s.seat) > 0) takenSeats[parseInt(s.seat)] = s.name;
+    });
+  } catch(e) {}
+
+  // DEFAULT_SEATS와 동일한 그리드 구성 (관리자앱과 동일)
+  const DEFAULT_SEATS = {
+    'r2_c2':-1,'r3_c2':0,'r4_c2':0,'r5_c2':-2,'r8_c2':-3,
+    'r2_c3':0,'r4_c3':0,'r5_c3':0,'r8_c3':0,
+    'r2_c4':1,'r3_c4':2,'r4_c4':3,'r5_c4':4,
+    'r1_c5':9,'r2_c5':8,'r3_c5':7,'r4_c5':6,'r5_c5':5,'r8_c5':45,'r9_c5':36,'r11_c5':35,
+    'r8_c6':44,'r9_c6':37,'r11_c6':34,
+    'r1_c7':10,'r2_c7':11,'r3_c7':12,'r4_c7':13,'r5_c7':14,'r8_c7':43,'r9_c7':38,'r10_c7':33,'r11_c7':30,
+    'r1_c8':19,'r2_c8':18,'r3_c8':17,'r4_c8':16,'r5_c8':15,'r8_c8':42,'r9_c8':39,'r10_c8':32,'r11_c8':31,
+    'r8_c9':41,'r9_c9':40,
+    'r1_c10':20,'r2_c10':21,'r3_c10':22,'r4_c10':23,'r5_c10':24,
+    'r6_c10':25,'r7_c10':26,'r8_c10':27,'r9_c10':28,'r10_c10':29,
+  };
+
+  const ROWS = 11, COLS = 10;
+  const myCurrentSeat = parseInt(currentStudent.seat) || 0;
+  const studioSpan = {};
+
+  let html = `<style>
+    #sm-grid { display:grid; grid-template-columns:1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr; grid-template-rows:repeat(11,48px); gap:3px; min-width:600px; }
+    .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:600; cursor:default; }
+    .sm-empty { background:#F9FAFB; border:1.5px dashed #E5E7EB; }
+    .sm-taken { background:#E5E7EB; color:#9CA3AF; }
+    .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
+    .sm-available:hover { background:#BBF7D0; transform:scale(1.05); }
+    .sm-mine { background:#C8900A; color:#fff; border:2px solid #8B6010; }
+    .sm-studio { background:#F3E8FF; border:1.5px solid #C084FC; color:#7C3AED; font-size:10px; }
+  </style>
+  <div id="sm-grid">`;
+
+  for (let r = 1; r <= ROWS; r++) {
+    for (let c = 1; c <= COLS; c++) {
+      const key = `r${r}_c${c}`;
+      if (studioSpan[key]) continue;
+      const val = DEFAULT_SEATS[key];
+      if (val === undefined) {
+        html += `<div class="sm-cell sm-empty" style="grid-row:${r};grid-column:${c}"></div>`;
+        continue;
+      }
+      if (val < 0) {
+        studioSpan[`r${r+1}_c${c}`] = true;
+        html += `<div class="sm-cell sm-studio" style="grid-row:${r}/span 2;grid-column:${c}">스터디룸${Math.abs(val)}</div>`;
+        continue;
+      }
+      if (val === 0) {
+        html += `<div class="sm-cell sm-empty" style="grid-row:${r};grid-column:${c}"></div>`;
+        continue;
+      }
+      const isMyseat = val === myCurrentSeat;
+      const isTaken = !!takenSeats[val];
+      const cls = isTaken ? (isMyseat ? 'sm-mine' : 'sm-taken') : 'sm-available';
+      const clickAttr = (!isTaken || isMyseat) ? `onclick="selectSeat(${val})"` : '';
+      html += `<div class="sm-cell ${cls}" style="grid-row:${r};grid-column:${c}" ${clickAttr}>
+        <div>${val}번</div>
+        ${isMyseat ? '<div style="font-size:9px">내 자리</div>' : ''}
+      </div>`;
+    }
+  }
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+window.selectSeat = async function(seatNum) {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  if (!confirm(`${seatNum}번 자리를 선택하시겠습니까?`)) return;
+  const oldSeat = currentStudent.seat;
+  currentStudent.seat = String(seatNum);
+  try {
+    await window._fsSetDoc(window._fsDoc(db, 'students', String(seatNum)), {
+      seat: String(seatNum),
+      name: currentStudent.name,
+      phone: currentStudent.phone || '',
+      parent: currentStudent.parent || '',
+      gender: currentStudent.gender || 'f',
+      expiry: currentStudent.expiry || '',
+      월: currentStudent.schedule['월']||'-',
+      화: currentStudent.schedule['화']||'-',
+      수: currentStudent.schedule['수']||'-',
+      목: currentStudent.schedule['목']||'-',
+      금: currentStudent.schedule['금']||'-',
+      토: currentStudent.schedule['토']||'-',
+      hours: currentStudent.hours || {},
+    });
+    alert(`✅ ${seatNum}번 자리가 선택됐습니다!`);
+    buildStudentSeatmap();
+  } catch(e) {
+    currentStudent.seat = oldSeat;
+    alert('자리 선택 실패: ' + e.message);
+  }
+};
 
 // ── 초기화 ──
 document.getElementById('login-screen').style.display='flex';
