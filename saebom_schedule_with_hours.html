@@ -2741,10 +2741,10 @@ async function loadStudentsFromFirebase() {
       for (const s of STUDENTS) { await saveStudentToFirebase(s); }
       console.log('✅ 업로드 완료');
     } else {
-      // Firebase 데이터로 STUDENTS 덮어쓰기
       STUDENTS.length = 0;
       snap.forEach(d => {
         const v = d.data();
+        if (!v.name) return; // 빈 자리 문서 제외
         STUDENTS.push({
           seat: v.seat, name: v.name,
           phone: v.phone || '', parent: v.parent || '',
@@ -2760,8 +2760,53 @@ async function loadStudentsFromFirebase() {
   } catch(e) {
     console.error('Firebase 로드 실패, 로컬 데이터 사용:', e);
   }
-  // 데이터 로드 후 화면 재초기화
   if (window.initApp) window.initApp();
+
+  // ── students 컬렉션 실시간 감시 (자리선택 등 변경 즉시 반영) ──
+  onSnapshot(collection(db, 'students'), (snap) => {
+    let changed = false;
+    snap.docChanges().forEach(change => {
+      const v = change.doc.data();
+      if (change.type === 'removed') {
+        const idx = STUDENTS.findIndex(s => s.seat === change.doc.id);
+        if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
+        return;
+      }
+      if (!v.name) {
+        // 빈 자리로 바뀐 경우 해당 학생 seat 비우기
+        const s = STUDENTS.find(s => s.seat === change.doc.id);
+        if (s) { s.seat = ''; changed = true; }
+        return;
+      }
+      const idx = STUDENTS.findIndex(s => s.seat === v.seat);
+      const updated = {
+        seat: v.seat, name: v.name,
+        phone: v.phone || '', parent: v.parent || '',
+        gender: v.gender || 'f', expiry: v.expiry || '',
+        schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+        hours: v.hours || {}
+      };
+      if (idx !== -1) {
+        // 좌석이 바뀐 경우 (이름은 같은데 seat 키가 다른 경우) 처리
+        const nameIdx = STUDENTS.findIndex(s => s.name === v.name && s.seat !== v.seat);
+        if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
+        STUDENTS[idx] = updated;
+      } else {
+        // 새 자리에 배정된 경우
+        const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
+        if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
+        STUDENTS.push(updated);
+      }
+      changed = true;
+    });
+
+    if (changed) {
+      STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
+      if (document.getElementById('fp-room')) buildFloorplan();
+      buildStudentList(document.getElementById('student-search')?.value || '');
+      buildDashboard();
+    }
+  });
 }
 
 // Firebase 전역 함수 노출

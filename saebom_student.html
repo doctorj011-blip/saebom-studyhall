@@ -498,6 +498,8 @@ function parsePeriodStatus(sched, pNum) {
 
 // ── 탭 전환 ──
 function showTab(id, btn) {
+  // 자리선택 탭 이탈 시 구독 해제
+  if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
   ['notice','daily','weekly','mystats','seatmap'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
@@ -865,21 +867,42 @@ async function checkSeatSelectionActive() {
   } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
 }
 
-async function buildStudentSeatmap() {
+let seatmapUnsubscribe = null;
+
+function buildStudentSeatmap() {
   const db = window._db;
   if (!db || !currentStudent) return;
   const el = document.getElementById('student-seatmap');
   if (!el) return;
 
-  // Firebase에서 현재 학생 배정 현황 가져오기
-  let takenSeats = {};
-  try {
-    const snap = await window._fsGetDocs(window._fsCollection(db, 'students'));
-    snap.forEach(d => {
-      const s = d.data();
-      if (s.seat && parseInt(s.seat) > 0) takenSeats[parseInt(s.seat)] = s.name;
-    });
-  } catch(e) {}
+  // 기존 구독 해제
+  if (seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
+
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">로딩 중...</div>';
+
+  // onSnapshot으로 실시간 감시
+  seatmapUnsubscribe = window._fsOnSnapshot(
+    window._fsCollection(db, 'students'),
+    (snap) => {
+      const takenSeats = {};
+      snap.forEach(d => {
+        const s = d.data();
+        if (s.name && s.seat && parseInt(s.seat) > 0) takenSeats[parseInt(s.seat)] = s.name;
+      });
+      // 내 좌석 최신화
+      snap.forEach(d => {
+        const s = d.data();
+        if (s.name === currentStudent.name && s.seat) currentStudent.seat = s.seat;
+      });
+      renderSeatmap(takenSeats);
+    },
+    (err) => { console.error('배치도 실시간 오류:', err); }
+  );
+}
+
+function renderSeatmap(takenSeats) {
+  const el = document.getElementById('student-seatmap');
+  if (!el || !currentStudent) return;
 
   // DEFAULT_SEATS와 동일한 그리드 구성 (관리자앱과 동일)
   // 학생 좌석만 (스터디룸·빈열 제외) — 관리자앱 DEFAULT_SEATS에서 양수만
@@ -895,7 +918,7 @@ async function buildStudentSeatmap() {
     [6,7,25],[7,7,26],[8,7,27],[9,7,28],[10,7,29],
   ];
   const ROWS = 11, COLS = 7;
-  const myCurrentSeat = parseInt(currentStudent.seat) || 0;
+  const myCurrentSeat = currentStudent.seat ? parseInt(currentStudent.seat) : 0;
 
   let html = `<style>
     #sm-grid { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(11,44px); gap:3px; max-width:420px; }
@@ -921,8 +944,8 @@ async function buildStudentSeatmap() {
       const isMyseat = val === myCurrentSeat;
       const isTaken = !!takenSeats[val];
       const cls = isTaken ? (isMyseat ? 'sm-mine' : 'sm-taken') : 'sm-available';
-      // 내 자리거나 공석만 클릭 가능
-      const clickAttr = (!isTaken || isMyseat) && !isMyseat ? `onclick="selectSeat(${val})"` : '';
+      // 공석이면 누구나 클릭 가능, 내 자리면 클릭 불가 (이미 선택됨), 다른 사람 자리는 불가
+      const clickAttr = !isTaken ? `onclick="selectSeat(${val})"` : '';
       html += `<div class="sm-cell ${cls}" style="grid-row:${r};grid-column:${c}" ${clickAttr}>
         <div>${val}번</div>
         ${isMyseat ? '<div style="font-size:9px">내 자리</div>' : ''}
