@@ -1,0 +1,4048 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
+.topbar{background:#F0D020;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:48px}
+.topbar-title{color:#5C3D08;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
+.topbar-tabs{display:flex;gap:2px}
+.tab-btn{padding:6px 14px;border:none;background:rgba(255,255,255,0.35);color:#5C3D08;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s}
+.tab-btn.active{background:#fff;color:#C8900A;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+.content{padding:16px}
+.section{display:none}.section.active{display:block}
+
+.stats-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:16px}
+.stat-card{background:linear-gradient(135deg,#FFF8DC 0%,#FFF3B0 100%);border:1.5px solid #E0B020;border-radius:16px;padding:14px 16px;box-shadow:0 2px 8px rgba(200,144,10,0.10);text-align:center}
+.stat-card:hover{box-shadow:0 4px 16px rgba(200,144,10,0.18);transform:translateY(-1px);transition:all 0.15s}
+.stat-label{font-size:11px;color:#8B6010;margin-bottom:6px;font-weight:600;letter-spacing:0.3px}
+.stat-val{font-size:24px;font-weight:700}
+.stat-val.green{color:#C8900A}.stat-val.red{color:#C62828}.stat-val.amber{color:#7A5008}.stat-val.blue{color:#A87008}
+
+.day-tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.day-tab{padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:20px;cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary);transition:all 0.15s}
+.day-tab.active{background:#C8900A;color:#fff;border-color:#C8900A}
+
+.schedule-table{width:100%;border-collapse:collapse;background:var(--color-background-primary);border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
+.schedule-table th{background:#C8900A;color:#fff;padding:7px 8px;font-size:11px;font-weight:500;text-align:center;white-space:nowrap}
+.schedule-table td{padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px;text-align:center;vertical-align:middle}
+.schedule-table tr:last-child td{border-bottom:none}
+.schedule-table tr:hover td{background:var(--color-background-secondary)}
+.name-cell{text-align:left!important;font-weight:500;white-space:nowrap}
+.seat-badge{display:inline-block;background:#FFF8DC;color:#8B6010;border-radius:4px;padding:1px 5px;font-size:10px}
+.cell-attend{background:#FFF8DC;color:#27500A;border-radius:4px;padding:2px 6px;font-size:11px;display:inline-block}
+.cell-absent{background:#FCEBEB;color:#A32D2D;border-radius:4px;padding:2px 6px;font-size:11px;display:inline-block}
+.cell-partial{background:#FFF3E0;color:#7A5008;border-radius:4px;padding:2px 6px;font-size:11px;display:inline-block}
+.cell-empty{color:var(--color-text-tertiary);font-size:11px}
+
+.dashboard-grid{display:grid;grid-template-columns:auto 1fr 1fr;gap:12px;margin-bottom:14px;align-items:start}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px}
+.card-title{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.attend-row{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#FFF8DC;border:1px solid #E0B020;border-radius:10px;margin-bottom:5px}
+.attend-row:last-child{margin-bottom:0}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.dot-in{background:#C8900A}.dot-out{background:#bdc1c6}.dot-alert{background:#C62828}
+.alert-card{background:#FFF0F0;border:1.5px solid #F09595;border-radius:16px;padding:16px 18px;margin-bottom:12px;box-shadow:0 2px 8px rgba(198,40,40,0.08)}
+.alert-title{font-size:12px;font-weight:700;color:#A32D2D;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.alert-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:10px;background:#fff;border:0.5px solid #F7C1C1}
+.alert-name{font-size:12px;font-weight:500;color:#C62828}
+.alert-info{font-size:11px;color:#A32D2D}
+.send-btn{padding:6px 14px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(198,40,40,0.25)}
+.period-row{display:flex;gap:8px;align-items:center;margin-bottom:6px;padding:7px 10px;background:#FFF8DC;border:1px solid #E0B020;border-radius:10px}
+.period-label{font-size:11px;font-weight:600;color:#8B6010;width:42px;flex-shrink:0}
+.period-bar{flex:1;height:8px;background:#F0E0A0;border-radius:4px;overflow:hidden}
+.period-fill{height:100%;background:linear-gradient(90deg,#E0B020,#C8900A);border-radius:4px}
+.period-count{font-size:12px;font-weight:700;color:#C8900A;width:24px;text-align:right}
+.period-count-btn{cursor:pointer;font-weight:600;color:#C8900A;text-decoration:underline dotted;text-underline-offset:2px}
+.student-list{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start}
+.student-card{background:linear-gradient(135deg,#FFFDF0 0%,#FFF8DC 100%);border:1.5px solid #E8C840;border-radius:16px;padding:14px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all 0.15s;box-shadow:0 2px 8px rgba(200,144,10,0.08)}
+.student-card:hover{background:linear-gradient(135deg,#FFF8DC 0%,#FFF0A0 100%);box-shadow:0 4px 16px rgba(200,144,10,0.18);transform:translateY(-1px);border-color:#C8900A}
+.student-avatar{width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;flex-shrink:0;box-shadow:0 2px 6px rgba(200,144,10,0.3)}
+.student-info{flex:1;min-width:0}
+.student-name{font-size:13px;font-weight:500}
+.student-meta{font-size:11px;color:var(--color-text-secondary)}
+.student-schedule{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.search-bar{display:flex;gap:8px;margin-bottom:12px}
+.search-bar input{flex:1;padding:7px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary)}
+.add-btn{padding:7px 14px;background:#C8900A;color:#fff;border:none;border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
+.today-chip{display:inline-flex;align-items:center;gap:4px;background:#FFF8DC;color:#27500A;border-radius:20px;padding:2px 8px;font-size:11px;margin-left:8px}
+.period-header{font-size:10px;line-height:1.3}
+
+/* 누적시간 탭 전용 */
+.hours-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px}
+.month-tabs{display:flex;gap:4px}
+.month-tab{padding:5px 11px;border:0.5px solid var(--color-border-secondary);border-radius:20px;cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary);transition:all 0.15s}
+.month-tab.active{background:#A87008;color:#fff;border-color:#A87008}
+.view-toggle{display:flex;gap:4px}
+.view-btn{padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary)}
+.view-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
+
+.hours-table{width:100%;border-collapse:collapse;background:var(--color-background-primary);border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
+.hours-table th{background:#A87008;color:#fff;padding:8px 10px;font-size:11px;font-weight:500;text-align:center}
+.hours-table th:first-child{text-align:left;padding-left:14px}
+.hours-table td{padding:7px 10px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px;text-align:center;vertical-align:middle}
+.hours-table td:first-child{text-align:left;padding-left:14px;font-weight:500}
+.hours-table tr:last-child td{border-bottom:none}
+.hours-table tr:hover td{background:var(--color-background-secondary)}
+
+.hours-bar-wrap{width:100%;background:var(--color-background-secondary);border-radius:3px;height:6px;overflow:hidden;display:inline-block;vertical-align:middle;width:80px}
+.hours-bar{height:100%;border-radius:3px;background:#A87008}
+.rank-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:500}
+.rank-1{background:#FFF3E0;color:#7A5008}
+.rank-2{background:#F5F5F5;color:#5F5E5A}
+.rank-3{background:#FFF3E0;color:#633806}
+.hours-chip{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:500}
+.chip-high{background:#FFF8DC;color:#27500A}
+.chip-mid{background:#E3F2FD;color:#0C447C}
+.chip-low{background:#FCEBEB;color:#A32D2D}
+.trend-up{color:#C8900A;font-size:11px}
+.trend-down{color:#C62828;font-size:11px}
+.trend-same{color:var(--color-text-tertiary);font-size:11px}
+
+/* 입실·퇴실 */
+.checkin-wrap{max-width:340px;margin:0 auto 20px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:24px 20px;text-align:center}
+.checkin-header{margin-bottom:20px}
+.checkin-title{font-size:18px;font-weight:600;color:var(--color-text-primary);margin-top:8px}
+.checkin-sub{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
+.checkin-display{font-size:36px;font-weight:600;letter-spacing:10px;color:#C8900A;background:#FFF8DC;border-radius:12px;padding:12px 0;margin-bottom:20px;font-family:monospace}
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.numpad-btn{padding:14px;font-size:20px;font-weight:500;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:10px;cursor:pointer;color:var(--color-text-primary);transition:background 0.1s;display:flex;align-items:center;justify-content:center}
+.numpad-btn:active{background:var(--color-background-secondary)}
+.numpad-clear{background:#FCEBEB;color:#C62828;border-color:#F7C1C1;font-size:12px;font-weight:600}
+.numpad-del{background:var(--color-background-secondary)}
+.checkin-error{margin-top:14px;font-size:12px;color:#C62828;background:#FCEBEB;border-radius:8px;padding:8px 12px}
+
+/* 확인 패널 */
+.checkin-confirm-panel{padding:8px 0}
+.confirm-avatar{width:64px;height:64px;border-radius:50%;background:#FFF8DC;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:600;color:#C8900A;margin:0 auto 12px}
+.confirm-name{font-size:22px;font-weight:600;margin-bottom:4px}
+.confirm-seat{font-size:13px;color:var(--color-text-secondary);margin-bottom:12px}
+.confirm-status{font-size:14px;font-weight:500;padding:6px 16px;border-radius:20px;display:inline-block;margin-bottom:6px}
+.status-checkin{background:#FFF8DC;color:#27500A}
+.status-checkout{background:#FFF3E0;color:#7A5008}
+.confirm-time{font-size:11px;color:var(--color-text-tertiary);margin-bottom:20px}
+.confirm-btns{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.confirm-btn{padding:12px;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer}
+.confirm-cancel{background:var(--color-background-secondary);color:var(--color-text-secondary)}
+.confirm-ok{background:#C8900A;color:#fff}
+.confirm-ok.checkout-mode{background:#7A5008}
+
+/* 완료 패널 */
+.checkin-done-panel{padding:16px 0}
+.done-icon{font-size:48px;margin-bottom:12px}
+.done-name{font-size:20px;font-weight:600;margin-bottom:6px}
+.done-msg{font-size:14px;color:var(--color-text-secondary);margin-bottom:6px}
+.done-time{font-size:12px;color:var(--color-text-tertiary)}
+
+/* 오늘 현황 */
+.checkin-today-wrap{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px}
+.checkin-today-title{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.checkin-today-count{margin-left:auto;background:#FFF8DC;color:#27500A;border-radius:20px;padding:1px 8px;font-size:11px;font-weight:500}
+.checkin-today-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto}
+.checkin-today-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px}
+.checkin-today-item:last-child{border-bottom:none}
+.ci-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.ci-in{background:#C8900A}.ci-out{background:#bdc1c6}
+.ci-time{margin-left:auto;font-size:11px;color:var(--color-text-tertiary)}
+
+/* 스케줄 변경 알림 */
+.sc-alert-item{padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary);display:flex;align-items:flex-start;gap:10px}
+.sc-alert-item:last-child{border-bottom:none}
+.sc-alert-avatar{width:30px;height:30px;border-radius:50%;background:#E3F2FD;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#A87008;flex-shrink:0}
+.sc-alert-body{flex:1;min-width:0}
+.sc-alert-name{font-size:12px;font-weight:600;margin-bottom:3px}
+.sc-alert-change{font-size:11px;color:var(--color-text-secondary);line-height:1.6}
+.sc-alert-time{font-size:10px;color:var(--color-text-tertiary);margin-top:3px}
+.sc-alert-btns{display:flex;gap:6px;margin-top:6px}
+.sc-apply-btn{padding:4px 10px;background:#C8900A;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:500;cursor:pointer}
+.sc-dismiss-btn{padding:4px 8px;background:var(--color-background-secondary);color:var(--color-text-secondary);border:none;border-radius:6px;font-size:11px;cursor:pointer}
+.sc-sms-btn{background:#FEE500;color:#3C1E1E;font-weight:600}
+
+/* 배치도 */
+.fp-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.fp-legend{display:flex;gap:12px;align-items:center}
+.fp-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
+.fp-leg-dot{width:10px;height:10px;border-radius:3px}
+.fp-leg-in{background:#C8900A}
+.fp-leg-out{background:#bdc1c6}
+.fp-leg-empty{background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary)}
+
+/* 드래그 스크롤 컨테이너 */
+.fp-drag-wrap{
+  overflow:hidden;
+  cursor:grab;
+  border-radius:var(--border-radius-lg);
+  background:var(--color-background-secondary);
+  padding:12px;
+  user-select:none;
+  -webkit-user-select:none;
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:760px;
+}
+.fp-drag-wrap.dragging{cursor:grabbing;}
+.fp-room{display:grid;gap:6px;width:fit-content;transition:none;}
+
+/* 배치도 영역 레이아웃 */
+.fp-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px}
+.fp-area-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.fp-grid{display:grid;gap:5px}
+
+/* 좌석 카드 */
+.fp-seat{border-radius:8px;padding:6px 7px;min-height:56px;cursor:pointer;transition:all 0.12s;border:0.5px solid transparent;position:relative;display:flex;flex-direction:column;justify-content:space-between}
+.fp-seat:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.fp-seat.fp-in{background:#FFF8DC;border-color:#E0B020}
+.fp-seat.fp-vacant{background:var(--color-background-secondary);border-color:var(--color-border-tertiary)}
+.fp-seat.fp-out-today{background:#F3F4F6;border-color:#D1D5DB}
+.fp-seat-num{font-size:9px;color:var(--color-text-tertiary);font-weight:500;line-height:1}
+.fp-seat-name{font-size:12px;font-weight:600;color:var(--color-text-primary);margin-top:2px;line-height:1.2}
+.fp-seat-status{font-size:9px;margin-top:3px;display:flex;align-items:center;gap:3px}
+.fp-status-in{color:#C8900A}
+.fp-status-out{color:#9CA3AF}
+.fp-status-empty{color:var(--color-text-tertiary)}
+.fp-in-dot{width:6px;height:6px;border-radius:50%;background:#C8900A;flex-shrink:0;animation:fp-pulse 2s infinite}
+
+/* 위치수정 버튼 */
+.fp-edit-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s}
+.fp-edit-btn:hover{background:var(--color-background-secondary)}
+.fp-edit-btn.active{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
+.fp-drag-over{outline:2px solid #C8900A!important;outline-offset:-2px;background:rgba(200,144,10,0.08)!important;}
+/* ── 학생카드 드래그&드롭 좌석변경 ── */
+.fp-side-card-drag{cursor:grab;transition:box-shadow 0.12s,transform 0.12s;user-select:none}
+.fp-side-card-drag.dragging-card{opacity:0.5;transform:scale(0.96)}
+.fp-cell-drop-ready{outline:2px dashed #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.05) !important;}
+.fp-cell-drop-hover{outline:3px solid #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.18) !important;transform:scale(1.05);z-index:10;transition:all 0.1s;}
+.fp-side-drag-hint{font-size:10px;color:#9CA3AF;text-align:center;padding:5px 4px;border-top:1px solid #F3F4F6;margin-top:4px;display:none}
+.fp-side-drag-hint.visible{display:block}
+.fp-edit-btn.saving{background:#A87008;color:#fff;border-color:#A87008}
+
+/* 위치수정 모드: 좌석을 absolute로 자유 배치 */
+.fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
+.fp-seat.draggable{cursor:move!important;box-shadow:0 0 0 2px #C8900A40;}
+.fp-seat.draggable:hover{box-shadow:0 0 0 2px #C8900A,0 4px 12px rgba(0,0,0,0.15);z-index:100;}
+.fp-studio.draggable{cursor:move!important;box-shadow:0 0 0 2px #C8900A40;}
+.fp-studio.draggable:hover{box-shadow:0 0 0 2px #C8900A,0 4px 12px rgba(0,0,0,0.15);z-index:100;}
+.fp-seat.seat-dragging{box-shadow:0 8px 24px rgba(0,0,0,0.2)!important;z-index:999!important;opacity:0.92;transform:scale(1.03);}
+.fp-studio.seat-dragging{box-shadow:0 8px 24px rgba(0,0,0,0.2)!important;z-index:999!important;opacity:0.92;transform:scale(1.03);}
+
+@keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+.admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.admin-toast.show{opacity:1}
+
+/* 스케줄 편집 모달 */
+.sched-modal{background:#ffffff;border-radius:16px;width:min(96vw,640px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden}
+.sched-modal-header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.sched-modal-title{font-size:16px;font-weight:600}
+.sched-modal-sub{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.sched-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--color-text-tertiary);padding:2px 6px;border-radius:6px;line-height:1}
+.sched-modal-close:hover{background:var(--color-background-secondary)}
+.sched-modal-body{overflow-y:auto;padding:16px 20px;flex:1}
+.sched-modal-footer{padding:14px 20px;border-top:0.5px solid var(--color-border-tertiary);display:flex;justify-content:flex-end;gap:10px}
+.sched-cancel-btn{padding:8px 18px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;font-size:13px;cursor:pointer;color:var(--color-text-secondary)}
+.sched-save-btn{padding:8px 22px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer}
+
+/* 요일별 스케줄 행 */
+.sched-day-row{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.sched-day-row:last-child{border-bottom:none}
+.sched-day-label{font-size:13px;font-weight:600;color:var(--color-text-primary);padding-top:6px}
+.sched-day-label.sat{color:#222}
+.sched-periods{display:flex;flex-wrap:wrap;gap:5px}
+
+/* 교시 토글 버튼 */
+.sched-period-btn{padding:4px 9px;border-radius:6px;font-size:11px;font-weight:500;border:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:pointer;transition:all 0.12s;user-select:none}
+.sched-period-btn.on{background:#FFF8DC;color:#27500A;border-color:#E0B020}
+.sched-period-btn.partial{background:#FFF3E0;color:#7A5008;border-color:#FFCC80}
+.sched-period-btn.absent{background:#FCEBEB;color:#C62828;border-color:#F09595}
+
+/* 결석 사유 입력 */
+.sched-absent-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
+.sched-absent-label{font-size:11px;color:var(--color-text-secondary);white-space:nowrap}
+.sched-absent-input{flex:1;min-width:120px;padding:4px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)}
+.sched-legend{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.sched-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
+.sched-legend-dot{width:12px;height:12px;border-radius:3px}
+
+/* 스터디룸 박스 */
+.fp-studio{background:var(--color-background-secondary);border:0.5px dashed var(--color-border-secondary);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:center;min-height:56px}
+.fp-studio-label{font-size:12px;color:var(--color-text-tertiary);font-weight:500}
+
+/* 관리자석 */
+.fp-seat.fp-admin{background:#FFF8E1;border-color:#FFD54F}
+.fp-seat.fp-admin .fp-seat-num{color:#7A5008}
+.fp-seat.fp-admin .fp-seat-name{color:#7A5008}
+
+.chart-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px;margin-bottom:14px}
+.bar-chart{display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:8px}
+.bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.bar-body{border-radius:4px 4px 0 0;background:#A87008;width:100%;transition:height 0.3s;min-height:2px}
+.bar-label{font-size:10px;color:var(--color-text-secondary);white-space:nowrap}
+.bar-val{font-size:10px;color:var(--color-text-secondary)}
+.summary-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.summary-chip{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:6px 10px;font-size:11px}
+.summary-chip span{font-weight:500;color:var(--color-text-primary)}
+</style>
+
+
+<div class="app">
+
+<div class="topbar">
+  <div class="topbar-title">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.15);vertical-align:middle;flex-shrink:0"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACwAAAAqCAYAAADI3bkcAAAA3mlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGB8wAAETECcm1dSFOTupBARGaXAfoGBEQjBIDG5uMA32C2EASf4dg2i9rIubjU4AWd5SUEJkP4AxCJFIUHODAyMLEA2XzqELQJiJ0HYKiB2EdCBQLYJSH06hO0BYidB2DEgdnJBEdBMxgKQ+SmpxclAdgOQnQDyG8Taz4FgNzOKnUkuLSqDuoWRyZiBgRAfYcYcCQYG/6UMDCx/EGImvQwMC3QYGPinIsTUDBkYBPQZGPbNKUmtKEH2PMRtYMCWXwAMfTICEB8AAAJtNVaW2HMEAAAHtElEQVR4nO2Ye4zU1RXHv+fc32NmluWxLkul1TQV0PpAw1LltbtoRRs1rYgsDa3FtqDR/tGm/FWtpZg+aIu2MU0q1DQVDDarMYHUpojZXR6mQKEtVA10AygIW9kHC+zOzO/3u/ec/jG8d2dnFkgaE04yf8x9nPv5nZx7Hhe4Ilfkky30/zxc29dXIIyugsiwmByLpVwqtMdoZGN3sT1lAe9YUetffyM1CORuVYyDkhCjTeBtGNl+7WZqfM2VC3n48IrMmHT1w1B9SFUnAlqtitQploSIjrPhNk3kd17N3FeHDNzZWjvLY7eUCVN9j6BaGGcCokQB0GYRf8momdtbSunSnrXjRJPV7PtToApYBxEFVKEAiAAmAnwPKgKXuDl+9dw3ztXBRZWrUmdL7TOBcW/6BlOtVWTzglxU+PXlBU4UntE65nh998baZ1S1qAFU/xLaOPojp4IpNhfB5mNY6yAiEFWoKkQU1glsPgYZA1X99oV6igJ3tX5heUVKnnWifj4uWKA/BJCPFaLqpwN5trt10m+1aa4ZSF/SeWIiG57u+qJiR54vzoGAsRcaYUDgzuZJ382E7vu5SCBSWrcIkIsEmRSe7Bq9/xcDrSFjxrBnoDrQpw+0gQCgl4jO29AP+NjG2kmekZ/FiaBc3cApa0eCVCCLu1omLeq3QChf1tefIWMA2Ntv+Nw/TU1zjYgsC3zKuCHoPsOkgHMKw7K8u7X2lvPmWI8miXNE5UZShYhuHhR41pgPGzyjd+fji6A9JdYpAp+Gi8gLuqPWPz0ex8HHROhhLg3MzEiy8UnnU7/Icx6wOPvNwCcaiisMJPmCP8/sOklfPz02rDM6pqodxEXv+VmowAOgzZmqxoNFgTu2TKtUSEOcXCItAEXBNQj26c6ttw8HALq5MSaiDpSwMAFQERD4pYHmzwAbK58l1qtFLh0YAGKryKToOs3bM1ZWRb7UPhN4cJHd5fVUbBgUmEhGe0zepbrDuWKdgkSe0P98KTw1lEOpS8cMYvo1TbhvwIB91qH4YuLC4JIkisDHzd1HOu8CAGI6Plgx4AUeklz8rslqU7E1Z4BZ+Yh1iMqOOmWIAvAMQVUWFAa0u5iFCQCIoMBP6drGXEng4Rk5AOB937u8FWecCAgyq7tp1Agl7+Ni60wqgM3Fm4PRo18fTN9ZH568MwF5LxpzeYGdAOmQqmRk9RfZTx0ZqCghIjjrEvXpKaI7bVnAANCVrX45l8dbFenSsXKoQp7/FXV0bKD0bNIBJLYvB1WNW0rpOY9swn1/jSwPezQX098r0nzZ2pHEKlRpmmYPjb3QwsYzsLn4iE/ej8rR1c+UNQ2b2w0y9+diNAUBI/DpksGdUwC4Ju778FZxZ4kJABmGOHmKaua0XxQwAAyv39Ixqv6f8+KEvyYOu8OAkQqoVJIqKgrA9zh0vW1VotR7ugAy6RBJPlkX1Ly/ulxdgzpr1cyda3qPm6mJmq/GjtaDkM2kGKE/dHg2DJc9NByqHxnDMJ6Bi+Kjvo/vES0tOwcM6dgT70y9QSV6QAUPqsrkVEihtVrw0RJ7fY+QJMnOypt+uM/PZBpVBEk+WRCOaVw1FIaLds/jW6Zdry6aDcg8Ir3NM4WmtFhqNwxYa9uHjX/8ufBT45bbnt7Vfk3jN4Z67pDilx5oGKl7Z3wuv/eOz/tjNT9i3NUvHO2bMUUkuCtx9KZhQlAk8YgCRFyd9Ow66Hqjt73Rc59csmRo5wNlWLj9X7MqqoKu+Ur6sDq9SSCjoPABcsw4TkRtbHjtiXzln7gndytz8nxgMCEX9XfLMGBA0/f2fXrR7j0bVi4MDD/kgCPQYPGMhS392qEhA3f9u+6aDJ9sSoWYIqKwFqda8kKPSFSoFYxHSGIcsurP69gf7hlR2bcqDPBALir0hUxAKmTkIv1vNhnWsG+fW5ZJ8+zECipSBsezeKR+0ZZXygEe5F0ClEbv86k0pmRzgnyksE4hUmg4RQDngChWZLMCZr2GNV5Xc13uthFXjZuTzdMqjykOAwaI4jhBMwWp+9v2y9PpFM/ORQ6eYRzrdWszY0a+UYyjbAvn90y9wSXZXcwalNvseh7BWcRgajXG2xud5I84xnsq/geVde+817xi+uKKQJdbpyAiWKEXMzJq8eTH/5wtF9grNmFtfEcmRUEuX35Fb62CGUHg4x4O7D02wQeZySPGE220rSvqv+xxvIzZQJ0eFPF+UL9o05qylZcChujYUrUxATAewfcK6dsJzrhMkoMC3EK00TavrLvXZ7sGxCaf4CXjpX887dHmw0OFHRSYQCeLzTEXbry1CuvogAj9TRQ7QHxAyWRDkhBsjlbcsm1b68rpswPjXiWg06k3v27hpnUXA1oSGIzt+UiVCHTui2UYMqJY+2JL6yDmlWxgtlRP2H5iIBWbfz99sWf0V6r0Vuz4iYbHNh24FFhgkEunuoT73l23uqIS8zVREAFRpBGIX09s8MvKidt2F9vb+of68b7a55io3gr/xB7i39y5dOOghfklAwOFpDHC7/yO59HtzlKbI/+1YTdu/cdAa1uWNHipz+h4YXmESB8EsDWG+fnMb21quxygZQGXKztWPObb9IE6cXEtQTosh811C97u92pzRT4J8j8/MLEEtB9IuwAAAABJRU5ErkJggg==" style="height:24px;width:auto" alt="나비"></span>
+    새봄 면학관
+    <span class="today-chip"><i class="ti ti-calendar" aria-hidden="true"></i> <span id="today-label"></span></span>
+    <button class="tab-btn checkin-shortcut-btn" onclick="showSection('checkin',this)" style="margin-left:8px;background:rgba(255,255,255,0.35);color:#5C3D08;font-weight:600;border:1px solid rgba(255,255,255,0.6)">입실·퇴실</button>
+  </div>
+  <div class="topbar-tabs">
+    <button class="tab-btn active" onclick="showSection('dashboard',this)">대시보드</button>
+    <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
+    <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
+    <button class="tab-btn" onclick="showSection('hours',this)">누적시간</button>
+    <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
+    <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
+    <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- 대시보드 -->
+<div id="sec-dashboard" class="section active">
+  <div class="stats-row">
+    <div class="stat-card" style="cursor:pointer" onclick="showTodayAttendees()"><div class="stat-label">현재 입실</div><div class="stat-val green" id="stat-today">0</div></div>
+    <div class="stat-card"><div class="stat-label">미입실 알림대상</div><div class="stat-val red" id="stat-alerts">0</div></div>
+    <div class="stat-card"><div class="stat-label">이번달 평균</div><div class="stat-val blue">168<span style="font-size:13px">h</span></div></div>
+
+  </div>
+  <div class="alert-card">
+    <div class="alert-title"><i class="ti ti-bell" style="font-size:15px" aria-hidden="true"></i> <span id="alert-title-text">미입실 알림 대상</span></div>
+    <div id="alert-list"></div>
+  </div>
+  <div class="dashboard-grid">
+    <div class="card">
+      <div class="card-title"><i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</div>
+      <div id="present-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</div>
+      <div id="period-chart"></div>
+    </div>
+    <!-- 스터디룸 초과 경고 -->
+    <div class="card" id="studyroom-overflow-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-alert-triangle" style="font-size:14px;color:#C62828"></i> 스터디룸 초과 경고</span>
+        <button onclick="dismissStudyroomOverflow()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">닫기</button>
+      </div>
+      <div id="studyroom-overflow-list"></div>
+    </div>
+    <!-- 스터디룸 신청 알림 -->
+    <div class="card" id="studyroom-req-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-door-enter" style="font-size:14px;color:#7C3AED"></i> 스터디룸 신청 알림</span>
+        <button onclick="window.clearAllStudyroomAlerts&&window.clearAllStudyroomAlerts()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">모두 지우기</button>
+      </div>
+      <div id="studyroom-req-list"></div>
+    </div>
+
+    <!-- 학생 스케줄 변경 알림 (Firebase 실시간) -->
+    <div class="card" id="schedule-change-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-refresh" style="font-size:14px;color:#A87008"></i> 학생 스케줄 변경 알림</span>
+        <button onclick="clearAllScheduleAlerts()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">모두 지우기</button>
+      </div>
+      <div id="schedule-change-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 배치도 -->
+<div id="sec-floorplan" class="section">
+  <div class="fp-toolbar">
+    <div class="fp-legend">
+      <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-in"></span>입실 중</span>
+      <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-out"></span>퇴실</span>
+      <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-empty"></span>공석</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span style="font-size:11px;color:var(--color-text-tertiary);display:none" id="fp-drag-hint"></span>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:14px;align-items:flex-start">
+    <div class="fp-drag-wrap" id="fp-drag-wrap" style="flex:1;min-width:0">
+      <div class="fp-room" id="fp-room" style="position:relative"></div>
+    </div>
+
+    <!-- 입실 현황 사이드패널 -->
+    <div id="fp-side-panel" style="width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;max-height:80vh;overflow-y:auto">
+      <div style="font-size:12px;font-weight:700;color:#5C3D08;padding:4px 2px;display:flex;align-items:center;justify-content:space-between">
+        <span>📋 입실 현황</span>
+        <span id="fp-side-count" style="font-size:11px;color:#888"></span>
+      </div>
+      <div id="fp-side-list"></div>
+      <div class="fp-side-drag-hint" id="fp-side-drag-hint">✋ 카드를 배치도 좌석에 드롭 → 좌석 변경</div>
+    </div>
+  </div>
+</div>
+
+<!-- 입실·퇴실 -->
+<div id="sec-checkin" class="section">
+  <div class="checkin-wrap">
+    <!-- 번호 입력 패널 -->
+    <div class="checkin-panel" id="checkin-input-panel">
+      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px">
+        <span style="font-size:11px;color:#8B6010">자동문 릴레이:</span>
+        <button id="relay-connect-btn" onclick="connectSerial()"
+          style="padding:5px 12px;background:#E0B020;color:#5C3D08;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+          🔌 포트 연결
+        </button>
+        <button onclick="window.doorOpenTimed(3)"
+          style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+          🚪 수동 열기
+        </button>
+      </div>
+      <div class="checkin-header">
+        <i class="ti ti-door-enter" style="font-size:28px;color:#C8900A"></i>
+        <div class="checkin-title">입실 · 퇴실</div>
+        <div class="checkin-sub">휴대폰 번호 뒷자리 4자리를 입력하세요</div>
+      </div>
+      <div class="checkin-display" id="checkin-display">____</div>
+      <div class="numpad">
+        <button class="numpad-btn" onclick="numpadInput('1')">1</button>
+        <button class="numpad-btn" onclick="numpadInput('2')">2</button>
+        <button class="numpad-btn" onclick="numpadInput('3')">3</button>
+        <button class="numpad-btn" onclick="numpadInput('4')">4</button>
+        <button class="numpad-btn" onclick="numpadInput('5')">5</button>
+        <button class="numpad-btn" onclick="numpadInput('6')">6</button>
+        <button class="numpad-btn" onclick="numpadInput('7')">7</button>
+        <button class="numpad-btn" onclick="numpadInput('8')">8</button>
+        <button class="numpad-btn" onclick="numpadInput('9')">9</button>
+        <button class="numpad-btn numpad-clear" onclick="numpadClear()">전체삭제</button>
+        <button class="numpad-btn" onclick="numpadInput('0')">0</button>
+        <button class="numpad-btn numpad-del" onclick="numpadDelete()">←</button>
+      </div>
+      <div class="checkin-error" id="checkin-error" style="display:none">일치하는 학생을 찾을 수 없습니다</div>
+    </div>
+
+    <!-- 학생 확인 패널 -->
+    <div class="checkin-confirm-panel" id="checkin-confirm-panel" style="display:none">
+      <div class="confirm-avatar" id="confirm-avatar"></div>
+      <div class="confirm-name" id="confirm-name"></div>
+      <div class="confirm-seat" id="confirm-seat"></div>
+      <div class="confirm-status" id="confirm-status"></div>
+      <div class="confirm-time" id="confirm-time"></div>
+      <div class="confirm-btns">
+        <button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>
+        <button class="confirm-btn confirm-ok" id="confirm-ok-btn" onclick="checkinConfirm()">확인</button>
+      </div>
+    </div>
+
+    <!-- 완료 패널 -->
+    <div class="checkin-done-panel" id="checkin-done-panel" style="display:none">
+      <div class="done-icon" id="done-icon"></div>
+      <div class="done-name" id="done-name"></div>
+      <div class="done-msg" id="done-msg"></div>
+      <div class="done-time" id="done-time"></div>
+    </div>
+  </div>
+
+  <!-- 오늘 입실 현황 -->
+  <div class="checkin-today-wrap">
+    <div class="checkin-today-title"><i class="ti ti-users" style="font-size:14px"></i> 오늘 입실 현황 <span class="checkin-today-count" id="checkin-today-count">0명</span></div>
+    <div class="checkin-today-list" id="checkin-today-list"></div>
+  </div>
+</div>
+
+<!-- 스케줄 -->
+<div id="sec-schedule" class="section">
+  <div class="day-tabs" id="day-tabs"></div>
+  <div style="overflow-x:auto">
+    <table class="schedule-table" id="schedule-table"></table>
+  </div>
+</div>
+
+<!-- 누적시간 -->
+<div id="sec-hours" class="section">
+  <div class="hours-toolbar">
+    <div class="month-tabs" id="month-tabs"></div>
+    <div class="view-toggle">
+      <button class="view-btn active" id="view-table-btn" onclick="setView('table',this)"><i class="ti ti-list" aria-hidden="true"></i> 목록</button>
+      <button class="view-btn" id="view-chart-btn" onclick="setView('chart',this)"><i class="ti ti-chart-bar" aria-hidden="true"></i> 차트</button>
+    </div>
+  </div>
+
+  <div id="hours-table-view">
+    <div class="summary-chips" id="hours-summary"></div>
+    <div style="height:10px"></div>
+    <div style="overflow-x:auto">
+      <table class="hours-table" id="hours-table"></table>
+    </div>
+  </div>
+
+  <div id="hours-chart-view" style="display:none">
+    <div class="chart-area">
+      <div class="card-title" style="margin-bottom:12px"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 학생별 누적시간 <span id="chart-month-label" style="color:var(--color-text-tertiary)"></span></div>
+      <div class="bar-chart" id="bar-chart"></div>
+    </div>
+    <div class="chart-area">
+      <div class="card-title" style="margin-bottom:12px"><i class="ti ti-trending-up" style="font-size:14px" aria-hidden="true"></i> 월별 추이 (상위 5명)</div>
+      <div id="trend-chart"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 학생관리 -->
+<div id="sec-students" class="section">
+  <div class="search-bar">
+    <input type="text" id="student-search" placeholder="이름 또는 좌석 검색..." oninput="filterStudents()">
+
+  </div>
+  <div class="student-list" id="student-list"></div>
+</div>
+
+</div>
+
+<!-- 문자 발신내역 -->
+<div id="sec-smslog" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700;color:#5C3D08">📨 문자 발신내역</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="smslog-filter" onchange="filterSmsLog()" style="padding:6px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#FFFDF5;color:#5C3D08">
+        <option value="all">전체</option>
+        <option value="success">성공만</option>
+        <option value="fail">실패만</option>
+        <option value="in">입실 문자</option>
+        <option value="out">퇴실 문자</option>
+        <option value="absent">미입실 알림</option>
+      </select>
+      <button onclick="refreshSmsLog()" style="padding:6px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010;cursor:pointer;font-weight:600">🔄 새로고침</button>
+      <button onclick="clearOldSmsLogs()" style="padding:6px 12px;background:#FCEBEB;border:1.5px solid #F09595;border-radius:8px;font-size:12px;color:#C62828;cursor:pointer;font-weight:600">🗑️ 오래된 내역 삭제</button>
+    </div>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="smslog-stats">
+    <div style="background:linear-gradient(135deg,#FFF8DC,#FFF3B0);border:1.5px solid #E0B020;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#8B6010;font-weight:700;margin-bottom:4px">총 발송</div>
+      <div style="font-size:22px;font-weight:700;color:#C8900A" id="smslog-total">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">성공</div>
+      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="smslog-success">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">실패</div>
+      <div style="font-size:22px;font-weight:700;color:#C62828" id="smslog-fail">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#F3E5F5,#E1BEE7);border:1.5px solid #CE93D8;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-bottom:4px">오늘</div>
+      <div style="font-size:22px;font-weight:700;color:#6A1B9A" id="smslog-today">0</div>
+    </div>
+  </div>
+
+  <!-- 내역 목록 -->
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+    <div id="smslog-list" style="min-height:200px">
+      <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 관리자설정 -->
+<div id="sec-settings" class="section">
+  <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
+
+    <!-- 솔라피 -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-message" style="font-size:15px;color:#C8900A"></i> 솔라피 — 문자발송 서비스
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:14px">
+        학부모 확인문자 및 미입실 알림 발송에 사용됩니다.
+        <a href="https://solapi.com" target="_blank" style="color:#C8900A;font-weight:600;margin-left:4px">solapi.com →</a>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:5px">API Key</div>
+            <input id="cfg-key" type="text" placeholder="NCS..."
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;background:#FFFDF5;outline:none">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:5px">API Secret</div>
+            <input id="cfg-secret" type="password" placeholder="Secret Key"
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;background:#FFFDF5;outline:none">
+          </div>
+        </div>
+        <div style="max-width:240px">
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:5px">발신번호 (등록된 번호)</div>
+          <input id="cfg-sender" type="text" placeholder="01041301139"
+            style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;background:#FFFDF5;outline:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:4px">
+          <button onclick="saveSettingsFromTab()"
+            style="padding:10px 24px;background:#C8900A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(200,144,10,0.3)">
+            저장
+          </button>
+          <span id="cfg-status" style="font-size:12px;color:#8B6010"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 공지사항 관리 -->
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-title" style="margin-bottom:10px">
+        <i class="ti ti-speakerphone" style="font-size:15px;color:#C8900A"></i> 공지사항 관리
+      </div>
+      <div id="notice-list-admin" style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px"></div>
+      <div style="background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px;padding:14px">
+        <div style="font-size:11px;font-weight:700;color:#8B6010;margin-bottom:8px">새 공지 작성</div>
+        <select id="notice-badge-sel" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;margin-bottom:8px;background:#fff">
+          <option value="important">🔴 중요</option>
+          <option value="general">🟡 공지</option>
+          <option value="event">🔵 이벤트</option>
+        </select>
+        <input id="notice-title-inp" type="text" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
+        <textarea id="notice-body-inp" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit"></textarea>
+        <button onclick="publishNotice()" style="margin-top:8px;width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">공지 발행</button>
+      </div>
+    </div>
+
+    <!-- Firebase -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-database" style="font-size:15px;color:#C8900A"></i> Firebase — 실시간 데이터베이스
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:10px">
+        학생 스케줄 변경 실시간 감지 및 동기화에 사용됩니다.
+        <a href="https://console.firebase.google.com" target="_blank" style="color:#C8900A;font-weight:600;margin-left:4px">Firebase 콘솔 →</a>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="padding:6px 12px;background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010">
+          <span style="font-weight:600">프로젝트:</span> saebom-studyhall
+        </div>
+        <div style="padding:6px 12px;background:#E8F5E9;border:1px solid #A5D6A7;border-radius:8px;font-size:12px;color:#2D7A4F;display:flex;align-items:center;gap:4px">
+          <span style="width:7px;height:7px;background:#2D7A4F;border-radius:50%;display:inline-block"></span> 연결됨
+        </div>
+      </div>
+    </div>
+
+
+    <!-- 자리선택 허용 -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:8px">
+        <i class="ti ti-armchair" style="font-size:15px;color:#C8900A"></i> 자리선택 허용
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:12px">학생들이 학생앱에서 자리를 선택할 수 있는 기간을 설정합니다. 종료 시각이 되면 미선택 학생은 랜덤 배정됩니다.</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+        <div>
+          <div style="font-size:11px;color:#8B6010;margin-bottom:4px">시작 시각</div>
+          <input type="datetime-local" id="seat-sel-start" style="width:100%;padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#FFFDF5">
+        </div>
+        <div>
+          <div style="font-size:11px;color:#8B6010;margin-bottom:4px">종료 시각</div>
+          <input type="datetime-local" id="seat-sel-end" style="width:100%;padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#FFFDF5">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button onclick="saveSeatSelection()" style="padding:7px 16px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">저장 및 활성화</button>
+        <button onclick="cancelSeatSelection()" style="padding:7px 16px;background:#FFF8DC;border:1.5px solid #E0B020;color:#8B6010;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">비활성화</button>
+        <span id="seat-sel-status" style="font-size:12px;color:#888"></span>
+      </div>
+    </div>
+
+    <!-- 학생앱 -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-users" style="font-size:15px;color:#C8900A"></i> 학생앱 — 스케줄 셀프 관리
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:10px">
+        학생이 직접 스케줄을 수정하면 관리자앱에 실시간 알림이 옵니다.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html" target="_blank"
+          style="padding:6px 12px;background:#C8900A;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">
+          학생앱 열기 →
+        </a>
+        <button onclick="navigator.clipboard.writeText('https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html').then(()=>showAdminToast('✅ 링크 복사됨'))"
+          style="padding:6px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010;cursor:pointer;font-weight:600">
+          링크 복사
+        </button>
+      </div>
+    </div>
+
+    <!-- GitHub -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-brand-github" style="font-size:15px;color:#C8900A"></i> GitHub Pages — 앱 호스팅
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:10px">
+        관리자앱과 학생앱이 GitHub Pages로 배포됩니다. 파일 업로드 후 1~3분 내 반영됩니다.
+        <a href="https://github.com/doctorj011-blip/saebom-studyhall" target="_blank" style="color:#C8900A;font-weight:600;margin-left:4px">저장소 보기 →</a>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <a href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_schedule_with_hours.html" target="_blank"
+          style="padding:6px 12px;background:#C8900A;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">
+          관리자앱 열기 →
+        </a>
+        <a href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html" target="_blank"
+          style="padding:6px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010;font-weight:600;text-decoration:none">
+          학생앱 열기 →
+        </a>
+      </div>
+    </div>
+
+  </div>
+</div>
+<div id="admin-toast" class="admin-toast"></div>
+
+<!-- 스케줄 편집 모달 -->
+<div id="schedule-modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:2000;align-items:center;justify-content:center">
+  <div class="sched-modal">
+    <div class="sched-modal-header">
+      <div style="flex:1">
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <div class="sched-modal-title" id="sched-modal-name"></div>
+          <div id="sched-modal-seat" style="font-size:16px;font-weight:700;color:#C8900A"></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
+            <input id="edit-phone" type="tel" placeholder="010-0000-0000"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">👨‍👩‍👧 부모님 번호</div>
+            <input id="edit-parent" type="tel" placeholder="010-0000-0000"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)">
+          </div>
+        </div>
+      </div>
+      <button class="sched-modal-close" onclick="closeScheduleModal()">✕</button>
+    </div>
+    <div class="sched-modal-body" id="sched-modal-body"></div>
+    <div class="sched-modal-footer">
+      <button class="sched-cancel-btn" onclick="closeScheduleModal()">취소</button>
+      <button class="sched-save-btn" onclick="saveSchedule()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DAYS=['월','화','수','목','금','토'];
+const PERIODS_WEEKDAY=[
+  {n:'7교시',t:'6:00~6:50'},{n:'8교시',t:'7:00~8:20'},{n:'9교시',t:'8:30~10:00'},
+  {n:'10교시',t:'10:30~11:50'},{n:'11교시',t:'12:00~1:00'}
+];
+const PERIODS_SAT=[
+  {n:'1교시',t:'9:00~10:00'},{n:'2교시',t:'10:10~11:10'},{n:'3교시',t:'11:20~12:30'},
+  {n:'4교시',t:'1:30~2:30'},{n:'5교시',t:'2:40~3:40'},{n:'6교시',t:'3:50~5:00'},
+  {n:'7교시',t:'6:00~6:50'},{n:'8교시',t:'7:00~8:20'},{n:'9교시',t:'8:30~10:00'},
+  {n:'10교시',t:'10:30~11:50'},{n:'11교시',t:'12:00~1:00'}
+];
+let PERIODS = PERIODS_WEEKDAY;
+let PERIOD_OFFSET = 6;
+
+let STUDENTS=[];
+
+const MONTHS=[{k:3,label:'3월'},{k:4,label:'4월'},{k:5,label:'5월'},{k:6,label:'6월'}];
+let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
+let currentMonth=6;
+let currentView='table';
+
+let ALERTS = []; // 동적으로 계산됨
+const PRESENT=[];
+// 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
+let studyRoomStudents = { 1: [], 2: [], 3: [] };
+
+// ── F5 새로고침 가로채기 ──
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
+    e.preventDefault();
+    const activeId = document.querySelector('.section.active')?.id?.replace('sec-', '') || 'dashboard';
+    // 데이터만 새로고침
+    if (window._adminDb) {
+      loadStudentsFromFirebase && loadStudentsFromFirebase();
+    }
+    buildDashboard();
+    if (activeId === 'floorplan' && document.getElementById('fp-room')) buildFloorplan();
+    if (activeId === 'hours') buildHoursTable();
+    if (activeId === 'smslog') loadSmsLog();
+    showAdminToast('🔄 새로고침됨');
+  }
+});
+
+// 페이지 로드 시 마지막 탭 복원
+window.addEventListener('load', function() {
+  try {
+    const saved = sessionStorage.getItem('saebom_active_tab');
+    if (saved && saved !== 'dashboard') {
+      const btn = document.querySelector('.tab-btn[onclick*="\'' + saved + '\'"]');
+      if (btn) setTimeout(() => showSection(saved, btn), 800);
+    }
+  } catch(e) {}
+});
+
+window.showSection = function(id,btn){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'settings') { loadSettingsTab(); loadNoticesAdmin(); }
+  if (id === 'smslog') { loadSmsLog(); }
+  try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
+}
+// ── 자리선택 허용 관리 ──
+window.saveSeatSelection = async function() {
+  const start = document.getElementById('seat-sel-start').value;
+  const end = document.getElementById('seat-sel-end').value;
+  if (!start || !end) { alert('시작/종료 시각을 모두 입력해주세요'); return; }
+  if (start >= end) { alert('종료 시각이 시작 시각보다 늦어야 합니다'); return; }
+  const db = window._adminDb;
+  if (!db) { alert('Firebase 연결이 필요합니다'); return; }
+  try {
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'seatSelection'), {
+      active: true, start, end, updatedAt: window._fsServerTimestamp()
+    });
+    document.getElementById('seat-sel-status').textContent = '✅ 활성화됨';
+    document.getElementById('seat-sel-status').style.color = '#2D7A4F';
+    showAdminToast('✅ 자리선택 기간이 설정됐습니다');
+    scheduleRandomAssignment(new Date(end));
+  } catch(e) { alert('저장 실패: ' + e.message); }
+};
+
+window.cancelSeatSelection = async function() {
+  const db = window._adminDb;
+  if (!db) return;
+  try {
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'seatSelection'), {
+      active: false, start: '', end: '', updatedAt: window._fsServerTimestamp()
+    });
+    document.getElementById('seat-sel-status').textContent = '비활성화됨';
+    document.getElementById('seat-sel-status').style.color = '#888';
+    showAdminToast('자리선택이 비활성화됐습니다');
+  } catch(e) { alert('실패: ' + e.message); }
+};
+
+let randomAssignTimer = null;
+function scheduleRandomAssignment(endDate) {
+  if (randomAssignTimer) clearTimeout(randomAssignTimer);
+  const ms = endDate - new Date();
+  if (ms <= 0) { doRandomAssignment(); return; }
+  randomAssignTimer = setTimeout(doRandomAssignment, ms);
+}
+
+async function doRandomAssignment() {
+  // 자리 없는 학생에게 빈 자리 랜덤 배정
+  const DEFAULT_SEATS_VALUES = Object.values(DEFAULT_SEATS).filter(v => v > 0);
+  const takenSeats = new Set(STUDENTS.filter(s => s.seat && parseInt(s.seat) > 0).map(s => parseInt(s.seat)));
+  const emptySeats = DEFAULT_SEATS_VALUES.filter(v => !takenSeats.has(v));
+  const unassigned = STUDENTS.filter(s => !s.seat || parseInt(s.seat) <= 0);
+
+  // 셔플
+  for (let i = emptySeats.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [emptySeats[i], emptySeats[j]] = [emptySeats[j], emptySeats[i]];
+  }
+
+  for (let i = 0; i < Math.min(unassigned.length, emptySeats.length); i++) {
+    unassigned[i].seat = String(emptySeats[i]);
+    if (window.saveStudentToFirebase) await window.saveStudentToFirebase(unassigned[i]).catch(console.error);
+  }
+
+  // 자리선택 비활성화
+  const db2 = window._adminDb;
+  if (db2) await window._fsSetDoc(window._fsDoc(db2, 'settings', 'seatSelection'), { active: false, start: '', end: '' });
+  buildFloorplan();
+  buildDashboard();
+  showAdminToast(`🎲 ${Math.min(unassigned.length, emptySeats.length)}명 랜덤 배정 완료`);
+}
+
+async function loadSeatSelectionStatus() {
+  try {
+    const db = window._adminDb;
+    if (!db) return;
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
+    if (!snap.exists()) return;
+    const d = snap.data();
+    if (d.start) document.getElementById('seat-sel-start').value = d.start;
+    if (d.end) document.getElementById('seat-sel-end').value = d.end;
+    const statusEl = document.getElementById('seat-sel-status');
+    if (d.active) {
+      statusEl.textContent = '✅ 활성화됨';
+      statusEl.style.color = '#2D7A4F';
+      if (d.end) scheduleRandomAssignment(new Date(d.end));
+    } else {
+      statusEl.textContent = '비활성화됨';
+      statusEl.style.color = '#888';
+    }
+  } catch(e) {}
+}
+
+function loadSettingsTab() {
+  const k = document.getElementById('cfg-key');
+  const s = document.getElementById('cfg-secret');
+  const sn = document.getElementById('cfg-sender');
+  if (k) k.value = SOLAPI_API_KEY;
+  loadSeatSelectionStatus();
+  if (s) s.value = SOLAPI_API_SECRET;
+  if (sn) sn.value = SOLAPI_SENDER;
+}
+window.saveSettingsFromTab = function() {
+  SOLAPI_API_KEY    = document.getElementById('cfg-key').value.trim();
+  SOLAPI_API_SECRET = document.getElementById('cfg-secret').value.trim();
+  SOLAPI_SENDER     = document.getElementById('cfg-sender').value.trim().replace(/-/g,'');
+  localStorage.setItem('solapi_api_key', SOLAPI_API_KEY);
+  localStorage.setItem('solapi_api_secret', SOLAPI_API_SECRET);
+  localStorage.setItem('solapi_sender', SOLAPI_SENDER);
+  const st = document.getElementById('cfg-status');
+  if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
+};
+
+window.setView = function(v,btn){
+  currentView=v;
+  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('hours-table-view').style.display=v==='table'?'block':'none';
+  document.getElementById('hours-chart-view').style.display=v==='chart'?'block':'none';
+  if(v==='chart') buildHoursChart();
+}
+
+window.selectMonth = function(m,el){
+  currentMonth=m;
+  document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  buildHoursTable();
+  if(currentView==='chart') buildHoursChart();
+}
+
+function getHoursChip(h){
+  if(h>=180) return `<span class="hours-chip chip-high">${h}h</span>`;
+  if(h>=120) return `<span class="hours-chip chip-mid">${h}h</span>`;
+  return `<span class="hours-chip chip-low">${h}h</span>`;
+}
+
+function getTrend(s,m){
+  const prev=s.hours[m-1];
+  const cur=s.hours[m];
+  if(!prev) return '<span class="trend-same">—</span>';
+  const diff=cur-prev;
+  if(diff>0) return `<span class="trend-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +${diff}h</span>`;
+  if(diff<0) return `<span class="trend-down"><i class="ti ti-trending-down" aria-hidden="true"></i> ${diff}h</span>`;
+  return '<span class="trend-same">±0</span>';
+}
+
+function buildHoursTable(){
+  const sorted=[...STUDENTS].sort((a,b)=>(b.hours[currentMonth]||0)-(a.hours[currentMonth]||0));
+  const vals=sorted.map(s=>s.hours[currentMonth]||0);
+  const maxH=Math.max(...vals);
+  const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+  const over180=vals.filter(v=>v>=180).length;
+  const under100=vals.filter(v=>v<100).length;
+
+  document.getElementById('hours-summary').innerHTML=`
+    <div class="summary-chip">평균 <span>${avg}시간</span></div>
+    <div class="summary-chip">180h 이상 <span style="color:#C8900A">${over180}명</span></div>
+    <div class="summary-chip">100h 미만 <span style="color:#C62828">${under100}명</span></div>
+    <div class="summary-chip">최고 <span>${maxH}h</span> (${sorted[0].name})</div>
+  `;
+
+  let html=`<thead><tr>
+    <th style="width:32px">순위</th>
+    <th>이름</th><th>좌석</th>
+    <th>${currentMonth}월 누적시간</th>
+    <th style="width:100px">그래프</th>
+    <th>전월 대비</th>
+    <th>3월</th><th>4월</th><th>5월</th><th>6월</th>
+  </tr></thead><tbody>`;
+
+  sorted.forEach((s,i)=>{
+    const h=s.hours[currentMonth]||0;
+    const pct=Math.round(h/maxH*100);
+    const rankClass=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
+    html+=`<tr>
+      <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
+      <td style="font-weight:500">${s.name}</td>
+      <td><span class="seat-badge">${s.seat}</span></td>
+      <td>${getHoursChip(h)}</td>
+      <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
+      <td>${getTrend(s,currentMonth)}</td>
+      ${MONTHS.map(m=>`<td style="font-size:11px;color:var(--color-text-secondary)">${s.hours[m.k]||'—'}</td>`).join('')}
+    </tr>`;
+  });
+  html+='</tbody>';
+  document.getElementById('hours-table').innerHTML=html;
+}
+
+function buildHoursChart(){
+  const sorted=[...STUDENTS].sort((a,b)=>(b.hours[currentMonth]||0)-(a.hours[currentMonth]||0));
+  const maxH=Math.max(...sorted.map(s=>s.hours[currentMonth]||0));
+  const chartH=120;
+  document.getElementById('chart-month-label').textContent=`— ${currentMonth}월`;
+
+  document.getElementById('bar-chart').innerHTML=sorted.map(s=>{
+    const h=s.hours[currentMonth]||0;
+    const barH=Math.round(h/maxH*chartH);
+    const color=h>=180?'#C8900A':h>=120?'#A87008':'#C62828';
+    return `<div class="bar-col">
+      <div class="bar-val">${h}</div>
+      <div class="bar-body" style="height:${barH}px;background:${color}"></div>
+      <div class="bar-label">${s.name.slice(0,2)}</div>
+    </div>`;
+  }).join('');
+
+  const top5=sorted.slice(0,5);
+  const colors=['#C8900A','#A87008','#7A5008','#993556','#534AB7'];
+  document.getElementById('trend-chart').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${top5.map((s,i)=>`
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:11px;width:50px;color:var(--color-text-secondary);flex-shrink:0">${s.name}</span>
+          <div style="flex:1;display:flex;align-items:center;gap:4px">
+            ${MONTHS.map(m=>{
+              const h=s.hours[m.k]||0;
+              const w=Math.round(h/250*100);
+              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
+                <div style="width:100%;height:18px;background:var(--color-background-secondary);border-radius:3px;overflow:hidden">
+                  <div style="height:100%;width:${w}%;background:${colors[i]};border-radius:3px"></div>
+                </div>
+                <span style="font-size:9px;color:var(--color-text-tertiary)">${h}h</span>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>`).join('')}
+      <div style="display:flex;align-items:center;gap:4px;margin-left:58px">
+        ${MONTHS.map(m=>`<div style="flex:1;text-align:center;font-size:10px;color:var(--color-text-tertiary)">${m.label}</div>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function getCellContent(sched, pidx) {
+  if (!sched || sched === '-') return '<span class="cell-empty">—</span>';
+  const p = pidx + PERIOD_OFFSET + 1;
+  const draft = parseScheduleStr(sched);
+  if (draft.absentPeriods.has(p)) {
+    const r = draft.absentReasons[p] || '';
+    return r ? `<span class="cell-absent">x(${r})</span>` : `<span class="cell-absent">x</span>`;
+  }
+  if (draft.periods.has(p)) {
+    if (draft.partials && draft.partials.has(p)) return `<span class="cell-partial">중간입실</span>`;
+    return `<span class="cell-attend">o</span>`;
+  }
+  return '<span class="cell-empty">—</span>';
+}
+
+function buildScheduleTable(day){
+  // 토요일은 1~11교시 전체, 평일은 7~11교시만
+  if(day==='토'){
+    PERIODS=PERIODS_SAT; PERIOD_OFFSET=0;
+  } else {
+    PERIODS=PERIODS_WEEKDAY; PERIOD_OFFSET=6;
+  }
+  const tbl=document.getElementById('schedule-table');
+  let html='<thead><tr><th style="text-align:left;padding-left:12px">좌석</th><th>이름</th>';
+  PERIODS.forEach(p=>{html+=`<th><div class="period-header">${p.n}<br><span style="font-weight:400;opacity:0.8;font-size:9px">${p.t}</span></div></th>`;});
+  html+='</tr></thead><tbody>';
+  [...STUDENTS].sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)).forEach(s=>{
+    html+=`<tr><td class="name-cell" style="padding-left:12px"><span class="seat-badge">${s.seat}</span></td><td>${s.name}</td>`;
+    PERIODS.forEach((_,i)=>{html+=`<td>${getCellContent(s.schedule[day],i)}</td>`;});
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+}
+
+function buildDayTabs(){
+  document.getElementById('day-tabs').innerHTML=DAYS.map(d=>
+    `<div class="day-tab${d===currentDay?' active':''}" onclick="selectDay('${d}',this)">${d}요일</div>`
+  ).join('');
+}
+
+window.selectDay = function(day,el){
+  currentDay=day;
+  document.querySelectorAll('.day-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  buildScheduleTable(day);
+}
+
+function buildMonthTabs(){
+  document.getElementById('month-tabs').innerHTML=MONTHS.map(m=>
+    `<div class="month-tab${m.k===currentMonth?' active':''}" onclick="selectMonth(${m.k},this)">${m.label}</div>`
+  ).join('');
+}
+
+// 현재 시간 기준 교시 번호 계산
+function getCurrentPeriod() {
+  const now = new Date();
+  // 일요일은 교시 없음
+  if (now.getDay() === 0) return null;
+  const h = now.getHours();
+  const m = now.getMinutes();
+  const t = h * 60 + m;
+  // 교시 시간 (시작~종료)
+  const PERIOD_TIMES = [
+    null,            // 0 (dummy)
+    [9*60, 10*60],   // 1교시
+    [10*60+10, 11*60+10], // 2교시
+    [11*60+20, 12*60+30], // 3교시
+    [13*60+30, 14*60+30], // 4교시
+    [14*60+40, 15*60+40], // 5교시
+    [15*60+50, 17*60],    // 6교시
+    [18*60, 18*60+50],    // 7교시
+    [19*60, 20*60+20],    // 8교시
+    [20*60+30, 22*60],    // 9교시
+    [22*60+30, 23*60+50], // 10교시
+    [24*60, 25*60],        // 11교시 (자정 이후)
+  ];
+  for (let p = 1; p <= 11; p++) {
+    const [start, end] = PERIOD_TIMES[p];
+    if (t >= start && t < end) return p;
+  }
+  return null; // 교시 외 시간
+}
+
+// 오늘 입실 현황 팝업
+function showTodayAttendees() {
+  const old = document.getElementById('today-popup-overlay');
+  if (old) { old.remove(); return; }
+  const inStudents = PRESENT.map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
+  const overlay = document.createElement('div');
+  overlay.id = 'today-popup-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(94vw,480px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FFF8DC">
+        <div style="font-size:15px;font-weight:700;color:#5C3D08">현재 입실 중 · <span style="color:#C8900A">${inStudents.length}명</span></div>
+        <button onclick="document.getElementById('today-popup-overlay').remove()"
+          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:14px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        ${inStudents.length === 0
+          ? '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#aaa;font-size:14px">현재 입실 중인 학생이 없습니다</div>'
+          : inStudents.map(s=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px">
+              <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${s.name[0]}</div>
+              <div><div style="font-size:13px;font-weight:600">${s.name}</div><div style="font-size:11px;color:#8B6010">${s.seat}</div></div>
+            </div>`).join('')}
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
+
+// ALERTS 동적 계산: 현재 교시에 출석해야 하는데 PRESENT에 없는 학생
+function calcAlerts() {
+  const p = getCurrentPeriod();
+  if (!p) return []; // 교시 외 시간엔 알림 없음
+
+  const PERIOD_TIMES_LABEL = [
+    '','9:00~10:00','10:10~11:10','11:20~12:30','1:30~2:30',
+    '2:40~3:40','3:50~5:00','6:00~6:50','7:00~8:20',
+    '8:30~10:00','10:30~11:50','12:00~1:00'
+  ];
+
+  const alerts = [];
+  const day = currentDay;
+
+  STUDENTS.forEach(s => {
+    // 이미 입실 중이면 제외
+    if (PRESENT.includes(s.name)) return;
+
+    // 오늘 이 교시에 출석 예정인지 확인
+    const sched = s.schedule[day] || '-';
+    if (sched === '-') return;
+
+    // parseScheduleStr로 교시 상태 파악
+    const draft = parseScheduleStr(sched);
+    if (draft.periods.has(p) && !draft.absentPeriods.has(p)) {
+      // 출석 예정인데 미입실
+      alerts.push({
+        name: s.name,
+        seat: s.seat,
+        period: `${p}교시`,
+        time: PERIOD_TIMES_LABEL[p]
+      });
+    }
+  });
+
+  return alerts;
+}
+
+function buildDashboard(){
+  // ALERTS 동적 계산
+  ALERTS = calcAlerts();
+  // 오늘 등원수 동적 업데이트
+  const todayEl = document.getElementById('stat-today');
+  if (todayEl) todayEl.textContent = PRESENT.length;
+  // 미입실 알림대상 수 동적 업데이트
+  const alertsEl = document.getElementById('stat-alerts');
+  if (alertsEl) alertsEl.textContent = ALERTS.length;
+  // 알림 카드 제목 업데이트
+  const p = getCurrentPeriod();
+  const titleEl = document.getElementById('alert-title-text');
+  if (titleEl) {
+    titleEl.textContent = p
+      ? `미입실 알림 대상 — ${p}교시`
+      : '미입실 알림 대상 (교시 외 시간)';
+  }
+  // 교시 외 시간엔 카드 숨기기
+  const alertCard = document.querySelector('.alert-card');
+  if (alertCard) alertCard.style.display = (ALERTS.length > 0) ? 'block' : 'none';
+  const ROWS = 3;
+  const alertCols = Math.ceil(ALERTS.length / ROWS);
+  // 열별로 분리
+  const cols = Array.from({length: alertCols}, (_,c) =>
+    ALERTS.slice(c * ROWS, c * ROWS + ROWS)
+  );
+  document.getElementById('alert-list').innerHTML=
+    `<div style="display:flex;gap:5px">` +
+    cols.map(col =>
+      `<div style="flex:1;display:flex;flex-direction:column;gap:5px">` +
+      col.map((a,i) => {
+        const gi = ALERTS.indexOf(a);
+        return `<div class="alert-item">
+          <div><span class="alert-name">${a.name}</span> <span class="alert-info">(${a.seat}) ${a.period} ${a.time}</span></div>
+          <button class="send-btn" onclick="sendAbsentAlert(${gi})"><i class="ti ti-send" aria-hidden="true"></i> 발송</button>
+        </div>`;
+      }).join('') +
+      `</div>`
+    ).join('') +
+    `</div>`;
+
+  // 배치도도 갱신 (입실 상태 반영)
+  if (document.getElementById('fp-room') && document.getElementById('sec-floorplan').classList.contains('active')) {
+    buildFloorplan();
+  } else {
+    // 배치도 탭이 아니어도 데이터만 갱신되도록 표시
+    if (typeof buildFloorplan === 'function') setTimeout(buildFloorplan, 0);
+  }
+
+  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+PRESENT.map(name=>{
+    const s=STUDENTS.find(s=>s.name===name);
+    return `<div class="attend-row">
+      <div style="display:flex;align-items:center;gap:5px">
+        <div class="status-dot dot-in"></div>
+        <span style="font-size:12px;font-weight:600;color:#5C3D08">${name}</span>
+      </div>
+      <span style="font-size:11px;font-weight:500;color:#C8900A;white-space:nowrap">${s?.seat||''}</span>
+    </div>`;
+  }).join('')+'</div>';
+
+  // 오늘 요일 기준 교시별 실제 입실 학생 기준 출석현황
+  const todayPeriods = PERIODS_WEEKDAY;
+  // 현재 입실 중인 학생 이름 목록
+  const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
+
+  const periodStudents = todayPeriods.map((p, i) => {
+    const periodNum = p.n;
+    return STUDENTS.filter(s => {
+      // 실제 입실 중인 학생만
+      if (!presentNames.has(s.name)) return false;
+      const sched = s.schedule[currentDay] || '';
+      if (!sched || sched === '-') return false;
+      const parsed = parseScheduleStr(sched);
+      return parsed[periodNum] === 'attend';
+    });
+  });
+
+  const counts = periodStudents.map(arr => arr.length);
+  const max = Math.max(...counts, 1);
+  document.getElementById('period-chart').innerHTML = todayPeriods.map((p, i) =>
+    `<div class="period-row">
+      <span class="period-label">${p.n}</span>
+      <div class="period-bar"><div class="period-fill" style="width:${Math.round(counts[i]/max*100)}%"></div></div>
+      <span class="period-count period-count-btn" onclick="showPeriodStudents(${i})" title="클릭해서 학생 보기">${counts[i]}</span>
+    </div>`
+  ).join('');
+}
+
+function buildStudentList(filter=''){
+  document.getElementById('student-list').innerHTML=[...STUDENTS]
+    .filter(s=>s.name.includes(filter)||s.seat.includes(filter)||(s.phone&&s.phone.replace(/\D/g,'').includes(filter.replace(/\D/g,''))))
+    .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat))
+    .map(s=>{
+      const h=s.hours[currentMonth]||0;
+      const idx=STUDENTS.indexOf(s);
+      const hColor = h>=180?'#27500A':h>=120?'#7A5008':'#A32D2D';
+      const hBg = h>=180?'#E8F5E9':h>=120?'#FFF8DC':'#FCEBEB';
+      return `<div class="student-card" onclick="openScheduleModal(${idx})">
+        <div class="student-avatar" style="font-size:12px;font-weight:800">${s.seat}</div>
+        <div class="student-info" style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
+            <span class="student-name" style="font-size:13px;font-weight:700">${s.name}</span>
+            <span onclick="toggleGender(${idx},event)" style="font-size:13px;cursor:pointer;user-select:none" title="클릭해서 성별 변경">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
+          </div>
+          <div class="student-meta" style="font-size:11px;color:#8B6010;margin-bottom:4px">${s.phone||'전화번호 미등록'}</div>
+          <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
+        </div>
+      </div>`;
+    }).join('');
+}
+
+window.toggleGender = function(idx, e) {
+  e.stopPropagation(); // 카드 클릭(모달 열기) 방지
+  const s = STUDENTS[idx];
+  s.gender = s.gender === 'm' ? 'f' : 'm';
+  buildStudentList(document.getElementById('student-search').value);
+  if (window.saveStudentToFirebase) window.saveStudentToFirebase(s).catch(console.error);
+  if (document.getElementById('fp-room')) buildFloorplan();
+};
+
+function filterStudents(){
+  buildStudentList(document.getElementById('student-search').value);
+}
+
+// ===== 입실·퇴실 =====
+let numpadBuffer = '';
+// 오늘 입퇴실 기록: { studentName, seat, inTime, outTime }
+// 이름 마스킹: 성 + 나머지 O로 (박지윤 → 박OO, 김범수 → 김OO)
+function maskName(name) {
+  if (!name || name.length < 2) return name;
+  return name[0] + 'O'.repeat(name.length - 1);
+}
+const todayRecords = [];
+
+window.numpadInput = function(d) {
+  if (numpadBuffer.length >= 4) return;
+  numpadBuffer += d;
+  updateCheckinDisplay();
+  if (numpadBuffer.length === 4) {
+    setTimeout(processCheckin, 180);
+  }
+}
+
+window.numpadDelete = function() {
+  numpadBuffer = numpadBuffer.slice(0, -1);
+  updateCheckinDisplay();
+  hideCheckinError();
+}
+
+window.numpadClear = function() {
+  numpadBuffer = '';
+  updateCheckinDisplay();
+  hideCheckinError();
+}
+
+function updateCheckinDisplay() {
+  const disp = document.getElementById('checkin-display');
+  let s = numpadBuffer.padEnd(4, '_');
+  disp.textContent = s.split('').join(' ');
+}
+
+function hideCheckinError() {
+  document.getElementById('checkin-error').style.display = 'none';
+}
+
+async function processCheckin() {
+  const last4 = numpadBuffer;
+  // 전화번호 뒷 4자리로 학생 검색 (로컬 먼저)
+  let matched = STUDENTS.filter(s => {
+    if (!s.phone) return false;
+    const digits = s.phone.replace(/\D/g, '');
+    return digits.slice(-4) === last4;
+  });
+
+  // 로컬에 없으면 Firebase students 컬렉션에서 검색
+  if (matched.length === 0 && window._adminDb) {
+    try {
+      const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      const snap = await getDocs(collection(window._adminDb, 'students'));
+      snap.forEach(doc => {
+        const v = doc.data();
+        if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === last4) {
+          const existing = STUDENTS.find(s => s.seat === v.seat);
+          if (!existing) {
+            STUDENTS.push({
+              seat: v.seat, name: v.name,
+              phone: v.phone || '', parent: v.parent || '',
+              schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+              hours: {}  // 누적시간은 이번 달 입퇴실 기록으로만 계산
+            });
+          }
+          matched.push(STUDENTS.find(s => s.seat === v.seat) || STUDENTS[STUDENTS.length-1]);
+        }
+      });
+    } catch(e) { console.error('Firebase 학생 검색 실패:', e); }
+  }
+
+  if (matched.length === 0) {
+    document.getElementById('checkin-error').style.display = 'block';
+    numpadBuffer = '';
+    updateCheckinDisplay();
+    return;
+  }
+
+  const student = matched[0];
+  hideCheckinError();
+
+  // 현재 상태 확인 (입실 중인지 퇴실 상태인지)
+  const existing = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  const isCheckout = !!existing;
+
+  // 확인 패널 표시
+  document.getElementById('checkin-input-panel').style.display = 'none';
+  const confirmPanel = document.getElementById('checkin-confirm-panel');
+  confirmPanel.style.display = 'block';
+
+  document.getElementById('confirm-avatar').textContent = student.name[0];
+  document.getElementById('confirm-name').textContent = maskName(student.name);
+  document.getElementById('confirm-seat').textContent = `${student.seat} · ${student.phone}`;
+
+  const statusEl = document.getElementById('confirm-status');
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+
+  if (isCheckout) {
+    statusEl.textContent = '퇴실 처리';
+    statusEl.className = 'confirm-status status-checkout';
+    document.getElementById('confirm-time').textContent = `입실 시각: ${existing.inTime} → 퇴실: ${timeStr}`;
+    document.getElementById('confirm-ok-btn').textContent = '퇴실 확인';
+    document.getElementById('confirm-ok-btn').className = 'confirm-btn confirm-ok checkout-mode';
+  } else {
+    statusEl.textContent = '입실 처리';
+    statusEl.className = 'confirm-status status-checkin';
+    document.getElementById('confirm-time').textContent = `입실 시각: ${timeStr}`;
+    document.getElementById('confirm-ok-btn').textContent = '입실 확인';
+    document.getElementById('confirm-ok-btn').className = 'confirm-btn confirm-ok';
+  }
+
+  // 확인 버튼에 학생 정보 저장
+  document.getElementById('confirm-ok-btn')._student = student;
+  document.getElementById('confirm-ok-btn')._isCheckout = isCheckout;
+  document.getElementById('confirm-ok-btn')._existingRecord = existing;
+}
+
+window.checkinConfirm = function() {
+  const btn = document.getElementById('confirm-ok-btn');
+  const student = btn._student;
+  const isCheckout = btn._isCheckout;
+  const existing = btn._existingRecord;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+
+  if (isCheckout) {
+    existing.outTime = timeStr;
+    // 퇴실 시 스터디룸에서도 제거
+    [1,2,3].forEach(r => {
+      const i = studyRoomStudents[r].indexOf(student.name);
+      if (i !== -1) studyRoomStudents[r].splice(i, 1);
+    });
+
+    // ── 누적시간 계산 및 저장 ──
+    const parseTime = t => {
+      const [h, m] = t.replace(/[^0-9:]/g,'').split(':').map(Number);
+      return h * 60 + (m || 0);
+    };
+    let inMin  = parseTime(existing.inTime);
+    let outMin = parseTime(timeStr);
+    if (outMin < inMin) outMin += 24 * 60; // 자정 넘긴 경우
+    const diffMin = Math.max(0, outMin - inMin);
+    const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
+
+    const monthKey = new Date().getMonth() + 1; // 1~12
+    if (!student.hours) student.hours = {};
+    student.hours[monthKey] = Math.round(((student.hours[monthKey] || 0) + diffHr) * 10) / 10;
+
+    // Firebase 저장
+    if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
+    buildHoursTable();
+  } else {
+    todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null });
+  }
+
+  // 완료 패널
+  document.getElementById('checkin-confirm-panel').style.display = 'none';
+  const donePanel = document.getElementById('checkin-done-panel');
+  donePanel.style.display = 'block';
+
+  // 입실 시 교시 외 시간이면 스터디룸 배정
+  let assignedRoom = null;
+  let isDuringPeriod = false;
+  if (!isCheckout) {
+    const curPeriod = getCurrentPeriod();
+    if (!curPeriod) {
+      // 쉬는 시간 — 바로 자리로 이동 (스터디룸 배정 없음)
+    } else {
+      // 교시 중 입실 — 1→2→3→1→2→3 순환 배정 (룸당 최대 4명, 총 12명)
+      isDuringPeriod = true;
+      const total = studyRoomStudents[1].length + studyRoomStudents[2].length + studyRoomStudents[3].length;
+      if (!Object.values(studyRoomStudents).flat().includes(student.name)) {
+        if (total < 12) {
+          // 가장 적게 찬 룸부터 순환 (1→2→3 순서 우선)
+          const counts = [studyRoomStudents[1].length, studyRoomStudents[2].length, studyRoomStudents[3].length];
+          const minCount = Math.min(...counts);
+          for (let r = 1; r <= 3; r++) {
+            if (studyRoomStudents[r].length === minCount && studyRoomStudents[r].length < 4) {
+              studyRoomStudents[r].push(student.name);
+              assignedRoom = r;
+              break;
+            }
+          }
+        } else {
+          // 12명 초과 — 경고 카드 표시
+          showStudyroomOverflowAlert(student.name, student.seat);
+        }
+      }
+    }
+  }
+
+  let doneMsg = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
+  let doneIcon = isCheckout ? '👋' : '✅';
+  if (assignedRoom && isDuringPeriod) {
+    doneMsg = `스터디룸 ${assignedRoom}번에서 공부를 하다가 쉬는 시간에 좌석으로 이동해 주세요`;
+    doneIcon = '📚';
+  } else if (assignedRoom) {
+    doneMsg = `📚 ${assignedRoom}번 스터디룸에서 대기하세요`;
+    doneIcon = '📚';
+  }
+
+  document.getElementById('done-icon').textContent = doneIcon;
+  document.getElementById('done-name').textContent = maskName(student.name);
+  document.getElementById('done-msg').textContent = doneMsg;
+  document.getElementById('done-time').textContent = timeStr;
+
+  // PRESENT 업데이트
+  if (isCheckout) {
+    const idx = PRESENT.indexOf(student.name);
+    if (idx !== -1) PRESENT.splice(idx, 1);
+  } else {
+    if (!PRESENT.includes(student.name)) PRESENT.push(student.name);
+  }
+
+  // Firebase에 입퇴실 기록 저장
+  saveCheckinToFirebase(student, isCheckout, timeStr);
+
+  // 📱 학부모 자동 문자 발송
+  sendCheckinSMS(student, isCheckout, timeStr);
+
+  buildCheckinTodayList();
+  buildDashboard();
+  if (document.getElementById('fp-room')) buildFloorplan();
+
+  // 🚪 자동문 열기 (3초 후 자동 닫힘)
+  if (window.doorOpenTimed) window.doorOpenTimed(3);
+
+  setTimeout(() => {
+    checkinReset();
+  }, isDuringPeriod && assignedRoom ? 6000 : 2200);
+}
+
+// ── 학부모 자동 문자 발송 ──
+async function sendCheckinSMS(student, isCheckout, timeStr) {
+  const parentPhone = student.parent || '';
+  if (!parentPhone) {
+    return;
+  }
+  const type = isCheckout ? 'out' : 'in';
+  const typeLabel = isCheckout ? '퇴실' : '입실';
+  const today = new Date().toLocaleDateString('ko-KR', {month:'long', day:'numeric', weekday:'short'});
+  const text = isCheckout
+    ? `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 퇴실하였습니다.`
+    : `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 입실하였습니다.`;
+
+  try {
+    const result = await solapiSend(parentPhone, text);
+    const success = result === true;
+    saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(result), time: timeStr });
+    if (success) console.log(`[SMS] ✅ ${student.name} ${typeLabel} 문자 발송 성공`);
+    else showAdminToast(`⚠️ ${student.name} 학부모 문자 실패`);
+  } catch(e) {
+    saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
+    console.error('[SMS] 발송 오류:', e);
+  }
+}
+
+// Firebase에 입퇴실 기록 저장
+async function saveCheckinToFirebase(student, isCheckout, timeStr) {
+  try {
+    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const logId = `${today}_${student.seat}_${timeStr.replace(':','')}`;
+    // Firebase가 준비될 때까지 대기
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    await setDoc(doc(db, 'checkin_logs', logId), {
+      studentName: student.name,
+      seat: student.seat,
+      type: isCheckout ? 'out' : 'in',
+      time: timeStr,
+      date: today,
+      createdAt: serverTimestamp()
+    });
+
+  } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
+}
+
+window.checkinReset = function() {
+  numpadBuffer = '';
+  updateCheckinDisplay();
+  hideCheckinError();
+  document.getElementById('checkin-confirm-panel').style.display = 'none';
+  document.getElementById('checkin-done-panel').style.display = 'none';
+  document.getElementById('checkin-input-panel').style.display = 'block';
+}
+
+function buildCheckinTodayList() {
+  const listEl = document.getElementById('checkin-today-list');
+  const inCount = todayRecords.filter(r => !r.outTime).length;
+  document.getElementById('checkin-today-count').textContent = `현재 ${inCount}명 입실 중`;
+
+  if (todayRecords.length === 0) {
+    listEl.innerHTML = '<div style="text-align:center;color:var(--color-text-tertiary);font-size:12px;padding:12px">아직 입실 기록이 없습니다</div>';
+    return;
+  }
+
+  listEl.innerHTML = [...todayRecords].reverse().map(r => {
+    const isIn = !r.outTime;
+    return `<div class="checkin-today-item">
+      <div class="ci-dot ${isIn ? 'ci-in' : 'ci-out'}"></div>
+      <span style="font-weight:500">${maskName(r.studentName)}</span>
+      <span style="color:var(--color-text-secondary)">${r.seat}</span>
+      ${isIn
+        ? `<span style="font-size:11px;background:#FFF8DC;color:#27500A;border-radius:10px;padding:1px 7px">입실 중</span>`
+        : `<span style="font-size:11px;color:var(--color-text-tertiary)">퇴실</span>`}
+      <span class="ci-time">${r.inTime}${r.outTime ? ' → ' + r.outTime : ''}</span>
+    </div>`;
+  }).join('');
+}
+
+// ===== 배치도 =====
+let _fpDragDist = 0;
+//
+// 그리드 10행 × 9열:
+//  C1: 관리자석 63→54 (r1~r10)
+//  C2: 1번(r2),2번(r3),3번(r4),4번(r5)
+//  C3: 스터디룸1(r2~r5 span), 스터디룸2(r6~r7 span), 스터디룸3(r8~r9 span)
+//  C4: 9번(r1),8번(r2),7번(r3),6번(r4),5번(r5) | 45번(r7),36번(r8),35번(r9)
+//  C5: (r1~r6 빈칸) | 44번(r7),37번(r8),34번(r9)
+//  C6: 10번(r1),11번(r2),12번(r3),13번(r4),14번(r5) | 43번(r7),38번(r8),33번(r9)
+//  C7: 19번(r1),18번(r2),17번(r3),16번(r4),15번(r5) | 42번(r7),39번(r8),32번(r9)
+//  C8: 20번(r1),21번(r2),22번(r3),23번(r4),24번(r5),25번(r6) | 41번(r7),40번(r8),31번(r9)
+//  C9: 26번(r6),27번(r7),28번(r8),30번(r9) | 29번(r9)→C10
+
+function getFpStudentBySeat(seatNum) {
+  return STUDENTS.find(s => parseInt(s.seat) === seatNum) || null;
+}
+
+function getFpStatus(student) {
+  if (!student) return 'vacant';
+  const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  if (rec) return 'in';
+  const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
+  if (recOut) return 'out';
+  return 'registered';
+}
+
+function calcDday(expiry) {
+  if (!expiry) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(expiry); exp.setHours(0,0,0,0);
+  return Math.ceil((exp - today) / 86400000);
+}
+
+function buildSeatCard(seatNum) {
+  const student = getFpStudentBySeat(seatNum);
+  const status = getFpStatus(student);
+
+  if (!student) {
+    // 공석
+    const onclick = `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
+    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px">
+      <div style="font-size:10px;color:#bbb;font-weight:500">${seatNum}번</div>
+      <div style="font-size:10px;color:#ccc">공석</div>
+    </div>`;
+  }
+
+  // 만료일 D-day
+  const dday = calcDday(student.expiry);
+  const expiryStr = student.expiry ? student.expiry.replace(/^\d{2}(\d{2})-(\d{2})-(\d{2})$/, '$1/$2/$3') : '';
+  let badgeBg, badgeColor;
+  if (status === 'in') { badgeBg = '#2D7A4F'; badgeColor = '#fff'; }
+  else if (dday !== null && dday <= 7) { badgeBg = '#E07000'; badgeColor = '#fff'; }
+  else { badgeBg = '#9CA3AF'; badgeColor = '#fff'; }
+
+  const ddayLabel = dday !== null ? ` D${dday >= 0 ? '-' : '+'}${Math.abs(dday)}` : '';
+  const genderIcon = student.gender === 'm' ? '<span style="color:#4A90D9;font-size:10px">♂</span>' : '<span style="color:#E05C8A;font-size:10px">♀</span>';
+
+  // 스터디룸 대기 여부
+  const inStudyRoom = studyRoomStudents && Object.values(studyRoomStudents).some(arr => arr.includes(student.name));
+
+  const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
+
+  let cardBorder, cardBg;
+  if (status === 'in') { cardBorder = '#2D7A4F'; cardBg = '#F0FFF4'; }
+  else if (inStudyRoom) { cardBorder = '#C8900A'; cardBg = '#FFF8DC'; }
+  else { cardBorder = '#D1D5DB'; cardBg = '#fff'; }
+
+  const onclick = `onclick="if(!fpEditMode)fpSeatClick(${seatNum})"`;
+
+  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0;height:100%;box-sizing:border-box">
+    <!-- 상단 배지 -->
+    <div style="background:${badgeBg};padding:2px 5px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:9px;color:${badgeColor};font-weight:600">고정석${expiryStr ? ' '+expiryStr : ''}</span>
+      <span style="font-size:9px;color:${badgeColor};font-weight:700">${ddayLabel}</span>
+    </div>
+    <!-- 이름/번호 -->
+    <div style="padding:4px 6px 3px;flex:1;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:9px;color:#9CA3AF;margin-bottom:1px">${seatNum}번</div>
+      <div style="display:flex;align-items:center;gap:3px">
+        <span style="font-size:12px;font-weight:700;color:#1F2937">${student.name}</span>
+        ${genderIcon}
+      </div>
+      <div style="font-size:9px;margin-top:2px;color:${status==='in'?'#2D7A4F':inStudyRoom?'#C8900A':'#9CA3AF'}">
+        ${status==='in' ? `● 입실 ${rec?.inTime||''}` : inStudyRoom ? '📚 스터디룸 대기' : '미입실'}
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildAdminCard(num, name) {
+  return `<div class="fp-seat fp-admin">
+    <div class="fp-seat-num">${num}번 관리</div>
+    <div class="fp-seat-name" style="font-size:11px;color:#7A5008">${name||''}</div>
+  </div>`;
+}
+
+function G(r, c, html) {
+  return `<div style="grid-row:${r};grid-column:${c}">${html}</div>`;
+}
+function GS(r, c, rs, cs, html) {
+  return `<div style="grid-row:${r}/span ${rs};grid-column:${c}/span ${cs}">${html}</div>`;
+}
+function studio(label) {
+  const m = label.match(/(\d+)/);
+  const roomNum = m ? parseInt(m[1]) : 0;
+  const students = (studyRoomStudents && studyRoomStudents[roomNum]) || [];
+  const studentHtml = students.length > 0
+    ? students.map(n => `<div style="font-size:9px;background:#FFF8DC;color:#7A5008;border-radius:4px;padding:1px 5px;margin-top:2px;font-weight:600">${n}</div>`).join('')
+    : `<div style="font-size:9px;color:#ccc;margin-top:2px">비어있음</div>`;
+  return `<div class="fp-studio" style="height:100%;min-height:0;flex-direction:column;align-items:flex-start;padding:6px 8px">
+    <div class="fp-studio-label" style="font-size:11px">🚪 ${label}</div>
+    ${studentHtml}
+  </div>`;
+}
+
+function buildFloorplan() {
+  const el = document.getElementById('fp-room');
+
+  // 고정 칸 정의 (admin=관리자석만 고정)
+  const FIXED = {
+    'r1_c1':{type:'admin',n:63,name:'관리조교'},
+    'r2_c1':{type:'admin',n:62,name:''},
+    'r3_c1':{type:'admin',n:61,name:''},
+    'r4_c1':{type:'admin',n:60,name:''},
+    'r5_c1':{type:'admin',n:59,name:''},
+    'r6_c1':{type:'admin',n:58,name:''},
+    'r7_c1':{type:'admin',n:57,name:'이지은'},
+    'r8_c1':{type:'admin',n:56,name:'남궁준'},
+    'r9_c1':{type:'admin',n:55,name:'이우영'},
+    'r10_c1':{type:'admin',n:54,name:'정원혁'},
+  };
+
+  // 확정 배치 (사용자 위치수정 반영)
+  const DEFAULT_SEATS = {
+    'r1_c5':9,
+    'r1_c7':10,
+    'r1_c8':19,
+    'r1_c10':20,
+    'r2_c2':-1,
+    'r2_c3':0,
+    'r2_c4':1,
+    'r2_c5':8,
+    'r2_c7':11,
+    'r2_c8':18,
+    'r2_c10':21,
+    'r3_c2':0,
+    'r3_c4':2,
+    'r3_c5':7,
+    'r3_c7':12,
+    'r3_c8':17,
+    'r3_c10':22,
+    'r4_c2':0,
+    'r4_c3':0,
+    'r4_c4':3,
+    'r4_c5':6,
+    'r4_c7':13,
+    'r4_c8':16,
+    'r4_c10':23,
+    'r5_c2':-2,
+    'r5_c3':0,
+    'r5_c4':4,
+    'r5_c5':5,
+    'r5_c7':14,
+    'r5_c8':15,
+    'r5_c10':24,
+    'r6_c10':25,
+    'r7_c10':26,
+    'r8_c2':-3,
+    'r8_c3':0,
+    'r8_c4':45,
+    'r8_c5':44,
+    'r8_c6':43,
+    'r8_c7':42,
+    'r8_c8':41,
+    'r8_c9':0,
+    'r8_c10':27,
+    'r9_c4':36,
+    'r9_c5':37,
+    'r9_c6':38,
+    'r9_c7':39,
+    'r9_c8':40,
+    'r9_c9':0,
+    'r9_c10':28,
+    'r10_c7':0,
+    'r10_c8':0,
+    'r10_c10':29,
+    'r11_c4':35,
+    'r11_c5':34,
+    'r11_c6':33,
+    'r11_c7':32,
+    'r11_c8':31,
+    'r11_c9':30,
+  };
+
+  const layout = {...DEFAULT_SEATS};
+  const ROWS = 11, COLS = 10;
+
+  // 스터디룸 span 추적 (2행×1열이므로 아래 1칸 건너뜀)
+  const studioSpan = {};
+
+  // 그리드 CSS: C4는 복도(18px 고정)
+  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
+  let html = `<style>
+    #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
+    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
+    .fp-cell-admin { background:#FFF8DC; border:1px solid #E0B020; }
+    .fp-cell-studio { background:#F5F0FF; border:1px dashed #C4A4E0; align-items:center; justify-content:center; }
+    .fp-cell-in { background:#DCFCE7; border:1.5px solid #4ADE80; }
+    .fp-cell-out { background:#F9FAFB; border:1px solid #D1D5DB; }
+    .fp-cell-absent { background:#F9FAFB; border:1px solid #D1D5DB; }
+    .fp-cell-vacant { background:transparent; border:none; }
+    .fp-cell-vacant-seat { background:#F9FAFB; border:1px solid #E5E7EB; }
+    .fp-cell-empty-edit { background:#FAFAFA; border:1.5px dashed #E0E0E0; cursor:pointer; }
+    .fp-cell-edit { cursor:pointer; }
+    .fp-cell-selected { outline:3px solid #C8900A !important; outline-offset:-2px; }
+    .fp-num { font-size:9px; color:#9CA3AF; line-height:1; }
+    .fp-name { font-size:12px; font-weight:700; color:#1F2937; line-height:1.3; margin-top:1px; }
+    .fp-badge { font-size:9px; font-weight:600; padding:1px 4px; border-radius:3px; margin-top:2px; display:inline-block; }
+    .fp-badge-in { background:#16A34A; color:#fff; }
+    .fp-badge-out { background:#9CA3AF; color:#fff; }
+    .fp-badge-absent { background:#F3F4F6; color:#9CA3AF; }
+    .fp-dday { font-size:9px; color:#E07000; font-weight:600; }
+    .fp-gender-f { color:#E05C8A; }
+    .fp-gender-m { color:#4A90D9; }
+  </style>
+  <div id="fp-grid">`;
+
+  for (let r = 1; r <= ROWS; r++) {
+    for (let c = 1; c <= COLS; c++) {
+      const key = `r${r}_c${c}`;
+      // 스터디룸 2×2 병합으로 덮인 칸은 건너뜀
+      if (studioSpan[key]) continue;
+
+      const fixed = FIXED[key];
+      const isSelected = fpSelectedSlot && fpSelectedSlot.key === key;
+      const selClass = isSelected ? ' fp-cell-selected' : '';
+
+      if (fixed) {
+        if (fixed.type === 'admin') {
+          // 관리자석
+          const adminSt = STUDENTS.find(s => parseInt(s.seat) === fixed.n) || null;
+          const rec = adminSt ? todayRecords.find(r2 => r2.studentName === adminSt.name && !r2.outTime) : null;
+          const dday = adminSt?.expiry ? calcDday(adminSt.expiry) : null;
+          const ddayHtml = dday !== null ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '';
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c}">
+            <div class="fp-num">${fixed.n}번 관리</div>
+            <div class="fp-name" style="color:#7A5008;font-size:11px">${fixed.name||''}</div>
+            ${ddayHtml}
+          </div>`;
+        }
+      } else {
+        const seatNum = layout[key] || 0;
+        if (seatNum < 0) {
+          // 스터디룸 (-1,-2,-3) — 2행×2열 병합
+          const roomNum = Math.abs(seatNum);
+          // 나머지 1칸 studioSpan에 등록 (2행×1열)
+          studioSpan[`r${r+1}_c${c}`] = true;
+          const waiting = (studyRoomStudents[roomNum]||[]);
+          const cols = ['#7C3AED','#9F5AE0','#C084FC'];
+          const waitHtml = waiting.length
+            ? waiting.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
+            : `<div style="font-size:10px;color:#C4A4E0;margin-top:4px">비어있음</div>`;
+          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : '';
+          html += `<div class="fp-cell fp-cell-studio${fpEditMode?' fp-cell-edit':''}${selClass}"
+            style="grid-row:${r}/span 2;grid-column:${c};flex-direction:column;align-items:flex-start;padding:8px 10px"
+            data-slot-key="${key}" ${editAttr}>
+            <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${roomNum}</div>
+            ${waitHtml}
+          </div>`;
+        } else if (seatNum > 0) {
+          const student = getFpStudentBySeat(seatNum);
+          const status = getFpStatus(student);
+          const rec = student ? todayRecords.find(r2 => r2.studentName === student.name && !r2.outTime) : null;
+          const dday = student?.expiry ? calcDday(student.expiry) : null;
+          const ddayStr = dday !== null ? (dday <= 7 ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '') : '';
+          const genderIcon = student?.gender === 'm'
+            ? '<span class="fp-gender-m">♂</span>'
+            : student ? '<span class="fp-gender-f">♀</span>' : '';
+
+          let cellCls, badgeCls, badgeText;
+          if (!student) {
+            cellCls = 'fp-cell-vacant-seat'; badgeCls = ''; badgeText = '';
+          } else if (status === 'in') {
+            cellCls = 'fp-cell-in'; badgeCls = 'fp-badge-in'; badgeText = `●입실 ${rec?.inTime||''}`;
+          } else if (status === 'out') {
+            cellCls = 'fp-cell-out'; badgeCls = 'fp-badge-out'; badgeText = '퇴실';
+          } else {
+            cellCls = 'fp-cell-absent'; badgeCls = 'fp-badge-absent'; badgeText = '미입실';
+          }
+
+          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
+          const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
+
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <span class="fp-num">${seatNum}번</span>
+              ${genderIcon}
+            </div>
+            <div class="fp-name">${student ? student.name : '<span style="color:#D1D5DB">공석</span>'}</div>
+            <div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap">
+              ${badgeText ? `<span class="fp-badge ${badgeCls}">${badgeText}</span>` : ''}
+              ${ddayStr}
+            </div>
+          </div>`;
+        } else {
+          // 빈 칸
+          if (fpEditMode) {
+            html += `<div class="fp-cell fp-cell-empty-edit${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" onclick="fpSlotClick('${key}',0)">
+              <div style="color:#E0E0E0;font-size:10px;text-align:center;width:100%">＋</div>
+            </div>`;
+          } else {
+            html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
+          }
+        }
+      }
+    }
+  }
+
+  html += '</div>';
+  el.innerHTML = html;
+  buildFpSidePanel();
+}
+
+// ===== 위치수정 모드// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
+const fpEditMode = false; // 위치수정 모드 비활성화
+
+// 좌석 배치 순서 저장: { slot_key: seatNum } 예) "r1_c4": 9
+// slot_key = "r{row}_c{col}"
+const fpGridLayout = {}; // 배치 확정 — 저장값 미사용
+
+function saveFpGridLayout() {
+  try { localStorage.setItem('saebom_fp_grid_layout', JSON.stringify(fpGridLayout)); } catch(e) {}
+}
+
+let fpSelectedSlot = null;
+
+window.toggleFpEditMode = function() {
+  fpEditMode = !fpEditMode;
+  fpSelectedSlot = null;
+  const btn = document.getElementById('fp-edit-btn');
+  if (fpEditMode) {
+    btn.className = 'fp-edit-btn active';
+    btn.innerHTML = '<i class="ti ti-check" style="font-size:13px"></i> 저장';
+    showAdminToast('💡 이동할 좌석 클릭 → 목적지 클릭으로 위치를 바꿔주세요');
+  } else {
+    saveFpGridLayout();
+    btn.className = 'fp-edit-btn';
+    btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정';
+    showFpSaveToast();
+  }
+  buildFloorplan();
+};
+
+window.fpSlotClick = function(key, seatNum) {
+  if (!fpEditMode) return;
+  // seatNum: 양수=좌석, 0=빈칸
+  if (fpSelectedSlot === null) {
+    fpSelectedSlot = { key, seatNum };
+    buildFloorplan(); // 선택 강조 반영
+  } else {
+    if (fpSelectedSlot.key === key) {
+      // 같은 칸 다시 클릭 → 취소
+      fpSelectedSlot = null;
+      buildFloorplan();
+      return;
+    }
+    // 두 칸 교환 (빈칸=0, 스터디룸=음수도 교환 가능)
+    fpGridLayout[fpSelectedSlot.key] = seatNum;
+    fpGridLayout[key] = fpSelectedSlot.seatNum;
+    fpSelectedSlot = null;
+    buildFloorplan();
+  }
+};
+
+window.resetFpPositions = function() {
+  if (!confirm('배치도 위치를 초기 상태로 되돌릴까요?')) return;
+  fpGridLayout = {};
+  localStorage.removeItem('saebom_fp_grid_layout');
+  localStorage.removeItem('saebom_fp_positions');
+  fpEditMode = false;
+  const btn = document.getElementById('fp-edit-btn');
+  if (btn) { btn.className = 'fp-edit-btn'; btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정'; }
+  buildFloorplan();
+  showAdminToast('✅ 배치도가 초기 위치로 돌아왔습니다');
+};
+
+
+function showFpSaveToast() {
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:toastIn 0.2s ease';
+  toast.textContent = '✅ 배치도 위치가 저장됐습니다 (새로고침 후에도 유지)';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
+}
+
+// ── 배치도 사이드패널 ──
+function buildFpSidePanel() {
+  const listEl = document.getElementById('fp-side-list');
+  const countEl = document.getElementById('fp-side-count');
+  if (!listEl) return;
+
+  // 전체 학생 (입실중 → 미입실 순)
+  const sorted = [...STUDENTS]
+    .filter(s => s.seat && parseInt(s.seat) > 0)
+    .sort((a, b) => {
+      const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
+      const bIn = todayRecords.some(r => r.studentName === b.name && !r.outTime);
+      if (aIn && !bIn) return -1;
+      if (!aIn && bIn) return 1;
+      return parseInt(a.seat) - parseInt(b.seat);
+    });
+
+  const inCount = sorted.filter(s => todayRecords.some(r => r.studentName === s.name && !r.outTime)).length;
+  if (countEl) countEl.textContent = `${inCount}명 입실중`;
+
+  listEl.innerHTML = sorted.map(s => {
+    const isIn = todayRecords.some(r => r.studentName === s.name && !r.outTime);
+    const rec = todayRecords.find(r => r.studentName === s.name && !r.outTime);
+    const genderIcon = s.gender === 'm'
+      ? '<span style="color:#4A90D9;font-size:11px">♂</span>'
+      : '<span style="color:#E05C8A;font-size:11px">♀</span>';
+
+    // 만료일 D-day
+    let expiryStr = '';
+    if (s.expiry) {
+      const today = new Date(); today.setHours(0,0,0,0);
+      const exp = new Date(s.expiry);
+      const diff = Math.round((exp - today) / 86400000);
+      expiryStr = diff >= 0
+        ? `<span style="font-size:10px;color:#888">📅 ${s.expiry.replace(/-/g,'.')} (D-${diff})</span>`
+        : `<span style="font-size:10px;color:#C62828">📅 만료</span>`;
+    }
+
+    return `<div
+      class="fp-side-card-drag"
+      data-student-name="${s.name}"
+      data-student-seat="${s.seat}"
+      draggable="true"
+      onclick="fpSeatClick(${parseInt(s.seat)})"
+      onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
+      style="background:${isIn ? '#FFFBEA' : '#F9FAFB'};border:1.5px solid ${isIn ? '#E0B020' : '#E5E7EB'};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative">
+      <div style="position:absolute;top:7px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${isIn ? '#C8900A' : '#9CA3AF'};color:#fff">${isIn ? '이용중' : '미입실'}</span>
+        </div>
+        <span style="font-size:10px;color:#6B7280;margin-right:14px">${s.seat}번</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+        <span style="font-size:13px;font-weight:700;color:#1F2937">${s.name}</span>
+        ${genderIcon}
+      </div>
+      ${expiryStr ? `<div style="margin-top:2px">${expiryStr}</div>` : ''}
+      ${isIn && rec ? `<div style="font-size:10px;color:#C8900A;margin-top:2px">⏱ ${rec.inTime} 입실</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // 드래그 이벤트 바인딩
+  setTimeout(bindSideCardDragEvents, 0);
+}
+
+
+// ══════════════════════════════════════════════════════
+// ── 학생카드 → 배치도 드래그&드롭 좌석 변경 ──
+// ══════════════════════════════════════════════════════
+let _dragStudentName = null;
+let _dragFromSeat = null;
+
+function bindSideCardDragEvents() {
+  document.querySelectorAll('.fp-side-card-drag').forEach(card => {
+    // 새 이벤트 중복 방지
+    if (card._dragBound) return;
+    card._dragBound = true;
+    card.addEventListener('dragstart', e => {
+      _dragStudentName = card.dataset.studentName;
+      _dragFromSeat = card.dataset.studentSeat;
+      e.dataTransfer.setData('text/plain', _dragStudentName);
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => {
+        card.classList.add('dragging-card');
+        activateSeatDropTargets();
+      }, 0);
+      const hint = document.getElementById('fp-side-drag-hint');
+      if (hint) hint.classList.add('visible');
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging-card');
+      deactivateSeatDropTargets();
+      _dragStudentName = null;
+      _dragFromSeat = null;
+      const hint = document.getElementById('fp-side-drag-hint');
+      if (hint) hint.classList.remove('visible');
+    });
+  });
+}
+
+function activateSeatDropTargets() {
+  const grid = document.getElementById('fp-grid');
+  if (!grid) return;
+  grid.querySelectorAll('[data-seat-num]').forEach(cell => {
+    cell.classList.add('fp-cell-drop-ready');
+    cell.addEventListener('dragover',  _onCellDragOver,  {passive:false});
+    cell.addEventListener('dragenter', _onCellDragEnter);
+    cell.addEventListener('dragleave', _onCellDragLeave);
+    cell.addEventListener('drop',      _onCellDrop);
+  });
+}
+
+function deactivateSeatDropTargets() {
+  const grid = document.getElementById('fp-grid');
+  if (!grid) return;
+  grid.querySelectorAll('[data-seat-num]').forEach(cell => {
+    cell.classList.remove('fp-cell-drop-ready','fp-cell-drop-hover');
+    cell.removeEventListener('dragover',  _onCellDragOver);
+    cell.removeEventListener('dragenter', _onCellDragEnter);
+    cell.removeEventListener('dragleave', _onCellDragLeave);
+    cell.removeEventListener('drop',      _onCellDrop);
+  });
+}
+
+function _onCellDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect='move'; }
+function _onCellDragEnter(e) { e.preventDefault(); this.classList.add('fp-cell-drop-hover'); }
+function _onCellDragLeave(e) { if (!this.contains(e.relatedTarget)) this.classList.remove('fp-cell-drop-hover'); }
+
+async function _onCellDrop(e) {
+  e.preventDefault();
+  this.classList.remove('fp-cell-drop-hover');
+  deactivateSeatDropTargets();
+
+  if (!_dragStudentName || !_dragFromSeat) return;
+
+  const targetSeat = this.dataset.seatNum;
+  if (!targetSeat || parseInt(targetSeat) <= 0) { showAdminToast('💡 유효하지 않은 좌석입니다'); return; }
+
+  const targetSeatStr = String(targetSeat);
+  const studentName   = _dragStudentName;
+  const fromSeat      = _dragFromSeat;
+
+  if (targetSeatStr === fromSeat) { showAdminToast('💡 같은 좌석입니다'); return; }
+
+  const occupant = STUDENTS.find(s => s.seat === targetSeatStr);
+  let confirmMsg = `${studentName} 학생을\n${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경할까요?`;
+  if (occupant) confirmMsg += `\n\n⚠️ ${targetSeatStr}번의 "${occupant.name}" 학생과 자리가 교환됩니다.`;
+  if (!confirm(confirmMsg)) return;
+
+  await _executeSeatChange(studentName, fromSeat, targetSeatStr, occupant);
+}
+
+async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
+  try {
+    showAdminToast('⏳ 좌석 변경 중...');
+    const student = STUDENTS.find(s => s.name === studentName);
+    if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
+
+    if (occupant) {
+      // 두 학생 교환: occupant → oldSeat
+      await _saveSeatDoc({...occupant, seat: oldSeat}, newSeat);
+      const oi = STUDENTS.findIndex(s => s.name === occupant.name);
+      if (oi !== -1) STUDENTS[oi].seat = oldSeat;
+      todayRecords.forEach(r => { if (r.studentName === occupant.name) r.seat = oldSeat; });
+    } else {
+      // 기존 문서 삭제
+      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', oldSeat)); } catch(e){}
+      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'schedules', oldSeat)); } catch(e){}
+    }
+
+    // 드래그한 학생 → newSeat
+    await _saveSeatDoc({...student, seat: newSeat}, oldSeat);
+    const si = STUDENTS.findIndex(s => s.name === studentName);
+    if (si !== -1) STUDENTS[si].seat = newSeat;
+    todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
+
+    STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
+    buildFloorplan();
+    buildStudentList(document.getElementById('student-search')?.value || '');
+    buildDashboard();
+
+    const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
+    showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
+  } catch(err) {
+    console.error('좌석 변경 실패:', err);
+    showAdminToast('❌ 좌석 변경 중 오류: ' + err.message);
+  }
+}
+
+async function _saveSeatDoc(student, oldDocId) {
+  const db = window._adminDb;
+  const ns = student.seat;
+  await window._fsSetDoc(window._fsDoc(db, 'students', ns), {
+    seat: ns, name: student.name,
+    phone: student.phone||'', parent: student.parent||'',
+    gender: student.gender||'f', expiry: student.expiry||'',
+    월: student.schedule?.['월']||'-', 화: student.schedule?.['화']||'-',
+    수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
+    금: student.schedule?.['금']||'-', 토: student.schedule?.['토']||'-',
+    hours: student.hours||{}, updatedAt: window._fsServerTimestamp()
+  });
+  // schedules 이동
+  try {
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', oldDocId));
+    if (snap.exists()) {
+      await window._fsSetDoc(window._fsDoc(db, 'schedules', ns), {
+        ...snap.data(), seat: ns, name: student.name,
+        updatedAt: window._fsServerTimestamp()
+      });
+    }
+  } catch(e) {}
+  // 구 문서 삭제
+  if (oldDocId && oldDocId !== ns) {
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'students', oldDocId)); } catch(e){}
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'schedules', oldDocId)); } catch(e){}
+  }
+}
+
+// ──────────────────────────────────────────────────────
+function fpSeatClick(seatNum) {
+  if (fpEditMode) return; // 수정 모드 중엔 정보창 안 띄움
+  const student = getFpStudentBySeat(seatNum);
+  if (!student) return;
+  // 학생 정보 간단 팝업 (alert 대신 대시보드 정보로)
+  const rec = todayRecords.find(r => r.studentName === student.name);
+  const isIn = rec && !rec.outTime;
+  const isOut = rec && rec.outTime;
+  const statusText = isIn ? `입실 중 (${rec.inTime}~)` : isOut ? `퇴실 (${rec.inTime} → ${rec.outTime})` : '오늘 미입실';
+  const statusColor = isIn ? '#C8900A' : isOut ? '#7A5008' : '#9CA3AF';
+  showFpPopup(student.name, student.seat, student.phone||'번호 미등록', student.parent||'번호 미등록', statusText, statusColor, isIn);
+}
+
+function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
+  const oldOv = document.getElementById('fp-popup-overlay');
+  if (oldOv) oldOv.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'fp-popup-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:#fff;border-radius:16px;padding:20px 22px;box-shadow:0 8px 40px rgba(0,0,0,0.3);min-width:260px';
+  const checkoutBtn = isIn
+    ? `<button onclick="adminForceCheckout('${name}');document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:10px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">퇴실 처리</button>`
+    : '';
+  popup.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+      <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">${name[0]}</div>
+      <div>
+        <div style="font-size:15px;font-weight:700;color:#1F2937">${name}</div>
+        <div style="font-size:11px;color:#6B7280">${seat}</div>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+      <div style="font-size:12px;color:#374151">학생: <b>${phone}</b></div>
+      <div style="font-size:12px;color:#374151">학부모: <b>${parent}</b></div>
+    </div>
+    <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#FFF8DC':'#F3F4F6'};border-radius:8px">${status}</div>
+    ${checkoutBtn}
+    <button onclick="document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer">닫기</button>
+  `;
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (!popup.contains(e.target)) overlay.remove(); });
+}
+
+function initFpDrag() {
+  const wrap = document.getElementById('fp-drag-wrap');
+  const room = document.getElementById('fp-room');
+  let isDragging = false;
+  let startX, startY, scrollLeft, scrollTop;
+  // 드래그로 이동한 거리 (클릭과 드래그 구분)
+  let dragDist = 0;
+
+  // 드래그 방식: transform translate로 fp-room 이동
+  let posX = 0, posY = 0;
+
+  function clamp(val, min, max) { return Math.max(min, Math.min(max, val)); }
+
+  function getBounds() {
+    const ww = wrap.offsetWidth;
+    const wh = wrap.offsetHeight;
+    const rw = room.offsetWidth;
+    const rh = room.offsetHeight;
+    // 배치도가 wrap보다 크면 패닝 허용, 작으면 중앙 고정
+    const extraX = Math.max(0, rw - ww + 24);
+    const extraY = Math.max(0, rh - wh + 24);
+    return { minX: -extraX, minY: -extraY, maxX: extraX, maxY: extraY };
+  }
+
+  function applyPos(x, y) {
+    const b = getBounds();
+    posX = clamp(x, b.minX, b.maxX);
+    posY = clamp(y, b.minY, b.maxY);
+    room.style.transform = `translate(${posX}px, ${posY}px)`;
+  }
+
+  wrap.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    isDragging = true;
+    dragDist = 0;
+    startX = e.clientX;
+    startY = e.clientY;
+    scrollLeft = posX;
+    scrollTop = posY;
+    wrap.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    const dx = e.clientX - startX;
+    const dy = e.clientY - startY;
+    dragDist = Math.sqrt(dx*dx + dy*dy);
+    _fpDragDist = dragDist;
+    applyPos(scrollLeft + dx, scrollTop + dy);
+  });
+
+  window.addEventListener('mouseup', e => {
+    if (!isDragging) return;
+    isDragging = false;
+    wrap.classList.remove('dragging');
+    if (dragDist > 5) {
+      window._fpLastDragged = true;
+      setTimeout(() => {  }, 500);
+    }
+    setTimeout(() => { _fpDragDist = 0; }, 50);
+  });
+
+  // 터치 지원
+  wrap.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    isDragging = true;
+    dragDist = 0;
+    startX = t.clientX;
+    startY = t.clientY;
+    scrollLeft = posX;
+    scrollTop = posY;
+  }, {passive: true});
+
+  wrap.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const t = e.touches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    dragDist = Math.sqrt(dx*dx + dy*dy);
+    applyPos(scrollLeft + dx, scrollTop + dy);
+    if (dragDist > 5) e.preventDefault();
+  }, {passive: false});
+
+  wrap.addEventListener('touchend', () => {
+    if (dragDist > 8) {
+      window._fpLastDragged = true;
+      setTimeout(() => { window._fpLastDragged = false; }, 700);
+    }
+    isDragging = false;
+  });
+
+  // 배치도 탭 열릴 때 초기 위치 중앙으로
+  document.querySelector('[onclick*="floorplan"]').addEventListener('click', () => {
+    setTimeout(() => {
+      posX = 0; posY = 0;
+      room.style.transform = 'translate(0px, 0px)';
+    }, 50);
+  });
+}
+
+// ===== 스케줄 편집 모달 =====
+let _schedEditIdx = -1;
+// 편집 중인 임시 스케줄: { 월: {periods: Set, absent: bool, absentReason: str}, ... }
+let _schedDraft = {};
+
+const ALL_PERIODS_SAT = [1,2,3,4,5,6,7,8,9,10,11];
+const ALL_PERIODS_WEEK = [7,8,9,10,11];
+
+function openScheduleModal(idx) {
+  _schedEditIdx = idx;
+  const s = STUDENTS[idx];
+  _schedDraft = {};
+
+  // 현재 스케줄 파싱해서 draft 초기화
+  DAYS.forEach(day => {
+    _schedDraft[day] = parseScheduleStr(s.schedule[day] || '');
+  });
+
+  document.getElementById('sched-modal-name').textContent = s.name;
+  document.getElementById('sched-modal-seat').textContent = s.seat;
+  document.getElementById('edit-phone').value = s.phone || '';
+  document.getElementById('edit-parent').value = s.parent || '';
+  setEditGender(s.gender || 'f');
+  renderScheduleModal();
+  const ov = document.getElementById('schedule-modal-overlay');
+  ov.style.display = 'flex';
+}
+
+window.setEditGender = function(g) {
+  window._editGender = g;
+  const fBtn = document.getElementById('edit-gender-f');
+  const mBtn = document.getElementById('edit-gender-m');
+  if (!fBtn || !mBtn) return;
+  fBtn.style.background = g === 'f' ? '#FFF8DC' : 'var(--color-background-primary)';
+  fBtn.style.color = g === 'f' ? '#C8900A' : '#888';
+  mBtn.style.background = g === 'm' ? '#E8F0FF' : 'var(--color-background-primary)';
+  mBtn.style.color = g === 'm' ? '#1a5fcc' : '#888';
+};
+
+window.closeScheduleModal = function() {
+  document.getElementById('schedule-modal-overlay').style.display = 'none';
+  document.getElementById('absent-reason-popup')?.remove();
+  _schedEditIdx = -1;
+  _schedDraft = {};
+}
+
+// 스케줄 문자열 → draft 객체
+// 저장 형식: "7,8,x(영어),10,11" — 교시순서로 출석/결석 혼합
+// 구버전 형식: "x(수학학원),7~9,10" — x(사유)가 전체 결석 prefix
+window.parseScheduleStr =
+function parseScheduleStr(str) {
+  const empty = { absent: false, absentReason: '', periods: new Set(), partials: new Set(), absentPeriods: new Set(), absentReasons: {} };
+  if (!str || str === '-') return empty;
+
+  const periods = new Set();
+  const partials = new Set();
+  const absentPeriods = new Set();
+  const absentReasons = {};
+
+  // 쉼표로 토큰 분리
+  const tokens = str.split(',').map(t => t.trim()).filter(Boolean);
+
+  // 저장 순서에서 결석 교시 인덱스를 추적
+  // 새 형식: x(사유) 토큰이 교시 인덱스에 해당
+  // 유효 교시 목록을 순서대로 추출 (x포함, 숫자포함)
+  let periodIdx = 6; // 평일 기본 7교시부터 시작 (인덱스 추적용)
+
+  // 먼저 구버전 형식 체크: x(사유)로 시작하고 뒤에 숫자 범위
+  // 예: "x(수학학원)7~9,10" 또는 "x(수학학원),7,8,9,10"
+  const legacyMatch = str.match(/^x\(([^)]*)\)(.*)/);
+  const isLegacy = legacyMatch && (tokens[0] === 'x' || tokens[0].match(/^x\([^)]*\)$/));
+
+  if (isLegacy) {
+    // 구버전: x(사유)가 전체에 적용, 뒤의 숫자는 출석
+    const reason = legacyMatch ? legacyMatch[1] : '';
+    tokens.forEach(token => {
+      if (token.startsWith('x')) return; // x(사유) 스킵
+      const rangeM = token.match(/^(\d+)~(\d+)$/);
+      if (rangeM) {
+        for (let i = Number(rangeM[1]); i <= Number(rangeM[2]); i++) periods.add(i);
+        return;
+      }
+      const num = Number(token);
+      if (!isNaN(num) && num >= 1 && num <= 11) periods.add(num);
+    });
+    // 출석이 아닌 교시 = 결석
+    [7,8,9,10,11].forEach(n => {
+      if (!periods.has(n)) { absentPeriods.add(n); if(reason) absentReasons[n] = reason; }
+    });
+  } else {
+    // 새 형식: draftToStr가 validPeriods 순서대로 저장
+    // "7,x(사유),9,x(사유2),11" → 토큰 i번째 = validPeriods[i]번째 교시
+    // 토요일 여부: 첫 숫자 토큰이 1~6이면 토요일
+    const firstNum = tokens.find(t => /^\d+$/.test(t));
+    const hasSatPeriod = firstNum && Number(firstNum) >= 1 && Number(firstNum) <= 6;
+    const validList = hasSatPeriod ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+
+    tokens.forEach((token, i) => {
+      const p = validList[i];
+      if (p === undefined) return;
+      const absentM = token.match(/^x\(([^)]*)\)$/i);
+      if (absentM) {
+        absentPeriods.add(p);
+        if (absentM[1]) absentReasons[p] = absentM[1];
+        return;
+      }
+      if (token === 'x') {
+        absentPeriods.add(p);
+        return;
+      }
+      // 숫자 토큰 — 해당 교시 출석
+      const num = Number(token);
+      if (!isNaN(num) && num >= 1 && num <= 11) periods.add(num);
+    });
+  }
+
+  const absent = absentPeriods.size > 0;
+  return { absent, absentReason: '', periods, partials, absentPeriods, absentReasons };
+}
+
+// draft → 스케줄 문자열
+function draftToStr(draft, isSat) {
+  if (!draft) return '-';
+  if (!draft.absentPeriods) draft.absentPeriods = new Set();
+  if (!draft.absentReasons) draft.absentReasons = {};
+  if (draft.periods.size === 0 && draft.absentPeriods.size === 0) return '-';
+
+  // 토요일은 1~11, 평일은 7~11만 출력
+  const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+  const parts = [];
+  for (const p of validPeriods) {
+    if (draft.absentPeriods.has(p)) {
+      const reason = draft.absentReasons[p] || '';
+      parts.push(reason ? 'x(' + reason + ')' : 'x');
+    } else if (draft.periods.has(p)) {
+      parts.push(String(p));
+    }
+  }
+  return parts.length ? parts.join(',') : '-';
+}
+
+function renderScheduleModal() {
+  const body = document.getElementById('sched-modal-body');
+
+  let html = `<div class="sched-legend">
+    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FFF8DC;border:0.5px solid #A5D6A7"></div>출석</div>
+    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FCEBEB;border:0.5px solid #F09595"></div>결석</div>
+    <div class="sched-legend-item" style="font-size:11px;color:var(--color-text-tertiary)">교시 클릭: 출석↔결석 토글 / 우클릭: 공란</div>
+  </div>`;
+
+  DAYS.forEach(day => {
+    const isSat = day === '토';
+    const availPeriods = isSat ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK;
+    const draft = _schedDraft[day];
+
+    html += `<div class="sched-day-row">
+      <div class="sched-day-label${isSat?' sat':''}">${day}요일</div>
+      <div>
+        <div class="sched-periods">`;
+
+    availPeriods.forEach(p => {
+      let cls = 'sched-period-btn';
+      let label = `${p}교시`;
+      if (draft.absentPeriods && draft.absentPeriods.has(p)) {
+        cls += ' absent';
+      } else if (draft.periods.has(p)) {
+        cls += draft.partials && draft.partials.has(p) ? ' partial' : ' on';
+      }
+      html += `<button class="${cls}"
+        onclick="togglePeriod('${day}',${p})"
+        oncontextmenu="clearPeriod('${day}',${p},event)"
+        ontouchstart="startLongPress('${day}',${p},event)"
+        ontouchend="cancelLongPress()"
+        ontouchmove="cancelLongPress()"
+        title="${p}교시">${label}</button>`;
+    });
+
+    html += `</div>`;
+
+    // 결석사유는 우클릭 팝업으로 입력 (교시별 개별 처리)
+    if (draft.absentPeriods && draft.absentPeriods.size > 0) {
+      const reasons = [...draft.absentPeriods].map(p => {
+        const r = draft.absentReasons && draft.absentReasons[p];
+        return `<span style="font-size:10px;color:#C62828;background:#FCEBEB;padding:2px 6px;border-radius:4px">${p}교시${r?': '+r:''}</span>`;
+      }).join(' ');
+      html += `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${reasons}</div>`;
+    }
+
+    html += `</div></div>`;
+  });
+
+  body.innerHTML = html;
+}
+
+function togglePeriod(day, p) {
+  // 클릭: 공란 ↔ 출석 토글
+  const draft = _schedDraft[day];
+  if (!draft.absentPeriods) draft.absentPeriods = new Set();
+  if (!draft.absentReasons) draft.absentReasons = {};
+
+  if (draft.periods.has(p)) {
+    // 출석 → 공란
+    draft.periods.delete(p);
+    if (draft.partials) draft.partials.delete(p);
+  } else if (draft.absentPeriods.has(p)) {
+    // 결석 → 공란
+    draft.absentPeriods.delete(p);
+    delete draft.absentReasons[p];
+    if (draft.absentPeriods.size === 0) draft.absent = false;
+  } else {
+    // 공란 → 출석
+    draft.periods.add(p);
+  }
+  renderScheduleModal();
+}
+
+function clearPeriod(day, p, e) {
+  // 우클릭: 출석→결석(사유팝업), 결석→공란
+  e.preventDefault();
+  const draft = _schedDraft[day];
+  if (!draft.absentPeriods) draft.absentPeriods = new Set();
+  if (!draft.absentReasons) draft.absentReasons = {};
+
+  if (!draft.absentPeriods.has(p)) {
+    // 출석 또는 공란 → 결석 (사유팝업)
+    draft.periods.delete(p);
+    if (draft.partials) draft.partials.delete(p);
+    draft.absentPeriods.add(p);
+    draft.absent = true;
+    renderScheduleModal();
+    showAbsentReasonPopup(day, p, e);
+  } else if (draft.absentPeriods.has(p)) {
+    // 결석 → 공란
+    draft.absentPeriods.delete(p);
+    delete draft.absentReasons[p];
+    if (draft.absentPeriods.size === 0) draft.absent = false;
+    renderScheduleModal();
+  }
+}
+
+function showAbsentReasonPopup(day, p, e) {
+  const old = document.getElementById('absent-reason-popup');
+  if (old) old.remove();
+  const popup = document.createElement('div');
+  popup.id = 'absent-reason-popup';
+  const x = Math.min(e.clientX, window.innerWidth - 230);
+  const y = Math.min(e.clientY, window.innerHeight - 130);
+  popup.style.cssText = 'position:fixed;z-index:99999;background:#fff;border:1.5px solid #E0B020;border-radius:12px;padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,0.18);min-width:210px;top:' + y + 'px;left:' + x + 'px';
+  const cur = (_schedDraft[day].absentReasons && _schedDraft[day].absentReasons[p]) || '';
+  popup.innerHTML = `<div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:6px">${p}교시 결석 사유</div>
+    <input id="absent-reason-input" type="text" placeholder="예: 수학학원" value="${cur}"
+      style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;outline:none;box-sizing:border-box">
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button onclick="document.getElementById('absent-reason-popup').remove()" style="flex:1;padding:6px;background:#f5f5f5;border:none;border-radius:7px;font-size:12px;cursor:pointer">건너뛰기</button>
+      <button onclick="saveAbsentReason('${day}',${p})" style="flex:1;padding:6px;background:#C8900A;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">확인</button>
+    </div>`;
+  document.body.appendChild(popup);
+  setTimeout(() => { const inp = document.getElementById('absent-reason-input'); if(inp){inp.focus();inp.select();} }, 50);
+  popup.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') saveAbsentReason(day, p);
+    if (ev.key === 'Escape') popup.remove();
+  });
+}
+
+window.saveAbsentReason = function(day, p) {
+  const inp = document.getElementById('absent-reason-input');
+  const reason = inp ? inp.value.trim() : '';
+  if (!_schedDraft[day].absentReasons) _schedDraft[day].absentReasons = {};
+  _schedDraft[day].absentReasons[p] = reason;
+  document.getElementById('absent-reason-popup')?.remove();
+  renderScheduleModal();
+};
+
+function updateAbsentReason(day, val) {
+  _schedDraft[day].absentReason = val;
+}
+
+function saveSchedule() {
+  if (_schedEditIdx < 0) return;
+  const s = STUDENTS[_schedEditIdx];
+
+  // 전화번호 저장
+  const newPhone  = document.getElementById('edit-phone').value.trim();
+  const newParent = document.getElementById('edit-parent').value.trim();
+  if (newPhone  !== undefined) s.phone  = newPhone;
+  if (newParent !== undefined) s.parent = newParent;
+  s.gender = window._editGender || s.gender || 'f';
+
+  DAYS.forEach(day => {
+    s.schedule[day] = draftToStr(_schedDraft[day], day === '토');
+  });
+
+  closeScheduleModal();
+  buildStudentList(document.getElementById('student-search').value);
+  buildScheduleTable(currentDay);
+  // Firebase에 저장
+  saveScheduleToFirebase(s).catch(console.error);
+
+  // 저장 토스트
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)';
+  toast.textContent = `✅ ${s.name} 정보가 저장됐습니다`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2000);
+}
+
+// ===== 교시별 학생 팝업 =====
+function showPeriodStudents(periodIdx) {
+  const old = document.getElementById('period-popup-overlay');
+  if (old) old.remove();
+
+  const periodNum = PERIODS_WEEKDAY[periodIdx]?.n || (periodIdx + 7);
+  const p = PERIODS_WEEKDAY[periodIdx];
+
+  // 실제 입실 중인 학생 중 해당 교시 출석 예정인 학생
+  const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
+  const students = STUDENTS.filter(s => {
+    if (!presentNames.has(s.name)) return false;
+    const sched = s.schedule[currentDay] || '';
+    if (!sched || sched === '-') return false;
+    const parsed = parseScheduleStr(sched);
+    return parsed[periodNum] === 'attend';
+  });
+
+  // 오버레이 없이 팝업만 화면 중앙에 고정
+  const overlay = document.createElement('div');
+  overlay.id = 'period-popup-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:transparent;z-index:9998;pointer-events:none;display:flex;align-items:center;justify-content:center';
+
+  const rows = students.length === 0
+    ? `<div style="grid-column:1/-1;padding:32px;text-align:center;color:var(--color-text-tertiary);font-size:14px">해당 교시 출석 학생 없음</div>`
+    : students.map(s => `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-background-secondary);border-radius:10px">
+          <div style="width:34px;height:34px;border-radius:50%;background:#FFF8DC;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#C8900A;flex-shrink:0">${s.name[0]}</div>
+          <div style="min-width:0">
+            <div style="font-size:13px;font-weight:600;white-space:nowrap">${s.name}</div>
+            <div style="font-size:11px;color:var(--color-text-secondary)">${s.seat}</div>
+          </div>
+        </div>`).join('');
+
+  overlay.innerHTML = `
+    <div style="
+      background:#ffffff;
+      border-radius:16px;
+      width:min(94vw,560px);
+      max-height:82vh;
+      display:flex;flex-direction:column;
+      box-shadow:0 8px 40px rgba(0,0,0,0.18);
+      border:0.5px solid var(--color-border-tertiary);
+      overflow:hidden;
+      pointer-events:all;
+    ">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid var(--color-border-tertiary);flex-shrink:0">
+        <div>
+          <div style="font-size:15px;font-weight:700">${p.n} 출석 학생</div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${p.t} · 총 <b style="color:#C8900A">${students.length}명</b></div>
+        </div>
+        <button onclick="document.getElementById('period-popup-overlay').remove()"
+          style="background:var(--color-background-secondary);border:none;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:14px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${rows}
+      </div>
+    </div>`;
+
+  document.body.appendChild(overlay);
+
+  // ESC 키로 닫기
+  function onEsc(e) { if (e.key === 'Escape') { overlay.remove(); document.removeEventListener('keydown', onEsc); } }
+  document.addEventListener('keydown', onEsc);
+}
+
+// ── 대시보드 1분마다 자동 갱신 (교시 변경 반영) ──
+setInterval(() => {
+  if (document.getElementById('sec-dashboard').classList.contains('active')) {
+    buildDashboard();
+  }
+}, 60000);
+
+// ── 모바일 롱프레스 결석 처리 ──
+let _longPressTimer = null;
+window.startLongPress = function(day, p, e) {
+  _longPressTimer = setTimeout(() => {
+    const fakeEvent = { clientX: e.touches[0].clientX, clientY: e.touches[0].clientY, preventDefault: ()=>{} };
+    const draft = _schedDraft[day];
+    if (!draft) return;
+    if (!draft.absentPeriods) draft.absentPeriods = new Set();
+    if (!draft.absentReasons) draft.absentReasons = {};
+    draft.periods.delete(p);
+    draft.absentPeriods.add(p);
+    draft.absent = true;
+    renderScheduleModal();
+    showAbsentReasonPopup(day, p, fakeEvent);
+  }, 600);
+};
+window.cancelLongPress = function() {
+  if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
+};
+
+// ── 공지사항 관리 함수 ──
+async function loadNoticesAdmin() {
+  if (!window._adminDb) return;
+  try {
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const snap = await getDoc(doc(window._adminDb, 'notices', 'list'));
+    const items = snap.exists() && snap.data().items ? snap.data().items : [];
+    const el = document.getElementById('notice-list-admin');
+    if (!el) return;
+    if (items.length === 0) {
+      el.innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:8px">등록된 공지 없음</div>';
+      return;
+    }
+    el.innerHTML = items.map((n, i) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border:1px solid #E0B020;border-radius:10px">
+        <div style="min-width:0">
+          <span style="font-size:10px;font-weight:700;color:#C8900A;margin-right:6px">${n.badgeLabel||n.badge}</span>
+          <span style="font-size:12px;font-weight:600">${n.title}</span>
+          <div style="font-size:11px;color:#aaa;margin-top:2px">${n.date||''}</div>
+        </div>
+        <button onclick="deleteNotice(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">삭제</button>
+      </div>`).join('');
+    window._adminNotices = items;
+  } catch(e) { console.error('공지 로드 실패:', e); }
+}
+
+window.publishNotice = async function() {
+  const badge = document.getElementById('notice-badge-sel').value;
+  const badgeLabel = badge === 'important' ? '중요' : badge === 'general' ? '공지' : '이벤트';
+  const title = document.getElementById('notice-title-inp').value.trim();
+  const body = document.getElementById('notice-body-inp').value.trim();
+  if (!title || !body) { showAdminToast('⚠️ 제목과 내용을 입력하세요'); return; }
+  if (!window._adminDb) { showAdminToast('⚠️ Firebase 연결 필요'); return; }
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const today = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'.').replace('.','');
+    const newNotice = { id: Date.now(), badge, badgeLabel, title, preview: body.slice(0,40), body, date: today };
+    const items = [...(window._adminNotices || []), newNotice];
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
+    
+    document.getElementById('notice-title-inp').value = '';
+    document.getElementById('notice-body-inp').value = '';
+    showAdminToast('✅ 공지사항이 발행됐습니다');
+    loadNoticesAdmin();
+  } catch(e) { console.error('공지 발행 실패:', e); showAdminToast('❌ 발행 실패: ' + e.message); }
+};
+
+window.deleteNotice = async function(i) {
+  if (!window._adminDb) return;
+  if (!confirm('이 공지를 삭제할까요?')) return;
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const items = (window._adminNotices || []).filter((_,idx) => idx !== i);
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
+    window._adminNotices = items;
+    showAdminToast('✅ 공지가 삭제됐습니다');
+    loadNoticesAdmin();
+  } catch(e) { console.error('공지 삭제 실패:', e); }
+};
+
+function showAdminToast(msg) {
+  const t = document.getElementById('admin-toast');
+  if (t) { t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+}
+
+window.initApp = function(){
+  window.STUDENTS = STUDENTS;
+  window.currentDay = currentDay;
+  window.buildScheduleTable = buildScheduleTable;
+  window.buildStudentList = buildStudentList;
+  const now=new Date();
+  const dn=['일','월','화','수','목','금','토'];
+  document.getElementById('today-label').textContent=`${now.getMonth()+1}월 ${now.getDate()}일 (${dn[now.getDay()]})`;
+  buildDashboard();
+  buildDayTabs();
+  buildScheduleTable(currentDay);
+  buildMonthTabs();
+  buildHoursTable();
+  buildStudentList();
+  buildCheckinTodayList();
+  buildFloorplan();
+  initFpDrag();
+  // 새로고침 후 탭 복원
+  try {
+    const saved = sessionStorage.getItem('saebom_active_tab');
+    if (saved && saved !== 'dashboard') {
+      const btn = document.querySelector('.tab-btn[onclick*="' + saved + '"]');
+      if (btn) showSection(saved, btn);
+    }
+  } catch(e) {}
+};
+window.initApp();
+
+// ── 대기 모드 후 재연결 처리 ──
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) return;
+  // 화면이 다시 보일 때 Firebase 재연결 및 데이터 갱신
+  if (window.loadStudentsFromFirebase) window.loadStudentsFromFirebase();
+  buildDashboard();
+  if (document.getElementById('fp-room')) buildFloorplan();
+});
+
+// ── 스케줄 알림 버튼 함수 ──
+window.applyStudentSchedule = function(seat, idx) {
+  const alerts = window._scheduleAlerts;
+  if (!alerts || !alerts[idx]) return;
+  const a = alerts[idx];
+  const student = STUDENTS.find(s => s.seat === seat);
+  if (!student) return;
+  a.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
+  if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
+  buildScheduleTable(currentDay);
+  buildStudentList(document.getElementById('student-search')?.value || '');
+  a.applied = true;
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+  showAdminToast(`✅ ${student.name} 스케줄 적용 완료`);
+};
+
+window.dismissAlert = function(idx) {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  alerts.splice(idx, 1);
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+};
+
+window.clearAllScheduleAlerts = function() {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  alerts.length = 0;
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+};
+
+</script>
+
+<!-- Firebase 실시간 연동 -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
+  from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
+  authDomain: "saebom-studyhall.firebaseapp.com",
+  projectId: "saebom-studyhall",
+  storageBucket: "saebom-studyhall.firebasestorage.app",
+  messagingSenderId: "273169263882",
+  appId: "1:273169263882:web:cb3c2abe45f76602d99ef3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getFirestore(app);
+window._adminDb = db; // 전역 노출 (다른 스크립트에서 접근 가능)
+window._fsSetDoc = setDoc;
+window._fsDoc = doc;
+window._fsGetDoc = getDoc;
+window._fsServerTimestamp = serverTimestamp;
+window._fsCollection = collection;
+window._fsDeleteDoc = deleteDoc;
+
+// ── Firebase students 컬렉션에 학생 저장 ──
+async function saveStudentToFirebase(student) {
+  const docRef = doc(db, 'students', student.seat);
+  await setDoc(docRef, {
+    seat: student.seat,
+    name: student.name,
+    phone: student.phone || '',
+    parent: student.parent || '',
+    gender: student.gender || 'f',
+    expiry: student.expiry || '',
+    월: student.schedule['월'] || '-',
+    화: student.schedule['화'] || '-',
+    수: student.schedule['수'] || '-',
+    목: student.schedule['목'] || '-',
+    금: student.schedule['금'] || '-',
+    토: student.schedule['토'] || '-',
+    hours: student.hours || {},
+    updatedAt: serverTimestamp()
+  });
+}
+
+// ── Firebase에서 학생 삭제 ──
+async function deleteStudentFromFirebase(seat) {
+  try {
+    await deleteDoc(doc(db, 'students', seat));
+    await deleteDoc(doc(db, 'schedules', seat));
+  } catch(e) { console.error('삭제 실패:', e); }
+}
+
+// ── 앱 시작 시 Firebase에서 학생 데이터 로드 ──
+async function loadStudentsFromFirebase() {
+  try {
+    const snap = await getDocs(collection(db, 'students'));
+    if (snap.empty) {
+      // 최초 1회: 현재 STUDENTS 배열을 Firebase에 업로드
+      for (const s of STUDENTS) { await saveStudentToFirebase(s); }
+    } else {
+      STUDENTS.length = 0;
+      snap.forEach(d => {
+        const v = d.data();
+        if (!v.name) return; // 빈 자리 문서 제외
+        STUDENTS.push({
+          seat: v.seat, name: v.name,
+          phone: v.phone || '', parent: v.parent || '',
+          gender: v.gender || 'f',
+          expiry: v.expiry || '',
+          schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+          hours: v.hours || {}
+        });
+      });
+      STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
+    }
+  } catch(e) {
+    console.error('Firebase 로드 실패, 로컬 데이터 사용:', e);
+  }
+  if (window.initApp) window.initApp();
+
+  // ── students 컬렉션 실시간 감시 (자리선택 등 변경 즉시 반영) ──
+  onSnapshot(collection(db, 'students'), (snap) => {
+    let changed = false;
+    snap.docChanges().forEach(change => {
+      const v = change.doc.data();
+      if (change.type === 'removed') {
+        const idx = STUDENTS.findIndex(s => s.seat === change.doc.id);
+        if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
+        return;
+      }
+      if (!v.name) {
+        // 빈 자리로 바뀐 경우 해당 학생 seat 비우기
+        const s = STUDENTS.find(s => s.seat === change.doc.id);
+        if (s) { s.seat = ''; changed = true; }
+        return;
+      }
+      const idx = STUDENTS.findIndex(s => s.seat === v.seat);
+      const updated = {
+        seat: v.seat, name: v.name,
+        phone: v.phone || '', parent: v.parent || '',
+        gender: v.gender || 'f', expiry: v.expiry || '',
+        schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+        hours: v.hours || {}
+      };
+      if (idx !== -1) {
+        // 좌석이 바뀐 경우 (이름은 같은데 seat 키가 다른 경우) 처리
+        const nameIdx = STUDENTS.findIndex(s => s.name === v.name && s.seat !== v.seat);
+        if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
+        STUDENTS[idx] = updated;
+      } else {
+        // 새 자리에 배정된 경우
+        const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
+        if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
+        STUDENTS.push(updated);
+      }
+      changed = true;
+    });
+
+    if (changed) {
+      STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
+      if (document.getElementById('fp-room')) buildFloorplan();
+      buildStudentList(document.getElementById('student-search')?.value || '');
+      buildDashboard();
+    }
+  });
+}
+
+// Firebase 전역 함수 노출
+window.saveStudentToFirebase = saveStudentToFirebase;
+window.deleteStudentFromFirebase = deleteStudentFromFirebase;
+window.loadStudentsFromFirebase = loadStudentsFromFirebase;
+
+// 앱 시작
+loadStudentsFromFirebase();
+
+// ── 스터디룸 신청 실시간 감시 ──
+const _studyroomReqAlerts = [];
+const _knownStudyroomReqs = {};
+
+onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
+  let changed = false;
+  snapshot.docChanges().forEach(change => {
+    if (change.type === 'removed') {
+      delete _knownStudyroomReqs[change.doc.id];
+      const idx = _studyroomReqAlerts.findIndex(a => a.id === change.doc.id);
+      if (idx !== -1) { _studyroomReqAlerts.splice(idx, 1); changed = true; }
+      return;
+    }
+    const data = { id: change.doc.id, ...change.doc.data() };
+    if (change.type === 'added' && _knownStudyroomReqs[data.id] === undefined) {
+      _knownStudyroomReqs[data.id] = data;
+      if (data.status === 'pending') { _studyroomReqAlerts.unshift(data); changed = true; }
+      return;
+    }
+    _knownStudyroomReqs[data.id] = data;
+    const existIdx = _studyroomReqAlerts.findIndex(a => a.id === data.id);
+    if (existIdx !== -1) { _studyroomReqAlerts[existIdx] = data; changed = true; }
+    else if (data.status === 'pending') { _studyroomReqAlerts.unshift(data); changed = true; }
+    else changed = true;
+  });
+  if (changed) renderStudyroomAlerts();
+});
+
+function renderStudyroomAlerts() {
+  const section = document.getElementById('studyroom-req-section');
+  const list = document.getElementById('studyroom-req-list');
+  if (!section || !list) return;
+  section.style.display = _studyroomReqAlerts.length ? 'block' : 'none';
+  list.innerHTML = _studyroomReqAlerts.map(a => {
+    const statusBadge = a.status === 'approved'
+      ? '<span style="background:#2D7A4F;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">✅ 승인됨</span>'
+      : a.status === 'rejected'
+      ? '<span style="background:#C62828;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">❌ 거절됨</span>'
+      : '<span style="background:#E0B020;color:#fff;font-size:10px;padding:2px 7px;border-radius:10px">⏳ 대기중</span>';
+    const actionBtns = a.status === 'pending' ? `
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button onclick="window.approveStudyroomReq('${a.id}')" style="flex:1;padding:7px;background:#2D7A4F;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ 승인</button>
+        <button onclick="window.rejectStudyroomReq('${a.id}')" style="flex:1;padding:7px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">❌ 거절</button>
+      </div>` : `<button onclick="window.removeStudyroomAlert('${a.id}')" style="margin-top:6px;padding:4px 10px;background:none;border:1px solid #ddd;border-radius:6px;font-size:11px;color:#888;cursor:pointer">닫기</button>`;
+    return `<div style="background:#FAF5FF;border:1.5px solid #C084FC;border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <div style="width:34px;height:34px;border-radius:10px;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">${(a.name||'?')[0]}</div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${a.name} <span style="color:#888;font-weight:400">${a.seat}번</span></div>
+          <div style="font-size:11px;color:#7C3AED;font-weight:600">${a.period}교시 · 스터디룸 ${a.room}번 신청</div>
+        </div>
+        ${statusBadge}
+      </div>
+      ${a.reason ? `<div style="font-size:12px;color:#555;background:#F3E8FF;border-radius:6px;padding:6px 10px;margin-bottom:4px">📝 ${a.reason}</div>` : ''}
+      ${actionBtns}
+    </div>`;
+  }).join('');
+}
+
+window.approveStudyroomReq = async function(id) {
+  try { await setDoc(doc(db,'studyroom_requests',id),{status:'approved'},{merge:true}); showAdminToast('✅ 스터디룸 신청 승인됨'); }
+  catch(e) { alert('실패: '+e.message); }
+};
+window.rejectStudyroomReq = async function(id) {
+  try { await setDoc(doc(db,'studyroom_requests',id),{status:'rejected'},{merge:true}); showAdminToast('❌ 스터디룸 신청 거절됨'); }
+  catch(e) { alert('실패: '+e.message); }
+};
+window.removeStudyroomAlert = function(id) {
+  const idx = _studyroomReqAlerts.findIndex(a=>a.id===id);
+  if (idx!==-1) { _studyroomReqAlerts.splice(idx,1); renderStudyroomAlerts(); }
+};
+window.clearAllStudyroomAlerts = function() {
+  _studyroomReqAlerts.length=0; renderStudyroomAlerts();
+};
+
+
+  // 대화 스레드별로 그룹핑 (학생 이름 기준)
+  const threads = {};
+  msgs.forEach(m => {
+    const key = m.from === '조교' ? m.to : m.from;
+    if (!threads[key]) threads[key] = [];
+    threads[key].push(m);
+  });
+  let html = '';
+  Object.entries(threads).forEach(([student, thread]) => {
+    html += `<div style="border:1px solid #eee;border-radius:12px;overflow:hidden">
+      <div style="background:#FFF8DC;padding:10px 14px;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-weight:700;color:#5C3D08;font-size:13px">👤 ${student}</span>
+        <button onclick="openReplyBar('${student}')" style="background:#C8900A;color:#fff;border:none;border-radius:8px;padding:4px 12px;font-size:12px;cursor:pointer">답장</button>
+      </div>
+      <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">`;
+    thread.forEach(m => {
+      const isAdmin = m.from === '조교';
+      const time = m.createdAt ? new Date(m.createdAt.seconds * 1000).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '';
+      html += `<div style="display:flex;flex-direction:column;align-items:${isAdmin ? 'flex-end' : 'flex-start'}">
+        <div style="font-size:10px;color:#aaa;margin-bottom:2px">${isAdmin ? '조교 · ' : ''}${time}</div>
+        <div style="max-width:85%;padding:8px 12px;border-radius:${isAdmin ? '12px 4px 12px 12px' : '4px 12px 12px 12px'};
+          background:${isAdmin ? '#C8900A' : '#F3F4F6'};color:${isAdmin ? '#fff' : '#1F2937'};
+          font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all">${m.text}</div>
+      </div>`;
+    });
+    html += '</div></div>';
+  });
+  listEl.innerHTML = html;
+}
+
+
+// ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
+// 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
+const knownSchedules = {};   // { seat: { 월,화,...,updatedAt } }
+const scheduleAlerts = [];
+window._scheduleAlerts = scheduleAlerts;   // 화면에 표시할 변경 알림 목록
+// knownSchedules는 onSnapshot 첫 'added' 이벤트에서 Firebase 실제값으로 초기화
+// (STUDENTS 배열로 초기화하면 schedules 컬렉션 실제값과 달라서 오탐/무감지 발생)
+
+// 관리자가 스케줄/정보 수정 시 students + schedules 양쪽 저장
+async function saveScheduleToFirebase(student) {
+  try {
+    await window.saveStudentToFirebase(student);
+    // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
+    const schedRef = doc(db, 'schedules', student.seat.replace(/[^0-9]/g, '') || student.seat);
+    const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
+    ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
+    await setDoc(schedRef, payload);
+  } catch(e) { console.error('Firebase 저장 실패:', e); }
+}
+onSnapshot(collection(db, 'schedules'), (snapshot) => {
+  const DAYS = ['월','화','수','목','금','토'];
+  let changed = false;
+
+  snapshot.docChanges().forEach(change => {
+    if (change.type === 'removed') return;
+    const seat = change.doc.id;
+    const data = change.doc.data();
+    const prev = knownSchedules[seat];
+
+    // 최초 로딩(앱 시작 시 added이고 아직 기준값 없는 경우)은 알림 생략
+    if (change.type === 'added' && !prev) {
+      knownSchedules[seat] = data;
+      return;
+    }
+
+    // 이전값과 비교 (단순 문자열 비교 — 실질적 변경만 감지)
+    const prevData = prev || {};
+    const dayChanges = DAYS.filter(d => {
+      const oldStr = prevData[d] || '-';
+      const newStr = data[d] || '-';
+      if (oldStr === newStr) return false;
+      // parseScheduleStr로 실질적 변경 여부 확인 (형식 차이 무시)
+      if (window.parseScheduleStr) {
+        const oldP = window.parseScheduleStr(oldStr);
+        const newP = window.parseScheduleStr(newStr);
+        const eq = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
+        if (eq(oldP.periods, newP.periods) && eq(oldP.absentPeriods, newP.absentPeriods)) return false;
+      }
+      return true;
+    }).map(d => ({ day: d, oldVal: prevData[d] || '-', newVal: data[d] || '-' }));
+
+    knownSchedules[seat] = data;
+
+    if (dayChanges.length === 0) return;
+
+    const existIdx = scheduleAlerts.findIndex(a => a.seat === seat);
+    const alertObj = { seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt };
+    if (existIdx !== -1) scheduleAlerts[existIdx] = alertObj;
+    else scheduleAlerts.unshift(alertObj);
+    changed = true;
+  });
+
+  if (changed) renderScheduleAlerts();
+}, (error) => {
+  console.error('❌ onSnapshot 에러:', error);
+});
+
+window.renderScheduleAlerts =
+function renderScheduleAlerts() {
+  const section = document.getElementById('schedule-change-section');
+  const list = document.getElementById('schedule-change-list');
+  if (!section || !list) return;
+
+  if (scheduleAlerts.length === 0) {
+    section.style.display = 'none';
+    return;
+  }
+  section.style.display = 'block';
+
+  const dayMap = {월:'월요일',화:'화요일',수:'수요일',목:'목요일',금:'금요일',토:'토요일'};
+
+  list.innerHTML = scheduleAlerts.map((a, idx) => {
+    const changeTexts = a.changes.map(c =>
+      `<span style="color:#A87008;font-weight:600">${dayMap[c.day]||c.day}</span>: ${c.oldVal||'-'} → <span style="color:#C8900A;font-weight:600">${c.newVal||'-'}</span>`
+    ).join('<br>');
+
+    const time = a.updatedAt?.toDate
+      ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
+      : '방금';
+
+    const applied = a.applied;
+
+    return `<div class="sc-alert-item" id="sc-item-${idx}" style="position:relative;background:#fff;border:1.5px solid ${applied?'#A5D6A7':'#F7C1C1'};border-radius:14px;padding:14px 16px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+      <!-- 우측 상단 X 버튼 -->
+      <button onclick="window.dismissAlert(${idx})" title="알림 닫기"
+        style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background 0.15s"
+        onmouseover="this.style.background='rgba(0,0,0,0.16)'" onmouseout="this.style.background='rgba(0,0,0,0.08)'">✕</button>
+
+      <div style="display:flex;align-items:flex-start;gap:10px;padding-right:24px">
+        <div class="sc-alert-avatar" style="flex-shrink:0">${a.studentName?.[0]||'?'}</div>
+        <div class="sc-alert-body" style="flex:1;min-width:0">
+          <div class="sc-alert-name">${a.studentName} · ${a.seat}
+            ${applied ? '<span style="font-size:10px;font-weight:700;color:#2D7A4F;background:#E8F5E9;border-radius:20px;padding:2px 8px;margin-left:6px;vertical-align:middle">✅ 적용됨</span>' : ''}
+          </div>
+          <div class="sc-alert-change">${changeTexts}</div>
+          <div class="sc-alert-time">${time} 변경</div>
+          <div class="sc-alert-btns">
+            ${applied
+              ? `<button class="sc-apply-btn" style="background:#aaa;cursor:default" disabled>✅ 적용됨</button>`
+              : `<button class="sc-apply-btn" onclick="window.applyStudentSchedule('${a.seat}',${idx})">적용</button>`
+            }
+            ${a.smsSent
+              ? `<button class="sc-dismiss-btn sc-sms-btn" style="background:#d4edda;color:#2D7A4F;border:1px solid #A5D6A7;cursor:default" disabled>✅ 문자발송됨</button>`
+              : `<button class="sc-dismiss-btn sc-sms-btn" onclick="window.sendKakaoSMS('${a.studentName}','${a.seat}',${idx})">확인문자</button>`
+            }
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+
+// 공지사항 저장 함수
+window.saveNoticesToFirebase = async function(notices) {
+  await setDoc(doc(db, 'notices', 'list'), { items: notices });
+};
+
+// ── 솔라피 문자 발송 ──
+// 공통 HMAC 인증 헤더 생성
+async function getSolapiAuthHeader() {
+  const date = new Date().toISOString();
+  const salt = Math.random().toString(36).substr(2,32);
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw', enc.encode(SOLAPI_API_SECRET),
+    {name:'HMAC',hash:'SHA-256'}, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(date + salt));
+  const signature = Array.from(new Uint8Array(sig)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  return `HMAC-SHA256 apiKey=${SOLAPI_API_KEY}, date=${date}, salt=${salt}, signature=${signature}`;
+}
+
+// 공통 솔라피 발송 함수
+async function solapiSend(to, text) {
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
+    showAdminToast('⚠️ 솔라피 API 설정을 먼저 해주세요');
+    openSolapiSettings();
+    return false;
+  }
+  const authorization = await getSolapiAuthHeader();
+  const res = await fetch('https://api.solapi.com/messages/v4/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': authorization },
+    body: JSON.stringify({ message: { from: SOLAPI_SENDER, to, text, type: 'LMS' } })
+  });
+  const data = await res.json();
+  // errorCount가 0이거나 없으면서 groupId가 있으면 성공
+  if (data.errorCount === 0 || (data.groupId && !data.errorCount)) return true;
+  return data;
+}
+
+// 미입실 알림 발송
+window.sendAbsentAlert = async function(idx) {
+  const a = ALERTS[idx];
+  if (!a) return;
+  const student = STUDENTS.find(s => s.seat === a.seat);
+  const parentPhone = student?.parent || '';
+  if (!parentPhone) {
+    showAdminToast(`⚠️ ${a.name} 학부모 전화번호가 없습니다`);
+    return;
+  }
+  const text = `[새봄면학관]
+${a.name} 학생이 ${a.period}(${a.time}) 미입실 상태입니다.
+확인 부탁드립니다.`;
+  showAdminToast(`📤 ${a.name} 학부모님께 발송 중...`);
+  try {
+    const result = await solapiSend(parentPhone, text);
+    const success = result === true;
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
+    if (success) showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
+    else showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
+  } catch(e) {
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
+    showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
+    console.error(e);
+  }
+};
+
+
+// ── SMS 발신내역 로그 관리 ──
+let _smsLogs = JSON.parse(localStorage.getItem('saebom_sms_logs') || '[]');
+
+function saveSmsLog(entry) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const logId = `${Date.now()}_${(entry.student||'').replace(/[^a-zA-Z0-9가-힣]/g,'')}_${entry.type||'sms'}`;
+  const logEntry = { ...entry, date: today, id: logId };
+  _smsLogs.unshift(logEntry);
+  // 최대 500건 유지
+  if (_smsLogs.length > 500) _smsLogs = _smsLogs.slice(0, 500);
+  localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
+  // Firebase에도 저장 (비동기) — 같은 id 사용
+  saveSmsLogToFirebase(logEntry, logId).catch(console.error);
+}
+
+async function saveSmsLogToFirebase(entry, logId) {
+  if (!window._adminDb) return;
+  try {
+    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const id = logId || entry.id || `${Date.now()}_${entry.type||'sms'}`;
+    await setDoc(doc(window._adminDb, 'sms_logs', id), {
+      ...entry,
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.error('SMS 로그 Firebase 저장 실패:', e); }
+}
+
+let _smsLogData = []; // 현재 표시 중인 데이터
+
+window.loadSmsLog = async function() {
+  const list = document.getElementById('smslog-list');
+  list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
+
+  // localStorage 먼저 즉시 표시
+  let logs = [..._smsLogs];
+  _smsLogData = logs;
+  renderSmsLog(logs);
+
+  // Firebase에서 추가 로드 후 병합
+  if (window._adminDb) {
+    try {
+      const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      // createdAt 없는 문서도 포함하기 위해 orderBy 제거, 전체 조회
+      const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
+      const fbLogs = [];
+      snap.forEach(d => fbLogs.push({ id: d.id, ...d.data() }));
+
+      if (fbLogs.length > 0) {
+        // id 기준 중복 제거 후 병합, 최신순 정렬
+        const merged = [...fbLogs];
+        const fbIds = new Set(fbLogs.map(l => l.id));
+        _smsLogs.forEach(l => { if (!fbIds.has(l.id)) merged.push(l); });
+        merged.sort((a, b) => (b.id || 0) - (a.id || 0));
+        logs = merged.slice(0, 300);
+        _smsLogData = logs;
+        renderSmsLog(logs);
+      }
+    } catch(e) {
+      console.error('SMS 로그 Firebase 로드 실패:', e);
+      // localStorage 데이터는 이미 표시됨
+    }
+  }
+}
+
+window.renderSmsLog = function(logs) {
+  const today = new Date().toLocaleDateString('ko-KR');
+  const todayLogs = logs.filter(l => l.date === today);
+  const successLogs = logs.filter(l => l.success);
+  const failLogs = logs.filter(l => !l.success);
+
+  document.getElementById('smslog-total').textContent = logs.length;
+  document.getElementById('smslog-success').textContent = successLogs.length;
+  document.getElementById('smslog-fail').textContent = failLogs.length;
+  document.getElementById('smslog-today').textContent = todayLogs.length;
+
+  if (logs.length === 0) {
+    document.getElementById('smslog-list').innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">📭 발신내역이 없습니다</div>';
+    return;
+  }
+
+  const typeBadge = {
+    in:       { label:'입실',     bg:'#FFF8DC', color:'#27500A', border:'#E0B020' },
+    out:      { label:'퇴실',     bg:'#E8F5E9', color:'#2D7A4F', border:'#A5D6A7' },
+    absent:   { label:'미입실알림', bg:'#FCEBEB', color:'#C62828', border:'#F09595' },
+    schedule: { label:'스케줄확인', bg:'#EDE7F6', color:'#4A148C', border:'#CE93D8' }
+  };
+
+  document.getElementById('smslog-list').innerHTML = logs.map((log, i) => {
+    const t = typeBadge[log.type] || { label: log.typeLabel||'문자', bg:'#F5F5F5', color:'#555', border:'#E0E0E0' };
+    const successBadge = log.success
+      ? '<span style="font-size:11px;font-weight:700;color:#2D7A4F;background:#E8F5E9;border-radius:20px;padding:2px 8px">✅ 성공</span>'
+      : '<span style="font-size:11px;font-weight:700;color:#C62828;background:#FCEBEB;border-radius:20px;padding:2px 8px">❌ 실패</span>';
+    const errorHtml = !log.success && log.error
+      ? `<div style="font-size:11px;color:#C62828;background:#FCEBEB;border-radius:6px;padding:4px 8px;margin-top:8px">오류: ${log.error.slice(0,120)}</div>`
+      : '';
+    // 첫 줄(제목행) 미리보기: 문자 내용 첫 줄
+    const firstLine = (log.text||'').split('\n').filter(l=>l.trim())[0] || '';
+    const detailId = `sms-detail-${i}`;
+    return `<div style="border-bottom:0.5px solid var(--color-border-tertiary)">
+      <!-- 헤더: 항상 표시 -->
+      <div onclick="toggleSmsDetail('${detailId}')" style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;gap:10px;user-select:none"
+           onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background=''">
+        <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:1;min-width:0">
+          <span style="font-size:11px;font-weight:700;background:${t.bg};color:${t.color};border:1px solid ${t.border};border-radius:20px;padding:2px 9px;flex-shrink:0">${t.label}</span>
+          <span style="font-size:13px;font-weight:700;flex-shrink:0">${log.student||''}</span>
+          <span style="font-size:11px;color:var(--color-text-secondary);flex-shrink:0">${log.seat||''}</span>
+          ${successBadge}
+          <span style="font-size:11px;color:var(--color-text-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${firstLine}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+          <div style="text-align:right">
+            <div style="font-size:11px;color:var(--color-text-tertiary)">${log.date||''}</div>
+            <div style="font-size:11px;color:var(--color-text-tertiary)">${log.time||''}</div>
+          </div>
+          <span id="${detailId}-arrow" style="font-size:13px;color:var(--color-text-tertiary);transition:transform 0.2s">▼</span>
+        </div>
+      </div>
+      <!-- 상세: 접혀있음 -->
+      <div id="${detailId}" style="display:none;padding:0 16px 12px;border-top:0.5px solid var(--color-border-tertiary)">
+        <div style="font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border-radius:8px;padding:10px 12px;line-height:1.7;white-space:pre-wrap;margin-top:10px">${log.text||''}</div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">수신: ${log.phone||''}</div>
+        ${errorHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.toggleSmsDetail = function(id) {
+  const el = document.getElementById(id);
+  const arrow = document.getElementById(id + '-arrow');
+  if (!el) return;
+  const isOpen = el.style.display !== 'none';
+  el.style.display = isOpen ? 'none' : 'block';
+  if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+};
+
+window.filterSmsLog = function() {
+  const f = document.getElementById('smslog-filter').value;
+  let filtered = _smsLogData;
+  if (f === 'success') filtered = _smsLogData.filter(l => l.success);
+  else if (f === 'fail') filtered = _smsLogData.filter(l => !l.success);
+  else if (f === 'in') filtered = _smsLogData.filter(l => l.type === 'in');
+  else if (f === 'out') filtered = _smsLogData.filter(l => l.type === 'out');
+  else if (f === 'absent') filtered = _smsLogData.filter(l => l.type === 'absent');
+  renderSmsLog(filtered);
+}
+
+window.refreshSmsLog = function() { loadSmsLog(); showAdminToast('🔄 새로고침 완료'); }
+
+window.clearOldSmsLogs = function() {
+  if (!confirm('30일 이전 내역을 삭제할까요?')) return;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 30);
+  _smsLogs = _smsLogs.filter(l => {
+    if (!l.date) return false;
+    const d = new Date(l.date.replace(/\./g, '-').replace(/ /g, '').replace(/-$/, ''));
+    return d >= cutoff;
+  });
+  localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
+  showAdminToast('🗑️ 오래된 내역 삭제 완료');
+  loadSmsLog();
+}
+
+// 솔라피 API 키 설정 (최초 1회 입력)
+let SOLAPI_API_KEY = localStorage.getItem('solapi_api_key') || '';
+let SOLAPI_API_SECRET = localStorage.getItem('solapi_api_secret') || '';
+let SOLAPI_SENDER = (function() {
+  const saved = localStorage.getItem('solapi_sender');
+  if (!saved || saved === '01012345678') {
+    localStorage.setItem('solapi_sender', '01041301139');
+    return '01041301139';
+  }
+  return saved;
+})();
+
+window.openSolapiSettings = function() {
+  const old = document.getElementById('solapi-modal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'solapi-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:16px;padding:24px;width:min(90vw,400px);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">📱 솔라피 API 설정</div>
+      <div style="font-size:12px;color:#888;margin-bottom:14px">
+        <a href="https://solapi.com" target="_blank" style="color:#C8900A">solapi.com</a> 가입 후
+        대시보드 → API Key 메뉴에서 발급받으세요
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px">
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">API Key</div>
+          <input id="sp-key" type="text" value="${SOLAPI_API_KEY}"
+            placeholder="NCS..."
+            style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">API Secret</div>
+          <input id="sp-secret" type="password" value="${SOLAPI_API_SECRET}"
+            placeholder="Secret Key"
+            style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+        <div>
+          <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:4px">발신번호 (등록된 번호)</div>
+          <input id="sp-sender" type="text" value="${SOLAPI_SENDER}"
+            placeholder="01041301139"
+            style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('solapi-modal').remove()"
+          style="flex:1;padding:10px;background:#f5f5f5;border:none;border-radius:8px;font-size:13px;cursor:pointer">취소</button>
+        <button onclick="saveSolapiSettings()"
+          style="flex:1;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">저장</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+};
+
+window.saveSolapiSettings = function() {
+  SOLAPI_API_KEY    = document.getElementById('sp-key').value.trim();
+  SOLAPI_API_SECRET = document.getElementById('sp-secret').value.trim();
+  SOLAPI_SENDER     = document.getElementById('sp-sender').value.trim().replace(/-/g,'');
+  localStorage.setItem('solapi_api_key', SOLAPI_API_KEY);
+  localStorage.setItem('solapi_api_secret', SOLAPI_API_SECRET);
+  localStorage.setItem('solapi_sender', SOLAPI_SENDER);
+  document.getElementById('solapi-modal').remove();
+  showAdminToast('✅ 솔라피 설정이 저장됐습니다');
+};
+
+window.sendKakaoSMS = async function(studentName, seat, idx) {
+  // API 키 미설정 시 설정창 열기
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
+    openSolapiSettings();
+    return;
+  }
+
+  const student = STUDENTS.find(s => s.seat === seat);
+  if (!student) return;
+  const parentPhone = student.parent?.replace(/-/g,'');
+
+  if (!parentPhone) {
+    showAdminToast('⚠️ 부모님 번호가 등록되지 않았습니다');
+    return;
+  }
+
+  const alert = scheduleAlerts[idx];
+  if (!alert) return;
+
+  const dayMap = {월:'월요일',화:'화요일',수:'수요일',목:'목요일',금:'금요일',토:'토요일'};
+  const periodTimes = {
+    1:'9:00~10:00', 2:'10:10~11:10', 3:'11:20~12:30',
+    4:'13:30~14:30', 5:'14:40~15:40', 6:'15:50~17:00',
+    7:'18:00~18:50', 8:'19:00~20:20', 9:'20:30~22:00',
+    10:'22:30~23:50', 11:'00:00~01:00'
+  };
+
+  // 요일별로 변경사항 그룹핑
+  const byDay = {};
+  alert.changes.forEach(c => {
+    if (!byDay[c.day]) byDay[c.day] = [];
+    byDay[c.day].push(c);
+  });
+
+  // parseScheduleStr()을 재활용해 교시별 상태를 정확히 파싱
+  let changeLines = [];
+  Object.keys(byDay).forEach(day => {
+    const isSat = day === '토';
+    const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+    const dayChanges = byDay[day];
+    changeLines.push(`${dayMap[day]||day}`);
+
+    dayChanges.forEach(c => {
+      const oldParsed = parseScheduleStr(c.oldVal);
+      const newParsed = parseScheduleStr(c.newVal);
+
+      validPeriods.forEach(p => {
+        const wasAttend = oldParsed.periods.has(p) && !oldParsed.absentPeriods.has(p);
+        const wasAbsent = oldParsed.absentPeriods.has(p);
+        const nowAttend = newParsed.periods.has(p) && !newParsed.absentPeriods.has(p);
+        const nowAbsent = newParsed.absentPeriods.has(p);
+
+        let before, after;
+        if (wasAttend)      before = '참여';
+        else if (wasAbsent) before = `불참${oldParsed.absentReasons[p] ? `(${oldParsed.absentReasons[p]})` : ''}`;
+        else                before = null;
+
+        if (nowAttend)      after = '참여';
+        else if (nowAbsent) after = `불참${newParsed.absentReasons[p] ? `(${newParsed.absentReasons[p]})` : ''}`;
+        else                after = null;
+
+        const beforeStr = before ?? '미등록';
+        const afterStr  = after  ?? '미등록';
+        if (beforeStr !== afterStr && (before !== null || after !== null)) {
+          const time = periodTimes[p] || '';
+          changeLines.push(`${p}교시(${time}) : ${beforeStr} → ${afterStr}`);
+        }
+      });
+    });
+  });
+
+  const message =
+    `[새봄면학관]\n` +
+    `${studentName} 학생의 스케줄이 변경되었습니다. 확인해주세요~\n\n` +
+    changeLines.join('\n');
+
+  const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  try {
+    const result = await solapiSend(parentPhone, message);
+    const success = result === true;
+    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: message, success, error: success ? null : JSON.stringify(result), time: timeStr });
+    if (success) {
+      showAdminToast(`✅ ${studentName} 학부모님께 문자를 발송했습니다`);
+      const alertObj = scheduleAlerts[idx];
+      if (alertObj) {
+        alertObj.smsSent = true;
+        renderScheduleAlerts();
+      }
+    } else {
+      showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
+    }
+  } catch(e) {
+    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: message, success: false, error: e.message, time: timeStr });
+    showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
+    console.error(e);
+  }
+};
+
+window.formatPhoneInput = function(input) {
+  // 숫자만 추출
+  let digits = input.value.replace(/\D/g, '');
+  if (digits.length > 8) digits = digits.slice(0, 8);
+  // 4자리 입력되면 하이픈 자동 삽입
+  if (digits.length > 4) {
+    input.value = digits.slice(0,4) + '-' + digits.slice(4);
+  } else {
+    input.value = digits;
+  }
+};
+
+window.openAddStudentModal = function(seatNum) {
+  const old = document.getElementById('add-student-modal');
+  if (old) old.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'add-student-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,360px);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">➕ ${seatNum}번 학생 추가</div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:16px">새 학생을 이 자리에 배정합니다</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이름 *</div>
+            <input id="new-st-name" type="text" placeholder="홍길동"
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+          </div>
+          <div style="flex:0 0 90px">
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">성별</div>
+            <div style="display:flex;border:1.5px solid #E0B020;border-radius:10px;overflow:hidden">
+              <button id="new-st-gender-f" onclick="selectGender('f')"
+                style="flex:1;padding:9px 0;border:none;font-size:13px;cursor:pointer;background:#FFF8DC;color:#C8900A;font-weight:700">♀</button>
+              <button id="new-st-gender-m" onclick="selectGender('m')"
+                style="flex:1;padding:9px 0;border:none;font-size:13px;cursor:pointer;background:#fff;color:#888">♂</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이용 만료일</div>
+          <input id="new-st-expiry" type="date"
+            style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">학생 전화번호</div>
+          <div style="display:flex;align-items:center;border:1.5px solid #E0B020;border-radius:10px;overflow:hidden;background:#fff">
+            <span style="padding:9px 0 9px 12px;font-size:13px;color:#5C3D08;font-weight:600;white-space:nowrap">010-</span>
+            <input id="new-st-phone" type="text" placeholder="0000-0000" maxlength="9"
+              oninput="formatPhoneInput(this)"
+              style="flex:1;padding:9px 12px 9px 0;border:none;font-size:13px;outline:none;width:100%">
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">부모님 전화번호</div>
+          <div style="display:flex;align-items:center;border:1.5px solid #E0B020;border-radius:10px;overflow:hidden;background:#fff">
+            <span style="padding:9px 0 9px 12px;font-size:13px;color:#5C3D08;font-weight:600;white-space:nowrap">010-</span>
+            <input id="new-st-parent" type="text" placeholder="0000-0000" maxlength="9"
+              oninput="formatPhoneInput(this)"
+              style="flex:1;padding:9px 12px 9px 0;border:none;font-size:13px;outline:none;width:100%">
+          </div>
+        </div>
+        <div id="new-st-err" style="font-size:12px;color:#C62828;min-height:16px"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="document.getElementById('add-student-modal').remove()"
+            style="flex:1;padding:10px;background:#f5f5f5;border:none;border-radius:10px;font-size:13px;cursor:pointer;color:#666">
+            취소
+          </button>
+          <button onclick="confirmAddStudent(${seatNum})"
+            style="flex:1;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+            추가
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('new-st-name')?.focus(), 100);
+};
+
+window._newStGender = 'f';
+window.selectGender = function(g) {
+  
+  document.getElementById('new-st-gender-f').style.background = g==='f' ? '#FFF8DC' : '#fff';
+  document.getElementById('new-st-gender-f').style.color = g==='f' ? '#C8900A' : '#888';
+  document.getElementById('new-st-gender-m').style.background = g==='m' ? '#E8F0FF' : '#fff';
+  document.getElementById('new-st-gender-m').style.color = g==='m' ? '#1a5fcc' : '#888';
+};
+
+window.confirmAddStudent = function(seatNum) {
+  const name   = document.getElementById('new-st-name').value.trim();
+  const phone  = '010-' + document.getElementById('new-st-phone').value.trim();
+  const parent = '010-' + document.getElementById('new-st-parent').value.trim();
+  const expiry = document.getElementById('new-st-expiry').value;
+  const gender = window._newStGender || 'f';
+  const err    = document.getElementById('new-st-err');
+
+  if (!name) { err.textContent = '이름을 입력해주세요'; return; }
+  if (STUDENTS.find(s => s.name === name)) { err.textContent = '이미 등록된 이름입니다'; return; }
+
+  // STUDENTS 배열에 추가
+  const newStudent = {
+    seat: seatNum + '번',
+    name,
+    phone,
+    parent,
+    gender,
+    expiry,
+    schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
+    hours: {}
+  };
+  STUDENTS.push(newStudent);
+
+  // 화면 갱신
+  buildFloorplan();
+  buildStudentList(document.getElementById('student-search')?.value || '');
+  buildScheduleTable(currentDay);
+
+  // Firebase에 저장
+  if (window.saveStudentToFirebase) window.saveStudentToFirebase(newStudent).catch(console.error);
+
+  document.getElementById('add-student-modal').remove();
+  showAdminToast(`✅ ${name} 학생이 ${seatNum}번 자리에 추가됐습니다`);
+};
+
+window.showTodayAttendees = function() {
+  const old = document.getElementById('today-modal');
+  if (old) old.remove();
+  const modal = document.createElement('div');
+  modal.id = 'today-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
+  function renderList() {
+    const list = PRESENT.map(name => {
+      const s = STUDENTS.find(s => s.name === name);
+      const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${name[0]}</div>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#5C3D08">${name}</div>
+            <div style="font-size:11px;color:#8B6010">${s?.seat||''} · 입실 ${rec?.inTime||''}</div>
+          </div>
+        </div>
+        <button onclick="adminForceCheckout('${name}')" style="background:#C62828;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">퇴실 처리</button>
+      </div>`;
+    }).join('');
+    const inner = document.getElementById('today-modal-list');
+    if (inner) inner.innerHTML = list || '<div style="text-align:center;padding:24px;color:#aaa;font-size:13px">현재 입실 중인 학생이 없습니다</div>';
+    const cnt = document.getElementById('today-modal-count');
+    if (cnt) cnt.textContent = `총 ${PRESENT.length}명 입실 중`;
+  }
+  modal.innerHTML = `
+    <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,420px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div style="font-size:15px;font-weight:700;color:#5C3D08">🎓 오늘 등원 현황</div>
+        <button onclick="document.getElementById('today-modal').remove()"
+          style="background:none;border:none;font-size:20px;cursor:pointer;color:#8B6010;line-height:1">✕</button>
+      </div>
+      <div id="today-modal-count" style="font-size:12px;color:#8B6010;margin-bottom:12px;padding:7px 12px;background:#FFF3B0;border-radius:8px;font-weight:600"></div>
+      <div id="today-modal-list" style="display:flex;flex-direction:column;gap:8px;overflow-y:auto"></div>
+    </div>`;
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  renderList();
+  window._todayModalRender = renderList;
+};
+
+// 관리자 강제 퇴실 처리
+window.adminForceCheckout = function(name) {
+  if (!confirm(`${name} 학생을 퇴실 처리할까요?`)) return;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+  if (rec) rec.outTime = timeStr;
+  const idx = PRESENT.indexOf(name);
+  if (idx !== -1) PRESENT.splice(idx, 1);
+  const student = STUDENTS.find(s => s.name === name);
+  if (student) saveCheckinToFirebase(student, true, timeStr);
+  buildDashboard();
+  buildCheckinTodayList();
+  if (document.getElementById('fp-room')) buildFloorplan();
+  showAdminToast(`👋 ${name} 퇴실 처리 완료 (${timeStr})`);
+  // 팝업 목록 새로고침
+  if (window._todayModalRender) window._todayModalRender();
+};
+
+// ── 배치도 우클릭 컨텍스트 메뉴 ──
+window.fpSeatContextMenu = function(e, seatNum, key) {
+  e.preventDefault();
+  e.stopPropagation();
+  // 기존 메뉴 제거
+  const old = document.getElementById('fp-ctx-menu');
+  if (old) old.remove();
+
+  const student = getFpStudentBySeat(seatNum);
+  if (!student) return;
+
+  const menu = document.createElement('div');
+  menu.id = 'fp-ctx-menu';
+  menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:#fff;
+    border:1px solid #E0B020;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15);
+    z-index:9999;min-width:160px;overflow:hidden;animation:toastIn 0.1s ease`;
+  menu.innerHTML = `
+    <div style="padding:8px 14px;font-size:11px;color:#888;border-bottom:1px solid #f0f0f0">
+      ${seatNum}번 · ${student.name}
+    </div>
+    <div onclick="fpUnassignSeat(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#C62828;display:flex;align-items:center;gap:8px"
+      onmouseover="this.style.background='#FFF0F0'" onmouseout="this.style.background=''">
+      🪑 배석 해제
+    </div>
+    <div onclick="fpSeatClick(${seatNum});document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#1F2937;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
+      👤 학생 정보 보기
+    </div>
+  `;
+  document.body.appendChild(menu);
+
+  // 화면 밖으로 넘어가면 위치 보정
+  requestAnimationFrame(() => {
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) menu.style.left = (e.clientX - rect.width) + 'px';
+    if (rect.bottom > window.innerHeight) menu.style.top = (e.clientY - rect.height) + 'px';
+  });
+
+  // 바깥 클릭 시 닫기
+  setTimeout(() => {
+    document.addEventListener('click', function closeCtx() {
+      document.getElementById('fp-ctx-menu')?.remove();
+      document.removeEventListener('click', closeCtx);
+    });
+    document.addEventListener('contextmenu', function closeCtx2() {
+      document.getElementById('fp-ctx-menu')?.remove();
+      document.removeEventListener('contextmenu', closeCtx2);
+    });
+  }, 50);
+};
+
+window.fpUnassignSeat = function(seatNum) {
+  document.getElementById('fp-ctx-menu')?.remove();
+  const student = getFpStudentBySeat(seatNum);
+  if (!student) return;
+  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
+
+  const idx = STUDENTS.findIndex(s => parseInt(s.seat) === seatNum);
+  if (idx !== -1) {
+    const oldSeat = STUDENTS[idx].seat;
+    STUDENTS[idx].seat = '';
+    // Firebase에서 기존 seat 문서 삭제 (공석 처리)
+    if (oldSeat && window.deleteStudentFromFirebase) {
+      window.deleteStudentFromFirebase(String(seatNum)).catch(console.error);
+    }
+  }
+
+  buildFloorplan();
+  buildStudentList(document.getElementById('student-search')?.value || '');
+  buildDashboard();
+  showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
+};
+
+// ── 스터디룸 초과 경고 ──
+const studyroomOverflowAlerts = [];
+
+function showStudyroomOverflowAlert(name, seat) {
+  studyroomOverflowAlerts.unshift({ name, seat, time: new Date() });
+  renderStudyroomOverflow();
+  // 대시보드 탭이 아니어도 보이게 섹션 활성화
+  const section = document.getElementById('studyroom-overflow-section');
+  if (section) section.style.display = 'block';
+  // 대시보드로 자동 이동
+  const dashBtn = document.querySelector('.tab-btn.active') || document.querySelector('.tab-btn');
+  showSection('dashboard', document.querySelector('[onclick*="dashboard"]'));
+}
+
+function renderStudyroomOverflow() {
+  const list = document.getElementById('studyroom-overflow-list');
+  if (!list) return;
+  list.innerHTML = studyroomOverflowAlerts.map((a, i) => {
+    const timeStr = a.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    return `<div style="position:relative;background:#FFF0F0;border:1.5px solid #F09595;border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <button onclick="studyroomOverflowAlerts.splice(${i},1);renderStudyroomOverflow();if(!studyroomOverflowAlerts.length)document.getElementById('studyroom-overflow-section').style.display='none'"
+        style="position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:12px;cursor:pointer">✕</button>
+      <div style="display:flex;align-items:center;gap:10px;padding-right:24px">
+        <div style="width:36px;height:36px;border-radius:10px;background:#C62828;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">${a.name[0]}</div>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#C62828">⚠️ 스터디룸 초과 — ${a.name} (${a.seat})</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">${timeStr} 입실 · 스터디룸 배정 불가 (12명 초과)</div>
+          <div style="font-size:12px;color:#C62828;margin-top:4px;font-weight:600">즉시 조치가 필요합니다</div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+window.dismissStudyroomOverflow = function() {
+  studyroomOverflowAlerts.length = 0;
+  const section = document.getElementById('studyroom-overflow-section');
+  if (section) section.style.display = 'none';
+};
+
+window.confirmDeleteStudent = function(seat, name) {
+  if (!confirm(`${name}(${seat}) 학생을 삭제하시겠습니까?\n이 작업은 되돌릴 수 없습니다.`)) return;
+  const idx = STUDENTS.findIndex(s => s.seat === seat);
+  if (idx !== -1) STUDENTS.splice(idx, 1);
+  if (window.deleteStudentFromFirebase) window.deleteStudentFromFirebase(seat);
+  buildStudentList(document.getElementById('student-search')?.value || '');
+  buildScheduleTable(currentDay);
+  buildFloorplan();
+  buildDashboard();
+  showAdminToast(`🗑️ ${name} 학생이 삭제됐습니다`);
+};
+
+// ── Web Serial API 릴레이 제어 (자동문) ──
+let _serialPort = null;
+let _serialWriter = null;
+
+window.connectSerial = async function() {
+  try {
+    if (!('serial' in navigator)) {
+      showAdminToast('⚠️ 이 브라우저는 Web Serial을 지원하지 않습니다 (크롬 필요)');
+      return false;
+    }
+    _serialPort = await navigator.serial.requestPort();
+    await _serialPort.open({ baudRate: 9600 });
+    _serialWriter = _serialPort.writable.getWriter();
+    showAdminToast('✅ 릴레이 포트 연결됨');
+    const btn = document.getElementById('relay-connect-btn');
+    if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; btn.style.color = '#fff'; }
+    return true;
+  } catch(e) {
+    showAdminToast('⚠️ 포트 연결 실패: ' + e.message);
+    return false;
+  }
+};
+
+async function sendRelay(bytes) {
+  if (!_serialWriter) {
+    const ok = await window.connectSerial();
+    if (!ok) return false;
+  }
+  try {
+    await _serialWriter.write(new Uint8Array(bytes));
+    return true;
+  } catch(e) {
+    _serialWriter = null; _serialPort = null;
+    return false;
+  }
+}
+
+window.doorOpen = async function() {
+  const ok = await sendRelay([0xA0, 0x01, 0x01, 0xA2]);
+  if (ok) console.log('🚪 문 열림 신호 전송');
+  return ok;
+};
+
+window.doorClose = async function() {
+  const ok = await sendRelay([0xA0, 0x01, 0x00, 0xA1]);
+  if (ok) console.log('🚪 문 닫힘 신호 전송');
+  return ok;
+};
+
+window.doorOpenTimed = async function(seconds = 3) {
+  const ok = await window.doorOpen();
+  if (ok) setTimeout(window.doorClose, seconds * 1000);
+  return ok;
+};
+
+function showAdminToast(msg) {
+  const t = document.createElement('div');
+  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);white-space:nowrap';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 2500);
+}
+</script>
