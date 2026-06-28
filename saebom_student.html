@@ -1075,6 +1075,10 @@ function buildStudyroomPeriodBtns() {
   const today = dn[new Date().getDay()];
   const isSat = today === '토';
   const isSun = today === '일';
+  renderStudyroomPeriodBtns(isSat, isSun);
+}
+
+function renderStudyroomPeriodBtns(isSat, isSun) {
   const el = document.getElementById('studyroom-period-btns');
   if (!el) return;
 
@@ -1091,13 +1095,18 @@ function buildStudyroomPeriodBtns() {
     : [{n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
 
-  el.innerHTML = periods.map(p =>
-    `<button onclick="applyStudyroom(${p.n})"
-      style="padding:8px 14px;border:1.5px solid #E0B020;border-radius:10px;background:#FFFDF5;
-             color:#5C3D08;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
-      ${p.n}교시<br><span style="font-size:10px;color:#888;font-weight:400">${p.t}</span>
-    </button>`
-  ).join('');
+  el.innerHTML = periods.map(p => {
+    const over = isPeriodOver(p.n);
+    return `<button onclick="${over ? '' : `applyStudyroom(${p.n})`}"
+      style="padding:8px 14px;border:1.5px solid ${over?'#E5E7EB':'#E0B020'};border-radius:10px;
+             background:${over?'#F3F4F6':'#FFFDF5'};
+             color:${over?'#9CA3AF':'#5C3D08'};font-size:13px;font-weight:600;
+             cursor:${over?'not-allowed':'pointer'};min-width:80px;
+             opacity:${over?'0.5':'1'}">
+      ${p.n}교시${over?' ✓':''}<br>
+      <span style="font-size:10px;color:${over?'#bbb':'#888'};font-weight:400">${over?'종료':p.t}</span>
+    </button>`;
+  }).join('');
 }
 
 async function applyStudyroom(periodNum) {
@@ -1164,6 +1173,30 @@ async function submitStudyroomReq(periodNum, roomCounts) {
   } catch(e) { alert('신청 실패: ' + e.message); }
 }
 
+
+// ── 교시 종료 시각 (분 단위, 자정 이후는 +1440) ──
+const PERIOD_END_MIN = {
+  1: 10*60,        // 10:00
+  2: 11*60+10,     // 11:10
+  3: 12*60+30,     // 12:30
+  4: 14*60+30,     // 14:30
+  5: 15*60+40,     // 15:40
+  6: 17*60,        // 17:00
+  7: 18*60+50,     // 18:50
+  8: 20*60+20,     // 20:20
+  9: 22*60,        // 22:00
+  10: 23*60+50,    // 23:50
+  11: 25*60,       // 01:00 (자정 이후 = +1440)
+};
+
+function isPeriodOver(periodNum) {
+  const now = new Date();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  // 자정 이후(00:00~01:00)는 +1440 처리
+  const adjMin = now.getHours() < 3 ? curMin + 1440 : curMin;
+  return adjMin > (PERIOD_END_MIN[periodNum] || 0);
+}
+
 function loadStudyroomData() {
   const db = window._db;
   if (!db || !currentStudent) return;
@@ -1174,7 +1207,8 @@ function loadStudyroomData() {
     snap => {
       const all = [];
       snap.forEach(d => all.push({ id: d.id, ...d.data() }));
-      const todayReqs = all.filter(r => r.date === today);
+      // 지난 교시 신청은 표시 안 함
+      const todayReqs = all.filter(r => r.date === today && !isPeriodOver(r.period));
       const myReqs = todayReqs.filter(r => r.name === currentStudent.name).sort((a,b) => a.period - b.period);
       const myEl = document.getElementById('studyroom-my-requests');
       if (myEl) {
@@ -1394,6 +1428,18 @@ function restoreTab() {
     }
   } catch(e) {}
 }
+
+// ── 스터디룸 탭 1분마다 자동 갱신 (교시 종료 반영) ──
+setInterval(() => {
+  const activeTab = sessionStorage.getItem('saebom_active_tab_student');
+  if (activeTab === 'studyroom') {
+    // 교시 버튼 재렌더 (지난 교시 비활성화 반영)
+    const now = new Date();
+    const isSat = now.getDay() === 6;
+    const isSun = now.getDay() === 0;
+    renderStudyroomPeriodBtns(isSat, isSun);
+  }
+}, 60000);
 </script>
 </body>
 </html>
