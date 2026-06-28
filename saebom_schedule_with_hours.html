@@ -1780,7 +1780,7 @@ function buildSeatCard(seatNum) {
         ${genderIcon}
       </div>
       <div style="font-size:9px;margin-top:2px;color:${status==='in'?'#2D7A4F':inStudyRoom?'#C8900A':'#9CA3AF'}">
-        ${status==='in' ? `● 입실 ${rec?.inTime||''}` : inStudyRoom ? '📚 스터디룸 대기' : '미입실'}
+        ${status==='in' ? `● 입실 ${rec?.inTime||''}` : inStudyRoom ? '📚 ST-R 대기' : '미입실'}
       </div>
     </div>
   </div>`;
@@ -2000,7 +2000,7 @@ function buildFloorplan() {
           }
           // 스터디룸 사용중이면 배지 추가
           const studyroomBadge = inStudyRoomGrid
-            ? `<span class="fp-badge" style="background:#7C3AED;color:#fff">📚 스터디룸${studyRoomNum}번</span>`
+            ? `<span class="fp-badge" style="background:#7C3AED;color:#fff">ST-R ${studyRoomNum}</span>`
             : '';
 
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
@@ -3207,7 +3207,8 @@ async function loadTodayCheckinFromFirebase() {
 
     buildDashboard();
     buildCheckinTodayList();
-    if (document.getElementById('fp-room')) buildFloorplan();
+    if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
+    else if (document.getElementById('fp-room')) buildFloorplan();
   } catch(e) { console.error('입퇴실 로드 실패:', e); }
 }
 window.loadTodayCheckinFromFirebase = loadTodayCheckinFromFirebase;
@@ -3268,7 +3269,8 @@ onSnapshot(
     if (changed) {
       buildDashboard();
       buildCheckinTodayList();
-      if (document.getElementById('fp-room')) buildFloorplan();
+      if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
+      else if (document.getElementById('fp-room')) buildFloorplan();
     }
   }
 );
@@ -3281,15 +3283,30 @@ function _syncStudyRoomStudents() {
   // studyRoomStudents 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
   const today = new Date().toISOString().slice(0,10);
+  const now = new Date();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  const adjMin = now.getHours() < 3 ? curMin + 1440 : curMin;
+
+  // 교시 시작~종료 시각 (분 단위)
+  const PERIOD_START = {1:540,2:610,3:680,4:810,5:880,6:950,7:1080,8:1140,9:1230,10:1350,11:1440};
+  const PERIOD_END   = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
+
   Object.values(_knownStudyroomReqs).forEach(data => {
     if (data.status !== 'approved') return;
     if (data.date !== today) return;
-    // 현재 교시가 지난 것은 제외
-    const now = new Date();
-    const curMin = now.getHours() * 60 + now.getMinutes();
-    const adjMin = now.getHours() < 3 ? curMin + 1440 : curMin;
-    const PERIOD_END = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
-    if (adjMin > (PERIOD_END[data.period] || 0)) return;
+
+    const p = data.period;
+    const start = PERIOD_START[p] || 0;
+    const end   = PERIOD_END[p]   || 0;
+
+    // 교시 시작 전이거나 종료 후면 표시 안 함
+    if (adjMin < start || adjMin > end) return;
+
+    // 이미 퇴실한 학생은 제외
+    const isCheckedOut = todayRecords.some(r => r.studentName === data.name && r.outTime);
+    const isPresent    = todayRecords.some(r => r.studentName === data.name && !r.outTime);
+    if (isCheckedOut && !isPresent) return;
+
     const room = data.room;
     if (studyRoomStudents[room] && !studyRoomStudents[room].includes(data.name)) {
       studyRoomStudents[room].push(data.name);
@@ -3297,6 +3314,7 @@ function _syncStudyRoomStudents() {
   });
   if (document.getElementById('fp-room')) buildFloorplan();
 }
+window._syncStudyRoomStudents = _syncStudyRoomStudents;
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;
