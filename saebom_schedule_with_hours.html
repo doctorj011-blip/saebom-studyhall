@@ -2727,6 +2727,17 @@ window.initApp = function(){
   } catch(e) {}
 };
 window.initApp();
+
+// ── 대기 모드 후 재연결 처리 ──
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden) return;
+  // 화면이 다시 보일 때 Firebase 재연결 및 데이터 갱신
+  console.log('🔄 화면 복귀 — Firebase 재연결 중...');
+  if (window.loadStudentsFromFirebase) window.loadStudentsFromFirebase();
+  buildDashboard();
+  if (document.getElementById('fp-room')) buildFloorplan();
+});
+
 // ── 스케줄 알림 버튼 함수 ──
 window.applyStudentSchedule = function(seat, idx) {
   const alerts = window._scheduleAlerts;
@@ -3116,6 +3127,7 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
   console.error('❌ onSnapshot 에러:', error);
 });
 
+window.renderScheduleAlerts =
 function renderScheduleAlerts() {
   const section = document.getElementById('schedule-change-section');
   const list = document.getElementById('schedule-change-list');
