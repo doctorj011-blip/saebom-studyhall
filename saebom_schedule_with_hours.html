@@ -2285,6 +2285,7 @@ window.closeScheduleModal = function() {
 // 스케줄 문자열 → draft 객체
 // 저장 형식: "7,8,x(영어),10,11" — 교시순서로 출석/결석 혼합
 // 구버전 형식: "x(수학학원),7~9,10" — x(사유)가 전체 결석 prefix
+window.parseScheduleStr =
 function parseScheduleStr(str) {
   const empty = { absent: false, absentReason: '', periods: new Set(), partials: new Set(), absentPeriods: new Set(), absentReasons: {} };
   if (!str || str === '-') return empty;
@@ -3049,8 +3050,8 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
       const newStr = data[d] || '-';
       if (oldStr === newStr) return false;
       // 파싱 결과가 실질적으로 다른지 비교
-      const oldP = parseScheduleStr(oldStr);
-      const newP = parseScheduleStr(newStr);
+      const oldP = window.parseScheduleStr(oldStr);
+      const newP = window.parseScheduleStr(newStr);
       const setsEqual = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
       if (!setsEqual(oldP.periods, newP.periods)) return true;
       if (!setsEqual(oldP.absentPeriods, newP.absentPeriods)) return true;
