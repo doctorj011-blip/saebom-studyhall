@@ -2701,6 +2701,10 @@ function showAdminToast(msg) {
 }
 
 window.initApp = function(){
+  window.STUDENTS = STUDENTS;
+  window.currentDay = currentDay;
+  window.buildScheduleTable = buildScheduleTable;
+  window.buildStudentList = buildStudentList;
   const now=new Date();
   const dn=['일','월','화','수','목','금','토'];
   document.getElementById('today-label').textContent=`${now.getMonth()+1}월 ${now.getDate()}일 (${dn[now.getDay()]})`;
@@ -3013,7 +3017,8 @@ window.sendAdminReply = async function() {
 // ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
 // 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
 const knownSchedules = {};   // { seat: { 월,화,...,updatedAt } }
-const scheduleAlerts = [];   // 화면에 표시할 변경 알림 목록
+const scheduleAlerts = [];
+window._scheduleAlerts = scheduleAlerts;   // 화면에 표시할 변경 알림 목록
 
 console.log('%c 관리자앱 v2026-06-26 02:36 ', 'background:#C8900A;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
 // knownSchedules는 onSnapshot 첫 'added' 이벤트에서 Firebase 실제값으로 초기화
@@ -3136,15 +3141,15 @@ function renderScheduleAlerts() {
 }
 
 window.applyStudentSchedule = function(seat, idx) {
-  const alert = scheduleAlerts[idx];
+  const alerts = window._scheduleAlerts || scheduleAlerts;
+  const alert = alerts[idx];
   if (!alert) return;
-  const student = STUDENTS.find(s => s.seat === seat);
+  const student = (window.STUDENTS || STUDENTS).find(s => s.seat === seat);
   if (!student) return;
   alert.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
-  buildScheduleTable(currentDay);
-  buildStudentList(document.getElementById('student-search')?.value || '');
+  if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || currentDay);
+  if (window.buildStudentList) window.buildStudentList(document.getElementById('student-search')?.value || '');
 
-  // 알림은 유지하고 적용됨 상태만 표시
   alert.applied = true;
   renderScheduleAlerts();
 
@@ -3156,12 +3161,14 @@ window.applyStudentSchedule = function(seat, idx) {
 };
 
 window.dismissAlert = function(idx) {
-  scheduleAlerts.splice(idx, 1);
+  const alerts = window._scheduleAlerts || scheduleAlerts;
+  alerts.splice(idx, 1);
   renderScheduleAlerts();
 };
 
 window.clearAllScheduleAlerts = function() {
-  scheduleAlerts.length = 0;
+  const alerts = window._scheduleAlerts || scheduleAlerts;
+  alerts.length = 0;
   renderScheduleAlerts();
 };
 
