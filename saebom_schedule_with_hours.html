@@ -3187,8 +3187,8 @@ window.loadSmsLog = async function() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
 
-  // localStorage 먼저 즉시 표시
-  let logs = [..._smsLogs];
+  // localStorage 먼저 즉시 표시 (최신순)
+  let logs = [..._smsLogs].sort((a, b) => (b.id || 0) - (a.id || 0));
   _smsLogData = logs;
   renderSmsLog(logs);
 
@@ -3206,7 +3206,11 @@ window.loadSmsLog = async function() {
         const merged = [...fbLogs];
         const fbIds = new Set(fbLogs.map(l => l.id));
         _smsLogs.forEach(l => { if (!fbIds.has(l.id)) merged.push(l); });
-        merged.sort((a, b) => (b.id || 0) - (a.id || 0));
+        merged.sort((a, b) => {
+          const ta = a.sentAt ? new Date(a.sentAt).getTime() : (a.id || 0);
+          const tb = b.sentAt ? new Date(b.sentAt).getTime() : (b.id || 0);
+          return tb - ta;
+        });
         logs = merged.slice(0, 300);
         _smsLogData = logs;
         renderSmsLog(logs);
