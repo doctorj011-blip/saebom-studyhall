@@ -3023,7 +3023,7 @@ async function saveScheduleToFirebase(student) {
   try {
     await window.saveStudentToFirebase(student);
     // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
-    const schedRef = doc(db, 'schedules', student.seat);
+    const schedRef = doc(db, 'schedules', student.seat.replace(/[^0-9]/g, '') || student.seat);
     const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
     ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
     await setDoc(schedRef, payload);
