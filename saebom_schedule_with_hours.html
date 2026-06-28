@@ -1354,7 +1354,7 @@ async function processCheckin() {
           const existing = STUDENTS.find(s => s.seat === v.seat);
           if (!existing) {
             STUDENTS.push({
-              seat: v.seat, name: v.name,
+              seat: String(v.seat).replace('번',''), name: v.name,
               phone: v.phone || '', parent: v.parent || '',
               schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
               hours: {}  // 누적시간은 이번 달 입퇴실 기록으로만 계산
@@ -2974,7 +2974,7 @@ async function loadStudentsFromFirebase() {
         const v = d.data();
         if (!v.name) return; // 빈 자리 문서 제외
         STUDENTS.push({
-          seat: v.seat, name: v.name,
+          seat: String(v.seat).replace('번',''), name: v.name,
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f',
           expiry: v.expiry || '',
@@ -2995,7 +2995,8 @@ async function loadStudentsFromFirebase() {
     snap.docChanges().forEach(change => {
       const v = change.doc.data();
       if (change.type === 'removed') {
-        const idx = STUDENTS.findIndex(s => s.seat === change.doc.id);
+        const docId = change.doc.id.replace('번','');
+        const idx = STUDENTS.findIndex(s => s.seat === docId);
         if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
         return;
       }
@@ -3005,9 +3006,10 @@ async function loadStudentsFromFirebase() {
         if (s) { s.seat = ''; changed = true; }
         return;
       }
-      const idx = STUDENTS.findIndex(s => s.seat === v.seat);
+      const vSeat = String(v.seat).replace('번','');
+      const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       const updated = {
-        seat: v.seat, name: v.name,
+        seat: String(v.seat).replace('번',''), name: v.name,
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
@@ -3015,7 +3017,7 @@ async function loadStudentsFromFirebase() {
       };
       if (idx !== -1) {
         // 좌석이 바뀐 경우 (이름은 같은데 seat 키가 다른 경우) 처리
-        const nameIdx = STUDENTS.findIndex(s => s.name === v.name && s.seat !== v.seat);
+        const nameIdx = STUDENTS.findIndex(s => s.name === v.name && s.seat !== vSeat);
         if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
         STUDENTS[idx] = updated;
       } else {
