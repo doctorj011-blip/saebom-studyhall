@@ -2231,6 +2231,8 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     const student = STUDENTS.find(s => s.name === studentName);
     if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
 
+    window._seatChanging = true; // onSnapshot 중복 방지 플래그
+
     if (occupant) {
       // 두 학생 교환: occupant → oldSeat
       await _saveSeatDoc({...occupant, seat: oldSeat}, newSeat);
@@ -2256,7 +2258,11 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
 
     const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
     showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
+
+    // 1초 후 플래그 해제
+    setTimeout(() => { window._seatChanging = false; }, 1000);
   } catch(err) {
+    window._seatChanging = false;
     console.error('좌석 변경 실패:', err);
     showAdminToast('❌ 좌석 변경 중 오류: ' + err.message);
   }
@@ -3064,6 +3070,7 @@ async function loadStudentsFromFirebase() {
 
   // ── students 컬렉션 실시간 감시 (자리선택 등 변경 즉시 반영) ──
   onSnapshot(collection(db, 'students'), (snap) => {
+    if (window._seatChanging) return; // 드래그&드롭 중 중복 방지
     let changed = false;
     snap.docChanges().forEach(change => {
       const v = change.doc.data();
