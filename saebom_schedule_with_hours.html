@@ -2859,6 +2859,7 @@ async function loadStudentsFromFirebase() {
 // Firebase 전역 함수 노출
 window.saveStudentToFirebase = saveStudentToFirebase;
 window.deleteStudentFromFirebase = deleteStudentFromFirebase;
+window.loadStudentsFromFirebase = loadStudentsFromFirebase;
 
 // 앱 시작
 loadStudentsFromFirebase();
@@ -3106,7 +3107,7 @@ function renderScheduleAlerts() {
 
     return `<div class="sc-alert-item" id="sc-item-${idx}" style="position:relative;background:#fff;border:1.5px solid ${applied?'#A5D6A7':'#F7C1C1'};border-radius:14px;padding:14px 16px 12px;margin-bottom:8px;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
       <!-- 우측 상단 X 버튼 -->
-      <button onclick="dismissAlert(${idx})" title="알림 닫기"
+      <button onclick="window.dismissAlert(${idx})" title="알림 닫기"
         style="position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:background 0.15s"
         onmouseover="this.style.background='rgba(0,0,0,0.16)'" onmouseout="this.style.background='rgba(0,0,0,0.08)'">✕</button>
 
@@ -3121,11 +3122,11 @@ function renderScheduleAlerts() {
           <div class="sc-alert-btns">
             ${applied
               ? `<button class="sc-apply-btn" style="background:#aaa;cursor:default" disabled>✅ 적용됨</button>`
-              : `<button class="sc-apply-btn" onclick="applyStudentSchedule('${a.seat}',${idx})">적용</button>`
+              : `<button class="sc-apply-btn" onclick="window.applyStudentSchedule('${a.seat}',${idx})">적용</button>`
             }
             ${a.smsSent
               ? `<button class="sc-dismiss-btn sc-sms-btn" style="background:#d4edda;color:#2D7A4F;border:1px solid #A5D6A7;cursor:default" disabled>✅ 문자발송됨</button>`
-              : `<button class="sc-dismiss-btn sc-sms-btn" onclick="sendKakaoSMS('${a.studentName}','${a.seat}',${idx})">확인문자</button>`
+              : `<button class="sc-dismiss-btn sc-sms-btn" onclick="window.sendKakaoSMS('${a.studentName}','${a.seat}',${idx})">확인문자</button>`
             }
           </div>
         </div>
