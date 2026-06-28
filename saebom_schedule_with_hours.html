@@ -2848,10 +2848,8 @@ const knownSchedules = {};   // { seat: { 월,화,...,updatedAt } }
 const scheduleAlerts = [];   // 화면에 표시할 변경 알림 목록
 
 console.log('%c 관리자앱 v2026-06-26 02:36 ', 'background:#C8900A;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
-// STUDENTS 배열을 초기 기준값으로 미리 등록 (Firebase 로딩 전 기준점)
-STUDENTS.forEach(s => {
-  knownSchedules[s.seat] = Object.assign({ name: s.name, seat: s.seat }, s.schedule);
-});
+// knownSchedules는 onSnapshot 첫 'added' 이벤트에서 Firebase 실제값으로 초기화
+// (STUDENTS 배열로 초기화하면 schedules 컬렉션 실제값과 달라서 오탐/무감지 발생)
 
 // 관리자가 스케줄/정보 수정 시 students + schedules 양쪽 저장
 async function saveScheduleToFirebase(student) {
@@ -2876,14 +2874,10 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     const seat = change.doc.id;
     const data = change.doc.data();
 
-    // 최초 로딩(added): Firebase 저장값으로 기준값 업데이트, 알림 생략
-    if (change.type === 'added') {
-      knownSchedules[seat] = data;
-      return;
-    }
-
-    // modified: 파싱 결과로 비교 (형식 차이로 인한 오탐 방지)
+    // added/modified 모두 기존값과 비교해서 변경 감지
     const prev = knownSchedules[seat] || {};
+    const isFirstLoad = change.type === 'added' && !prev.updatedAt;
+
     const dayChanges = DAYS.filter(d => {
       const oldStr = prev[d] || '-';
       const newStr = data[d] || '-';
@@ -2891,11 +2885,9 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
       // 파싱 결과가 실질적으로 다른지 비교
       const oldP = parseScheduleStr(oldStr);
       const newP = parseScheduleStr(newStr);
-      // periods, absentPeriods, absentReasons 비교
       const setsEqual = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
       if (!setsEqual(oldP.periods, newP.periods)) return true;
       if (!setsEqual(oldP.absentPeriods, newP.absentPeriods)) return true;
-      // 결석사유 비교
       const allAbsent = new Set([...oldP.absentPeriods, ...newP.absentPeriods]);
       for (const p of allAbsent) {
         if ((oldP.absentReasons[p]||'') !== (newP.absentReasons[p]||'')) return true;
@@ -2905,7 +2897,8 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
 
     knownSchedules[seat] = data;
 
-    if (dayChanges.length === 0) return;
+    // 최초 로딩(앱 시작 직후 added)이거나 변경 없으면 알림 생략
+    if (isFirstLoad || dayChanges.length === 0) return;
 
     // 같은 seat의 기존 알림 교체 (중복 방지)
     const existIdx = scheduleAlerts.findIndex(a => a.seat === seat);
