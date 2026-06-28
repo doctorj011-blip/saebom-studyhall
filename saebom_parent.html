@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>새봄 면학관 학부모</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: #F5F5F5; color: #1F2937; min-height: 100vh; }
+
+  /* 로그인 */
+  #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #C8900A 0%, #8B6010 100%); padding: 24px; }
+  .login-logo { width: 72px; height: 72px; background: rgba(255,255,255,0.2); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 36px; margin-bottom: 16px; }
+  .login-title { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
+  .login-sub { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 32px; }
+  .login-card { background: #fff; border-radius: 20px; padding: 24px; width: 100%; max-width: 340px; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
+  .login-label { font-size: 12px; color: #888; margin-bottom: 6px; }
+  .login-input { width: 100%; padding: 12px 14px; border: 1.5px solid #E5E7EB; border-radius: 12px; font-size: 15px; outline: none; transition: border 0.2s; }
+  .login-input:focus { border-color: #C8900A; }
+  .login-btn { width: 100%; padding: 14px; background: #C8900A; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 16px; }
+  .login-btn:active { background: #8B6010; }
+  .login-error { color: #C62828; font-size: 12px; margin-top: 8px; text-align: center; min-height: 16px; }
+
+  /* 앱 */
+  #app-screen { display: none; min-height: 100vh; flex-direction: column; }
+  #app-screen.visible { display: flex; }
+
+  /* 헤더 */
+  .app-header { background: linear-gradient(135deg, #C8900A 0%, #8B6010 100%); padding: 16px 16px 0; }
+  .hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+  .hdr-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; }
+  .hdr-info { flex: 1; margin-left: 10px; }
+  .hdr-name { font-size: 15px; font-weight: 700; color: #fff; }
+  .hdr-sub { font-size: 11px; color: rgba(255,255,255,0.8); }
+  .logout-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
+
+  /* 탭 */
+  .app-tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .app-tabs::-webkit-scrollbar { display: none; }
+  .app-tab { flex: 0 0 auto; padding: 10px 14px; background: transparent; border: none; color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .app-tab.active { color: #fff; border-bottom: 3px solid #fff; font-weight: 700; }
+
+  /* 컨텐츠 */
+  .app-content { flex: 1; padding: 16px; }
+
+  /* 카드 */
+  .card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .card-title { font-size: 13px; font-weight: 700; color: #5C3D08; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+
+  /* 상태 배지 */
+  .badge-in { background: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .badge-out { background: #F3F4F6; color: #6B7280; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+
+  /* 스케줄 표 */
+  .sched-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .sched-table th { background: #FFF8DC; color: #5C3D08; padding: 6px 4px; text-align: center; border: 1px solid #F0E0A0; font-weight: 700; }
+  .sched-table td { padding: 5px 4px; text-align: center; border: 1px solid #F0E0A0; }
+  .sched-attend { color: #166534; font-weight: 600; }
+  .sched-absent { color: #C62828; }
+  .sched-none { color: #D1D5DB; }
+
+  /* 누적시간 */
+  .hours-bar { height: 8px; background: #F3F4F6; border-radius: 4px; overflow: hidden; margin-top: 6px; }
+  .hours-fill { height: 100%; background: linear-gradient(90deg, #C8900A, #E0B020); border-radius: 4px; transition: width 0.5s; }
+
+  /* 공지 */
+  .notice-item { padding: 12px 0; border-bottom: 1px solid #F3F4F6; }
+  .notice-item:last-child { border-bottom: none; }
+  .notice-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+  .notice-badge.중요 { background: #FEE2E2; color: #C62828; }
+  .notice-badge.일반 { background: #DBEAFE; color: #1D4ED8; }
+  .notice-badge.안내 { background: #DCFCE7; color: #166534; }
+  .notice-title { font-size: 13px; font-weight: 600; color: #1F2937; }
+  .notice-date { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+
+  /* 토스트 */
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- 로그인 화면 -->
+<div id="login-screen">
+  <div class="login-logo">👨‍👩‍👧</div>
+  <div class="login-title">새봄 면학관</div>
+  <div class="login-sub">학부모 전용 앱</div>
+  <div class="login-card">
+    <div class="login-label">자녀 이름</div>
+    <input class="login-input" id="login-name" type="text" placeholder="홍길동" autocomplete="off">
+    <div class="login-label" style="margin-top:12px">학부모 전화번호 (뒷 4자리)</div>
+    <input class="login-input" id="login-phone" type="tel" placeholder="1234" maxlength="4" inputmode="numeric">
+    <button class="login-btn" onclick="doLogin()">로그인</button>
+    <div class="login-error" id="login-error"></div>
+  </div>
+</div>
+
+<!-- 앱 화면 -->
+<div id="app-screen">
+  <div class="app-header">
+    <div class="hdr-top">
+      <div class="hdr-avatar" id="hdr-avatar">👤</div>
+      <div class="hdr-info">
+        <div class="hdr-name" id="hdr-name"></div>
+        <div class="hdr-sub" id="hdr-sub">새봄 면학관</div>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">로그아웃</button>
+    </div>
+    <div class="app-tabs">
+      <button class="app-tab active" onclick="showTab('status',this)">현황</button>
+      <button class="app-tab" onclick="showTab('schedule',this)">스케줄</button>
+      <button class="app-tab" onclick="showTab('hours',this)">누적시간</button>
+      <button class="app-tab" onclick="showTab('notice',this)">공지사항</button>
+      <button class="app-tab" onclick="showTab('planner',this)">플래너</button>
+    </div>
+  </div>
+
+  <div class="app-content">
+    <!-- 현황 탭 -->
+    <div id="tab-status">
+      <div class="card">
+        <div class="card-title">📍 현재 상태</div>
+        <div id="status-content" style="text-align:center;padding:12px 0">
+          <div id="status-badge" class="badge-out">확인 중...</div>
+          <div id="status-time" style="font-size:12px;color:#888;margin-top:8px"></div>
+          <div id="status-seat" style="font-size:13px;font-weight:600;color:#5C3D08;margin-top:6px"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">📅 오늘 입퇴실 기록</div>
+        <div id="today-records" style="font-size:13px;color:#888">불러오는 중...</div>
+      </div>
+      <div class="card">
+        <div class="card-title">📊 이번 달 현황</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div style="text-align:center;padding:10px;background:#FFF8DC;border-radius:10px">
+            <div style="font-size:11px;color:#888;margin-bottom:4px">누적 시간</div>
+            <div id="month-hours" style="font-size:22px;font-weight:800;color:#C8900A">0h</div>
+          </div>
+          <div style="text-align:center;padding:10px;background:#FFF8DC;border-radius:10px">
+            <div style="font-size:11px;color:#888;margin-bottom:4px">좌석</div>
+            <div id="month-seat" style="font-size:22px;font-weight:800;color:#C8900A">-</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 스케줄 탭 -->
+    <div id="tab-schedule" style="display:none">
+      <div class="card">
+        <div class="card-title">📋 주간 스케줄</div>
+        <div id="schedule-content" style="overflow-x:auto">불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 누적시간 탭 -->
+    <div id="tab-hours" style="display:none">
+      <div class="card">
+        <div class="card-title">⏱ 월별 누적시간</div>
+        <div id="hours-content">불러오는 중...</div>
+      </div>
+    </div>
+
+    <!-- 공지사항 탭 -->
+    <div id="tab-notice" style="display:none">
+      <div class="card">
+        <div class="card-title">📢 공지사항</div>
+        <div id="notice-content" style="font-size:13px;color:#888">불러오는 중...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+    <!-- 플래너 탭 -->
+    <div id="tab-planner" style="display:none">
+      <div class="card">
+        <div class="card-title">📸 스터디 플래너</div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+          <button onclick="changeParentPlannerDate(-1)" style="padding:6px 12px;border:1.5px solid #E0B020;border-radius:8px;background:#FFFDF5;color:#5C3D08;font-size:16px;cursor:pointer">‹</button>
+          <div id="parent-planner-date" style="flex:1;text-align:center;font-size:14px;font-weight:700;color:#1F2937"></div>
+          <button onclick="changeParentPlannerDate(1)" style="padding:6px 12px;border:1.5px solid #E0B020;border-radius:8px;background:#FFFDF5;color:#5C3D08;font-size:16px;cursor:pointer">›</button>
+        </div>
+        <div id="parent-planner-images" style="display:flex;flex-direction:column;gap:12px">
+          <div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>
+        </div>
+      </div>
+    </div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DAYS = ['월','화','수','목','금','토'];
+const PERIODS_WEEK = [
+  {n:7,label:'7교시',t:'18:00~18:50'},
+  {n:8,label:'8교시',t:'19:00~20:20'},
+  {n:9,label:'9교시',t:'20:30~22:00'},
+  {n:10,label:'10교시',t:'22:30~23:50'},
+  {n:11,label:'11교시',t:'00:00~01:00'},
+];
+const PERIODS_SAT = [
+  {n:1,label:'1교시',t:'09:00~10:00'},{n:2,label:'2교시',t:'10:10~11:10'},
+  {n:3,label:'3교시',t:'11:20~12:30'},{n:4,label:'4교시',t:'13:30~14:30'},
+  {n:5,label:'5교시',t:'14:40~15:40'},{n:6,label:'6교시',t:'15:50~17:00'},
+  {n:7,label:'7교시',t:'18:00~18:50'},{n:8,label:'8교시',t:'19:00~20:20'},
+  {n:9,label:'9교시',t:'20:30~22:00'},{n:10,label:'10교시',t:'22:30~23:50'},
+  {n:11,label:'11교시',t:'00:00~01:00'},
+];
+const MONTHS = [
+  {k:1,label:'1월'},{k:2,label:'2월'},{k:3,label:'3월'},{k:4,label:'4월'},
+  {k:5,label:'5월'},{k:6,label:'6월'},{k:7,label:'7월'},{k:8,label:'8월'},
+  {k:9,label:'9월'},{k:10,label:'10월'},{k:11,label:'11월'},{k:12,label:'12월'},
+];
+
+let currentStudent = null;
+let currentTab = 'status';
+
+function showTab(id, btn) {
+  if (id === 'planner') loadParentPlanner();
+  ['status','schedule','hours','notice','planner'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
+  });
+  document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentTab = id;
+  try { sessionStorage.setItem('saebom_parent_tab', id); } catch(e) {}
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// ── 로그인 ──
+// ── 더미 데이터 (로컬 테스트용) ──
+const DUMMY_STUDENT = {
+  name: '이우영',
+  seat: '37',
+  phone: '010-1234-5678',
+  parent: '010-8765-4321',
+  gender: 'f',
+  expiry: '2026-07-01',
+  schedule: {
+    월: '7,8,9,10',
+    화: '7,x(수학학원),9,10',
+    수: '7,8,9,10',
+    목: '7,8,x(영어학원),10',
+    금: '7,8,9,10',
+    토: '1,2,3,4,5,6,7,8,9',
+  },
+  hours: { 1:12, 2:18, 3:24, 4:30, 5:22, 6:28, 7:0, 8:0, 9:0, 10:0, 11:0, 12:0 }
+};
+
+const DUMMY_RECORDS = [
+  { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'18:05', outTime:'22:10' },
+  { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'14:30', outTime:null },
+];
+
+const DUMMY_NOTICES = [
+  { type:'중요', title:'7월 운영 안내', content:'7월 1일부터 하계 특별 운영 시간이 적용됩니다.', date:'2026.06.28' },
+  { type:'일반', title:'청소 당번 안내', content:'이번 주 청소 당번을 확인해 주세요.', date:'2026.06.25' },
+  { type:'안내', title:'Wi-Fi 비밀번호 변경', content:'면학관 와이파이 비밀번호가 변경되었습니다.', date:'2026.06.20' },
+];
+
+async function doLogin() {
+  const name = document.getElementById('login-name').value.trim();
+  const phone = document.getElementById('login-phone')?.value.trim() || '';
+  const errEl = document.getElementById('login-error');
+  errEl.textContent = '';
+  if (!name) { errEl.textContent = '이름을 입력해주세요'; return; }
+
+  errEl.textContent = '확인 중...';
+
+  // Firebase 연결 시 실제 조회
+  if (window._firebaseReady && window._getDocs) {
+    const found = await doLoginFirebase(name, phone);
+    if (found) {
+      currentStudent = found;
+      try { sessionStorage.setItem('saebom_parent', JSON.stringify(found)); } catch(e) {}
+      enterApp();
+      return;
+    }
+    // Firebase에 없으면 더미 데이터로 폴백 (테스트용)
+  }
+  // 로컬 테스트 모드
+  currentStudent = { ...DUMMY_STUDENT, name };
+  try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
+  enterApp();
+}
+
+function enterApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app-screen').classList.add('visible');
+  document.getElementById('hdr-avatar').textContent = currentStudent.name[0];
+  document.getElementById('hdr-name').textContent = currentStudent.name;
+  document.getElementById('hdr-sub').textContent = (currentStudent.seat || '-') + '번 · 새봄 면학관';
+  loadAllData();
+}
+
+function doLogout() {
+  currentStudent = null;
+  try { sessionStorage.removeItem('saebom_parent'); } catch(e) {}
+  document.getElementById('app-screen').classList.remove('visible');
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('login-name').value = '';
+  document.getElementById('login-phone').value = '';
+}
+
+// ── 데이터 로드 ──
+async function loadAllData() {
+  await startStatusRealtime();  // 실시간 먼저
+  loadSchedule();
+  loadHours();
+  loadNotices();
+}
+
+// 입퇴실 (로컬: 더미 데이터)
+async function startStatusRealtime() {
+  if (!window._onSnapshot || !window._db || !currentStudent) {
+    loadStatus(); return;
+  }
+  const today = new Date().toISOString().slice(0,10);
+  try {
+    window._onSnapshot(
+      window._query(window._collection(window._db, 'checkin_records'), window._where('studentName','==', currentStudent.name)),
+      snap => {
+        const records = [];
+        snap.forEach(d => records.push(d.data()));
+        const todayRecs = records.filter(r => r.date === today).sort((a,b)=>(a.inTime||'').localeCompare(b.inTime||''));
+        renderStatus(todayRecs);
+      }
+    );
+  } catch(e) { loadStatus(); }
+}
+
+function loadStatus() {
+  const today = new Date().toISOString().slice(0,10);
+  const todayRecs = DUMMY_RECORDS.filter(r => r.date === today).sort((a,b) => (a.inTime||'').localeCompare(b.inTime||''));
+  renderStatus(todayRecs);
+}
+
+function renderStatus(todayRecs) {
+  const isIn = todayRecs.some(r => r.inTime && !r.outTime);
+  const lastRec = todayRecs[todayRecs.length - 1];
+  const badge = document.getElementById('status-badge');
+  const timeEl = document.getElementById('status-time');
+  const seatEl = document.getElementById('status-seat');
+
+  if (isIn) {
+    badge.className = 'badge-in'; badge.textContent = '✅ 입실 중';
+    const inRec = todayRecs.find(r => r.inTime && !r.outTime);
+    timeEl.textContent = `입실 시각: ${inRec?.inTime || ''}`;
+    seatEl.textContent = `좌석: ${currentStudent.seat || '-'}번`;
+  } else if (lastRec) {
+    badge.className = 'badge-out'; badge.textContent = '🏠 퇴실';
+    timeEl.textContent = `퇴실 시각: ${lastRec.outTime || ''}`;
+    seatEl.textContent = '';
+  } else {
+    badge.className = 'badge-out'; badge.textContent = '미입실';
+    timeEl.textContent = '오늘 아직 입실하지 않았어요';
+    seatEl.textContent = '';
+  }
+
+  // 오늘 기록
+  const recEl = document.getElementById('today-records');
+  if (!todayRecs.length) {
+    recEl.innerHTML = '<div style="color:#aaa;padding:8px 0">오늘 입퇴실 기록이 없습니다</div>';
+  } else {
+    recEl.innerHTML = todayRecs.map(r =>
+      `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F3F4F6;font-size:13px">
+        <span style="color:#5C3D08;font-weight:600">📌 입실 ${r.inTime}</span>
+        <span style="color:#6B7280">${r.outTime ? '퇴실 '+r.outTime : '입실 중'}</span>
+      </div>`
+    ).join('');
+  }
+
+  // 이번 달 누적
+  const monthKey = new Date().getMonth() + 1;
+  const h = currentStudent.hours?.[monthKey] || 0;
+  document.getElementById('month-hours').textContent = h + 'h';
+  document.getElementById('month-seat').textContent = currentStudent.seat ? currentStudent.seat+'번' : '-';
+}
+
+function loadSchedule() {
+  if (!currentStudent) return;
+  const sched = currentStudent.schedule || {};
+  const periodNums = [...new Set([...PERIODS_WEEK.map(p=>p.n), ...PERIODS_SAT.map(p=>p.n)])].sort((a,b)=>a-b);
+
+  let html = '<table class="sched-table"><thead><tr><th>교시</th>';
+  DAYS.forEach(d => { html += `<th>${d}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  // 표시할 교시: 평일은 7~11, 토요일은 1~11
+  const allPeriods = PERIODS_SAT;
+  allPeriods.forEach(p => {
+    html += `<tr><td style="font-size:10px;color:#888;white-space:nowrap">${p.n}교시</td>`;
+    DAYS.forEach(day => {
+      const str = sched[day] || '-';
+      if (str === '-') { html += '<td class="sched-none">—</td>'; return; }
+      // 토요일 아닌데 1~6교시면 패스
+      if (day !== '토' && p.n <= 6) { html += '<td></td>'; return; }
+      const tokens = str.split(',');
+      const periodIdx = (day === '토' ? PERIODS_SAT : PERIODS_WEEK).findIndex(pp => pp.n === p.n);
+      if (periodIdx < 0) { html += '<td></td>'; return; }
+      const token = tokens[periodIdx];
+      if (!token) { html += '<td class="sched-none">—</td>'; return; }
+      if (token.startsWith('x')) {
+        const reason = token.match(/\(([^)]+)\)/)?.[1] || '';
+        html += `<td class="sched-absent" title="${reason}">✕</td>`;
+      } else {
+        html += `<td class="sched-attend">○</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  html += '<div style="margin-top:10px;font-size:11px;color:#888">○: 출석 / ✕: 결석 / —: 해당없음</div>';
+  document.getElementById('schedule-content').innerHTML = html;
+}
+
+function loadHours() {
+  if (!currentStudent) return;
+  const hours = currentStudent.hours || {};
+  const currentMonth = new Date().getMonth() + 1;
+  const maxH = Math.max(...MONTHS.map(m => hours[m.k] || 0), 1);
+
+  let html = MONTHS.map(m => {
+    const h = hours[m.k] || 0;
+    const pct = Math.round(h / maxH * 100);
+    const isCurrent = m.k === currentMonth;
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <span style="font-size:12px;font-weight:${isCurrent?'700':'400'};color:${isCurrent?'#C8900A':'#374151'}">${m.label}</span>
+        <span style="font-size:12px;font-weight:700;color:${isCurrent?'#C8900A':'#6B7280'}">${h}h</span>
+      </div>
+      <div class="hours-bar"><div class="hours-fill" style="width:${pct}%;opacity:${isCurrent?1:0.5}"></div></div>
+    </div>`;
+  }).join('');
+
+  const total = Object.values(hours).reduce((a,b)=>a+b, 0);
+  html += `<div style="margin-top:16px;padding:12px;background:#FFF8DC;border-radius:10px;text-align:center">
+    <div style="font-size:11px;color:#888;margin-bottom:2px">총 누적 시간</div>
+    <div style="font-size:24px;font-weight:800;color:#C8900A">${Math.round(total*10)/10}h</div>
+  </div>`;
+
+  document.getElementById('hours-content').innerHTML = html;
+}
+
+async function loadNotices() {
+  const el = document.getElementById('notice-content');
+  let items = DUMMY_NOTICES;
+  if (window._getDoc && window._doc && window._db) {
+    try {
+      const snap = await window._getDoc(window._doc(window._db, 'notices', 'list'));
+      if (snap.exists()) items = snap.data().items || [];
+    } catch(e) {}
+  }
+  if (!items.length) { el.innerHTML = '<div style="color:#aaa;padding:8px 0">공지사항이 없습니다</div>'; return; }
+  el.innerHTML = items.slice().reverse().map(n => `
+    <div class="notice-item">
+      <div class="notice-badge ${n.type||'일반'}">${n.type||'일반'}</div>
+      <div class="notice-title">${n.title}</div>
+      ${n.content ? `<div style="font-size:12px;color:#6B7280;margin-top:4px">${n.content}</div>` : ''}
+      <div class="notice-date">${n.date||''}</div>
+    </div>`).join('');
+}
+
+// ── 학부모앱 플래너 조회 ──
+let parentPlannerDate = new Date().toISOString().slice(0,10);
+
+function loadParentPlanner() {
+  updateParentPlannerDate();
+  loadParentPlannerImages();
+}
+
+function updateParentPlannerDate() {
+  const d = new Date(parentPlannerDate + 'T00:00:00');
+  const dn = ['일','월','화','수','목','금','토'];
+  document.getElementById('parent-planner-date').textContent =
+    `${d.getMonth()+1}월 ${d.getDate()}일 (${dn[d.getDay()]})`;
+}
+
+function changeParentPlannerDate(delta) {
+  const d = new Date(parentPlannerDate + 'T00:00:00');
+  d.setDate(d.getDate() + delta);
+  parentPlannerDate = d.toISOString().slice(0,10);
+  updateParentPlannerDate();
+  loadParentPlannerImages();
+}
+
+async function loadParentPlannerImages() {
+  const el = document.getElementById('parent-planner-images');
+  if (!el || !currentStudent) return;
+
+  const storage = window._storage;
+  if (!storage) {
+    // 로컬 테스트: 더미 표시
+    el.innerHTML = `<div style="background:#F3F4F6;border-radius:12px;padding:40px;text-align:center;color:#aaa;font-size:13px">
+      Firebase Storage 연결 후<br>학생이 업로드한 플래너를 볼 수 있어요</div>`;
+    return;
+  }
+
+  el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>';
+
+  try {
+    const seat = (currentStudent.seat || '').replace(/[^0-9]/g,'') || currentStudent.seat;
+    const path = `planners/${seat}/${parentPlannerDate}`;
+    const listRef = window._storageRef(storage, path);
+    const result = await window._listAll(listRef);
+
+    if (!result.items.length) {
+      el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 업로드된 플래너가 없습니다</div>';
+      return;
+    }
+
+    const items = await Promise.all(result.items.map(async item => {
+      const url = await window._getDownloadURL(item);
+      return url;
+    }));
+
+    el.innerHTML = items.map(url =>
+      `<div style="border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+        <img src="${url}" style="width:100%;display:block;border-radius:16px" loading="lazy"
+          onclick="openParentImage('${url}')">
+      </div>`
+    ).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 업로드된 플래너가 없습니다</div>';
+  }
+}
+
+function openParentImage(url) {
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;border-radius:8px;object-fit:contain">`;
+  overlay.onclick = () => overlay.remove();
+  document.body.appendChild(overlay);
+}
+
+// Firebase 연동 로그인 (Storage 활성화 후)
+async function doLoginFirebase(name, phone) {
+  if (!window._getDocs || !window._collection || !window._db) return null;
+  try {
+    const snap = await window._getDocs(window._collection(window._db, 'students'));
+    let found = null;
+    snap.forEach(d => {
+      const s = d.data();
+      if (s.name === name && s.parent && s.parent.replace(/-/g,'').endsWith(phone)) found = s;
+    });
+    return found;
+  } catch(e) { return null; }
+}
+
+// 화면 복귀 시 갱신
+document.addEventListener('visibilitychange', function() {
+  if (document.hidden || !currentStudent) return;
+  startStatusRealtime();
+  loadNotices();
+  if (currentTab === 'planner') loadParentPlannerImages();
+});
+
+// 초기화
+(function() {
+  try {
+    const saved = sessionStorage.getItem('saebom_parent');
+    if (saved) {
+      currentStudent = JSON.parse(saved);
+      enterApp();
+      const tab = sessionStorage.getItem('saebom_parent_tab');
+      if (tab && tab !== 'status') {
+        const btn = document.querySelector(`.app-tab[onclick*="${tab}"]`);
+        if (btn) setTimeout(() => showTab(tab, btn), 300);
+      }
+    } else {
+      document.getElementById('login-screen').style.display = 'flex';
+    }
+  } catch(e) {
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+})();
+</script>
+
+<!-- Firebase -->
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+import { getFirestore, getDocs, collection, getDoc, doc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
+  authDomain: "saebom-studyhall.firebaseapp.com",
+  projectId: "saebom-studyhall",
+  storageBucket: "saebom-studyhall.appspot.com",
+  messagingSenderId: "273169263882",
+  appId: "1:273169263882:web:cb3c2abe45f76602d99ef3"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const storage = getStorage(app);
+window._db = db;
+window._storage = storage;
+window._storageRef = ref;
+window._listAll = listAll;
+window._getDownloadURL = getDownloadURL;
+window._getDocs = getDocs;
+window._collection = collection;
+window._getDoc = getDoc;
+window._doc = doc;
+window._query = query;
+window._where = where;
+window._onSnapshot = onSnapshot;
+window._firebaseReady = true;
+console.log('🔥 학부모앱 Firebase 연결 완료');
+</script>
+
+</body>
+</html>

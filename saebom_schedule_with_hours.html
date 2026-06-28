@@ -620,7 +620,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     </div>
 
 
-
     <!-- 자리선택 허용 -->
     <div class="card">
       <div class="card-title" style="margin-bottom:8px">
@@ -736,38 +735,7 @@ const PERIODS_SAT=[
 let PERIODS = PERIODS_WEEKDAY;
 let PERIOD_OFFSET = 6;
 
-let STUDENTS=[
-  {seat:'1번',name:'박지윤',phone:'010-8260-9557',parent:'010-2668-9557',schedule:{월:'x(영어학원),8,9,10',화:'7,8,9,10',수:'x(영어학원),8,9,10',목:'x(수학),x(수학),x(수학),10',금:'7,8,9,10',토:'1,2,3,4,5,6,x(수학),x(수학),x(수학),10,11'},hours:{}},
-  {seat:'4번',name:'정은찬',phone:'010-7687-7186',parent:'010-7687-3236',schedule:{월:'7,8,9,10',화:'x(수학),x(수학),x(수학),10',수:'7,8,9,10',목:'7,x(국어),x(국어),10',금:'7,8,9,10',토:'1,2,3,4,5,6,7,8,9,10'},hours:{}},
-  {seat:'6번',name:'김태현',phone:'010-5944-7969',parent:'010-9253-7969',schedule:{월:'x(영어),8,9,x',화:'x(수학학원),x(수학학원),x(수학학원),x',수:'7,x(영어학원),x(영어학원),x',목:'7,8,9,x',금:'7,8,9,10',토:'1,2,3,4,5,6,7,8,9,x'},hours:{}},
-  {seat:'7번',name:'김용찬',phone:'010-7137-3512',parent:'010-4393-3512',schedule:{월:'x(영어학원),8,9,10',화:'7,8,9,10',수:'x(수학학원),x(수학학원),x(수학학원),10',목:'x(영어학원),x(영어학원),x(영어학원),10',금:'x(과학학원),x(과학학원),9,10',토:'1,2,3,x(수학),x(수학),x(수학),x(수학),8,9,10'},hours:{}},
-  {seat:'8번',name:'강민수',phone:'010-2476-5626',parent:'010-8296-5626',schedule:{월:'7,8,9,10',화:'x(수학),x(수학),x(수학),10',수:'7,8,9,10',목:'x(확통특강),x(확통특강),9,10',금:'x(국어),x(국어),9,10',토:'1,2,3,x(수학학원),x(수학학원),x(수학학원),x(수학학원),8,9,10'},hours:{}},
-  {seat:'9번',name:'김은호',phone:'010-8308-9628',parent:'010-3367-9628',schedule:{월:'7,8,9,10',화:'x(수학),x(수학),x(수학),10',수:'7,8,9,10',목:'x(국어학원),x(국어학원),x(국어학원),10',금:'7,8,9,10',토:'x,2,3,x(새봄수학),x(새봄수학),x(새봄수학),x(저녁식사),8,9,10'},hours:{}},
-  {seat:'10번',name:'박지윤A',phone:'010-3916-2271',parent:'010-9858-2271',schedule:{월:'7,8,9,10,11',화:'x(새봄),x(새봄),x(새봄),10',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어),x(국어),9,10',토:'1,2,3,x(수학),x(수학),x(수학),x(저녁),x,x,10'},hours:{}},
-  {seat:'11번',name:'정은영',phone:'010-3351-5334',parent:'010-3791-9742',schedule:{월:'x(수학),x(수학),x(수학),10',화:'7,8,9,10',수:'x(소인수과목),8,x(영어)',목:'7,8,9,10',금:'x(수학),x(수학),x(수학)',토:'1,2,x(영어학원),x(영어학원),x(영어학원),6,x(과학),8,9'},hours:{}},
-  {seat:'12번',name:'김범수',phone:'010-8335-1790',parent:'010-4135-1790',schedule:{월:'7,8,9,10',화:'x(사탐학원),8,9,10',수:'x(영어),x(영어),9,10',목:'x(수학),x(수학),x(수학),10',금:'x(국어학원),x(영어),x(영어),10',토:'x,x,x,4,5,6,x(수학),x(수학),x(수학),10'},hours:{}},
-  {seat:'13번',name:'권민지',phone:'010-3797-7469',parent:'010-9135-7469',schedule:{월:'7,8,9,10',화:'x(수학),x(수학),x(수학)',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어학원),x(국어학원),x(국어학원)',토:'1,2,3,x(수학학원),x,x,x(영어),x(영어),x(영어)'},hours:{}},
-  {seat:'15번',name:'이승석',phone:'010-8780-2426',parent:'010-2801-2426',schedule:{월:'7,8,9,10',화:'x(수학),x(수학),x(수학),10',수:'7,8,9,10',목:'7,8,9,10',금:'x(국어),x(국어),9,10',토:'1,2,3,4,5,6,7,8,9,10'},hours:{}},
-  {seat:'16번',name:'유시훈',phone:'010-9481-2217',parent:'010-4783-3671',schedule:{월:'x(저녁),8,9,x,x',화:'x(학원),x(학원),x(학원),x,x',수:'x(저녁식사),8,9,x,x',목:'x(학원),x(학원),x(학원),x,x',금:'x(저녁식사),8,9,x,x',토:'x(학원),x(학원),x(학원),x(학원),x(학원),x(학원),x,x(학원),x(학원),x,x'},hours:{}},
-  {seat:'17번',name:'김지후',phone:'010-2403-7847',parent:'010-9466-7847',schedule:{월:'7,8,9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(수학학원),x(수학학원),x(수학학원),10',금:'7,8,9,10',토:'1,2,3,x(영어),x(영어),x(영어),x(수학학원),x(수학학원),x(수학학원),x(개인사정)'},hours:{}},
-  {seat:'18번',name:'김리원',phone:'010-6596-1345',parent:'010-4722-1002',schedule:{월:'7,8,9,10',화:'x(영어),x(영어),x(영어),10',수:'x(수학),x(수학),x(수학),10',목:'x(영어),x(영어),x(영어),10',금:'x(국어),x(국어),x(국어),10',토:'x(수학),x(수학),x(수학),x(과학),x(과학),x(과학),7,8,9,10'},hours:{}},
-  {seat:'19번',name:'장혜령',phone:'010-5131-0927',parent:'010-9303-0005',schedule:{월:'7,8,9,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(수학),x(수학),x(수학),10',금:'x(국어),x(국어),x(국어),10',토:'1,2,3,x(영어),x(영어),x(영어),x(수학),x(수학),x(수학),10'},hours:{}},
-  {seat:'20번',name:'변아인',phone:'010-4790-6863',parent:'010-4794-6863',schedule:{월:'x(수학학원),x(수학학원),x(수학학원),10',화:'7,8,x(영어학원),10',수:'x(국어학원),8,9,10',목:'7,x(영어학원),x(영어학원),10',금:'x(수학학원),x(수학학원),x(수학학원),10',토:'1,2,3,4,5,6,x(종교),x(종교),9,10'},hours:{}},
-  {seat:'21번',name:'박현진',phone:'010-5765-1486',parent:'010-2431-1486',schedule:{월:'7,8,9,10',화:'x(수업),x(수업),x(수업),10',수:'7,8,9,10',목:'7,8,9,10',금:'7,8,9,10',토:'1,2,3,4,5,6,7,8,9,x'},hours:{}},
-  {seat:'22번',name:'박준영',phone:'010-5375-7406',parent:'010-5374-7406',schedule:{월:'x(새봄),x(새봄),x(새봄),10,11',화:'x(영어),x(영어),x(영어),10,11',수:'7,8,9,10,11',목:'x(영어),x(영어),x(영어),10,11',금:'x(새봄),x(새봄),x(새봄),10,11',토:'1,2,3,4,5,6,7,8,9,10,11'},hours:{}},
-  {seat:'23번',name:'신유담',phone:'010-4301-5683',parent:'010-2641-5683',schedule:{월:'x(수학),x(수학),x(수학),10',화:'x(영어),x(영어),x(영어),10',수:'x(국어),x(국어),9,10',목:'x(영어),x(영어),x(영어),10',금:'x(수학),x(수학),x(수학),10',토:'10'},hours:{}},
-  {seat:'27번',name:'이은혁',phone:'010-3071-2400',parent:'010-5110-2400',schedule:{월:'x(영어),x(영어),x(영어),x,x',화:'x,8,9,10,11',수:'x(수학학원),x(수학학원),x(수학학원),10,11',목:'x,8,9,10,x',금:'x(영어학원),x(영어학원),x(영어학원),x,x',토:'x(수학),x(수학),x(수학),x(국어),x(국어),x(국어),x(국어),9,9,10,11'},hours:{}},
-  {seat:'29번',name:'이준서',phone:'010-8774-7933',parent:'010-4504-7933',schedule:{월:'7,8,9,x',화:'x(영어),x(영어),x(영어),x',수:'x(수학),x(수학),x(수학),x',목:'7,8,9,x',금:'7,8,9,x',토:'x(수학),x(수학),x(수학),x(과학),5,6,x(국어학원),x(국어학원),x(국어학원),x'},hours:{}},
-  {seat:'30번',name:'신치원',phone:'010-7226-2813',parent:'010-9989-2813',schedule:{월:'x,x,x,10',화:'7,8,9,10',수:'7,8,9,10',목:'x(영어),x(영어),9,10',금:'x(수학수업),x(수학수업),x(수학수업),10',토:'1,2,3,x(국어학원),x(국어학원),x(국어학원),7,8,9,10'},hours:{}},
-  {seat:'32번',name:'유공명',phone:'010-9318-4789',parent:'010-9353-4833',schedule:{월:'x(야간자율학습),x(야간자율학습),x(야간자율학습),10,11',화:'x(학원),x(학원),x(학원),10,11',수:'x(야간자율학습),x(야간자율학습),x(야간자율학습),10,11',목:'x(학원),x(학원),x(학원),10,11',금:'x(야간자율학습),x(야간자율학습),x(야간자율학습),10,11',토:'1,2,3,4,5,6,7,8,9,10,11'},hours:{}},
-  {seat:'34번',name:'김소윤',phone:'010-8713-6915',parent:'010-3578-3350',schedule:{월:'x(생명),x(생명),9,x',화:'x(수학),x(수학),x(수학),x',수:'x(영어),x(영어),x(영어),x',목:'x(수학),x(수학),x(수학),x',금:'7,8,9,x,x',토:'x(과탐클리닉),x(과탐클리닉),3,4,5,x(국어),x(국어),8,9,x,x'},hours:{}},
-  {seat:'35번',name:'김준현',phone:'010-4057-6238',parent:'010-8968-5467',schedule:{월:'7,8,9,10',화:'x(학원),x(학원),x(학원),10',수:'x(학원),x(학원),x(학원),10',목:'7,8,9,10',금:'x(학원),x(학원),x(학원),10',토:'x(학원),x(학원),x(학원),x(학원),5,6,7,8,9,x'},hours:{}},
-  {seat:'39번',name:'김지윤',phone:'010-5361-3615',parent:'010-5491-3615',schedule:{월:'x(수학학원),x(수학학원),x(수학학원),10',화:'7,8,9,10',수:'7,8,9,10',목:'x(영어학원),x(영어학원),x(영어학원),10',금:'x(수학학원),x(수학학원),x(수학학원),10',토:'x(국어학원),x(국어학원),x(국어학원),4,5,6,7,8,9,10'},hours:{}},
-  {seat:'40번',name:'한수아',phone:'010-6830-1364',parent:'010-5202-1364',schedule:{월:'7,8,9,10,11',화:'x(수학),x(수학),x(수학),10,11',수:'7,8,9,10,11',목:'7,8,9,10,11',금:'7,8,9,10,11',토:'x(수학),x(수학),x(수학),x(수학),5,6,x(과학),x(과학),x(과학),x(과학),11'},hours:{}},
-  {seat:'41번',name:'윤서정',phone:'010-4995-1709',parent:'010-9148-8580',schedule:{월:'x(수학학원),x(수학학원),x(수학학원),10',화:'x(영어학원),x(영어학원),x(영어학원),10',수:'7,8,9,10',목:'x(영어학원),x(영어학원),x(영어학원),10',금:'x(수학학원),x(수학학원),x(수학학원),10',토:'1,2,3,4,5,6,7,8,9,10'},hours:{}},
-  {seat:'42번',name:'권세나',phone:'010-6373-3328',parent:'010-2426-3328',schedule:{월:'x(새봄수학),x(새봄수학),x(새봄수학),x',화:'7,8,9,x',수:'7,8,9,x',목:'7,8,9,x',금:'x(새봄수학),x(새봄수학),x(새봄수학),x',토:'1,2,3,4,5,6,7,8,9,x'},hours:{}},
-  {seat:'45번',name:'조찬웅',phone:'010-5229-5421',parent:'010-8936-5421',schedule:{월:'x(영어),x(영어),x(영어),10',화:'7,8,9,10',수:'x(수학),x(수학),x(수학),10',목:'x(검도),8,9,10',금:'x(통사),x(통사),x(통사),10',토:'x(새봄),x(새봄),x(새봄),x(통과),x(국어),x(국어),7,8,9,10'},hours:{}},
-];
+let STUDENTS=[];
 
 const MONTHS=[{k:3,label:'3월'},{k:4,label:'4월'},{k:5,label:'5월'},{k:6,label:'6월'}];
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
@@ -1556,7 +1524,6 @@ window.checkinConfirm = function() {
 async function sendCheckinSMS(student, isCheckout, timeStr) {
   const parentPhone = student.parent || '';
   if (!parentPhone) {
-    console.log(`[SMS] ${student.name} 학부모 번호 없음 - 발송 생략`);
     return;
   }
   const type = isCheckout ? 'out' : 'in';
@@ -2192,7 +2159,7 @@ function initFpDrag() {
     wrap.classList.remove('dragging');
     if (dragDist > 5) {
       window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 500);
+      setTimeout(() => {  }, 500);
     }
     setTimeout(() => { _fpDragDist = 0; }, 50);
   });
@@ -2221,11 +2188,9 @@ function initFpDrag() {
   wrap.addEventListener('touchend', () => {
     if (dragDist > 8) {
       window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 700);
+ow._fpLastDragged = false; }, 700);
     }
-    isDragging = false;
-    dragDist = 0;
-  });
+    isDraggin });
 
   // 배치도 탭 열릴 때 초기 위치 중앙으로
   document.querySelector('[onclick*="floorplan"]').addEventListener('click', () => {
@@ -2674,7 +2639,7 @@ window.publishNotice = async function() {
     const newNotice = { id: Date.now(), badge, badgeLabel, title, preview: body.slice(0,40), body, date: today };
     const items = [...(window._adminNotices || []), newNotice];
     await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
-    window._adminNotices = items;
+    
     document.getElementById('notice-title-inp').value = '';
     document.getElementById('notice-body-inp').value = '';
     showAdminToast('✅ 공지사항이 발행됐습니다');
@@ -2689,8 +2654,7 @@ window.deleteNotice = async function(i) {
     const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const items = (window._adminNotices || []).filter((_,idx) => idx !== i);
     await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
-    window._adminNotices = items;
-    showAdminToast('✅ 공지가 삭제됐습니다');
+    window._adminNotices = items;됐습니다');
     loadNoticesAdmin();
   } catch(e) { console.error('공지 삭제 실패:', e); }
 };
@@ -2732,7 +2696,6 @@ window.initApp();
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
   // 화면이 다시 보일 때 Firebase 재연결 및 데이터 갱신
-  console.log('🔄 화면 복귀 — Firebase 재연결 중...');
   if (window.loadStudentsFromFirebase) window.loadStudentsFromFirebase();
   buildDashboard();
   if (document.getElementById('fp-room')) buildFloorplan();
@@ -2829,9 +2792,7 @@ async function loadStudentsFromFirebase() {
     const snap = await getDocs(collection(db, 'students'));
     if (snap.empty) {
       // 최초 1회: 현재 STUDENTS 배열을 Firebase에 업로드
-      console.log('🚀 학생 데이터 최초 Firebase 업로드 중...');
       for (const s of STUDENTS) { await saveStudentToFirebase(s); }
-      console.log('✅ 업로드 완료');
     } else {
       STUDENTS.length = 0;
       snap.forEach(d => {
@@ -2847,7 +2808,6 @@ async function loadStudentsFromFirebase() {
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
-      console.log(`✅ Firebase에서 ${STUDENTS.length}명 로드`);
     }
   } catch(e) {
     console.error('Firebase 로드 실패, 로컬 데이터 사용:', e);
@@ -2985,14 +2945,6 @@ window.clearAllStudyroomAlerts = function() {
 };
 
 
-window.refreshMessages = window.loadAdminMessages;
-
-function renderAdminMessages(msgs) {
-  const listEl = document.getElementById('admin-msg-list');
-  if (!msgs.length) {
-    listEl.innerHTML = '<div style="text-align:center;color:#aaa;padding:40px">학생 메시지가 없습니다.</div>';
-    return;
-  }
   // 대화 스레드별로 그룹핑 (학생 이름 기준)
   const threads = {};
   msgs.forEach(m => {
@@ -3023,45 +2975,12 @@ function renderAdminMessages(msgs) {
   listEl.innerHTML = html;
 }
 
-window.openReplyBar = function(studentName) {
-  currentReplyTo = studentName;
-  document.getElementById('reply-target').textContent = studentName;
-  document.getElementById('admin-reply-bar').style.display = 'flex';
-  document.getElementById('admin-reply-bar').style.flexDirection = 'column';
-  document.getElementById('admin-reply-text').focus();
-};
-
-window.closeReplyBar = function() {
-  currentReplyTo = null;
-  document.getElementById('admin-reply-bar').style.display = 'none';
-  document.getElementById('admin-reply-text').value = '';
-};
-
-window.sendAdminReply = async function() {
-  if (!currentReplyTo) return;
-  const text = document.getElementById('admin-reply-text').value.trim();
-  if (!text) return;
-  try {
-    await addDoc(collection(db, 'messages'), {
-      from: '조교',
-      to: currentReplyTo,
-      text: text,
-      createdAt: serverTimestamp()
-    });
-    document.getElementById('admin-reply-text').value = '';
-    closeReplyBar();
-  } catch(e) {
-    alert('전송 실패: ' + e.message);
-  }
-};
 
 // ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
 // 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
 const knownSchedules = {};   // { seat: { 월,화,...,updatedAt } }
 const scheduleAlerts = [];
 window._scheduleAlerts = scheduleAlerts;   // 화면에 표시할 변경 알림 목록
-
-console.log('%c 관리자앱 v2026-06-26 02:36 ', 'background:#C8900A;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
 // knownSchedules는 onSnapshot 첫 'added' 이벤트에서 Firebase 실제값으로 초기화
 // (STUDENTS 배열로 초기화하면 schedules 컬렉션 실제값과 달라서 오탐/무감지 발생)
 
@@ -3074,11 +2993,8 @@ async function saveScheduleToFirebase(student) {
     const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
     ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
     await setDoc(schedRef, payload);
-    console.log('✅ Firebase 저장:', student.name);
   } catch(e) { console.error('Firebase 저장 실패:', e); }
 }
-
-console.log('🔍 schedules 컬렉션 리스닝 시작...');
 onSnapshot(collection(db, 'schedules'), (snapshot) => {
   const DAYS = ['월','화','수','목','금','토'];
   let changed = false;
@@ -3181,7 +3097,6 @@ function renderScheduleAlerts() {
     </div>`;
   }).join('');
 }
-
 
 
 // 공지사항 저장 함수
@@ -3663,7 +3578,7 @@ window.openAddStudentModal = function(seatNum) {
 
 window._newStGender = 'f';
 window.selectGender = function(g) {
-  window._newStGender = g;
+  
   document.getElementById('new-st-gender-f').style.background = g==='f' ? '#FFF8DC' : '#fff';
   document.getElementById('new-st-gender-f').style.color = g==='f' ? '#C8900A' : '#888';
   document.getElementById('new-st-gender-m').style.background = g==='m' ? '#E8F0FF' : '#fff';
@@ -3955,6 +3870,4 @@ function showAdminToast(msg) {
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
-
-console.log('🔥 Firebase 연동 완료 — 학생 스케줄 변경을 실시간 감지합니다');
 </script>
