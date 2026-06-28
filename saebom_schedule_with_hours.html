@@ -108,7 +108,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .numpad-btn:active{background:var(--color-background-secondary)}
 .numpad-clear{background:#FCEBEB;color:#C62828;border-color:#F7C1C1;font-size:12px;font-weight:600}
 .numpad-del{background:var(--color-background-secondary)}
-.checkin-error{margin-top:14px;font-size:12px;color:#C62828;background:#FCEBEB;border-radius:8px;padding:8px 12px}
+.checkin-error{margin-top:14px;font-size:13px;color:#C62828;background:#FCEBEB;border-radius:8px;padding:10px 14px;text-align:center;line-height:1.6;border:1.5px solid #F09595}
 
 /* 확인 패널 */
 .checkin-confirm-panel{padding:8px 0}
@@ -1434,6 +1434,21 @@ async function processCheckin() {
   // 현재 상태 확인 (입실 중인지 퇴실 상태인지)
   const existing = todayRecords.find(r => r.studentName === student.name && !r.outTime);
   const isCheckout = !!existing;
+
+  // 만료일 확인 (퇴실은 만료돼도 허용, 입실만 차단)
+  if (!isCheckout && student.expiry) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const expDate = new Date(student.expiry); expDate.setHours(0,0,0,0);
+    if (expDate < today) {
+      // 만료된 경우 에러 메시지 표시
+      const errEl = document.getElementById('checkin-error');
+      errEl.innerHTML = `⛔ 사용기간이 만료되었습니다.<br>관리자에게 문의해주세요.`;
+      errEl.style.display = 'block';
+      numpadBuffer = '';
+      updateCheckinDisplay();
+      return;
+    }
+  }
 
   // 확인 패널 표시
   document.getElementById('checkin-input-panel').style.display = 'none';
