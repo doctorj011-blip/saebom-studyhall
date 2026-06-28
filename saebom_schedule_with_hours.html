@@ -2727,6 +2727,36 @@ window.initApp = function(){
   } catch(e) {}
 };
 window.initApp();
+// ── 스케줄 알림 버튼 함수 (일반 스크립트에서 실행) ──
+window.applyStudentSchedule = function(seat, idx) {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  const alert = alerts[idx];
+  if (!alert) return;
+  const student = STUDENTS.find(s => s.seat === seat);
+  if (!student) return;
+  alert.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
+  buildScheduleTable(currentDay);
+  buildStudentList(document.getElementById('student-search')?.value || '');
+  alert.applied = true;
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+  showAdminToast(`✅ ${student.name} 스케줄 적용 완료`);
+};
+
+window.dismissAlert = function(idx) {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  alerts.splice(idx, 1);
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+};
+
+window.clearAllScheduleAlerts = function() {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  alerts.length = 0;
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+};
+
 </script>
 
 <!-- Firebase 실시간 연동 -->
@@ -3140,37 +3170,7 @@ function renderScheduleAlerts() {
   }).join('');
 }
 
-window.applyStudentSchedule = function(seat, idx) {
-  const alerts = window._scheduleAlerts || scheduleAlerts;
-  const alert = alerts[idx];
-  if (!alert) return;
-  const student = (window.STUDENTS || STUDENTS).find(s => s.seat === seat);
-  if (!student) return;
-  alert.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
-  if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || currentDay);
-  if (window.buildStudentList) window.buildStudentList(document.getElementById('student-search')?.value || '');
 
-  alert.applied = true;
-  renderScheduleAlerts();
-
-  const t = document.createElement('div');
-  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)';
-  t.textContent = `✅ ${student.name} 스케줄 적용 완료`;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2200);
-};
-
-window.dismissAlert = function(idx) {
-  const alerts = window._scheduleAlerts || scheduleAlerts;
-  alerts.splice(idx, 1);
-  renderScheduleAlerts();
-};
-
-window.clearAllScheduleAlerts = function() {
-  const alerts = window._scheduleAlerts || scheduleAlerts;
-  alerts.length = 0;
-  renderScheduleAlerts();
-};
 
 // 공지사항 저장 함수
 window.saveNoticesToFirebase = async function(notices) {
