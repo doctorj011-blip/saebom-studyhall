@@ -3040,46 +3040,38 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     if (change.type === 'removed') return;
     const seat = change.doc.id;
     const data = change.doc.data();
+    const prev = knownSchedules[seat];
 
-    // added/modified 모두 기존값과 비교해서 변경 감지
-    const prev = knownSchedules[seat] || {};
-    const isFirstLoad = change.type === 'added' && !prev.updatedAt;
+    // 최초 로딩(앱 시작 시 added이고 아직 기준값 없는 경우)은 알림 생략
+    if (change.type === 'added' && !prev) {
+      knownSchedules[seat] = data;
+      return;
+    }
 
+    // 이전값과 비교 (단순 문자열 비교 — 실질적 변경만 감지)
+    const prevData = prev || {};
     const dayChanges = DAYS.filter(d => {
-      const oldStr = prev[d] || '-';
+      const oldStr = prevData[d] || '-';
       const newStr = data[d] || '-';
       if (oldStr === newStr) return false;
-      // 파싱 결과가 실질적으로 다른지 비교
-      const oldP = window.parseScheduleStr(oldStr);
-      const newP = window.parseScheduleStr(newStr);
-      const setsEqual = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
-      if (!setsEqual(oldP.periods, newP.periods)) return true;
-      if (!setsEqual(oldP.absentPeriods, newP.absentPeriods)) return true;
-      const allAbsent = new Set([...oldP.absentPeriods, ...newP.absentPeriods]);
-      for (const p of allAbsent) {
-        if ((oldP.absentReasons[p]||'') !== (newP.absentReasons[p]||'')) return true;
+      // parseScheduleStr로 실질적 변경 여부 확인 (형식 차이 무시)
+      if (window.parseScheduleStr) {
+        const oldP = window.parseScheduleStr(oldStr);
+        const newP = window.parseScheduleStr(newStr);
+        const eq = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
+        if (eq(oldP.periods, newP.periods) && eq(oldP.absentPeriods, newP.absentPeriods)) return false;
       }
-      return false;
-    }).map(d => ({ day: d, oldVal: prev[d] || '-', newVal: data[d] || '-' }));
+      return true;
+    }).map(d => ({ day: d, oldVal: prevData[d] || '-', newVal: data[d] || '-' }));
 
     knownSchedules[seat] = data;
 
-    // 최초 로딩(앱 시작 직후 added)이거나 변경 없으면 알림 생략
-    if (isFirstLoad || dayChanges.length === 0) return;
+    if (dayChanges.length === 0) return;
 
-    // 같은 seat의 기존 알림 교체 (중복 방지)
     const existIdx = scheduleAlerts.findIndex(a => a.seat === seat);
-    const alertObj = {
-      seat,
-      studentName: data.name || seat,
-      changes: dayChanges,
-      updatedAt: data.updatedAt,
-    };
-    if (existIdx !== -1) {
-      scheduleAlerts[existIdx] = alertObj;
-    } else {
-      scheduleAlerts.unshift(alertObj);
-    }
+    const alertObj = { seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt };
+    if (existIdx !== -1) scheduleAlerts[existIdx] = alertObj;
+    else scheduleAlerts.unshift(alertObj);
     changed = true;
   });
 
