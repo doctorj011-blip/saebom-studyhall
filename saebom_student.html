@@ -1407,7 +1407,7 @@ async function plannerLoadComments(dateStr) {
   try {
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
     const docId = seat + '_' + dateStr;
-    const snap = await getDoc(doc(db, 'planner_comments', docId));
+    const snap = await window._fsGetDoc(window._fsDoc(window._db, 'planner_comments', docId));
     if (snap.exists()) {
       const comments = snap.data().comments || [];
       if (comments.length > 0) {
