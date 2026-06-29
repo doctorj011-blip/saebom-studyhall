@@ -1304,11 +1304,12 @@ async function loadPlannerMonthData() {
     const st = await getPlannerStorage();
     const storage = st.storage;
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
-    const prefix = `planners/${seat}/${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
-    const listRef = st.ref(storage, prefix);
+    const monthPrefix = `${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
+    const listRef = st.ref(storage, `planners/${seat}`);
     const result = await st.listAll(listRef);
     for (const item of result.items) {
       const name = item.name.replace(/\.jpg$/i,'');
+      if (!name.startsWith(monthPrefix)) continue;
       try {
         const url = await st.getDownloadURL(item);
         plannerUploadedDates[name] = url;

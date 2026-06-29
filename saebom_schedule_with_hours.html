@@ -4521,11 +4521,12 @@ async function _apcLoadMonth() {
   if (!_apcSeat) return;
   try {
     const st = _apcGetStorage();
-    const prefix = 'planners/' + _apcSeat + '/' + _apcYear + '-' + String(_apcMonth+1).padStart(2,'0');
-    const listRef2 = storageRef(st, prefix);
+    const monthPrefix = _apcYear + '-' + String(_apcMonth+1).padStart(2,'0');
+    const listRef2 = storageRef(st, 'planners/' + _apcSeat);
     const result = await listAll(listRef2);
     for (const item of result.items) {
       const key = item.name.replace(/\.jpg$/i, '');
+      if (!key.startsWith(monthPrefix)) continue;
       try { _apcDates[key] = await getDownloadURL(item); } catch(e) {}
     }
   } catch(e) {
