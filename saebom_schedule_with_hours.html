@@ -631,17 +631,15 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         <input id="notice-title-inp" type="text" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
         <textarea id="notice-body-inp" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
 
-        <!-- 이미지 첨부 -->
+        <!-- 이미지 첨부 (최대 5장) -->
         <div style="margin-bottom:10px">
-          <div style="font-size:11px;font-weight:700;color:#8B6010;margin-bottom:6px">📎 이미지 첨부 (선택)</div>
-          <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#fff;border:1.5px solid #E0B020;border-radius:8px;cursor:pointer;font-size:12px;color:#8B6010;font-weight:600">
-            <i class="ti ti-photo" style="font-size:14px"></i> 이미지 선택
-            <input type="file" id="notice-img-inp" accept="image/*" style="display:none" onchange="noticePreviewImage(this)">
+          <div style="font-size:11px;font-weight:700;color:#8B6010;margin-bottom:6px">📎 이미지 첨부 (최대 5장)</div>
+          <label id="notice-img-add-btn" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#fff;border:1.5px solid #E0B020;border-radius:8px;cursor:pointer;font-size:12px;color:#8B6010;font-weight:600">
+            <i class="ti ti-photo-plus" style="font-size:14px"></i> 이미지 추가
+            <input type="file" id="notice-img-inp" accept="image/*" style="display:none" onchange="noticeAddImage(this)">
           </label>
-          <button onclick="noticeClearImage()" id="notice-img-clear" style="display:none;margin-left:8px;padding:7px 12px;background:#FCEBEB;border:1.5px solid #F09595;border-radius:8px;font-size:12px;color:#C62828;font-weight:600;cursor:pointer">✕ 제거</button>
-          <div id="notice-img-preview" style="margin-top:8px;display:none">
-            <img id="notice-img-preview-img" src="" style="max-width:100%;max-height:200px;border-radius:8px;border:1.5px solid #E0B020;object-fit:contain">
-          </div>
+          <span id="notice-img-count" style="margin-left:8px;font-size:11px;color:#aaa">0 / 5</span>
+          <div id="notice-img-thumbs" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
         </div>
 
         <button onclick="publishNotice()" style="width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">공지 발행</button>
@@ -3051,25 +3049,44 @@ window.cancelLongPress = function() {
   if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
 };
 
-// ── 공지 이미지 미리보기 ──
-window.noticePreviewImage = function(input) {
+// ── 공지 이미지 (최대 5장) ──
+window._noticePendingImages = []; // { dataURL }
+
+function _noticeUpdateUI() {
+  const imgs = window._noticePendingImages;
+  document.getElementById('notice-img-count').textContent = imgs.length + ' / 5';
+  const addBtn = document.getElementById('notice-img-add-btn');
+  addBtn.style.opacity = imgs.length >= 5 ? '0.4' : '1';
+  addBtn.style.pointerEvents = imgs.length >= 5 ? 'none' : 'auto';
+  document.getElementById('notice-img-thumbs').innerHTML = imgs.map((item, i) => `
+    <div style="position:relative;display:inline-block">
+      <img src="${item.dataURL}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1.5px solid #E0B020">
+      <button onclick="noticeRemoveImage(${i})" style="position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:#C62828;color:#fff;border:none;font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+    </div>`).join('');
+}
+
+window.noticeAddImage = function(input) {
   const file = input.files[0];
   if (!file) return;
+  if (window._noticePendingImages.length >= 5) { showAdminToast('⚠️ 이미지는 최대 5장입니다'); return; }
   const reader = new FileReader();
   reader.onload = function(e) {
-    window._noticePendingImage = e.target.result; // 원본 dataURL 임시 보관
-    document.getElementById('notice-img-preview-img').src = e.target.result;
-    document.getElementById('notice-img-preview').style.display = 'block';
-    document.getElementById('notice-img-clear').style.display = 'inline-flex';
+    window._noticePendingImages.push({ dataURL: e.target.result });
+    _noticeUpdateUI();
   };
   reader.readAsDataURL(file);
+  input.value = ''; // 같은 파일 재선택 허용
+};
+
+window.noticeRemoveImage = function(i) {
+  window._noticePendingImages.splice(i, 1);
+  _noticeUpdateUI();
 };
 
 window.noticeClearImage = function() {
-  window._noticePendingImage = null;
+  window._noticePendingImages = [];
   document.getElementById('notice-img-inp').value = '';
-  document.getElementById('notice-img-preview').style.display = 'none';
-  document.getElementById('notice-img-clear').style.display = 'none';
+  _noticeUpdateUI();
 };
 
 // 이미지를 canvas로 압축 (최대 900px, JPEG 0.75)
@@ -3114,7 +3131,7 @@ async function loadNoticesAdmin() {
           </div>
           <button onclick="deleteNotice(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">삭제</button>
         </div>
-        ${n.image ? `<img src="${n.image}" style="margin-top:8px;max-width:100%;max-height:120px;border-radius:6px;object-fit:contain;border:1px solid #E0B020">` : ''}
+        ${(n.images||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${(n.images).map(url=>`<img src="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #E0B020;cursor:pointer" onclick="noticeAdminImgZoom('${url}')">`).join('')}</div>` : (n.image ? `<img src="${n.image}" style="margin-top:8px;max-width:100%;max-height:120px;border-radius:6px;object-fit:contain;border:1px solid #E0B020">` : '')}
       </div>`).join('');
     window._adminNotices = items;
   } catch(e) { console.error('공지 로드 실패:', e); }
@@ -3130,11 +3147,11 @@ window.publishNotice = async function() {
   try {
     const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const today = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'.').replace('.','');
-    let image = null;
-    if (window._noticePendingImage) {
-      image = await compressImage(window._noticePendingImage);
+    const images = [];
+    for (const item of (window._noticePendingImages || [])) {
+      images.push(await compressImage(item.dataURL));
     }
-    const newNotice = { id: Date.now(), badge, badgeLabel, title, preview: body.slice(0,40), body, date: today, ...(image ? { image } : {}) };
+    const newNotice = { id: Date.now(), badge, badgeLabel, title, preview: body.slice(0,40), body, date: today, ...(images.length ? { images } : {}) };
     const items = [...(window._adminNotices || []), newNotice];
     await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
 
@@ -3144,6 +3161,14 @@ window.publishNotice = async function() {
     showAdminToast('✅ 공지사항이 발행됐습니다');
     loadNoticesAdmin();
   } catch(e) { console.error('공지 발행 실패:', e); showAdminToast('❌ 발행 실패: ' + e.message); }
+};
+
+window.noticeAdminImgZoom = function(url) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.innerHTML = `<img src="${url}" style="max-width:92vw;max-height:92vh;border-radius:10px;object-fit:contain">`;
+  ov.onclick = () => ov.remove();
+  document.body.appendChild(ov);
 };
 
 window.deleteNotice = async function(i) {
