@@ -311,7 +311,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
   <div class="stats-row">
     <div class="stat-card" style="cursor:pointer" onclick="showTodayAttendees()"><div class="stat-label">현재 입실</div><div class="stat-val green" id="stat-today">0</div></div>
     <div class="stat-card"><div class="stat-label">미입실 알림대상</div><div class="stat-val red" id="stat-alerts">0</div></div>
-    <div class="stat-card"><div class="stat-label">이번달 평균</div><div class="stat-val blue">168<span style="font-size:13px">h</span></div></div>
+    <div class="stat-card"><div class="stat-label">이번달 평균</div><div class="stat-val blue" id="stat-avg-hours">—<span style="font-size:13px">h</span></div></div>
 
   </div>
   <div class="alert-card">
@@ -1227,6 +1227,14 @@ function buildDashboard(){
   // 미입실 알림대상 수 동적 업데이트
   const alertsEl = document.getElementById('stat-alerts');
   if (alertsEl) alertsEl.textContent = ALERTS.length;
+  // 이번달 평균 누적시간 계산
+  const avgEl = document.getElementById('stat-avg-hours');
+  if (avgEl && STUDENTS.length > 0) {
+    const validStudents = STUDENTS.filter(s => parseInt(s.seat) < 54); // 관리자 제외
+    const vals = validStudents.map(s => s.hours[currentMonth] || 0);
+    const avg = vals.length > 0 ? Math.round(vals.reduce((a,b) => a+b, 0) / vals.length) : 0;
+    avgEl.innerHTML = `${avg}<span style="font-size:13px">h</span>`;
+  }
   // 알림 카드 제목 업데이트
   const p = getCurrentPeriod();
   const titleEl = document.getElementById('alert-title-text');
@@ -3687,17 +3695,20 @@ window.loadSmsLog = async function() {
 }
 
 window.renderSmsLog = function(logs) {
-  const today = new Date().toLocaleDateString('ko-KR');
-  const todayLogs = logs.filter(l => l.date === today);
-  const successLogs = logs.filter(l => l.success);
-  const failLogs = logs.filter(l => !l.success);
+  // 최신순 정렬
+  const sorted = [...logs].sort((a, b) => (b.id || 0) - (a.id || 0));
 
-  document.getElementById('smslog-total').textContent = logs.length;
+  const today = new Date().toLocaleDateString('ko-KR');
+  const todayLogs = sorted.filter(l => l.date === today);
+  const successLogs = sorted.filter(l => l.success);
+  const failLogs = sorted.filter(l => !l.success);
+
+  document.getElementById('smslog-total').textContent = sorted.length;
   document.getElementById('smslog-success').textContent = successLogs.length;
   document.getElementById('smslog-fail').textContent = failLogs.length;
   document.getElementById('smslog-today').textContent = todayLogs.length;
 
-  if (logs.length === 0) {
+  if (sorted.length === 0) {
     document.getElementById('smslog-list').innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">📭 발신내역이 없습니다</div>';
     return;
   }
@@ -3709,7 +3720,7 @@ window.renderSmsLog = function(logs) {
     schedule: { label:'스케줄확인', bg:'#EDE7F6', color:'#4A148C', border:'#CE93D8' }
   };
 
-  document.getElementById('smslog-list').innerHTML = logs.map((log, i) => {
+  document.getElementById('smslog-list').innerHTML = sorted.map((log, i) => {
     const t = typeBadge[log.type] || { label: log.typeLabel||'문자', bg:'#F5F5F5', color:'#555', border:'#E0E0E0' };
     const successBadge = log.success
       ? '<span style="font-size:11px;font-weight:700;color:#2D7A4F;background:#E8F5E9;border-radius:20px;padding:2px 8px">✅ 성공</span>'
@@ -3717,11 +3728,10 @@ window.renderSmsLog = function(logs) {
     const errorHtml = !log.success && log.error
       ? `<div style="font-size:11px;color:#C62828;background:#FCEBEB;border-radius:6px;padding:4px 8px;margin-top:8px">오류: ${log.error.slice(0,120)}</div>`
       : '';
-    // 첫 줄(제목행) 미리보기: 문자 내용 첫 줄
     const firstLine = (log.text||'').split('\n').filter(l=>l.trim())[0] || '';
     const detailId = `sms-detail-${i}`;
-    return `<div style="border-bottom:0.5px solid var(--color-border-tertiary)">
-      <!-- 헤더: 항상 표시 -->
+    const logId = log.id || '';
+    return `<div id="smsrow-${i}" style="border-bottom:0.5px solid var(--color-border-tertiary)">
       <div onclick="toggleSmsDetail('${detailId}')" style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;gap:10px;user-select:none"
            onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background=''">
         <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;flex:1;min-width:0">
@@ -3736,10 +3746,11 @@ window.renderSmsLog = function(logs) {
             <div style="font-size:11px;color:var(--color-text-tertiary)">${log.date||''}</div>
             <div style="font-size:11px;color:var(--color-text-tertiary)">${log.time||''}</div>
           </div>
+          <button onclick="event.stopPropagation();deleteSmsLog('${logId}', ${i})"
+            style="background:#FCEBEB;border:none;color:#C62828;border-radius:6px;padding:4px 8px;font-size:11px;cursor:pointer;flex-shrink:0" title="삭제">🗑</button>
           <span id="${detailId}-arrow" style="font-size:13px;color:var(--color-text-tertiary);transition:transform 0.2s">▼</span>
         </div>
       </div>
-      <!-- 상세: 접혀있음 -->
       <div id="${detailId}" style="display:none;padding:0 16px 12px;border-top:0.5px solid var(--color-border-tertiary)">
         <div style="font-size:12px;color:var(--color-text-secondary);background:var(--color-background-secondary);border-radius:8px;padding:10px 12px;line-height:1.7;white-space:pre-wrap;margin-top:10px">${log.text||''}</div>
         <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">수신: ${log.phone||''}</div>
@@ -3756,6 +3767,29 @@ window.toggleSmsDetail = function(id) {
   const isOpen = el.style.display !== 'none';
   el.style.display = isOpen ? 'none' : 'block';
   if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(180deg)';
+};
+
+window.deleteSmsLog = async function(logId, idx) {
+  if (!confirm('이 발송 내역을 삭제할까요?')) return;
+
+  // localStorage에서 삭제
+  _smsLogs = _smsLogs.filter(l => l.id !== logId);
+  localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
+
+  // Firebase에서도 삭제
+  if (logId && window._adminDb) {
+    try {
+      await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'sms_logs', logId));
+    } catch(e) {}
+  }
+
+  // 화면에서 해당 행 제거
+  const row = document.getElementById(`smsrow-${idx}`);
+  if (row) row.remove();
+
+  // 통계 업데이트
+  renderSmsLog(_smsLogs);
+  showAdminToast('🗑️ 삭제됐습니다');
 };
 
 window.filterSmsLog = function() {
