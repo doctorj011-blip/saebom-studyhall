@@ -3136,10 +3136,7 @@ function _parseStudentDoc(v) {
 }
 
 // ── 앱 시작 시 Firebase에서 학생 데이터 로드 ──
-let _loadStudentsLock = false;
 async function loadStudentsFromFirebase() {
-  if (_loadStudentsLock) return; // 중복 호출 방지
-  _loadStudentsLock = true;
   try {
     const snap = await getDocs(collection(db, 'students'));
     if (snap.empty) {
@@ -3151,42 +3148,75 @@ async function loadStudentsFromFirebase() {
         if (!v.name) return;
         const seatNum = parseInt(String(v.seat).replace('번',''));
         if (seatNum >= 54 && seatNum <= 63) return;
-        STUDENTS.push(_parseStudentDoc(v));
+        STUDENTS.push({
+          seat: String(v.seat).replace('번',''), name: v.name,
+          phone: v.phone || '', parent: v.parent || '',
+          gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
+          schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+          hours: v.hours || {}
+        });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
     }
   } catch(e) {
     console.error('Firebase 로드 실패:', e);
-  } finally {
-    _loadStudentsLock = false;
   }
   if (window.initApp) window.initApp();
 
-  // 30초마다 학생 데이터 폴링 (onSnapshot 초기 중복 문제 우회)
-  setInterval(async () => {
+  // students 컬렉션 실시간 감시
+  onSnapshot(collection(db, 'students'), (snap) => {
     if (window._seatChanging) return;
-    try {
-      const snap2 = await getDocs(collection(db, 'students'));
-      const newStudents = [];
-      snap2.forEach(d => {
-        const v = d.data();
-        if (!v.name) return;
-        const sn = parseInt(String(v.seat).replace('번',''));
-        if (sn >= 54 && sn <= 63) return;
-        newStudents.push(_parseStudentDoc(v));
-      });
-      newStudents.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
-      const oldKey = STUDENTS.map(s=>s.seat+s.name).join(',');
-      const newKey = newStudents.map(s=>s.seat+s.name).join(',');
-      if (oldKey !== newKey) {
-        STUDENTS.length = 0;
-        newStudents.forEach(s => STUDENTS.push(s));
-        if (document.getElementById('fp-room')) buildFloorplan();
-        buildStudentList(document.getElementById('student-search')?.value || '');
-        buildDashboard();
+    let changed = false;
+    snap.docChanges().forEach(change => {
+      const v = change.doc.data();
+      if (change.type === 'removed') {
+        const docId = change.doc.id.replace('번','');
+        const idx = STUDENTS.findIndex(s => s.seat === docId);
+        if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
+        return;
       }
-    } catch(e) {}
-  }, 30000);
+      if (!v.name) {
+        const s = STUDENTS.find(s => s.seat === change.doc.id.replace('번',''));
+        if (s) { s.seat = ''; changed = true; }
+        return;
+      }
+      const vSeat = String(v.seat).replace('번','');
+      const seatNum = parseInt(vSeat);
+      if (seatNum >= 54 && seatNum <= 63) return;
+      const idx = STUDENTS.findIndex(s => s.seat === vSeat);
+      const updated = {
+        seat: vSeat, name: v.name,
+        phone: v.phone || '', parent: v.parent || '',
+        gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
+        schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
+        hours: v.hours || {}
+      };
+      if (change.type === 'added') {
+        // added: 이미 같은 seat이 있으면 업데이트, 없으면 추가
+        if (idx !== -1) {
+          STUDENTS[idx] = updated;
+        } else if (!STUDENTS.find(s => s.name === v.name)) {
+          STUDENTS.push(updated);
+        }
+      } else if (change.type === 'modified') {
+        if (idx !== -1) {
+          STUDENTS[idx] = updated;
+        } else {
+          const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
+          if (nameIdx !== -1) { STUDENTS[nameIdx] = updated; }
+          else { STUDENTS.push(updated); }
+        }
+      }
+      changed = true;
+    });
+
+    if (changed) {
+      STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
+      if (document.getElementById('fp-room')) buildFloorplan();
+      buildStudentList(document.getElementById('student-search')?.value || '');
+      buildDashboard();
+    }
+  });
 }
 
 // Firebase 전역 함수 노출
