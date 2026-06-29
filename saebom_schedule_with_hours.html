@@ -3658,30 +3658,33 @@ async function saveSmsLogToFirebase(entry, logId) {
 }
 
 let _smsLogData = []; // 현재 표시 중인 데이터
+let _deletedSmsIds = new Set(JSON.parse(localStorage.getItem('saebom_sms_deleted') || '[]'));
 
 window.loadSmsLog = async function() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
 
-  // localStorage 먼저 즉시 표시
-  let logs = [..._smsLogs];
+  // localStorage 먼저 즉시 표시 (삭제된 항목 제외)
+  let logs = _smsLogs.filter(l => !_deletedSmsIds.has(l.id));
   _smsLogData = logs;
   renderSmsLog(logs);
 
   // Firebase에서 추가 로드 후 병합
   if (window._adminDb) {
     try {
-      const { collection, getDocs, query, orderBy, limit } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      // createdAt 없는 문서도 포함하기 위해 orderBy 제거, 전체 조회
+      const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
       const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
       const fbLogs = [];
-      snap.forEach(d => fbLogs.push({ id: d.id, ...d.data() }));
+      snap.forEach(d => {
+        if (!_deletedSmsIds.has(d.id)) { // 삭제된 항목 제외
+          fbLogs.push({ id: d.id, ...d.data() });
+        }
+      });
 
       if (fbLogs.length > 0) {
-        // id 기준 중복 제거 후 병합, 최신순 정렬
         const merged = [...fbLogs];
         const fbIds = new Set(fbLogs.map(l => l.id));
-        _smsLogs.forEach(l => { if (!fbIds.has(l.id)) merged.push(l); });
+        _smsLogs.forEach(l => { if (!fbIds.has(l.id) && !_deletedSmsIds.has(l.id)) merged.push(l); });
         merged.sort((a, b) => (b.id || 0) - (a.id || 0));
         logs = merged.slice(0, 300);
         _smsLogData = logs;
@@ -3689,7 +3692,6 @@ window.loadSmsLog = async function() {
       }
     } catch(e) {
       console.error('SMS 로그 Firebase 로드 실패:', e);
-      // localStorage 데이터는 이미 표시됨
     }
   }
 }
@@ -3772,6 +3774,12 @@ window.toggleSmsDetail = function(id) {
 window.deleteSmsLog = async function(logId, idx) {
   if (!confirm('이 발송 내역을 삭제할까요?')) return;
 
+  // 삭제 ID 추적 (재로드 시에도 복구 안 되도록)
+  if (logId) {
+    _deletedSmsIds.add(logId);
+    localStorage.setItem('saebom_sms_deleted', JSON.stringify([..._deletedSmsIds]));
+  }
+
   // localStorage에서 삭제
   _smsLogs = _smsLogs.filter(l => l.id !== logId);
   localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
@@ -3780,7 +3788,7 @@ window.deleteSmsLog = async function(logId, idx) {
   if (logId && window._adminDb) {
     try {
       await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'sms_logs', logId));
-    } catch(e) {}
+    } catch(e) { console.error('SMS Firebase 삭제 실패:', e); }
   }
 
   // 화면에서 해당 행 제거
@@ -3788,7 +3796,8 @@ window.deleteSmsLog = async function(logId, idx) {
   if (row) row.remove();
 
   // 통계 업데이트
-  renderSmsLog(_smsLogs);
+  _smsLogData = _smsLogData.filter(l => l.id !== logId);
+  renderSmsLog(_smsLogData);
   showAdminToast('🗑️ 삭제됐습니다');
 };
 
