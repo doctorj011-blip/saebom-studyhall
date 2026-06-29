@@ -510,7 +510,7 @@ function _buildParentNotices() {
       </div>
       <div class="notice-detail" id="pndet-${i}">
         ${(n.body||'').split('\n').map(line => line ? `<p>${line.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '<br>').join('')}
-        ${n.image ? `<img src="${n.image}" style="margin-top:10px;max-width:100%;border-radius:10px;object-fit:contain">` : ''}
+        ${(n.images||[]).length ? `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">${n.images.map(url=>`<img src="${url}" data-zoom="${url}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="noticeImgZoom(this.dataset.zoom)">`).join('')}</div>` : (n.image ? `<img src="${n.image}" style="margin-top:10px;max-width:100%;border-radius:10px;object-fit:contain">` : '')}
       </div>
     </div>`).join('');
 }
@@ -521,6 +521,14 @@ function _toggleParentNotice(i) {
   const isOpen = det.classList.toggle('open');
   exp.classList.toggle('open', isOpen);
 }
+
+window.noticeImgZoom = function(url) {
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;display:flex;align-items:center;justify-content:center;cursor:zoom-out';
+  ov.innerHTML = `<img src="${url}" style="max-width:94vw;max-height:94vh;border-radius:10px;object-fit:contain">`;
+  ov.onclick = () => ov.remove();
+  document.body.appendChild(ov);
+};
 
 // ── 학부모앱 플래너 (달력 방식) ──
 let _ppYear = new Date().getFullYear();
