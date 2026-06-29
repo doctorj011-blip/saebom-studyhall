@@ -3095,9 +3095,10 @@ window._fsDeleteDoc = deleteDoc;
 
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
-  const docRef = doc(db, 'students', student.seat);
+  const cleanSeat = String(student.seat).replace('번','');
+  const docRef = doc(db, 'students', cleanSeat);
   await setDoc(docRef, {
-    seat: student.seat,
+    seat: cleanSeat,
     name: student.name,
     phone: student.phone || '',
     parent: student.parent || '',
