@@ -1707,8 +1707,8 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   const typeLabel = isCheckout ? '퇴실' : '입실';
   const templateId = isCheckout ? KAKAO_TPL_OUT : KAKAO_TPL_IN;
   const variables  = isCheckout
-    ? { 이름: student.name, 시간: timeStr, 총시간: formatTotalTime(totalMin) }
-    : { 이름: student.name, 시간: timeStr };
+    ? { '#{이름}': student.name, '#{시간}': timeStr, '#{총시간}': formatTotalTime(totalMin) }
+    : { '#{이름}': student.name, '#{시간}': timeStr };
 
   const text = isCheckout
     ? `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 퇴실하였습니다.\n오늘 총 이용시간: ${formatTotalTime(totalMin)}👏`
@@ -1722,7 +1722,7 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
     const data = await sendFn(parentPhone, KAKAO_PF_ID, templateId, variables);
     if (data?.error === 'NO_KEY') { showAdminToast('⚠️ 솔라피 API 설정을 먼저 해주세요'); return; }
     console.log('[알림톡] 응답:', JSON.stringify(data));
-    const success = data.errorCount === 0 || (data.groupId && !data.errorCount);
+    const success = !!(data.errorCount === 0 || (data.groupId && !data.errorCount));
     const logFn = window.saveSmsLog || saveSmsLog;
     logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(data), time: timeStr });
     if (success) {
