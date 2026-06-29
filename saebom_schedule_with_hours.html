@@ -781,7 +781,6 @@ document.addEventListener('keydown', function(e) {
     e.preventDefault();
     const activeId = document.querySelector('.section.active')?.id?.replace('sec-', '') || 'dashboard';
     if (window._adminDb) {
-      loadStudentsFromFirebase && loadStudentsFromFirebase();
       window.loadTodayCheckinFromFirebase && window.loadTodayCheckinFromFirebase();
     }
     buildDashboard();
@@ -3031,8 +3030,8 @@ window.initApp();
 // ── 대기 모드 후 재연결 처리 ──
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
-  // 화면이 다시 보일 때 Firebase 재연결 및 데이터 갱신
-  if (window.loadStudentsFromFirebase) window.loadStudentsFromFirebase();
+  // 화면이 다시 보일 때 입퇴실 기록만 갱신 (학생 데이터는 onSnapshot이 처리)
+  if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
   buildDashboard();
   if (document.getElementById('fp-room')) buildFloorplan();
 });
