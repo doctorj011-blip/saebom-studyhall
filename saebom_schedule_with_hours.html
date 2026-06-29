@@ -4458,18 +4458,30 @@ async function getAdminPlannerStorage() {
 }
 
 function adminPlannerInit() {
-  // 학생 목록 채우기
+  adminPlannerBuildStudentList();
+  document.getElementById('admin-planner-calendar').innerHTML = '';
+  document.getElementById('admin-planner-detail').style.display = 'none';
+}
+
+function adminPlannerBuildStudentList() {
   const sel = document.getElementById('admin-planner-student');
+  if (!sel) return;
+  const prevVal = sel.value;
   sel.innerHTML = '<option value="">-- 학생 선택 --</option>';
-  STUDENTS.forEach(s => {
+  const list = (window.STUDENTS && window.STUDENTS.length > 0) ? window.STUDENTS : STUDENTS;
+  if (!list || list.length === 0) {
+    // 아직 로드 안됐으면 500ms 후 재시도
+    setTimeout(adminPlannerBuildStudentList, 500);
+    return;
+  }
+  list.forEach(s => {
     const opt = document.createElement('option');
     opt.value = s.seat.replace(/[^0-9a-zA-Z가-힣]/g,'_');
     opt.textContent = `${s.name} (${s.seat})`;
     opt.dataset.name = s.name;
     sel.appendChild(opt);
   });
-  document.getElementById('admin-planner-calendar').innerHTML = '';
-  document.getElementById('admin-planner-detail').style.display = 'none';
+  if (prevVal) sel.value = prevVal;
 }
 
 async function adminPlannerLoadStudent() {
