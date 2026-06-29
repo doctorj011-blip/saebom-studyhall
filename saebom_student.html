@@ -304,6 +304,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <img id="planner-photo-img" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
           <div id="planner-no-photo" style="color:#aaa;font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
         </div>
+        <!-- 선생님 코멘트 -->
+        <div id="planner-comments-area" style="display:none;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div id="planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
         <div style="display:flex;gap:8px;justify-content:center">
           <label style="flex:1;background:#C8900A;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
             📷 카메라
@@ -1388,8 +1393,44 @@ async function plannerSelectDate(dateStr) {
     noPhoto.style.display = 'block';
     delBtn.style.display = 'none';
   }
+  // 코멘트 로드
+  plannerLoadComments(dateStr);
   // 스크롤
   detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 선생님 코멘트 로드 (학생앱 - 읽기 전용)
+async function plannerLoadComments(dateStr) {
+  const area = document.getElementById('planner-comments-area');
+  const list = document.getElementById('planner-comments-list');
+  if (!area || !list || !currentStudent) return;
+  try {
+    const { doc: fsDoc, getDoc: fsGetDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const db = window._adminDb || (await (async () => {
+      const { getFirestore } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      return getFirestore();
+    })());
+    const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const docId = seat + '_' + dateStr;
+    const snap = await fsGetDoc(fsDoc(db, 'planner_comments', docId));
+    if (snap.exists()) {
+      const comments = snap.data().comments || [];
+      if (comments.length > 0) {
+        area.style.display = 'block';
+        list.innerHTML = comments.map(c => `
+          <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
+            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+          </div>`).join('');
+        return;
+      }
+    }
+    area.style.display = 'none';
+    list.innerHTML = '';
+  } catch(e) {
+    area.style.display = 'none';
+    console.warn('[student comment]', e);
+  }
 }
 
 // 사진 업로드
