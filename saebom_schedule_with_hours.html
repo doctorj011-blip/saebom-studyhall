@@ -1573,6 +1573,7 @@ window.checkinConfirm = function() {
   const now = new Date();
   const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
 
+  let _checkoutTotalMin = 0;
   if (isCheckout) {
     existing.outTime = timeStr;
     // 퇴실 시 스터디룸에서도 제거
@@ -1590,6 +1591,7 @@ window.checkinConfirm = function() {
     let outMin = parseTime(timeStr);
     if (outMin < inMin) outMin += 24 * 60; // 자정 넘긴 경우
     const diffMin = Math.max(0, outMin - inMin);
+    _checkoutTotalMin = diffMin;
     const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
 
     const monthKey = new Date().getMonth() + 1; // 1~12
@@ -1667,8 +1669,8 @@ window.checkinConfirm = function() {
   // Firebase에 입퇴실 기록 저장
   saveCheckinToFirebase(student, isCheckout, timeStr);
 
-  // 📱 학부모 자동 문자 발송
-  sendCheckinSMS(student, isCheckout, timeStr);
+  // 📱 학부모 자동 알림톡 발송
+  sendCheckinSMS(student, isCheckout, timeStr, _checkoutTotalMin);
 
   buildCheckinTodayList();
   buildDashboard();
@@ -1682,31 +1684,62 @@ window.checkinConfirm = function() {
   }, isDuringPeriod && assignedRoom ? 6000 : 2200);
 }
 
-// ── 학부모 자동 문자 발송 ──
-async function sendCheckinSMS(student, isCheckout, timeStr) {
+// ── 총 이용시간 포맷 (분 → "X시간 Y분") ──
+function formatTotalTime(totalMin) {
+  if (!totalMin || totalMin <= 0) return '0분';
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `${m}분`;
+  if (m === 0) return `${h}시간`;
+  return `${h}시간 ${m}분`;
+}
+
+// ── 학부모 자동 알림톡 발송 ──
+const KAKAO_PF_ID       = 'KA01PF250331012230026QtFDIwwp8qt';
+const KAKAO_TPL_IN      = 'KA01TP260629075724381ioWs4XlJ4Fb';
+const KAKAO_TPL_OUT     = 'KA01TP260629075832864ZAgymUVvhgt';
+
+async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   const parentPhone = student.parent || '';
-  if (!parentPhone) {
-    return;
-  }
-  const type = isCheckout ? 'out' : 'in';
+  if (!parentPhone) return;
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) return;
+
+  const type      = isCheckout ? 'out' : 'in';
   const typeLabel = isCheckout ? '퇴실' : '입실';
-  const today = new Date().toLocaleDateString('ko-KR', {month:'long', day:'numeric', weekday:'short'});
+  const templateId = isCheckout ? KAKAO_TPL_OUT : KAKAO_TPL_IN;
+  const variables  = isCheckout
+    ? { 이름: student.name, 시간: timeStr, 총시간: formatTotalTime(totalMin) }
+    : { 이름: student.name, 시간: timeStr };
+
+  // 로그용 텍스트 (알림톡 본문 그대로)
   const text = isCheckout
-    ? `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 퇴실하였습니다.`
-    : `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 입실하였습니다.`;
+    ? `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 퇴실하였습니다.\n오늘 총 이용시간: ${formatTotalTime(totalMin)}👏`
+    : `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 입실하였습니다.😊`;
 
   try {
-    const sendFn = window.solapiSend || solapiSend;
-    const result = await sendFn(parentPhone, text);
-    const success = result === true;
+    const authorization = await getSolapiAuthHeader();
+    const res = await fetch('https://api.solapi.com/messages/v4/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: authorization },
+      body: JSON.stringify({
+        message: {
+          to: parentPhone,
+          from: SOLAPI_SENDER,
+          type: 'ATA',
+          kakaoOptions: { pfId: KAKAO_PF_ID, templateId, variables }
+        }
+      })
+    });
+    const data = await res.json();
+    const success = data.errorCount === 0 || (data.groupId && !data.errorCount);
     const logFn = window.saveSmsLog || saveSmsLog;
-    logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(result), time: timeStr });
-    if (success) console.log(`[SMS] ✅ ${student.name} ${typeLabel} 문자 발송 성공`);
+    logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(data), time: timeStr });
+    if (success) console.log(`[알림톡] ✅ ${student.name} ${typeLabel} 발송 성공`);
     else showAdminToast(`⚠️ ${student.name} 학부모 문자 실패`);
   } catch(e) {
     const logFn = window.saveSmsLog || saveSmsLog;
     logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
-    console.error('[SMS] 발송 오류:', e);
+    console.error('[알림톡] 발송 오류:', e);
   }
 }
 
