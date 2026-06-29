@@ -3156,8 +3156,16 @@ async function loadStudentsFromFirebase() {
   if (window.initApp) window.initApp();
 
   // ── students 컬렉션 실시간 감시 (자리선택 등 변경 즉시 반영) ──
+  let _studentsInitialized = false; // 초기 로딩 완료 여부
   onSnapshot(collection(db, 'students'), (snap) => {
-    if (window._seatChanging) return; // 드래그&드롭 중 중복 방지
+    if (window._seatChanging) return;
+
+    // 첫 번째 스냅샷(초기 added 이벤트들)은 무시 - getDocs로 이미 처리됨
+    if (!_studentsInitialized) {
+      _studentsInitialized = true;
+      return;
+    }
+
     let changed = false;
     snap.docChanges().forEach(change => {
       const v = change.doc.data();
