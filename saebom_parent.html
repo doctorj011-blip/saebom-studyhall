@@ -175,33 +175,31 @@
 </div>
 
     <!-- 플래너 탭 -->
-    <div id="tab-planner" style="display:none">
-      <div class="card">
-        <div class="card-title">📓 플래너</div>
-        <!-- 월 이동 -->
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-          <button onclick="ppPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:7px 16px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
-          <div id="pp-title" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
-          <button onclick="ppNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:7px 16px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
+    <div id="tab-planner" style="display:none;padding:12px">
+      <!-- 월 이동 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button onclick="ppPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
+        <div id="pp-title" style="font-size:16px;font-weight:700;color:#5C3D08"></div>
+        <button onclick="ppNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
+      </div>
+      <!-- 달력 -->
+      <div id="pp-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px"></div>
+      <!-- 날짜 선택 시 사진+코멘트 -->
+      <div id="pp-detail" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div id="pp-detail-title" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
+          <button onclick="document.getElementById('pp-detail').style.display='none'"
+            style="background:none;border:none;font-size:18px;cursor:pointer;color:#888;line-height:1">✕</button>
         </div>
-        <!-- 달력 -->
-        <div id="pp-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:14px"></div>
-        <!-- 날짜 선택 시 사진+코멘트 -->
-        <div id="pp-detail" style="display:none;margin-top:8px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-            <div id="pp-detail-title" style="font-size:14px;font-weight:700;color:#5C3D08"></div>
-            <button onclick="document.getElementById('pp-detail').style.display='none'"
-              style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1">✕</button>
-          </div>
-          <div style="text-align:center;margin-bottom:12px">
-            <img id="pp-photo" src="" alt="" style="display:none;max-width:100%;border-radius:12px">
-            <div id="pp-nophoto" style="color:#aaa;font-size:13px;padding:24px 0">이 날짜에 등록된 플래너 사진이 없습니다</div>
-          </div>
-          <!-- 선생님 코멘트 -->
-          <div id="pp-comments-area" style="display:none">
-            <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
-            <div id="pp-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
-          </div>
+        <!-- 사진 -->
+        <div id="pp-photo-view" style="text-align:center;margin-bottom:12px">
+          <img id="pp-photo" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer" onclick="openParentImage(this.src)">
+          <div id="pp-nophoto" style="color:#aaa;font-size:13px;padding:30px 0">이 날짜에 등록된 플래너 사진이 없습니다</div>
+        </div>
+        <!-- 선생님 코멘트 -->
+        <div id="pp-comments-area" style="display:none;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div id="pp-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
       </div>
     </div>
