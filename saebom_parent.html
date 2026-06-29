@@ -329,11 +329,16 @@ async function loadAllData() {
   loadNotices();
 }
 
-// 입퇴실 (로컬: 더미 데이터)
+// 입퇴실 실시간 감지 - Firebase 준비될 때까지 대기 후 연결
 async function startStatusRealtime() {
-  if (!window._onSnapshot || !window._db || !currentStudent) {
-    loadStatus(); return;
+  // Firebase가 준비될 때까지 최대 3초 대기
+  let waited = 0;
+  while (!window._onSnapshot || !window._db) {
+    if (waited >= 3000) { loadStatus(); return; }
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
   }
+  if (!currentStudent) { loadStatus(); return; }
   const today = new Date().toISOString().slice(0,10);
   try {
     window._onSnapshot(
