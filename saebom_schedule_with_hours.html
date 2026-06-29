@@ -561,7 +561,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       </select>
     </div>
     <!-- 월 이동 -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px" id="admin-planner-month-nav" style="display:none">
+    <div id="admin-planner-month-nav" style="display:none;align-items:center;justify-content:space-between;margin-bottom:12px">
       <button onclick="adminPlannerPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 14px;font-size:15px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
       <div id="admin-planner-month-title" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
       <button onclick="adminPlannerNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 14px;font-size:15px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
@@ -3040,6 +3040,8 @@ window.initApp = function(){
   window.currentDay = currentDay;
   window.buildScheduleTable = buildScheduleTable;
   window.buildStudentList = buildStudentList;
+  // 플래너 탭 학생 목록 갱신 (탭이 열려있으면 즉시, 아니면 다음 오픈 때)
+  if (typeof adminPlannerBuildStudentList === 'function') adminPlannerBuildStudentList();
   const now=new Date();
   const dn=['일','월','화','수','목','금','토'];
   document.getElementById('today-label').textContent=`${now.getMonth()+1}월 ${now.getDate()}일 (${dn[now.getDay()]})`;
@@ -4467,18 +4469,17 @@ function adminPlannerBuildStudentList() {
   const sel = document.getElementById('admin-planner-student');
   if (!sel) return;
   const prevVal = sel.value;
-  sel.innerHTML = '<option value="">-- 학생 선택 --</option>';
-  const list = (window.STUDENTS && window.STUDENTS.length > 0) ? window.STUDENTS : STUDENTS;
-  if (!list || list.length === 0) {
-    // 아직 로드 안됐으면 500ms 후 재시도
-    setTimeout(adminPlannerBuildStudentList, 500);
+  // STUDENTS는 전역 배열 (같은 스크립트 블록 내)
+  if (!STUDENTS || STUDENTS.length === 0) {
+    setTimeout(adminPlannerBuildStudentList, 600);
     return;
   }
-  list.forEach(s => {
+  sel.innerHTML = '<option value="">-- 학생 선택 --</option>';
+  STUDENTS.forEach(s => {
     const opt = document.createElement('option');
-    opt.value = s.seat.replace(/[^0-9a-zA-Z가-힣]/g,'_');
-    opt.textContent = `${s.name} (${s.seat})`;
-    opt.dataset.name = s.name;
+    const seatKey = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g,'_');
+    opt.value = seatKey;
+    opt.textContent = `${s.name} (${s.seat}번)`;
     sel.appendChild(opt);
   });
   if (prevVal) sel.value = prevVal;
@@ -4490,25 +4491,31 @@ async function adminPlannerLoadStudent() {
   if (!adminPlannerCurrentSeat) return;
   adminPlannerYear = new Date().getFullYear();
   adminPlannerMonth = new Date().getMonth();
+  adminPlannerDates = {};
   document.getElementById('admin-planner-month-nav').style.display = 'flex';
   document.getElementById('admin-planner-detail').style.display = 'none';
+  // 달력 먼저 렌더링 (사진 로드 전)
+  adminPlannerRenderCalendar();
+  // 사진 로드 후 달력 갱신
   await adminPlannerLoadMonth();
   adminPlannerRenderCalendar();
 }
 
 async function adminPlannerLoadMonth() {
   if (!adminPlannerCurrentSeat) return;
+  adminPlannerDates = {};
   try {
     const st = await getAdminPlannerStorage();
     const storage = st.storage;
     const prefix = `planners/${adminPlannerCurrentSeat}/${adminPlannerYear}-${String(adminPlannerMonth+1).padStart(2,'0')}`;
     const listRef = st.ref(storage, prefix);
     const result = await st.listAll(listRef);
-    adminPlannerDates = {};
     for (const item of result.items) {
       const name = item.name.replace(/\.jpg$/i,'');
-      const url = await st.getDownloadURL(item);
-      adminPlannerDates[name] = url;
+      try {
+        const url = await st.getDownloadURL(item);
+        adminPlannerDates[name] = url;
+      } catch(e2) { /* 개별 URL 실패 무시 */ }
     }
   } catch(e) {
     adminPlannerDates = {};
