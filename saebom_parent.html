@@ -65,14 +65,19 @@
   .hours-fill { height: 100%; background: linear-gradient(90deg, #C8900A, #E0B020); border-radius: 4px; transition: width 0.5s; }
 
   /* 공지 */
-  .notice-item { padding: 12px 0; border-bottom: 1px solid #F3F4F6; }
-  .notice-item:last-child { border-bottom: none; }
-  .notice-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; font-weight: 700; margin-bottom: 4px; }
-  .notice-badge.중요 { background: #FEE2E2; color: #C62828; }
-  .notice-badge.일반 { background: #DBEAFE; color: #1D4ED8; }
-  .notice-badge.안내 { background: #DCFCE7; color: #166534; }
-  .notice-title { font-size: 13px; font-weight: 600; color: #1F2937; }
-  .notice-date { font-size: 11px; color: #9CA3AF; margin-top: 2px; }
+  .notice-card{background:#fff;border-radius:16px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
+  .notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:8px}
+  .badge-important{background:#FCEBEB;color:#C62828}
+  .badge-general{background:#FFF8DC;color:#C8900A}
+  .badge-event{background:#E3F2FD;color:#A87008}
+  .notice-title{font-size:15px;font-weight:700;margin-bottom:6px;line-height:1.4}
+  .notice-date{font-size:11px;color:#aaa}
+  .notice-header{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .notice-expand{font-size:20px;color:#ccc;flex-shrink:0;margin-top:2px;transition:transform 0.2s}
+  .notice-expand.open{transform:rotate(180deg)}
+  .notice-detail{padding:0 16px 14px;border-top:0.5px solid #f0f0f0;display:none}
+  .notice-detail.open{display:block}
+  .notice-detail p{font-size:13px;color:#444;line-height:1.7;margin-top:10px}
 
   /* 토스트 */
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
@@ -164,10 +169,7 @@
 
     <!-- 공지사항 탭 -->
     <div id="tab-notice" style="display:none">
-      <div class="card">
-        <div class="card-title">📢 공지사항</div>
-        <div id="notice-content" style="font-size:13px;color:#888">불러오는 중...</div>
-      </div>
+      <div id="notice-list"></div>
     </div>
   </div>
 </div>
@@ -175,19 +177,31 @@
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none">
       <div class="card">
-        <div class="card-title">📸 스터디 플래너</div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-          <button onclick="changeParentPlannerDate(-1)" style="padding:6px 12px;border:1.5px solid #E0B020;border-radius:8px;background:#FFFDF5;color:#5C3D08;font-size:16px;cursor:pointer">‹</button>
-          <div id="parent-planner-date" style="flex:1;text-align:center;font-size:14px;font-weight:700;color:#1F2937"></div>
-          <button onclick="changeParentPlannerDate(1)" style="padding:6px 12px;border:1.5px solid #E0B020;border-radius:8px;background:#FFFDF5;color:#5C3D08;font-size:16px;cursor:pointer">›</button>
+        <div class="card-title">📓 플래너</div>
+        <!-- 월 이동 -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <button onclick="ppPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:7px 16px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
+          <div id="pp-title" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
+          <button onclick="ppNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:7px 16px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
         </div>
-        <div id="parent-planner-images" style="display:flex;flex-direction:column;gap:12px">
-          <div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>
-        </div>
-        <!-- 선생님 코멘트 -->
-        <div id="parent-planner-comments" style="display:none;margin-top:12px">
-          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
-          <div id="parent-planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        <!-- 달력 -->
+        <div id="pp-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:14px"></div>
+        <!-- 날짜 선택 시 사진+코멘트 -->
+        <div id="pp-detail" style="display:none;margin-top:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <div id="pp-detail-title" style="font-size:14px;font-weight:700;color:#5C3D08"></div>
+            <button onclick="document.getElementById('pp-detail').style.display='none'"
+              style="background:none;border:none;font-size:20px;cursor:pointer;color:#aaa;line-height:1">✕</button>
+          </div>
+          <div style="text-align:center;margin-bottom:12px">
+            <img id="pp-photo" src="" alt="" style="display:none;max-width:100%;border-radius:12px">
+            <div id="pp-nophoto" style="color:#aaa;font-size:13px;padding:24px 0">이 날짜에 등록된 플래너 사진이 없습니다</div>
+          </div>
+          <!-- 선생님 코멘트 -->
+          <div id="pp-comments-area" style="display:none">
+            <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+            <div id="pp-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -260,12 +274,6 @@ const DUMMY_STUDENT = {
 const DUMMY_RECORDS = [
   { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'18:05', outTime:'22:10' },
   { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'14:30', outTime:null },
-];
-
-const DUMMY_NOTICES = [
-  { type:'중요', title:'7월 운영 안내', content:'7월 1일부터 하계 특별 운영 시간이 적용됩니다.', date:'2026.06.28' },
-  { type:'일반', title:'청소 당번 안내', content:'이번 주 청소 당번을 확인해 주세요.', date:'2026.06.25' },
-  { type:'안내', title:'Wi-Fi 비밀번호 변경', content:'면학관 와이파이 비밀번호가 변경되었습니다.', date:'2026.06.20' },
 ];
 
 async function doLogin() {
@@ -452,114 +460,189 @@ function loadHours() {
   document.getElementById('hours-content').innerHTML = html;
 }
 
+// ── 학부모앱 공지사항 ──
+let _ppNotices = [];
+
 async function loadNotices() {
-  const el = document.getElementById('notice-content');
-  let items = DUMMY_NOTICES;
+  const el = document.getElementById('notice-list');
+  if (!el) return;
+  el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>';
   if (window._getDoc && window._doc && window._db) {
     try {
       const snap = await window._getDoc(window._doc(window._db, 'notices', 'list'));
-      if (snap.exists()) items = snap.data().items || [];
+      if (snap.exists() && snap.data().items) {
+        _ppNotices = snap.data().items.slice().reverse();
+      }
     } catch(e) {}
   }
-  if (!items.length) { el.innerHTML = '<div style="color:#aaa;padding:8px 0">공지사항이 없습니다</div>'; return; }
-  el.innerHTML = items.slice().reverse().map(n => `
-    <div class="notice-item">
-      <div class="notice-badge ${n.type||'일반'}">${n.type||'일반'}</div>
-      <div class="notice-title">${n.title}</div>
-      ${n.content ? `<div style="font-size:12px;color:#6B7280;margin-top:4px">${n.content}</div>` : ''}
-      <div class="notice-date">${n.date||''}</div>
+  _buildParentNotices();
+}
+
+function _buildParentNotices() {
+  const el = document.getElementById('notice-list');
+  if (!el) return;
+  if (!_ppNotices.length) {
+    el.innerHTML = '<div class="card"><div style="color:#aaa;font-size:13px;text-align:center;padding:20px">📭 공지사항이 없습니다</div></div>';
+    return;
+  }
+  el.innerHTML = _ppNotices.map((n, i) => `
+    <div class="notice-card">
+      <div class="notice-header" onclick="_toggleParentNotice(${i})">
+        <div style="flex:1">
+          <span class="notice-badge badge-${n.badge||'general'}">${n.badgeLabel||n.badge||'공지'}</span>
+          <div class="notice-title">${n.title||''}</div>
+          <div class="notice-date">${n.date||''}</div>
+        </div>
+        <span class="notice-expand" id="pnexp-${i}">⌄</span>
+      </div>
+      <div class="notice-detail" id="pndet-${i}">
+        ${(n.body||'').split('\n').map(line => line ? `<p>${line.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '<br>').join('')}
+      </div>
     </div>`).join('');
 }
 
-// ── 학부모앱 플래너 조회 ──
-let parentPlannerDate = new Date().toISOString().slice(0,10);
+function _toggleParentNotice(i) {
+  const det = document.getElementById('pndet-'+i);
+  const exp = document.getElementById('pnexp-'+i);
+  const isOpen = det.classList.toggle('open');
+  exp.classList.toggle('open', isOpen);
+}
 
+// ── 학부모앱 플래너 (달력 방식) ──
+let _ppYear = new Date().getFullYear();
+let _ppMonth = new Date().getMonth();
+let _ppDates = {}; // { 'YYYY-MM-DD': downloadURL }
+let _ppSelectedDate = null;
+
+// 탭 진입 시 호출
 function loadParentPlanner() {
-  updateParentPlannerDate();
-  loadParentPlannerImages();
+  const detail = document.getElementById('pp-detail');
+  if (detail) detail.style.display = 'none';
+  _ppRenderCal();
+  _ppLoadMonth();
 }
 
-function updateParentPlannerDate() {
-  const d = new Date(parentPlannerDate + 'T00:00:00');
-  const dn = ['일','월','화','수','목','금','토'];
-  document.getElementById('parent-planner-date').textContent =
-    `${d.getMonth()+1}월 ${d.getDate()}일 (${dn[d.getDay()]})`;
-}
-
-function changeParentPlannerDate(delta) {
-  const d = new Date(parentPlannerDate + 'T00:00:00');
-  d.setDate(d.getDate() + delta);
-  parentPlannerDate = d.toISOString().slice(0,10);
-  updateParentPlannerDate();
-  loadParentPlannerImages();
-}
-
-async function loadParentPlannerImages() {
-  const el = document.getElementById('parent-planner-images');
-  const commentsArea = document.getElementById('parent-planner-comments');
-  const commentsList = document.getElementById('parent-planner-comments-list');
-  if (!el || !currentStudent) return;
-
-  // 코멘트 초기화
-  if (commentsArea) commentsArea.style.display = 'none';
-
-  const storage = window._storage;
-  if (!storage) {
-    el.innerHTML = `<div style="background:#F3F4F6;border-radius:12px;padding:40px;text-align:center;color:#aaa;font-size:13px">
-      Firebase Storage 연결 후<br>학생이 업로드한 플래너를 볼 수 있어요</div>`;
-    return;
+// 달력 렌더링
+function _ppRenderCal() {
+  const titleEl = document.getElementById('pp-title');
+  const calEl = document.getElementById('pp-cal');
+  if (!titleEl || !calEl) return;
+  titleEl.textContent = _ppYear + '년 ' + (_ppMonth + 1) + '월';
+  const now = new Date();
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  const DAY_LABELS = ['일','월','화','수','목','금','토'];
+  let h = '';
+  DAY_LABELS.forEach((d, i) => {
+    const c = i===0 ? '#C62828' : i===6 ? '#1565C0' : '#5C3D08';
+    h += `<div style="text-align:center;font-size:11px;font-weight:700;color:${c};padding:5px 0">${d}</div>`;
+  });
+  const firstDay = new Date(_ppYear, _ppMonth, 1).getDay();
+  const lastDate = new Date(_ppYear, _ppMonth + 1, 0).getDate();
+  for (let i = 0; i < firstDay; i++) h += '<div></div>';
+  for (let d = 1; d <= lastDate; d++) {
+    const ds = _ppYear + '-' + String(_ppMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const isToday = ds === todayStr;
+    const isSelected = ds === _ppSelectedDate;
+    const hasPhoto = !!_ppDates[ds];
+    const dow = new Date(_ppYear, _ppMonth, d).getDay();
+    const tc = dow===0 ? '#C62828' : dow===6 ? '#1565C0' : '#333';
+    const bg = isSelected ? '#C8900A' : isToday ? '#FFF3CD' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
+    const bd = isSelected ? '2px solid #C8900A' : isToday ? '2px solid #E0B020' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
+    const dc = isSelected ? '#fff' : tc;
+    h += `<div onclick="ppPickDate('${ds}')" style="border-radius:10px;padding:7px 2px;text-align:center;cursor:pointer;background:${bg};border:${bd}">
+      <div style="font-size:13px;font-weight:${(isToday||isSelected)?'700':'500'};color:${dc}">${d}</div>
+      ${hasPhoto ? '<div style="font-size:10px;margin-top:1px">📷</div>' : ''}
+    </div>`;
   }
+  calEl.innerHTML = h;
+}
 
-  el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>';
-
+// 해당 월 사진 목록 로드
+async function _ppLoadMonth() {
+  _ppDates = {};
+  if (!currentStudent || !window._storage) return;
   try {
     const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
-    const monthPrefix = parentPlannerDate.slice(0, 7); // YYYY-MM
-
-    // seat 폴더 전체 listAll 후 날짜로 필터링
-    const seatRef = window._storageRef(storage, `planners/${seat}`);
+    const monthPrefix = _ppYear + '-' + String(_ppMonth+1).padStart(2,'0');
+    const seatRef = window._storageRef(window._storage, 'planners/' + seat);
     const result = await window._listAll(seatRef);
-    const dateItems = result.items.filter(item => {
-      const name = item.name.replace(/\.jpg$/i, '');
-      return name === parentPlannerDate;
-    });
-
-    if (!dateItems.length) {
-      el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 업로드된 플래너가 없습니다</div>';
-    } else {
-      const urls = await Promise.all(dateItems.map(item => window._getDownloadURL(item)));
-      el.innerHTML = urls.map(url =>
-        `<div style="border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
-          <img src="${url}" style="width:100%;display:block;border-radius:16px" loading="lazy"
-            onclick="openParentImage('${url}')">
-        </div>`
-      ).join('');
+    for (const item of result.items) {
+      const key = item.name.replace(/\.jpg$/i, '');
+      if (!key.startsWith(monthPrefix)) continue;
+      try { _ppDates[key] = await window._getDownloadURL(item); } catch(e) {}
     }
-  } catch(e) {
-    el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 업로드된 플래너가 없습니다</div>';
-  }
+  } catch(e) {}
+  _ppRenderCal();
+}
 
-  // 선생님 코멘트 로드
+// 날짜 클릭
+function ppPickDate(ds) {
+  _ppSelectedDate = ds;
+  _ppRenderCal();
+  const detail = document.getElementById('pp-detail');
+  const titleEl = document.getElementById('pp-detail-title');
+  const img = document.getElementById('pp-photo');
+  const nophoto = document.getElementById('pp-nophoto');
+  const commentsArea = document.getElementById('pp-comments-area');
+  const commentsList = document.getElementById('pp-comments-list');
+  if (!detail) return;
+  const parts = ds.split('-');
+  titleEl.textContent = parts[0] + '년 ' + parseInt(parts[1]) + '월 ' + parseInt(parts[2]) + '일';
+  if (_ppDates[ds]) {
+    img.src = _ppDates[ds];
+    img.style.display = 'block';
+    nophoto.style.display = 'none';
+  } else {
+    img.src = '';
+    img.style.display = 'none';
+    nophoto.style.display = 'block';
+  }
+  detail.style.display = 'block';
+  // 코멘트 초기화 후 로드
+  if (commentsArea) commentsArea.style.display = 'none';
+  if (commentsList) commentsList.innerHTML = '';
+  _ppLoadComments(ds);
+}
+
+// 코멘트 로드
+async function _ppLoadComments(ds) {
+  const commentsArea = document.getElementById('pp-comments-area');
+  const commentsList = document.getElementById('pp-comments-list');
+  if (!commentsArea || !commentsList || !currentStudent) return;
   try {
-    if (window._getDoc && window._doc && window._db && commentsArea && commentsList) {
-      const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
-      const docId = seat + '_' + parentPlannerDate;
-      const snap = await window._getDoc(window._doc(window._db, 'planner_comments', docId));
-      if (snap.exists()) {
-        const comments = snap.data().comments || [];
-        if (comments.length > 0) {
-          commentsArea.style.display = 'block';
-          commentsList.innerHTML = comments.map(c => `
-            <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
-              <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${(c.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-              <div style="font-size:11px;color:#888">${c.time || ''}</div>
-            </div>`).join('');
-        }
+    if (!window._getDoc || !window._doc || !window._db) return;
+    const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const snap = await window._getDoc(window._doc(window._db, 'planner_comments', seat + '_' + ds));
+    if (snap.exists()) {
+      const comments = snap.data().comments || [];
+      if (comments.length > 0) {
+        commentsArea.style.display = 'block';
+        commentsList.innerHTML = comments.map(c => `
+          <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
+            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${(c.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+          </div>`).join('');
       }
     }
-  } catch(e) {
-    // 코멘트 로드 실패 무시
-  }
+  } catch(e) {}
+}
+
+// 이전/다음 월
+function ppPrevMonth() {
+  _ppMonth--; if (_ppMonth < 0) { _ppMonth = 11; _ppYear--; }
+  _ppSelectedDate = null;
+  const detail = document.getElementById('pp-detail');
+  if (detail) detail.style.display = 'none';
+  _ppRenderCal();
+  _ppLoadMonth();
+}
+function ppNextMonth() {
+  _ppMonth++; if (_ppMonth > 11) { _ppMonth = 0; _ppYear++; }
+  _ppSelectedDate = null;
+  const detail = document.getElementById('pp-detail');
+  if (detail) detail.style.display = 'none';
+  _ppRenderCal();
+  _ppLoadMonth();
 }
 
 function openParentImage(url) {
@@ -589,7 +672,8 @@ document.addEventListener('visibilitychange', function() {
   if (document.hidden || !currentStudent) return;
   startStatusRealtime();
   loadNotices();
-  if (currentTab === 'planner') loadParentPlannerImages();
+  if (currentTab === 'planner') { _ppRenderCal(); _ppLoadMonth(); }
+  if (currentTab === 'notice') loadNotices();
 });
 
 // 초기화
