@@ -3168,7 +3168,6 @@ async function loadStudentsFromFirebase() {
         return;
       }
       if (!v.name) {
-        // 빈 자리로 바뀐 경우 해당 학생 seat 비우기
         const s = STUDENTS.find(s => s.seat === change.doc.id);
         if (s) { s.seat = ''; changed = true; }
         return;
@@ -3177,24 +3176,32 @@ async function loadStudentsFromFirebase() {
       if (parseInt(vSeat) >= 54 && parseInt(vSeat) <= 63) return; // 관리자석 제외
       const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       const updated = {
-        seat: String(v.seat).replace('번',''), name: v.name,
+        seat: vSeat, name: v.name,
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: v.hours || {}
       };
       if (idx !== -1) {
-        // 좌석이 바뀐 경우 (이름은 같은데 seat 키가 다른 경우) 처리
+        // 이미 있는 자리 → 업데이트 (added 타입이라도 덮어씌우기)
         const nameIdx = STUDENTS.findIndex(s => s.name === v.name && s.seat !== vSeat);
         if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
         STUDENTS[idx] = updated;
-      } else {
-        // 새 자리에 배정된 경우
+        changed = true;
+      } else if (change.type !== 'added') {
+        // modified인데 seat이 없는 경우만 추가 (added는 loadStudentsFromFirebase가 처리)
         const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
         if (nameIdx !== -1) { STUDENTS[nameIdx].seat = ''; }
         STUDENTS.push(updated);
+        changed = true;
+      } else {
+        // added인데 STUDENTS에 없는 경우 (완전히 새 학생)
+        const nameExists = STUDENTS.findIndex(s => s.name === v.name);
+        if (nameExists === -1) {
+          STUDENTS.push(updated);
+          changed = true;
+        }
       }
-      changed = true;
     });
 
     if (changed) {
@@ -3226,26 +3233,30 @@ async function loadTodayCheckinFromFirebase() {
     todayRecords.length = 0;
     PRESENT.length = 0;
 
-    // in 먼저, out 나중에 처리
-    const ins  = todayDocs.filter(d => d.type === 'in').sort((a,b) => a.time?.localeCompare(b.time));
-    const outs = todayDocs.filter(d => d.type === 'out');
+    // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
+    todayDocs.sort((a, b) => (a.time||'').localeCompare(b.time||''));
 
-    ins.forEach(d => {
-      if (!d.studentName) return;
-      const exists = todayRecords.find(r => r.studentName === d.studentName && r.inTime === d.time);
-      if (!exists) {
-        todayRecords.push({ studentName: d.studentName, seat: d.seat||'', inTime: d.time, outTime: null });
-        if (!PRESENT.includes(d.studentName)) PRESENT.push(d.studentName);
-      }
-    });
+    todayDocs.forEach(d => {
+      if (!d.studentName || !d.type) return;
+      const name = d.studentName;
+      const seat = d.seat || '';
+      const time = d.time || '';
 
-    outs.forEach(d => {
-      if (!d.studentName) return;
-      const rec = todayRecords.find(r => r.studentName === d.studentName && !r.outTime);
-      if (rec) {
-        rec.outTime = d.time;
-        const idx = PRESENT.indexOf(d.studentName);
-        if (idx !== -1) PRESENT.splice(idx, 1);
+      if (d.type === 'in') {
+        // 이미 입실중인 기록 있으면 스킵
+        const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
+        if (!alreadyIn) {
+          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null });
+          if (!PRESENT.includes(name)) PRESENT.push(name);
+        }
+      } else if (d.type === 'out') {
+        // 가장 최근 입실중 기록에 퇴실 처리
+        const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+        if (rec) {
+          rec.outTime = time;
+          const idx = PRESENT.indexOf(name);
+          if (idx !== -1) PRESENT.splice(idx, 1);
+        }
       }
     });
 
