@@ -1551,15 +1551,17 @@ window.checkinConfirm = function() {
   let isDuringPeriod = false;
   if (!isCheckout) {
     const curPeriod = getCurrentPeriod();
-    if (!curPeriod) {
-      // 쉬는 시간 — 바로 자리로 이동 (스터디룸 배정 없음)
-    } else {
-      // 교시 중 입실 — 1→2→3→1→2→3 순환 배정 (룸당 최대 4명, 총 12명)
+    // 7교시(18:00) 이후에만 스터디룸 안내 적용
+    const now = new Date();
+    const curMin = now.getHours() * 60 + now.getMinutes();
+    const is7thOrLater = curMin >= 18 * 60; // 18:00 이후
+
+    if (curPeriod && is7thOrLater) {
+      // 교시 중 + 6시 이후 입실 — 스터디룸 배정
       isDuringPeriod = true;
       const total = studyRoomStudents[1].length + studyRoomStudents[2].length + studyRoomStudents[3].length;
       if (!Object.values(studyRoomStudents).flat().includes(student.name)) {
         if (total < 12) {
-          // 가장 적게 찬 룸부터 순환 (1→2→3 순서 우선)
           const counts = [studyRoomStudents[1].length, studyRoomStudents[2].length, studyRoomStudents[3].length];
           const minCount = Math.min(...counts);
           for (let r = 1; r <= 3; r++) {
@@ -1570,11 +1572,11 @@ window.checkinConfirm = function() {
             }
           }
         } else {
-          // 12명 초과 — 경고 카드 표시
           showStudyroomOverflowAlert(student.name, student.seat);
         }
       }
     }
+    // 6시 이전이거나 쉬는 시간이면 스터디룸 배정 없음
   }
 
   let doneMsg = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
