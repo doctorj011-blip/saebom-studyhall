@@ -626,7 +626,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         <option value="general">🟡 공지</option>
         <option value="event">🔵 이벤트</option>
       </select>
-      <input id="notice-title-inp" type="text" autocomplete="off" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
+      <input id="notice-title-inp" type="text" autocomplete="new-password" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
       <textarea id="notice-body-inp" autocomplete="off" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
 
       <!-- 이미지 첨부 (최대 5장) -->
@@ -892,7 +892,7 @@ window.showSection = function(id,btn){
   document.getElementById('sec-'+id).classList.add('active');
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); }
-  if (id === 'notice') { loadNoticesAdmin(); }
+  if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
