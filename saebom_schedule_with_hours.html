@@ -1625,7 +1625,8 @@ async function sendCheckinSMS(student, isCheckout, timeStr) {
     : `[새봄면학관] ${student.name} 학생이 ${today} ${timeStr}에 입실하였습니다.`;
 
   try {
-    const result = await solapiSend(parentPhone, text);
+    const sendFn = window.solapiSend || solapiSend;
+    const result = await sendFn(parentPhone, text);
     const success = result === true;
     saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(result), time: timeStr });
     if (success) console.log(`[SMS] ✅ ${student.name} ${typeLabel} 문자 발송 성공`);
@@ -3587,6 +3588,8 @@ async function solapiSend(to, text) {
   if (data.errorCount === 0 || (data.groupId && !data.errorCount)) return true;
   return data;
 }
+// 전역 노출 (첫 번째 스크립트 블록에서 접근 가능하도록)
+window.solapiSend = solapiSend;
 
 // 미입실 알림 발송
 window.sendAbsentAlert = async function(idx) {
@@ -3984,10 +3987,17 @@ window.openAddStudentModal = function(seatNum) {
             </div>
           </div>
         </div>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이용 만료일</div>
-          <input id="new-st-expiry" type="date"
-            style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이용 시작일</div>
+            <input id="new-st-start-date" type="date"
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이용 만료일</div>
+            <input id="new-st-expiry" type="date"
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+          </div>
         </div>
         <div>
           <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">학생 전화번호</div>
@@ -4036,12 +4046,13 @@ window.selectGender = function(g) {
 };
 
 window.confirmAddStudent = function(seatNum) {
-  const name   = document.getElementById('new-st-name').value.trim();
-  const phone  = '010-' + document.getElementById('new-st-phone').value.trim();
-  const parent = '010-' + document.getElementById('new-st-parent').value.trim();
-  const expiry = document.getElementById('new-st-expiry').value;
-  const gender = window._newStGender || 'f';
-  const err    = document.getElementById('new-st-err');
+  const name      = document.getElementById('new-st-name').value.trim();
+  const phone     = '010-' + document.getElementById('new-st-phone').value.trim();
+  const parent    = '010-' + document.getElementById('new-st-parent').value.trim();
+  const expiry    = document.getElementById('new-st-expiry').value;
+  const startDate = document.getElementById('new-st-start-date').value;
+  const gender    = window._newStGender || 'f';
+  const err       = document.getElementById('new-st-err');
 
   if (!name) { err.textContent = '이름을 입력해주세요'; return; }
   if (STUDENTS.find(s => s.name === name)) { err.textContent = '이미 등록된 이름입니다'; return; }
@@ -4054,6 +4065,7 @@ window.confirmAddStudent = function(seatNum) {
     parent,
     gender,
     expiry,
+    startDate,
     schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
     hours: {}
   };
