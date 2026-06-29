@@ -3221,7 +3221,10 @@ window.deleteStudentFromFirebase = deleteStudentFromFirebase;
 window.loadStudentsFromFirebase = loadStudentsFromFirebase;
 
 // ── 오늘 입퇴실 기록 Firebase에서 로드 ──
+let _loadCheckinLock = false;
 async function loadTodayCheckinFromFirebase() {
+  if (_loadCheckinLock) return;
+  _loadCheckinLock = true;
   try {
     const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const snap = await getDocs(collection(db, 'checkin_logs'));
@@ -3245,14 +3248,12 @@ async function loadTodayCheckinFromFirebase() {
       const time = d.time || '';
 
       if (d.type === 'in') {
-        // 이미 입실중인 기록 있으면 스킵
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (!alreadyIn) {
           todayRecords.push({ studentName: name, seat, inTime: time, outTime: null });
           if (!PRESENT.includes(name)) PRESENT.push(name);
         }
       } else if (d.type === 'out') {
-        // 가장 최근 입실중 기록에 퇴실 처리
         const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (rec) {
           rec.outTime = time;
@@ -3266,7 +3267,9 @@ async function loadTodayCheckinFromFirebase() {
     buildCheckinTodayList();
     if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
     else if (document.getElementById('fp-room')) buildFloorplan();
+    _checkinSnapshotReady = true; // 이제부터 onSnapshot 이벤트 처리
   } catch(e) { console.error('입퇴실 로드 실패:', e); }
+  finally { _loadCheckinLock = false; }
 }
 window.loadTodayCheckinFromFirebase = loadTodayCheckinFromFirebase;
 
@@ -3276,10 +3279,12 @@ loadTodayCheckinFromFirebase();
 
 // ── 입퇴실 기록 실시간 감시 (다중 기기 동기화) ──
 const _todayStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+let _checkinSnapshotReady = false; // loadTodayCheckinFromFirebase 완료 후 true
 
 onSnapshot(
   collection(db, 'checkin_logs'),
   (snapshot) => {
+    if (!_checkinSnapshotReady) return; // 초기 로드 전 이벤트 무시
     let changed = false;
     snapshot.docChanges().forEach(change => {
       if (change.type === 'removed') return;
@@ -3689,8 +3694,8 @@ window.loadSmsLog = async function() {
       const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
       const fbLogs = [];
       snap.forEach(d => {
-        if (!_deletedSmsIds.has(d.id)) { // 삭제된 항목 제외
-          fbLogs.push({ id: d.id, ...d.data() });
+        if (!_deletedSmsIds.has(d.id) && !_deletedSmsIds.has(d.data().id)) {
+          fbLogs.push({ _fbId: d.id, id: d.id, ...d.data() });
         }
       });
 
@@ -3745,7 +3750,7 @@ window.renderSmsLog = function(logs) {
       : '';
     const firstLine = (log.text||'').split('\n').filter(l=>l.trim())[0] || '';
     const detailId = `sms-detail-${i}`;
-    const logId = log.id || '';
+    const logId = log.id || log._fbId || `log_${i}_${log.date||''}`;
     return `<div id="smsrow-${i}" style="border-bottom:0.5px solid var(--color-border-tertiary)">
       <div onclick="toggleSmsDetail('${detailId}')" style="display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;gap:10px;user-select:none"
            onmouseover="this.style.background='rgba(0,0,0,0.03)'" onmouseout="this.style.background=''">
@@ -3787,7 +3792,7 @@ window.toggleSmsDetail = function(id) {
 window.deleteSmsLog = async function(logId, idx) {
   if (!confirm('이 발송 내역을 삭제할까요?')) return;
 
-  // 삭제 ID 추적 (재로드 시에도 복구 안 되도록)
+  // 삭제 ID 추적
   if (logId) {
     _deletedSmsIds.add(logId);
     localStorage.setItem('saebom_sms_deleted', JSON.stringify([..._deletedSmsIds]));
@@ -3797,19 +3802,18 @@ window.deleteSmsLog = async function(logId, idx) {
   _smsLogs = _smsLogs.filter(l => l.id !== logId);
   localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
 
-  // Firebase에서도 삭제
-  if (logId && window._adminDb) {
+  // _smsLogData에서 즉시 제거
+  _smsLogData = _smsLogData.filter(l => l.id !== logId);
+
+  // Firebase에서도 삭제 (id 또는 _fbId 사용)
+  const fbId = logId;
+  if (fbId && window._adminDb) {
     try {
-      await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'sms_logs', logId));
+      await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'sms_logs', fbId));
     } catch(e) { console.error('SMS Firebase 삭제 실패:', e); }
   }
 
-  // 화면에서 해당 행 제거
-  const row = document.getElementById(`smsrow-${idx}`);
-  if (row) row.remove();
-
-  // 통계 업데이트
-  _smsLogData = _smsLogData.filter(l => l.id !== logId);
+  // 화면 갱신
   renderSmsLog(_smsLogData);
   showAdminToast('🗑️ 삭제됐습니다');
 };
