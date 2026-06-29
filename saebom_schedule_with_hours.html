@@ -3163,11 +3163,14 @@ async function loadStudentsFromFirebase() {
   }
   if (window.initApp) window.initApp();
 
-  // students 컬렉션 실시간 감시
+  // students 컬렉션 실시간 감시 - added 무시, modified/removed만 처리
   onSnapshot(collection(db, 'students'), (snap) => {
     if (window._seatChanging) return;
     let changed = false;
     snap.docChanges().forEach(change => {
+      // added는 getDocs에서 이미 처리했으므로 완전히 무시
+      if (change.type === 'added') return;
+
       const v = change.doc.data();
       if (change.type === 'removed') {
         const docId = change.doc.id.replace('번','');
@@ -3175,6 +3178,7 @@ async function loadStudentsFromFirebase() {
         if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
         return;
       }
+      // modified
       if (!v.name) {
         const s = STUDENTS.find(s => s.seat === change.doc.id.replace('번',''));
         if (s) { s.seat = ''; changed = true; }
@@ -3183,7 +3187,6 @@ async function loadStudentsFromFirebase() {
       const vSeat = String(v.seat).replace('번','');
       const seatNum = parseInt(vSeat);
       if (seatNum >= 54 && seatNum <= 63) return;
-      const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       const updated = {
         seat: vSeat, name: v.name,
         phone: v.phone || '', parent: v.parent || '',
@@ -3191,21 +3194,12 @@ async function loadStudentsFromFirebase() {
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: v.hours || {}
       };
-      if (change.type === 'added') {
-        // added: 이미 같은 seat이 있으면 업데이트, 없으면 추가
-        if (idx !== -1) {
-          STUDENTS[idx] = updated;
-        } else if (!STUDENTS.find(s => s.name === v.name)) {
-          STUDENTS.push(updated);
-        }
-      } else if (change.type === 'modified') {
-        if (idx !== -1) {
-          STUDENTS[idx] = updated;
-        } else {
-          const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
-          if (nameIdx !== -1) { STUDENTS[nameIdx] = updated; }
-          else { STUDENTS.push(updated); }
-        }
+      const idx = STUDENTS.findIndex(s => s.seat === vSeat);
+      if (idx !== -1) { STUDENTS[idx] = updated; }
+      else {
+        const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
+        if (nameIdx !== -1) { STUDENTS[nameIdx] = updated; }
+        else { STUDENTS.push(updated); }
       }
       changed = true;
     });
