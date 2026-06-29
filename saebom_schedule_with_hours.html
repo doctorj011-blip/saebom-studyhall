@@ -2136,6 +2136,26 @@ function buildFpSidePanel() {
       ? '<span style="color:#4A90D9;font-size:11px">♂</span>'
       : '<span style="color:#E05C8A;font-size:11px">♀</span>';
 
+    // 스터디룸 배정 여부
+    const strRoom = Object.entries(studyRoomStudents).find(([r, arr]) => arr.includes(s.name));
+    const strNum = strRoom ? strRoom[0] : null;
+
+    // 배지 및 배경 결정
+    let badgeText, badgeBg, cardBg, cardBorder;
+    if (isIn && strNum) {
+      badgeText = `이용 · ST-R ${strNum}`;
+      badgeBg = '#7C3AED'; cardBg = '#FAF5FF'; cardBorder = '#C084FC';
+    } else if (isIn) {
+      badgeText = '이용';
+      badgeBg = '#C8900A'; cardBg = '#FFFBEA'; cardBorder = '#E0B020';
+    } else if (strNum) {
+      badgeText = `ST-R ${strNum} 대기`;
+      badgeBg = '#7C3AED'; cardBg = '#FAF5FF'; cardBorder = '#C084FC';
+    } else {
+      badgeText = '미입실';
+      badgeBg = '#9CA3AF'; cardBg = '#F9FAFB'; cardBorder = '#E5E7EB';
+    }
+
     // 만료일 D-day
     let expiryStr = '';
     if (s.expiry) {
@@ -2154,11 +2174,11 @@ function buildFpSidePanel() {
       draggable="true"
       onclick="fpSeatClick(${parseInt(s.seat)})"
       onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
-      style="background:${isIn ? '#FFFBEA' : '#F9FAFB'};border:1.5px solid ${isIn ? '#E0B020' : '#E5E7EB'};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative">
+      style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative">
       <div style="position:absolute;top:7px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="display:flex;align-items:center;gap:5px">
-          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${isIn ? '#C8900A' : '#9CA3AF'};color:#fff">${isIn ? '이용중' : '미입실'}</span>
+          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${badgeBg};color:#fff">${badgeText}</span>
         </div>
         <span style="font-size:10px;color:#6B7280;margin-right:14px">${s.seat}번</span>
       </div>
@@ -2865,9 +2885,22 @@ function showPeriodStudents(periodIdx) {
 }
 
 // ── 대시보드 1분마다 자동 갱신 (교시 변경 반영) ──
+let _lastResetDate = new Date().toLocaleDateString('ko-KR');
 setInterval(() => {
   if (document.getElementById('sec-dashboard').classList.contains('active')) {
     buildDashboard();
+  }
+
+  // 오전 2시 이후 날짜가 바뀌면 입퇴실 기록 초기화 (11교시 종료 후 여유 시간)
+  const now = new Date();
+  const hour = now.getHours();
+  const todayStr = now.toLocaleDateString('ko-KR');
+  if (hour >= 2 && hour < 6 && todayStr !== _lastResetDate) {
+    _lastResetDate = todayStr;
+    todayRecords.length = 0;
+    PRESENT.length = 0;
+    if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
+    showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
   }
 }, 60000);
 
