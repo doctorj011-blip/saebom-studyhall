@@ -7,7 +7,6 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getStorage, ref, uploadBytes, getDownloadURL, listAll, deleteObject } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
@@ -25,13 +24,6 @@ const db  = getFirestore(app);
 
 // 전역 노출
 window._db = db;
-const storage = getStorage(app);
-window._storage = storage;
-window._storageRef = ref;
-window._uploadBytes = uploadBytes;
-window._getDownloadURL = getDownloadURL;
-window._listAll = listAll;
-window._deleteObject = deleteObject;
 window._fsDoc = doc;
 window._fsSetDoc = setDoc;
 window._fsCollection = collection;
@@ -231,8 +223,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="app-tab" onclick="showTab('weekly',this)">주간설정</button>
       <button class="app-tab" onclick="showTab('mystats',this)">내 현황</button>
       <button class="app-tab" onclick="showTab('studyroom',this)">스터디룸</button>
-      <button class="app-tab" onclick="showTab('planner',this)">플래너</button>
       <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">자리선택</button>
+      <button class="app-tab" onclick="showTab('planner',this)">📓 플래너</button>
     </div>
   </div>
 
@@ -264,36 +256,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
 
     <!-- 자리선택 배치도 -->
-    <!-- 스터디 플래너 -->
-    <div id="tab-planner" style="display:none;padding:16px">
-      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">📸 스터디 플래너</div>
-      <div style="font-size:12px;color:#888;margin-bottom:16px">오늘의 플래너를 사진으로 찍어 업로드하세요.</div>
-
-      <!-- 날짜 선택 -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-        <button onclick="changePlannerDate(-1)" style="padding:6px 12px;border:1.5px solid #E0B020;border-radius:8px;background:#FFFDF5;color:#5C3D08;font-size:16px;cursor:pointer">‹</button>
-        <div id="planner-date" style="flex:1;text-align:center;font-size:14px;font-weight:700;color:#1F2937"></div>
-        <button onclick="changePlannerDate(1)" style="padding:6px 12px;border:1.5px solid #E0B020;border-radius:8px;background:#FFFDF5;color:#5C3D08;font-size:16px;cursor:pointer">›</button>
-      </div>
-
-      <!-- 업로드 영역 -->
-      <div id="planner-upload-area" style="border:2px dashed #E0B020;border-radius:16px;padding:24px;text-align:center;background:#FFFDF5;margin-bottom:16px;cursor:pointer" onclick="document.getElementById('planner-file-input').click()">
-        <div style="font-size:36px;margin-bottom:8px">📷</div>
-        <div style="font-size:13px;font-weight:600;color:#5C3D08;margin-bottom:4px">사진을 탭하여 업로드</div>
-        <div style="font-size:11px;color:#aaa">카메라로 찍거나 앨범에서 선택</div>
-        <input type="file" id="planner-file-input" accept="image/*" capture="environment" style="display:none" onchange="uploadPlanner(this)">
-      </div>
-
-      <!-- 업로드 진행 -->
-      <div id="planner-progress" style="display:none;margin-bottom:16px">
-        <div style="font-size:12px;color:#C8900A;margin-bottom:6px" id="planner-progress-text">업로드 중...</div>
-        <div style="height:6px;background:#F3F4F6;border-radius:3px"><div id="planner-progress-bar" style="height:100%;background:#C8900A;border-radius:3px;width:0%;transition:width 0.3s"></div></div>
-      </div>
-
-      <!-- 저장된 사진 -->
-      <div id="planner-images" style="display:flex;flex-direction:column;gap:12px"></div>
-    </div>
-
     <!-- 스터디룸 신청 -->
     <div id="tab-studyroom" style="display:none;padding:16px">
       <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">📚 스터디룸 신청</div>
@@ -324,6 +286,44 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
       <div id="student-seatmap" style="overflow-x:auto"></div>
     </div>
+    <!-- 플래너 탭 -->
+    <div id="tab-planner" style="display:none;padding:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <button onclick="plannerPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
+        <div id="planner-month-title" style="font-size:16px;font-weight:700;color:#5C3D08"></div>
+        <button onclick="plannerNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
+      </div>
+      <div id="planner-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px"></div>
+      <!-- 사진 업로드/조회 영역 -->
+      <div id="planner-detail" style="display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div id="planner-selected-date" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
+          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">✕</button>
+        </div>
+        <div id="planner-photo-view" style="text-align:center;margin-bottom:12px">
+          <img id="planner-photo-img" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
+          <div id="planner-no-photo" style="color:#aaa;font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:center">
+          <label style="flex:1;background:#C8900A;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+            📷 카메라
+            <input type="file" accept="image/*" capture="environment" id="planner-camera-input" style="display:none" onchange="plannerUploadPhoto(this)">
+          </label>
+          <label style="flex:1;background:#E0B020;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+            🖼️ 갤러리
+            <input type="file" accept="image/*" id="planner-gallery-input" style="display:none" onchange="plannerUploadPhoto(this)">
+          </label>
+          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:#C62828;color:#fff;padding:10px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer">🗑️ 삭제</button>
+        </div>
+        <div id="planner-upload-progress" style="display:none;margin-top:10px">
+          <div style="background:#eee;border-radius:20px;height:6px">
+            <div id="planner-progress-bar" style="background:#C8900A;height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
+          </div>
+          <div style="text-align:center;font-size:12px;color:#888;margin-top:4px">업로드 중...</div>
+        </div>
+      </div>
+    </div>
+
 
   </div>
 </div>
@@ -452,7 +452,8 @@ async function tryLogin() {
   // 2) 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._db) {
     try {
-      const snap = await window._fsGetDocs(window._fsCollection(window._db, 'students'));
+      const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      const snap = await getDocs(collection(window._db, 'students'));
       snap.forEach(doc => {
         const v = doc.data();
         if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === pinBuffer) {
@@ -567,7 +568,8 @@ function showTab(id, btn) {
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','daily','weekly','mystats','seatmap','studyroom'].forEach(t => {
+  if (id === 'planner') { initPlannerCalendar(); }
+  ['notice','daily','weekly','mystats','seatmap','studyroom','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -1075,10 +1077,6 @@ function buildStudyroomPeriodBtns() {
   const today = dn[new Date().getDay()];
   const isSat = today === '토';
   const isSun = today === '일';
-  renderStudyroomPeriodBtns(isSat, isSun);
-}
-
-function renderStudyroomPeriodBtns(isSat, isSun) {
   const el = document.getElementById('studyroom-period-btns');
   if (!el) return;
 
@@ -1095,18 +1093,13 @@ function renderStudyroomPeriodBtns(isSat, isSun) {
     : [{n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
 
-  el.innerHTML = periods.map(p => {
-    const over = isPeriodOver(p.n);
-    return `<button onclick="${over ? '' : `applyStudyroom(${p.n})`}"
-      style="padding:8px 14px;border:1.5px solid ${over?'#E5E7EB':'#E0B020'};border-radius:10px;
-             background:${over?'#F3F4F6':'#FFFDF5'};
-             color:${over?'#9CA3AF':'#5C3D08'};font-size:13px;font-weight:600;
-             cursor:${over?'not-allowed':'pointer'};min-width:80px;
-             opacity:${over?'0.5':'1'}">
-      ${p.n}교시${over?' ✓':''}<br>
-      <span style="font-size:10px;color:${over?'#bbb':'#888'};font-weight:400">${over?'종료':p.t}</span>
-    </button>`;
-  }).join('');
+  el.innerHTML = periods.map(p =>
+    `<button onclick="applyStudyroom(${p.n})"
+      style="padding:8px 14px;border:1.5px solid #E0B020;border-radius:10px;background:#FFFDF5;
+             color:#5C3D08;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
+      ${p.n}교시<br><span style="font-size:10px;color:#888;font-weight:400">${p.t}</span>
+    </button>`
+  ).join('');
 }
 
 async function applyStudyroom(periodNum) {
@@ -1173,30 +1166,6 @@ async function submitStudyroomReq(periodNum, roomCounts) {
   } catch(e) { alert('신청 실패: ' + e.message); }
 }
 
-
-// ── 교시 종료 시각 (분 단위, 자정 이후는 +1440) ──
-const PERIOD_END_MIN = {
-  1: 10*60,        // 10:00
-  2: 11*60+10,     // 11:10
-  3: 12*60+30,     // 12:30
-  4: 14*60+30,     // 14:30
-  5: 15*60+40,     // 15:40
-  6: 17*60,        // 17:00
-  7: 18*60+50,     // 18:50
-  8: 20*60+20,     // 20:20
-  9: 22*60,        // 22:00
-  10: 23*60+50,    // 23:50
-  11: 25*60,       // 01:00 (자정 이후 = +1440)
-};
-
-function isPeriodOver(periodNum) {
-  const now = new Date();
-  const curMin = now.getHours() * 60 + now.getMinutes();
-  // 자정 이후(00:00~01:00)는 +1440 처리
-  const adjMin = now.getHours() < 3 ? curMin + 1440 : curMin;
-  return adjMin > (PERIOD_END_MIN[periodNum] || 0);
-}
-
 function loadStudyroomData() {
   const db = window._db;
   if (!db || !currentStudent) return;
@@ -1207,8 +1176,7 @@ function loadStudyroomData() {
     snap => {
       const all = [];
       snap.forEach(d => all.push({ id: d.id, ...d.data() }));
-      // 지난 교시 신청은 표시 안 함
-      const todayReqs = all.filter(r => r.date === today && !isPeriodOver(r.period));
+      const todayReqs = all.filter(r => r.date === today);
       const myReqs = todayReqs.filter(r => r.name === currentStudent.name).sort((a,b) => a.period - b.period);
       const myEl = document.getElementById('studyroom-my-requests');
       if (myEl) {
@@ -1264,140 +1232,6 @@ document.addEventListener('visibilitychange', function() {
   if (activeTab === 'studyroom') loadStudyroomData();
 });
 
-
-// ── 스터디 플래너 ──
-let plannerDate = new Date().toISOString().slice(0,10);
-
-function loadPlannerTab() {
-  updatePlannerDateDisplay();
-  loadPlannerImages();
-}
-
-function updatePlannerDateDisplay() {
-  const d = new Date(plannerDate + 'T00:00:00');
-  const dn = ['일','월','화','수','목','금','토'];
-  document.getElementById('planner-date').textContent =
-    `${d.getMonth()+1}월 ${d.getDate()}일 (${dn[d.getDay()]})`;
-}
-
-function changePlannerDate(delta) {
-  const d = new Date(plannerDate + 'T00:00:00');
-  d.setDate(d.getDate() + delta);
-  plannerDate = d.toISOString().slice(0,10);
-  updatePlannerDateDisplay();
-  loadPlannerImages();
-}
-
-async function uploadPlanner(input) {
-  if (!input.files || !input.files[0]) return;
-  if (!currentStudent) return;
-  const storage = window._storage;
-  if (!storage) { alert('Storage 연결 필요'); return; }
-
-  const file = input.files[0];
-  const maxMB = 10;
-  if (file.size > maxMB * 1024 * 1024) {
-    alert(`파일이 너무 큽니다. ${maxMB}MB 이하만 가능해요.`);
-    return;
-  }
-
-  // 진행 표시
-  const prog = document.getElementById('planner-progress');
-  const progText = document.getElementById('planner-progress-text');
-  const progBar = document.getElementById('planner-progress-bar');
-  prog.style.display = 'block';
-  progText.textContent = '업로드 중...';
-  progBar.style.width = '30%';
-
-  try {
-    const seat = currentStudent.seat.replace(/[^0-9]/g,'') || currentStudent.seat;
-    const timestamp = Date.now();
-    const ext = file.name.split('.').pop() || 'jpg';
-    const path = `planners/${seat}/${plannerDate}/${timestamp}.${ext}`;
-    const storageRef = window._storageRef(storage, path);
-
-    progBar.style.width = '60%';
-    await window._uploadBytes(storageRef, file);
-    progBar.style.width = '90%';
-    const url = await window._getDownloadURL(storageRef);
-    progBar.style.width = '100%';
-    progText.textContent = '✅ 업로드 완료!';
-
-    setTimeout(() => { prog.style.display = 'none'; progBar.style.width = '0%'; }, 1500);
-    loadPlannerImages();
-    input.value = '';
-  } catch(e) {
-    prog.style.display = 'none';
-    alert('업로드 실패: ' + e.message);
-  }
-}
-
-async function loadPlannerImages() {
-  const storage = window._storage;
-  const el = document.getElementById('planner-images');
-  if (!el || !currentStudent) return;
-  if (!storage) {
-    el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Firebase Storage 연결 후 사용 가능합니다</div>';
-    return;
-  }
-
-  el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>';
-
-  try {
-    const seat = currentStudent.seat.replace(/[^0-9]/g,'') || currentStudent.seat;
-    const path = `planners/${seat}/${plannerDate}`;
-    const listRef = window._storageRef(storage, path);
-    const result = await window._listAll(listRef);
-
-    if (result.items.length === 0) {
-      el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 저장된 플래너가 없습니다</div>';
-      return;
-    }
-
-    // URL 로드
-    const items = await Promise.all(result.items.map(async (item) => {
-      const url = await window._getDownloadURL(item);
-      return { url, ref: item };
-    }));
-
-    el.innerHTML = items.map((item, i) =>
-      `<div style="position:relative;border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
-        <img src="${item.url}" style="width:100%;display:block;border-radius:16px" loading="lazy"
-          onclick="openPlannerImage('${item.url}')">
-        <button onclick="deletePlannerImage('${item.ref.fullPath}', this)"
-          style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:20px;padding:4px 10px;font-size:12px;cursor:pointer">삭제</button>
-      </div>`
-    ).join('');
-  } catch(e) {
-    if (e.code === 'storage/object-not-found') {
-      el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 저장된 플래너가 없습니다</div>';
-    } else {
-      el.innerHTML = `<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오기 실패</div>`;
-    }
-  }
-}
-
-function openPlannerImage(url) {
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
-  overlay.innerHTML = `<img src="${url}" style="max-width:100%;max-height:100%;border-radius:8px;object-fit:contain">`;
-  overlay.onclick = () => overlay.remove();
-  document.body.appendChild(overlay);
-}
-
-async function deletePlannerImage(fullPath, btn) {
-  if (!confirm('이 사진을 삭제하시겠습니까?')) return;
-  try {
-    const storageRef = window._storageRef(window._storage, fullPath);
-    await window._deleteObject(storageRef);
-    btn.closest('div').remove();
-    showToast('삭제됐습니다');
-    loadPlannerImages();
-  } catch(e) {
-    alert('삭제 실패: ' + e.message);
-  }
-}
-
 // ── 초기화 ──
 // 새로고침 후 자동 로그인 복원
 (function restoreSession() {
@@ -1429,17 +1263,241 @@ function restoreTab() {
   } catch(e) {}
 }
 
-// ── 스터디룸 탭 1분마다 자동 갱신 (교시 종료 반영) ──
-setInterval(() => {
-  const activeTab = sessionStorage.getItem('saebom_active_tab_student');
-  if (activeTab === 'studyroom') {
-    // 교시 버튼 재렌더 (지난 교시 비활성화 반영)
-    const now = new Date();
-    const isSat = now.getDay() === 6;
-    const isSun = now.getDay() === 0;
-    renderStudyroomPeriodBtns(isSat, isSun);
+// ══════════════════════════════════════
+// 📓 플래너 기능
+// ══════════════════════════════════════
+let plannerYear = new Date().getFullYear();
+let plannerMonth = new Date().getMonth(); // 0-based
+let plannerUploadedDates = {}; // { 'YYYY-MM-DD': downloadURL }
+let plannerSelectedDate = null;
+let plannerStorageRef = null;
+
+// Firebase Storage 초기화
+async function getPlannerStorage() {
+  if (plannerStorageRef) return plannerStorageRef;
+  const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } =
+    await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
+  plannerStorageRef = { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll };
+  return plannerStorageRef;
+}
+
+// 플래너 탭 초기화
+async function initPlannerCalendar() {
+  if (!currentStudent) return;
+  await loadPlannerMonthData();
+  renderPlannerCalendar();
+}
+
+// 해당 월의 업로드된 날짜 목록 로드
+async function loadPlannerMonthData() {
+  try {
+    const st = await getPlannerStorage();
+    const storage = st.getStorage();
+    const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const prefix = `planners/${seat}/${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
+    const listRef = st.ref(storage, prefix);
+    const result = await st.listAll(listRef);
+    plannerUploadedDates = {};
+    for (const item of result.items) {
+      // 파일명: YYYY-MM-DD.jpg
+      const name = item.name.replace(/\.jpg$/i,'');
+      const url = await st.getDownloadURL(item);
+      plannerUploadedDates[name] = url;
+    }
+  } catch(e) {
+    // 빈 달이면 에러 무시
+    plannerUploadedDates = {};
   }
-}, 60000);
+}
+
+// 달력 렌더링
+function renderPlannerCalendar() {
+  const title = document.getElementById('planner-month-title');
+  title.textContent = `${plannerYear}년 ${plannerMonth+1}월`;
+
+  const cal = document.getElementById('planner-calendar');
+  const days = ['일','월','화','수','목','금','토'];
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  let html = '';
+  // 요일 헤더
+  days.forEach((d,i) => {
+    const color = i===0?'#C62828':i===6?'#1565C0':'#5C3D08';
+    html += `<div style="text-align:center;font-size:11px;font-weight:700;color:${color};padding:4px 0">${d}</div>`;
+  });
+
+  const firstDay = new Date(plannerYear, plannerMonth, 1).getDay();
+  const lastDate = new Date(plannerYear, plannerMonth+1, 0).getDate();
+
+  for (let i=0; i<firstDay; i++) {
+    html += '<div></div>';
+  }
+  for (let d=1; d<=lastDate; d++) {
+    const dateStr = `${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const isToday = dateStr === todayStr;
+    const hasPhoto = !!plannerUploadedDates[dateStr];
+    const dow = new Date(plannerYear, plannerMonth, d).getDay();
+    const textColor = dow===0?'#C62828':dow===6?'#1565C0':'#333';
+    const bgColor = isToday ? '#C8900A' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
+    const border = isToday ? '2px solid #C8900A' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
+    const dateColor = isToday ? '#fff' : textColor;
+    html += `<div onclick="plannerSelectDate('${dateStr}')"
+      style="border-radius:10px;padding:6px 2px;text-align:center;cursor:pointer;background:${bgColor};border:${border};position:relative">
+      <div style="font-size:13px;font-weight:${isToday?'700':'500'};color:${dateColor}">${d}</div>
+      ${hasPhoto ? '<div style="font-size:9px;margin-top:1px">📷</div>' : ''}
+    </div>`;
+  }
+  cal.innerHTML = html;
+}
+
+// 날짜 선택
+async function plannerSelectDate(dateStr) {
+  plannerSelectedDate = dateStr;
+  const detail = document.getElementById('planner-detail');
+  detail.style.display = 'block';
+
+  const [y,m,d] = dateStr.split('-');
+  document.getElementById('planner-selected-date').textContent =
+    `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
+
+  const img = document.getElementById('planner-photo-img');
+  const noPhoto = document.getElementById('planner-no-photo');
+  const delBtn = document.getElementById('planner-delete-btn');
+
+  if (plannerUploadedDates[dateStr]) {
+    img.src = plannerUploadedDates[dateStr];
+    img.style.display = 'block';
+    noPhoto.style.display = 'none';
+    delBtn.style.display = 'block';
+  } else {
+    img.src = '';
+    img.style.display = 'none';
+    noPhoto.style.display = 'block';
+    delBtn.style.display = 'none';
+  }
+  // 스크롤
+  detail.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 사진 업로드
+async function plannerUploadPhoto(input) {
+  if (!input.files || !input.files[0]) return;
+  if (!currentStudent || !plannerSelectedDate) return;
+  const file = input.files[0];
+
+  try {
+    const st = await getPlannerStorage();
+    const storage = st.getStorage();
+    const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const path = `planners/${seat}/${plannerSelectedDate}.jpg`;
+    const storageRef = st.ref(storage, path);
+
+    const progress = document.getElementById('planner-upload-progress');
+    const bar = document.getElementById('planner-progress-bar');
+    progress.style.display = 'block';
+
+    const uploadTask = st.uploadBytesResumable(storageRef, file, { contentType: file.type });
+    uploadTask.on('state_changed',
+      (snap) => {
+        const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
+        bar.style.width = pct + '%';
+      },
+      (err) => {
+        progress.style.display = 'none';
+        showStudentToast('업로드 실패: ' + err.message);
+      },
+      async () => {
+        const url = await st.getDownloadURL(uploadTask.snapshot.ref);
+        plannerUploadedDates[plannerSelectedDate] = url;
+        progress.style.display = 'none';
+        bar.style.width = '0%';
+        input.value = '';
+        renderPlannerCalendar();
+        plannerSelectDate(plannerSelectedDate);
+        showStudentToast('📷 플래너 사진이 저장되었습니다!');
+        // Firestore에 메타 저장 (관리자/학부모 앱에서 조회용)
+        savePlannerMeta(seat, plannerSelectedDate, url);
+      }
+    );
+  } catch(e) {
+    showStudentToast('업로드 오류: ' + e.message);
+  }
+}
+
+// Firestore에 플래너 메타 저장
+async function savePlannerMeta(seat, dateStr, url) {
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const db = window._adminDb || (await (async()=>{
+      const {getFirestore} = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      return getFirestore();
+    })());
+    const ref = doc(db, 'planners', `${seat}_${dateStr}`);
+    await setDoc(ref, {
+      seat,
+      date: dateStr,
+      url,
+      name: currentStudent.name,
+      updatedAt: new Date().toISOString()
+    });
+  } catch(e) { console.warn('플래너 메타 저장 실패:', e); }
+}
+
+// 사진 삭제
+async function plannerDeletePhoto() {
+  if (!plannerSelectedDate || !plannerUploadedDates[plannerSelectedDate]) return;
+  if (!confirm('이 날의 플래너 사진을 삭제할까요?')) return;
+  try {
+    const st = await getPlannerStorage();
+    const storage = st.getStorage();
+    const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const path = `planners/${seat}/${plannerSelectedDate}.jpg`;
+    const storageRef = st.ref(storage, path);
+    await st.deleteObject(storageRef);
+    delete plannerUploadedDates[plannerSelectedDate];
+    renderPlannerCalendar();
+    plannerSelectDate(plannerSelectedDate);
+    // Firestore 메타 삭제
+    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const db = window._adminDb || (await (async()=>{
+      const {getFirestore} = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      return getFirestore();
+    })());
+    await deleteDoc(doc(db, 'planners', `${seat}_${plannerSelectedDate}`));
+    showStudentToast('사진이 삭제되었습니다');
+  } catch(e) {
+    showStudentToast('삭제 실패: ' + e.message);
+  }
+}
+
+// 이전 달
+async function plannerPrevMonth() {
+  plannerMonth--;
+  if (plannerMonth < 0) { plannerMonth = 11; plannerYear--; }
+  document.getElementById('planner-detail').style.display = 'none';
+  await loadPlannerMonthData();
+  renderPlannerCalendar();
+}
+
+// 다음 달
+async function plannerNextMonth() {
+  plannerMonth++;
+  if (plannerMonth > 11) { plannerMonth = 0; plannerYear++; }
+  document.getElementById('planner-detail').style.display = 'none';
+  await loadPlannerMonthData();
+  renderPlannerCalendar();
+}
+
+// 토스트 (학생앱용 - 기존 showAdminToast와 별도)
+function showStudentToast(msg) {
+  const t = document.getElementById('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
 </script>
 </body>
 </html>
