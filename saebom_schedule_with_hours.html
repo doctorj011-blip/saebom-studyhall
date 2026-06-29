@@ -4448,9 +4448,12 @@ let adminPlannerStorageRef = null;
 
 async function getAdminPlannerStorage() {
   if (adminPlannerStorageRef) return adminPlannerStorageRef;
-  const { getStorage, ref, getDownloadURL, listAll } =
-    await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
-  adminPlannerStorageRef = { getStorage, ref, getDownloadURL, listAll };
+  const mod = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
+  const { getStorage, ref, getDownloadURL, listAll } = mod;
+  const { getApps } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js');
+  const apps = getApps();
+  const storage = apps.length > 0 ? getStorage(apps[0]) : getStorage();
+  adminPlannerStorageRef = { storage, ref, getDownloadURL, listAll };
   return adminPlannerStorageRef;
 }
 
@@ -4485,7 +4488,7 @@ async function adminPlannerLoadMonth() {
   if (!adminPlannerCurrentSeat) return;
   try {
     const st = await getAdminPlannerStorage();
-    const storage = st.getStorage();
+    const storage = st.storage;
     const prefix = `planners/${adminPlannerCurrentSeat}/${adminPlannerYear}-${String(adminPlannerMonth+1).padStart(2,'0')}`;
     const listRef = st.ref(storage, prefix);
     const result = await st.listAll(listRef);

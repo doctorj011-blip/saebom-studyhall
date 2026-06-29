@@ -568,10 +568,10 @@ function showTab(id, btn) {
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  if (id === 'planner') { initPlannerCalendar(); }
   ['notice','daily','weekly','mystats','seatmap','studyroom','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
+  if (id === 'planner') { initPlannerCalendar(); }
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 
@@ -1275,44 +1275,55 @@ let plannerStorageRef = null;
 // Firebase Storage 초기화
 async function getPlannerStorage() {
   if (plannerStorageRef) return plannerStorageRef;
-  const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } =
-    await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
-  plannerStorageRef = { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll };
+  const mod = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
+  const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } = mod;
+  // firebase app 인스턴스에서 storage 가져오기
+  const { getApps } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js');
+  const apps = getApps();
+  const storage = apps.length > 0 ? getStorage(apps[0]) : getStorage();
+  plannerStorageRef = {
+    storage,
+    ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll,
+    getStorage: () => storage
+  };
   return plannerStorageRef;
 }
 
 // 플래너 탭 초기화
 async function initPlannerCalendar() {
-  if (!currentStudent) return;
+  // currentStudent 없어도 달력은 렌더링 (사진 로드만 스킵)
   await loadPlannerMonthData();
   renderPlannerCalendar();
 }
 
 // 해당 월의 업로드된 날짜 목록 로드
 async function loadPlannerMonthData() {
+  plannerUploadedDates = {};
+  if (!currentStudent) return;
   try {
     const st = await getPlannerStorage();
-    const storage = st.getStorage();
+    const storage = st.storage;
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
     const prefix = `planners/${seat}/${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
     const listRef = st.ref(storage, prefix);
     const result = await st.listAll(listRef);
-    plannerUploadedDates = {};
     for (const item of result.items) {
-      // 파일명: YYYY-MM-DD.jpg
       const name = item.name.replace(/\.jpg$/i,'');
-      const url = await st.getDownloadURL(item);
-      plannerUploadedDates[name] = url;
+      try {
+        const url = await st.getDownloadURL(item);
+        plannerUploadedDates[name] = url;
+      } catch(e2) { /* 개별 URL 실패 무시 */ }
     }
   } catch(e) {
-    // 빈 달이면 에러 무시
-    plannerUploadedDates = {};
+    // Storage 미설정 또는 빈 달 - 달력은 계속 렌더링
+    console.warn('[Planner] Storage 로드 실패 (정상 - 사진 없음):', e.message || e);
   }
 }
 
 // 달력 렌더링
 function renderPlannerCalendar() {
   const title = document.getElementById('planner-month-title');
+  if (!title) { console.error('[Planner] planner-month-title 요소 없음'); return; }
   title.textContent = `${plannerYear}년 ${plannerMonth+1}월`;
 
   const cal = document.getElementById('planner-calendar');
@@ -1388,7 +1399,7 @@ async function plannerUploadPhoto(input) {
 
   try {
     const st = await getPlannerStorage();
-    const storage = st.getStorage();
+    const storage = st.storage;
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
     const path = `planners/${seat}/${plannerSelectedDate}.jpg`;
     const storageRef = st.ref(storage, path);
@@ -1450,7 +1461,7 @@ async function plannerDeletePhoto() {
   if (!confirm('이 날의 플래너 사진을 삭제할까요?')) return;
   try {
     const st = await getPlannerStorage();
-    const storage = st.getStorage();
+    const storage = st.storage;
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
     const path = `planners/${seat}/${plannerSelectedDate}.jpg`;
     const storageRef = st.ref(storage, path);
