@@ -1405,14 +1405,9 @@ async function plannerLoadComments(dateStr) {
   const list = document.getElementById('planner-comments-list');
   if (!area || !list || !currentStudent) return;
   try {
-    const { doc: fsDoc, getDoc: fsGetDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-    const db = window._adminDb || (await (async () => {
-      const { getFirestore } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      return getFirestore();
-    })());
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
     const docId = seat + '_' + dateStr;
-    const snap = await fsGetDoc(fsDoc(db, 'planner_comments', docId));
+    const snap = await getDoc(doc(db, 'planner_comments', docId));
     if (snap.exists()) {
       const comments = snap.data().comments || [];
       if (comments.length > 0) {

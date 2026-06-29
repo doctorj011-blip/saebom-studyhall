@@ -184,6 +184,11 @@
         <div id="parent-planner-images" style="display:flex;flex-direction:column;gap:12px">
           <div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>
         </div>
+        <!-- 선생님 코멘트 -->
+        <div id="parent-planner-comments" style="display:none;margin-top:12px">
+          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div id="parent-planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
+        </div>
       </div>
     </div>
 
@@ -491,11 +496,15 @@ function changeParentPlannerDate(delta) {
 
 async function loadParentPlannerImages() {
   const el = document.getElementById('parent-planner-images');
+  const commentsArea = document.getElementById('parent-planner-comments');
+  const commentsList = document.getElementById('parent-planner-comments-list');
   if (!el || !currentStudent) return;
+
+  // 코멘트 초기화
+  if (commentsArea) commentsArea.style.display = 'none';
 
   const storage = window._storage;
   if (!storage) {
-    // 로컬 테스트: 더미 표시
     el.innerHTML = `<div style="background:#F3F4F6;border-radius:12px;padding:40px;text-align:center;color:#aaa;font-size:13px">
       Firebase Storage 연결 후<br>학생이 업로드한 플래너를 볼 수 있어요</div>`;
     return;
@@ -504,29 +513,52 @@ async function loadParentPlannerImages() {
   el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>';
 
   try {
-    const seat = (currentStudent.seat || '').replace(/[^0-9]/g,'') || currentStudent.seat;
-    const path = `planners/${seat}/${parentPlannerDate}`;
-    const listRef = window._storageRef(storage, path);
-    const result = await window._listAll(listRef);
+    const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const monthPrefix = parentPlannerDate.slice(0, 7); // YYYY-MM
 
-    if (!result.items.length) {
+    // seat 폴더 전체 listAll 후 날짜로 필터링
+    const seatRef = window._storageRef(storage, `planners/${seat}`);
+    const result = await window._listAll(seatRef);
+    const dateItems = result.items.filter(item => {
+      const name = item.name.replace(/\.jpg$/i, '');
+      return name === parentPlannerDate;
+    });
+
+    if (!dateItems.length) {
       el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 업로드된 플래너가 없습니다</div>';
-      return;
+    } else {
+      const urls = await Promise.all(dateItems.map(item => window._getDownloadURL(item)));
+      el.innerHTML = urls.map(url =>
+        `<div style="border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
+          <img src="${url}" style="width:100%;display:block;border-radius:16px" loading="lazy"
+            onclick="openParentImage('${url}')">
+        </div>`
+      ).join('');
     }
-
-    const items = await Promise.all(result.items.map(async item => {
-      const url = await window._getDownloadURL(item);
-      return url;
-    }));
-
-    el.innerHTML = items.map(url =>
-      `<div style="border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.1)">
-        <img src="${url}" style="width:100%;display:block;border-radius:16px" loading="lazy"
-          onclick="openParentImage('${url}')">
-      </div>`
-    ).join('');
   } catch(e) {
     el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">이 날 업로드된 플래너가 없습니다</div>';
+  }
+
+  // 선생님 코멘트 로드
+  try {
+    if (window._getDoc && window._doc && window._db && commentsArea && commentsList) {
+      const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
+      const docId = seat + '_' + parentPlannerDate;
+      const snap = await window._getDoc(window._doc(window._db, 'planner_comments', docId));
+      if (snap.exists()) {
+        const comments = snap.data().comments || [];
+        if (comments.length > 0) {
+          commentsArea.style.display = 'block';
+          commentsList.innerHTML = comments.map(c => `
+            <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
+              <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${(c.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+              <div style="font-size:11px;color:#888">${c.time || ''}</div>
+            </div>`).join('');
+        }
+      }
+    }
+  } catch(e) {
+    // 코멘트 로드 실패 무시
   }
 }
 
