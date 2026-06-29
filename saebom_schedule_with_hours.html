@@ -3136,7 +3136,10 @@ function _parseStudentDoc(v) {
 }
 
 // ── 앱 시작 시 Firebase에서 학생 데이터 로드 ──
+let _loadStudentsLock = false;
 async function loadStudentsFromFirebase() {
+  if (_loadStudentsLock) return; // 중복 호출 방지
+  _loadStudentsLock = true;
   try {
     const snap = await getDocs(collection(db, 'students'));
     if (snap.empty) {
@@ -3154,6 +3157,8 @@ async function loadStudentsFromFirebase() {
     }
   } catch(e) {
     console.error('Firebase 로드 실패:', e);
+  } finally {
+    _loadStudentsLock = false;
   }
   if (window.initApp) window.initApp();
 
