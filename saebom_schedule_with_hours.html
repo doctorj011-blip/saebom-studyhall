@@ -3053,7 +3053,7 @@ window.initApp = function(){
   window.buildScheduleTable = buildScheduleTable;
   window.buildStudentList = buildStudentList;
   // 플래너 탭 학생 목록 갱신 (탭이 열려있으면 즉시, 아니면 다음 오픈 때)
-  if (typeof adminPlannerRefreshList === 'function') adminPlannerRefreshList();
+  if (typeof window.adminPlannerRefreshList === 'function') window.adminPlannerRefreshList();
   const now=new Date();
   const dn=['일','월','화','수','목','금','토'];
   document.getElementById('today-label').textContent=`${now.getMonth()+1}월 ${now.getDate()}일 (${dn[now.getDay()]})`;
@@ -4451,162 +4451,148 @@ function showAdminToast(msg) {
   setTimeout(() => t.remove(), 2500);
 }
 
+
 // ══════════════════════════════════════
-// 📓 관리자 플래너 (apc = admin planner calendar)
+// 📓 관리자 플래너 (type=module 블록 안 - import 가능)
 // ══════════════════════════════════════
-(function() {
-  let year = new Date().getFullYear();
-  let month = new Date().getMonth(); // 0-based
-  let dates = {}; // { 'YYYY-MM-DD': downloadURL }
-  let seat = null;
-  let stMod = null;
+import { getStorage, ref as storageRef, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
-  // Storage 모듈 로드 (1회만)
-  async function getSt() {
-    if (stMod) return stMod;
-    const [storageMod, appMod] = await Promise.all([
-      import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js'),
-      import('https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js')
-    ]);
-    const apps = appMod.getApps();
-    const storage = storageMod.getStorage(apps[0]);
-    stMod = { storage, ref: storageMod.ref, getDownloadURL: storageMod.getDownloadURL, listAll: storageMod.listAll };
-    return stMod;
+let _apcYear = new Date().getFullYear();
+let _apcMonth = new Date().getMonth();
+let _apcDates = {};
+let _apcSeat = null;
+let _apcStorage = null;
+
+function _apcGetStorage() {
+  if (!_apcStorage) _apcStorage = getStorage(app);
+  return _apcStorage;
+}
+
+function _apcFillStudents() {
+  const sel = document.getElementById('apc-student');
+  if (!sel) return;
+  if (!STUDENTS || STUDENTS.length === 0) { setTimeout(_apcFillStudents, 500); return; }
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">-- 학생을 선택하세요 --</option>';
+  STUDENTS.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    opt.textContent = s.name + ' (' + s.seat + '번)';
+    sel.appendChild(opt);
+  });
+  if (prev) sel.value = prev;
+}
+
+function _apcRenderCal() {
+  const titleEl = document.getElementById('apc-title');
+  const calEl = document.getElementById('apc-cal');
+  if (!titleEl || !calEl) return;
+  titleEl.textContent = _apcYear + '년 ' + (_apcMonth + 1) + '월';
+  const now = new Date();
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  const DAYS = ['일','월','화','수','목','금','토'];
+  let h = '';
+  DAYS.forEach((d, i) => {
+    const c = i===0 ? '#C62828' : i===6 ? '#1565C0' : '#5C3D08';
+    h += `<div style="text-align:center;font-size:11px;font-weight:700;color:${c};padding:5px 0">${d}</div>`;
+  });
+  const firstDay = new Date(_apcYear, _apcMonth, 1).getDay();
+  const lastDate = new Date(_apcYear, _apcMonth + 1, 0).getDate();
+  for (let i = 0; i < firstDay; i++) h += '<div></div>';
+  for (let d = 1; d <= lastDate; d++) {
+    const ds = _apcYear + '-' + String(_apcMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+    const isToday = ds === todayStr;
+    const hasPhoto = !!_apcDates[ds];
+    const dow = new Date(_apcYear, _apcMonth, d).getDay();
+    const tc = dow===0 ? '#C62828' : dow===6 ? '#1565C0' : '#333';
+    const bg = isToday ? '#C8900A' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
+    const bd = isToday ? '2px solid #C8900A' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
+    const dc = isToday ? '#fff' : tc;
+    h += `<div onclick="window._apcPickDate('${ds}')" style="border-radius:10px;padding:7px 2px;text-align:center;cursor:pointer;background:${bg};border:${bd}">
+      <div style="font-size:13px;font-weight:${isToday?'700':'500'};color:${dc}">${d}</div>
+      ${hasPhoto ? '<div style="font-size:10px;margin-top:1px">📷</div>' : ''}
+    </div>`;
   }
+  calEl.innerHTML = h;
+}
 
-  // 학생 목록 채우기
-  function fillStudentList() {
-    const sel = document.getElementById('apc-student');
-    if (!sel) return;
-    if (!STUDENTS || STUDENTS.length === 0) { setTimeout(fillStudentList, 500); return; }
-    const prev = sel.value;
-    sel.innerHTML = '<option value="">-- 학생을 선택하세요 --</option>';
-    STUDENTS.forEach(s => {
-      const opt = document.createElement('option');
-      opt.value = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g,'_').replace(/_+$/,'');
-      opt.textContent = s.name + ' (' + s.seat + '번)';
-      sel.appendChild(opt);
-    });
-    if (prev) sel.value = prev;
-  }
-
-  // 달력 렌더링
-  function renderCal() {
-    const title = document.getElementById('apc-title');
-    const cal = document.getElementById('apc-cal');
-    if (!title || !cal) return;
-    title.textContent = year + '년 ' + (month + 1) + '월';
-    const _td = new Date();
-    const todayStr = _td.getFullYear() + '-' + String(_td.getMonth()+1).padStart(2,'0') + '-' + String(_td.getDate()).padStart(2,'0');
-    const DAY_LABELS = ['일','월','화','수','목','금','토'];
-    let h = '';
-    DAY_LABELS.forEach((d, i) => {
-      const c = i===0?'#C62828':i===6?'#1565C0':'#5C3D08';
-      h += '<div style="text-align:center;font-size:11px;font-weight:700;color:' + c + ';padding:5px 0">' + d + '</div>';
-    });
-    const firstDay = new Date(year, month, 1).getDay();
-    const lastDate = new Date(year, month + 1, 0).getDate();
-    for (let i = 0; i < firstDay; i++) h += '<div></div>';
-    for (let d = 1; d <= lastDate; d++) {
-      const ds = year + '-' + String(month+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
-      const isToday = ds === todayStr;
-      const hasPhoto = !!dates[ds];
-      const dow = new Date(year, month, d).getDay();
-      const tc = dow===0?'#C62828':dow===6?'#1565C0':'#333';
-      const bg = isToday ? '#C8900A' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
-      const bd = isToday ? '2px solid #C8900A' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
-      const dc = isToday ? '#fff' : tc;
-      h += '<div onclick="window._apcPickDate(\'' + ds + '\')" style="border-radius:10px;padding:7px 2px;text-align:center;cursor:pointer;background:' + bg + ';border:' + bd + '">'
-         + '<div style="font-size:13px;font-weight:' + (isToday?'700':'500') + ';color:' + dc + '">' + d + '</div>'
-         + (hasPhoto ? '<div style="font-size:10px;margin-top:1px">📷</div>' : '')
-         + '</div>';
+async function _apcLoadMonth() {
+  _apcDates = {};
+  if (!_apcSeat) return;
+  try {
+    const st = _apcGetStorage();
+    const prefix = 'planners/' + _apcSeat + '/' + _apcYear + '-' + String(_apcMonth+1).padStart(2,'0');
+    const listRef2 = storageRef(st, prefix);
+    const result = await listAll(listRef2);
+    for (const item of result.items) {
+      const key = item.name.replace(/\.jpg$/i, '');
+      try { _apcDates[key] = await getDownloadURL(item); } catch(e) {}
     }
-    cal.innerHTML = h;
+  } catch(e) {
+    console.warn('[planner admin] 사진 없음 또는 오류:', e.message);
   }
+}
 
-  // 해당 월 사진 목록 로드
-  async function loadMonth() {
-    dates = {};
-    if (!seat) return;
-    try {
-      const st = await getSt();
-      const prefix = 'planners/' + seat + '/' + year + '-' + String(month+1).padStart(2,'0');
-      const listRef = st.ref(st.storage, prefix);
-      const result = await st.listAll(listRef);
-      for (const item of result.items) {
-        const key = item.name.replace(/\.jpg$/i, '');
-        try { dates[key] = await st.getDownloadURL(item); } catch(e) {}
-      }
-    } catch(e) {
-      console.warn('[planner] 이 달 사진 없음:', e.message);
-    }
+window._apcPickDate = function(ds) {
+  const detail = document.getElementById('apc-detail');
+  const titleEl2 = document.getElementById('apc-detail-title');
+  const img = document.getElementById('apc-photo');
+  const nophoto = document.getElementById('apc-nophoto');
+  if (!detail) return;
+  const parts = ds.split('-');
+  titleEl2.textContent = parts[0] + '년 ' + parseInt(parts[1]) + '월 ' + parseInt(parts[2]) + '일';
+  if (_apcDates[ds]) {
+    img.src = _apcDates[ds];
+    img.style.display = 'block';
+    nophoto.style.display = 'none';
+  } else {
+    img.src = '';
+    img.style.display = 'none';
+    nophoto.style.display = 'block';
   }
+  detail.style.display = 'block';
+};
 
-  // 날짜 선택
-  window._apcPickDate = function(ds) {
-    const detail = document.getElementById('apc-detail');
-    const titleEl = document.getElementById('apc-detail-title');
-    const img = document.getElementById('apc-photo');
-    const nophoto = document.getElementById('apc-nophoto');
-    if (!detail) return;
-    const [y, m, d] = ds.split('-');
-    titleEl.textContent = y + '년 ' + parseInt(m) + '월 ' + parseInt(d) + '일';
-    if (dates[ds]) {
-      img.src = dates[ds];
-      img.style.display = 'block';
-      nophoto.style.display = 'none';
-    } else {
-      img.src = '';
-      img.style.display = 'none';
-      nophoto.style.display = 'block';
-    }
-    detail.style.display = 'block';
-  };
+window.apcSelectStudent = async function() {
+  const sel = document.getElementById('apc-student');
+  _apcSeat = sel.value || null;
+  const body = document.getElementById('apc-body');
+  const detail = document.getElementById('apc-detail');
+  if (!_apcSeat) { if (body) body.style.display = 'none'; return; }
+  _apcYear = new Date().getFullYear();
+  _apcMonth = new Date().getMonth();
+  if (detail) detail.style.display = 'none';
+  if (body) body.style.display = 'block';
+  _apcRenderCal();
+  await _apcLoadMonth();
+  _apcRenderCal();
+};
 
-  // 학생 선택
-  window.apcSelectStudent = async function() {
-    const sel = document.getElementById('apc-student');
-    seat = sel.value || null;
-    const body = document.getElementById('apc-body');
-    const detail = document.getElementById('apc-detail');
-    if (!seat) { if (body) body.style.display = 'none'; return; }
-    year = new Date().getFullYear();
-    month = new Date().getMonth();
-    if (detail) detail.style.display = 'none';
-    if (body) body.style.display = 'block';
-    renderCal();            // 달력 먼저 그리고
-    await loadMonth();      // 사진 로드 후
-    renderCal();            // 📷 표시 업데이트
-  };
+window.apcPrevMonth = async function() {
+  _apcMonth--; if (_apcMonth < 0) { _apcMonth = 11; _apcYear--; }
+  const detail = document.getElementById('apc-detail');
+  if (detail) detail.style.display = 'none';
+  _apcRenderCal();
+  await _apcLoadMonth();
+  _apcRenderCal();
+};
 
-  // 이전/다음 월
-  window.apcPrevMonth = async function() {
-    month--; if (month < 0) { month = 11; year--; }
-    const detail = document.getElementById('apc-detail');
-    if (detail) detail.style.display = 'none';
-    renderCal();
-    await loadMonth();
-    renderCal();
-  };
-  window.apcNextMonth = async function() {
-    month++; if (month > 11) { month = 0; year++; }
-    const detail = document.getElementById('apc-detail');
-    if (detail) detail.style.display = 'none';
-    renderCal();
-    await loadMonth();
-    renderCal();
-  };
+window.apcNextMonth = async function() {
+  _apcMonth++; if (_apcMonth > 11) { _apcMonth = 0; _apcYear++; }
+  const detail = document.getElementById('apc-detail');
+  if (detail) detail.style.display = 'none';
+  _apcRenderCal();
+  await _apcLoadMonth();
+  _apcRenderCal();
+};
 
-  // 탭 진입 시 초기화
-  window.adminPlannerInit = function() {
-    fillStudentList();
-    const body = document.getElementById('apc-body');
-    if (body) body.style.display = seat ? 'block' : 'none';
-    if (seat) renderCal();
-  };
+window.adminPlannerInit = function() {
+  _apcFillStudents();
+  const body = document.getElementById('apc-body');
+  if (body) body.style.display = _apcSeat ? 'block' : 'none';
+  if (_apcSeat) _apcRenderCal();
+};
 
-  // STUDENTS 로드 완료 때도 목록 갱신 (initApp에서 호출됨)
-  window.adminPlannerRefreshList = fillStudentList;
-})();
+window.adminPlannerRefreshList = _apcFillStudents;
 
 </script>
