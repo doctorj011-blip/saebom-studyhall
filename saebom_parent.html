@@ -113,17 +113,22 @@
       <button class="logout-btn" onclick="doLogout()">로그아웃</button>
     </div>
     <div class="app-tabs">
-      <button class="app-tab active" onclick="showTab('status',this)">현황</button>
+      <button class="app-tab active" onclick="showTab('notice',this)">공지</button>
+      <button class="app-tab" onclick="showTab('status',this)">현황</button>
       <button class="app-tab" onclick="showTab('schedule',this)">스케줄</button>
       <button class="app-tab" onclick="showTab('hours',this)">누적시간</button>
-      <button class="app-tab" onclick="showTab('notice',this)">공지사항</button>
       <button class="app-tab" onclick="showTab('planner',this)">플래너</button>
     </div>
   </div>
 
   <div class="app-content">
     <!-- 현황 탭 -->
-    <div id="tab-status">
+    <!-- 공지 탭 -->
+    <div id="tab-notice">
+      <div id="notice-list"></div>
+    </div>
+
+    <div id="tab-status" style="display:none">
       <div class="card">
         <div class="card-title">📍 현재 상태</div>
         <div id="status-content" style="text-align:center;padding:12px 0">
@@ -165,11 +170,6 @@
         <div class="card-title">⏱ 월별 누적시간</div>
         <div id="hours-content">불러오는 중...</div>
       </div>
-    </div>
-
-    <!-- 공지사항 탭 -->
-    <div id="tab-notice" style="display:none">
-      <div id="notice-list"></div>
     </div>
   </div>
 </div>
@@ -232,11 +232,12 @@ const MONTHS = [
 ];
 
 let currentStudent = null;
-let currentTab = 'status';
+let currentTab = 'notice';
 
 function showTab(id, btn) {
   if (id === 'planner') loadParentPlanner();
-  ['status','schedule','hours','notice','planner'].forEach(t => {
+  if (id === 'notice') loadNotices();
+  ['notice','status','schedule','hours','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -707,7 +708,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
   authDomain: "saebom-studyhall.firebaseapp.com",
   projectId: "saebom-studyhall",
-  storageBucket: "saebom-studyhall.appspot.com",
+  storageBucket: "saebom-studyhall.firebasestorage.app",
   messagingSenderId: "273169263882",
   appId: "1:273169263882:web:cb3c2abe45f76602d99ef3"
 };
