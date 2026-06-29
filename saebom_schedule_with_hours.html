@@ -626,8 +626,8 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
         <option value="general">🟡 공지</option>
         <option value="event">🔵 이벤트</option>
       </select>
-      <input id="notice-title-inp" type="text" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
-      <textarea id="notice-body-inp" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
+      <input id="notice-title-inp" type="text" autocomplete="off" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
+      <textarea id="notice-body-inp" autocomplete="off" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
 
       <!-- 이미지 첨부 (최대 5장) -->
       <div style="margin-bottom:12px">
@@ -3125,12 +3125,15 @@ function compressImage(dataURL) {
   });
 }
 
-// Storage에 이미지 업로드 → download URL 반환
+// Storage에 이미지 업로드 → download URL 반환 (동적 import로 격리)
 async function uploadNoticeImage(dataURL, noticeId, idx) {
   const compressed = await compressImage(dataURL);
-  const storageRef = window._adminStorageRef(window._adminStorage, `notices/${noticeId}/${idx}.jpg`);
-  await window._adminUploadString(storageRef, compressed, 'data_url');
-  return await window._adminGetDownloadURL(storageRef);
+  const { getStorage, ref, uploadString, getDownloadURL } =
+    await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
+  const storage = getStorage(window._adminApp);
+  const storageRef = ref(storage, `notices/${noticeId}/${idx}.jpg`);
+  await uploadString(storageRef, compressed, 'data_url');
+  return await getDownloadURL(storageRef);
 }
 
 // ── 공지사항 관리 함수 ──
@@ -3341,8 +3344,6 @@ window.clearAllScheduleAlerts = function() {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
 import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
-import { getStorage, ref, uploadString, getDownloadURL, deleteObject }
-  from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
@@ -3355,13 +3356,8 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
-const storage = getStorage(app);
 window._adminDb = db;
-window._adminStorage = storage;
-window._adminStorageRef = ref;
-window._adminUploadString = uploadString;
-window._adminGetDownloadURL = getDownloadURL;
-window._adminDeleteObject = deleteObject;
+window._adminApp = app;
 window._fsSetDoc = setDoc;
 window._fsDoc = doc;
 window._fsGetDoc = getDoc;
