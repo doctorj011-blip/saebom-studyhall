@@ -1702,10 +1702,6 @@ const KAKAO_TPL_OUT     = 'KA01TP260629075832864ZAgymUVvhgt';
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   const parentPhone = (student.parent || '').replace(/-/g, '');
   if (!parentPhone) return;
-  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
-    showAdminToast('⚠️ 솔라피 API 설정을 먼저 해주세요');
-    return;
-  }
 
   const type      = isCheckout ? 'out' : 'in';
   const typeLabel = isCheckout ? '퇴실' : '입실';
@@ -1721,21 +1717,10 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   console.log(`[알림톡] 발송 시도 → ${student.name} (${parentPhone}) ${typeLabel}`, variables);
 
   try {
-    const authorization = await getSolapiAuthHeader();
-    const payload = {
-      message: {
-        to: parentPhone,
-        from: SOLAPI_SENDER,
-        type: 'ATA',
-        kakaoOptions: { pfId: KAKAO_PF_ID, templateId, variables }
-      }
-    };
-    const res = await fetch('https://api.solapi.com/messages/v4/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: authorization },
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
+    const sendFn = window.solapiAlimtalkSend;
+    if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
+    const data = await sendFn(parentPhone, KAKAO_PF_ID, templateId, variables);
+    if (data?.error === 'NO_KEY') { showAdminToast('⚠️ 솔라피 API 설정을 먼저 해주세요'); return; }
     console.log('[알림톡] 응답:', JSON.stringify(data));
     const success = data.errorCount === 0 || (data.groupId && !data.errorCount);
     const logFn = window.saveSmsLog || saveSmsLog;
@@ -3728,6 +3713,21 @@ async function solapiSend(to, text) {
 }
 // 전역 노출 (첫 번째 스크립트 블록에서 접근 가능하도록)
 window.solapiSend = solapiSend;
+
+// 알림톡(ATA) 발송 함수 — SOLAPI_API_KEY 접근 가능한 블록에서 정의
+async function solapiAlimtalkSend(to, pfId, templateId, variables) {
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) return { error: 'NO_KEY' };
+  const authorization = await getSolapiAuthHeader();
+  const res = await fetch('https://api.solapi.com/messages/v4/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: authorization },
+    body: JSON.stringify({
+      message: { to, from: SOLAPI_SENDER, type: 'ATA', kakaoOptions: { pfId, templateId, variables } }
+    })
+  });
+  return await res.json();
+}
+window.solapiAlimtalkSend = solapiAlimtalkSend;
 
 // 미입실 알림 발송
 window.sendAbsentAlert = async function(idx) {
