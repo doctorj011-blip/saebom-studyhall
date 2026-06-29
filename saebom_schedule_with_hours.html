@@ -3156,17 +3156,12 @@ async function loadStudentsFromFirebase() {
     console.error('Firebase 로드 실패:', e);
   }
   if (window.initApp) window.initApp();
-}
 
-// ── students 실시간 감시 ──
-// 첫 번째 스냅샷(초기 added)은 getDocs와 중복이므로 무시
-let _studentsSnapshotReady = false;
-onSnapshot(collection(db, 'students'), (snap) => {
-  if (!_studentsSnapshotReady) { _studentsSnapshotReady = true; return; }
-  if (window._seatChanging) return;
-
-  let changed = false;
-  snap.docChanges().forEach(change => {
+  // getDocs 완료 후 onSnapshot 등록 → 초기 added 중복 방지
+  onSnapshot(collection(db, 'students'), (snap) => {
+    if (window._seatChanging) return;
+    let changed = false;
+    snap.docChanges().forEach(change => {
     const v = change.doc.data();
     if (change.type === 'removed') {
       const docId = change.doc.id.replace('번','');
@@ -3205,6 +3200,7 @@ onSnapshot(collection(db, 'students'), (snap) => {
       buildDashboard();
     }
   });
+} // end loadStudentsFromFirebase
 
 // Firebase 전역 함수 노출
 window.saveStudentToFirebase = saveStudentToFirebase;
