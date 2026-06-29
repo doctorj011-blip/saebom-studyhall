@@ -78,6 +78,9 @@
   .notice-detail{padding:0 16px 14px;border-top:0.5px solid #f0f0f0;display:none}
   .notice-detail.open{display:block}
   .notice-detail p{font-size:13px;color:#444;line-height:1.7;margin-top:10px}
+  .empty-state{text-align:center;padding:48px 24px;color:#aaa}
+  .empty-icon{font-size:40px;margin-bottom:12px}
+  .empty-text{font-size:14px}
 
   /* 토스트 */
   .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
@@ -466,27 +469,33 @@ function loadHours() {
 
 // ── 학부모앱 공지사항 ──
 let _ppNotices = [];
+let _ppNoticeUnsub = null;
 
-async function loadNotices() {
-  const el = document.getElementById('notice-list');
-  if (!el) return;
-  el.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">불러오는 중...</div>';
-  if (window._getDoc && window._doc && window._db) {
-    try {
-      const snap = await window._getDoc(window._doc(window._db, 'notices', 'list'));
-      if (snap.exists() && snap.data().items) {
-        _ppNotices = snap.data().items.slice().reverse();
-      }
-    } catch(e) {}
+function loadNotices() {
+  if (!window._onSnapshot || !window._doc || !window._db) {
+    _buildParentNotices();
+    return;
   }
-  _buildParentNotices();
+  if (_ppNoticeUnsub) return; // 이미 리스너 등록됨
+  _ppNoticeUnsub = window._onSnapshot(
+    window._doc(window._db, 'notices', 'list'),
+    (snap) => {
+      if (snap.exists() && snap.data().items) {
+        _ppNotices = [...snap.data().items].reverse();
+      } else {
+        _ppNotices = [];
+      }
+      _buildParentNotices();
+    },
+    () => { _buildParentNotices(); }
+  );
 }
 
 function _buildParentNotices() {
   const el = document.getElementById('notice-list');
   if (!el) return;
   if (!_ppNotices.length) {
-    el.innerHTML = '<div class="card"><div style="color:#aaa;font-size:13px;text-align:center;padding:20px">📭 공지사항이 없습니다</div></div>';
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">공지사항이 없습니다</div></div>`;
     return;
   }
   el.innerHTML = _ppNotices.map((n, i) => `
