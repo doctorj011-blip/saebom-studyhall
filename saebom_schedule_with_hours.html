@@ -1628,11 +1628,13 @@ async function sendCheckinSMS(student, isCheckout, timeStr) {
     const sendFn = window.solapiSend || solapiSend;
     const result = await sendFn(parentPhone, text);
     const success = result === true;
-    saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(result), time: timeStr });
+    const logFn = window.saveSmsLog || saveSmsLog;
+    logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(result), time: timeStr });
     if (success) console.log(`[SMS] ✅ ${student.name} ${typeLabel} 문자 발송 성공`);
     else showAdminToast(`⚠️ ${student.name} 학부모 문자 실패`);
   } catch(e) {
-    saveSmsLog({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
+    const logFn = window.saveSmsLog || saveSmsLog;
+    logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
     console.error('[SMS] 발송 오류:', e);
   }
 }
@@ -3633,6 +3635,7 @@ function saveSmsLog(entry) {
   // Firebase에도 저장 (비동기) — 같은 id 사용
   saveSmsLogToFirebase(logEntry, logId).catch(console.error);
 }
+window.saveSmsLog = saveSmsLog;
 
 async function saveSmsLogToFirebase(entry, logId) {
   if (!window._adminDb) return;
