@@ -1700,9 +1700,12 @@ const KAKAO_TPL_IN      = 'KA01TP260629075724381ioWs4XlJ4Fb';
 const KAKAO_TPL_OUT     = 'KA01TP260629075832864ZAgymUVvhgt';
 
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
-  const parentPhone = student.parent || '';
+  const parentPhone = (student.parent || '').replace(/-/g, '');
   if (!parentPhone) return;
-  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) return;
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
+    showAdminToast('⚠️ 솔라피 API 설정을 먼저 해주세요');
+    return;
+  }
 
   const type      = isCheckout ? 'out' : 'in';
   const typeLabel = isCheckout ? '퇴실' : '입실';
@@ -1711,34 +1714,44 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
     ? { 이름: student.name, 시간: timeStr, 총시간: formatTotalTime(totalMin) }
     : { 이름: student.name, 시간: timeStr };
 
-  // 로그용 텍스트 (알림톡 본문 그대로)
   const text = isCheckout
     ? `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 퇴실하였습니다.\n오늘 총 이용시간: ${formatTotalTime(totalMin)}👏`
     : `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 입실하였습니다.😊`;
 
+  console.log(`[알림톡] 발송 시도 → ${student.name} (${parentPhone}) ${typeLabel}`, variables);
+
   try {
     const authorization = await getSolapiAuthHeader();
+    const payload = {
+      message: {
+        to: parentPhone,
+        from: SOLAPI_SENDER,
+        type: 'ATA',
+        kakaoOptions: { pfId: KAKAO_PF_ID, templateId, variables }
+      }
+    };
     const res = await fetch('https://api.solapi.com/messages/v4/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: authorization },
-      body: JSON.stringify({
-        message: {
-          to: parentPhone,
-          from: SOLAPI_SENDER,
-          type: 'ATA',
-          kakaoOptions: { pfId: KAKAO_PF_ID, templateId, variables }
-        }
-      })
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
+    console.log('[알림톡] 응답:', JSON.stringify(data));
     const success = data.errorCount === 0 || (data.groupId && !data.errorCount);
     const logFn = window.saveSmsLog || saveSmsLog;
     logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(data), time: timeStr });
-    if (success) console.log(`[알림톡] ✅ ${student.name} ${typeLabel} 발송 성공`);
-    else showAdminToast(`⚠️ ${student.name} 학부모 문자 실패`);
+    if (success) {
+      showAdminToast(`✅ ${student.name} 학부모님께 알림톡 발송 완료`);
+      console.log(`[알림톡] ✅ ${student.name} ${typeLabel} 발송 성공`);
+    } else {
+      const errMsg = data.failedMessageList?.[0]?.reason || data.message || JSON.stringify(data);
+      showAdminToast(`⚠️ 알림톡 실패: ${errMsg}`);
+      console.warn('[알림톡] 실패:', data);
+    }
   } catch(e) {
     const logFn = window.saveSmsLog || saveSmsLog;
     logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
+    showAdminToast(`⚠️ 알림톡 오류: ${e.message}`);
     console.error('[알림톡] 발송 오류:', e);
   }
 }
