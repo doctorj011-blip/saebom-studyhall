@@ -611,6 +611,7 @@ function buildNotices() {
       </div>
       <div class="notice-detail" id="ndet-${i}">
         ${n.body.split('\n').map(line => line ? `<p>${line}</p>` : '<br>').join('')}
+        ${n.image ? `<img src="${n.image}" style="margin-top:10px;max-width:100%;border-radius:10px;object-fit:contain">` : ''}
       </div>
     </div>`).join('');
 }

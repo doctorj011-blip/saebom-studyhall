@@ -510,6 +510,7 @@ function _buildParentNotices() {
       </div>
       <div class="notice-detail" id="pndet-${i}">
         ${(n.body||'').split('\n').map(line => line ? `<p>${line.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '<br>').join('')}
+        ${n.image ? `<img src="${n.image}" style="margin-top:10px;max-width:100%;border-radius:10px;object-fit:contain">` : ''}
       </div>
     </div>`).join('');
 }

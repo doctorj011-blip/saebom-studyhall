@@ -300,6 +300,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
     <button class="tab-btn" onclick="showSection('hours',this)">사용시간</button>
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
+    <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
@@ -610,6 +611,45 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
   </div>
 </div>
 
+<!-- 공지사항 관리 -->
+<div id="sec-notice" class="section">
+  <div style="max-width:700px;margin:0 auto">
+    <div class="card">
+      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:16px">📢 공지사항 관리</div>
+
+      <!-- 등록된 공지 목록 -->
+      <div id="notice-list-admin" style="margin-bottom:16px;display:flex;flex-direction:column;gap:6px"></div>
+
+      <!-- 새 공지 작성 -->
+      <div style="background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px;padding:14px">
+        <div style="font-size:11px;font-weight:700;color:#8B6010;margin-bottom:10px">새 공지 작성</div>
+        <select id="notice-badge-sel" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;margin-bottom:8px;background:#fff">
+          <option value="important">🔴 중요</option>
+          <option value="general">🟡 공지</option>
+          <option value="event">🔵 이벤트</option>
+        </select>
+        <input id="notice-title-inp" type="text" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
+        <textarea id="notice-body-inp" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
+
+        <!-- 이미지 첨부 -->
+        <div style="margin-bottom:10px">
+          <div style="font-size:11px;font-weight:700;color:#8B6010;margin-bottom:6px">📎 이미지 첨부 (선택)</div>
+          <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;background:#fff;border:1.5px solid #E0B020;border-radius:8px;cursor:pointer;font-size:12px;color:#8B6010;font-weight:600">
+            <i class="ti ti-photo" style="font-size:14px"></i> 이미지 선택
+            <input type="file" id="notice-img-inp" accept="image/*" style="display:none" onchange="noticePreviewImage(this)">
+          </label>
+          <button onclick="noticeClearImage()" id="notice-img-clear" style="display:none;margin-left:8px;padding:7px 12px;background:#FCEBEB;border:1.5px solid #F09595;border-radius:8px;font-size:12px;color:#C62828;font-weight:600;cursor:pointer">✕ 제거</button>
+          <div id="notice-img-preview" style="margin-top:8px;display:none">
+            <img id="notice-img-preview-img" src="" style="max-width:100%;max-height:200px;border-radius:8px;border:1.5px solid #E0B020;object-fit:contain">
+          </div>
+        </div>
+
+        <button onclick="publishNotice()" style="width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">공지 발행</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="sec-settings" class="section">
   <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:16px">
 
@@ -647,25 +687,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
           </button>
           <span id="cfg-status" style="font-size:12px;color:#8B6010"></span>
         </div>
-      </div>
-    </div>
-
-    <!-- 공지사항 관리 -->
-    <div class="card" style="margin-bottom:12px">
-      <div class="card-title" style="margin-bottom:10px">
-        <i class="ti ti-speakerphone" style="font-size:15px;color:#C8900A"></i> 공지사항 관리
-      </div>
-      <div id="notice-list-admin" style="margin-bottom:10px;display:flex;flex-direction:column;gap:6px"></div>
-      <div style="background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px;padding:14px">
-        <div style="font-size:11px;font-weight:700;color:#8B6010;margin-bottom:8px">새 공지 작성</div>
-        <select id="notice-badge-sel" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;margin-bottom:8px;background:#fff">
-          <option value="important">🔴 중요</option>
-          <option value="general">🟡 공지</option>
-          <option value="event">🔵 이벤트</option>
-        </select>
-        <input id="notice-title-inp" type="text" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
-        <textarea id="notice-body-inp" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit"></textarea>
-        <button onclick="publishNotice()" style="margin-top:8px;width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">공지 발행</button>
       </div>
     </div>
 
@@ -868,7 +889,8 @@ window.showSection = function(id,btn){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
   btn.classList.add('active');
-  if (id === 'settings') { loadSettingsTab(); loadNoticesAdmin(); }
+  if (id === 'settings') { loadSettingsTab(); }
+  if (id === 'notice') { loadNoticesAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
@@ -3029,6 +3051,45 @@ window.cancelLongPress = function() {
   if (_longPressTimer) { clearTimeout(_longPressTimer); _longPressTimer = null; }
 };
 
+// ── 공지 이미지 미리보기 ──
+window.noticePreviewImage = function(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    window._noticePendingImage = e.target.result; // 원본 dataURL 임시 보관
+    document.getElementById('notice-img-preview-img').src = e.target.result;
+    document.getElementById('notice-img-preview').style.display = 'block';
+    document.getElementById('notice-img-clear').style.display = 'inline-flex';
+  };
+  reader.readAsDataURL(file);
+};
+
+window.noticeClearImage = function() {
+  window._noticePendingImage = null;
+  document.getElementById('notice-img-inp').value = '';
+  document.getElementById('notice-img-preview').style.display = 'none';
+  document.getElementById('notice-img-clear').style.display = 'none';
+};
+
+// 이미지를 canvas로 압축 (최대 900px, JPEG 0.75)
+function compressImage(dataURL) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = function() {
+      const MAX = 900;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      if (h > MAX) { w = Math.round(w * MAX / h); h = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.src = dataURL;
+  });
+}
+
 // ── 공지사항 관리 함수 ──
 async function loadNoticesAdmin() {
   if (!window._adminDb) return;
@@ -3040,16 +3101,20 @@ async function loadNoticesAdmin() {
     if (!el) return;
     if (items.length === 0) {
       el.innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:8px">등록된 공지 없음</div>';
+      window._adminNotices = [];
       return;
     }
     el.innerHTML = items.map((n, i) => `
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#fff;border:1px solid #E0B020;border-radius:10px">
-        <div style="min-width:0">
-          <span style="font-size:10px;font-weight:700;color:#C8900A;margin-right:6px">${n.badgeLabel||n.badge}</span>
-          <span style="font-size:12px;font-weight:600">${n.title}</span>
-          <div style="font-size:11px;color:#aaa;margin-top:2px">${n.date||''}</div>
+      <div style="background:#fff;border:1px solid #E0B020;border-radius:10px;padding:10px 12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div style="min-width:0;flex:1">
+            <span style="font-size:10px;font-weight:700;color:#C8900A;margin-right:6px">${n.badgeLabel||n.badge}</span>
+            <span style="font-size:12px;font-weight:600">${n.title}</span>
+            <div style="font-size:11px;color:#aaa;margin-top:2px">${n.date||''}${n.image ? ' &nbsp;📎 이미지 있음' : ''}</div>
+          </div>
+          <button onclick="deleteNotice(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0">삭제</button>
         </div>
-        <button onclick="deleteNotice(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer;flex-shrink:0;margin-left:8px">삭제</button>
+        ${n.image ? `<img src="${n.image}" style="margin-top:8px;max-width:100%;max-height:120px;border-radius:6px;object-fit:contain;border:1px solid #E0B020">` : ''}
       </div>`).join('');
     window._adminNotices = items;
   } catch(e) { console.error('공지 로드 실패:', e); }
@@ -3065,12 +3130,17 @@ window.publishNotice = async function() {
   try {
     const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const today = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'.').replace('.','');
-    const newNotice = { id: Date.now(), badge, badgeLabel, title, preview: body.slice(0,40), body, date: today };
+    let image = null;
+    if (window._noticePendingImage) {
+      image = await compressImage(window._noticePendingImage);
+    }
+    const newNotice = { id: Date.now(), badge, badgeLabel, title, preview: body.slice(0,40), body, date: today, ...(image ? { image } : {}) };
     const items = [...(window._adminNotices || []), newNotice];
     await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
-    
+
     document.getElementById('notice-title-inp').value = '';
     document.getElementById('notice-body-inp').value = '';
+    noticeClearImage();
     showAdminToast('✅ 공지사항이 발행됐습니다');
     loadNoticesAdmin();
   } catch(e) { console.error('공지 발행 실패:', e); showAdminToast('❌ 발행 실패: ' + e.message); }
