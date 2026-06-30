@@ -3948,15 +3948,15 @@ async function solapiSend(to, text) {
 window.solapiSend = solapiSend;
 
 // 알림톡(ATA) 발송 함수 — SOLAPI_API_KEY 접근 가능한 블록에서 정의
-async function solapiAlimtalkSend(to, pfId, templateId, variables) {
+async function solapiAlimtalkSend(to, pfId, templateId, variables, content) {
   if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) return { error: 'NO_KEY' };
   const authorization = await getSolapiAuthHeader();
+  const msg = { to, from: SOLAPI_SENDER, type: 'ATA', kakaoOptions: { pfId, templateId, variables } };
+  if (content) msg.content = content;
   const res = await fetch('https://api.solapi.com/messages/v4/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: authorization },
-    body: JSON.stringify({
-      message: { to, from: SOLAPI_SENDER, type: 'ATA', kakaoOptions: { pfId, templateId, variables } }
-    })
+    body: JSON.stringify({ message: msg })
   });
   return await res.json();
 }
@@ -4334,8 +4334,8 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   try {
     const sendFn = window.solapiAlimtalkSend;
     if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
-    const result = await sendFn(parentPhone, KAKAO_PF_ID, KAKAO_TPL_SCHEDULE, variables);
-    const success = result?.groupInfo?.count?.total > 0 || result?.messageId != null;
+    const result = await sendFn(parentPhone, KAKAO_PF_ID, KAKAO_TPL_SCHEDULE, variables, messageText);
+    const success = !!(result?.errorCount === 0 || (result?.groupId && !result?.errorCount));
     saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: messageText, success, error: success ? null : JSON.stringify(result), time: timeStr });
     if (success) {
       showAdminToast(`✅ ${studentName} 학부모님께 알림톡을 발송했습니다`);
