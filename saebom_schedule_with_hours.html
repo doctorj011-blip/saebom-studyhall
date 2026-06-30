@@ -858,8 +858,6 @@ let ALERTS = []; // 동적으로 계산됨
 const PRESENT=[];
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
-// 다음 교시 예약자: { 1: [...], 2: [...], 3: [...] }
-let studyRoomNextStudents = { 1: [], 2: [], 3: [] };
 
 // ── F5 새로고침 가로채기 ──
 document.addEventListener('keydown', function(e) {
@@ -2089,33 +2087,21 @@ function buildFloorplan() {
       } else {
         const seatNum = layout[key] || 0;
         if (seatNum < 0) {
-          // 스터디룸 (-1,-2,-3) — 2행×1열 병합
+          // 스터디룸 (-1,-2,-3) — 2행×2열 병합
           const roomNum = Math.abs(seatNum);
-          // 아래 1칸 + 오른쪽 2칸 studioSpan에 등록
+          // 나머지 1칸 studioSpan에 등록 (2행×1열)
           studioSpan[`r${r+1}_c${c}`] = true;
-          studioSpan[`r${r}_c${c+1}`] = true;
-          studioSpan[`r${r+1}_c${c+1}`] = true;
           const waiting = (studyRoomStudents[roomNum]||[]);
-          const nextWaiting = (studyRoomNextStudents[roomNum]||[]);
           const cols = ['#7C3AED','#9F5AE0','#C084FC'];
           const waitHtml = waiting.length
             ? waiting.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
             : `<div style="font-size:10px;color:#C4A4E0;margin-top:4px">비어있음</div>`;
-          const nextHtml = nextWaiting.length
-            ? nextWaiting.map((n,i)=>`<div style="font-size:10px;color:#0369A1;font-weight:600;padding:2px 0">${n}</div>`).join('')
-            : `<div style="font-size:10px;color:#D1D5DB;margin-top:4px">예약없음</div>`;
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : '';
-          // 스터디룸 본체 (현재 이용자)
           html += `<div class="fp-cell fp-cell-studio${fpEditMode?' fp-cell-edit':''}${selClass}"
             style="grid-row:${r}/span 2;grid-column:${c};flex-direction:column;align-items:flex-start;padding:8px 10px"
             data-slot-key="${key}" ${editAttr}>
             <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${roomNum}</div>
             ${waitHtml}
-          </div>`;
-          // 다음 교시 예약자 (오른쪽 셀)
-          html += `<div class="fp-cell" style="grid-row:${r}/span 2;grid-column:${c+1};background:#EFF6FF;border:1px dashed #93C5FD;border-radius:6px;flex-direction:column;align-items:flex-start;padding:6px 8px">
-            <div style="font-size:9px;font-weight:700;color:#3B82F6;margin-bottom:3px">다음교시 예약</div>
-            ${nextHtml}
           </div>`;
         } else if (seatNum > 0) {
           const student = getFpStudentBySeat(seatNum);
@@ -3628,7 +3614,6 @@ const _knownStudyroomReqs = {};
 function _syncStudyRoomStudents() {
   // studyRoomStudents 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
-  studyRoomNextStudents = { 1: [], 2: [], 3: [] };
   const today = new Date().toISOString().slice(0,10);
   const now = new Date();
   const curMin = now.getHours() * 60 + now.getMinutes();
@@ -3638,15 +3623,6 @@ function _syncStudyRoomStudents() {
   const PERIOD_START = {1:540,2:610,3:680,4:810,5:880,6:950,7:1080,8:1140,9:1230,10:1350,11:1440};
   const PERIOD_END   = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
 
-  // 현재 교시 및 다음 교시 계산
-  let currentPeriod = null;
-  let nextPeriod = null;
-  for (let p = 1; p <= 11; p++) {
-    const s = PERIOD_START[p], e = PERIOD_END[p];
-    if (adjMin >= s && adjMin <= e) { currentPeriod = p; nextPeriod = p + 1; break; }
-    if (adjMin < s && nextPeriod === null) { nextPeriod = p; break; }
-  }
-
   Object.values(_knownStudyroomReqs).forEach(data => {
     if (data.status !== 'approved') return;
     if (data.date !== today) return;
@@ -3655,22 +3631,17 @@ function _syncStudyRoomStudents() {
     const start = PERIOD_START[p] || 0;
     const end   = PERIOD_END[p]   || 0;
 
-    // 현재 교시 이용자
-    if (adjMin >= start && adjMin <= end) {
-      const isCheckedOut = todayRecords.some(r => r.studentName === data.name && r.outTime);
-      const isPresent    = todayRecords.some(r => r.studentName === data.name && !r.outTime);
-      if (isCheckedOut && !isPresent) return;
-      const room = data.room;
-      if (studyRoomStudents[room] && !studyRoomStudents[room].includes(data.name)) {
-        studyRoomStudents[room].push(data.name);
-      }
-    }
-    // 다음 교시 예약자
-    else if (nextPeriod !== null && p === nextPeriod) {
-      const room = data.room;
-      if (studyRoomNextStudents[room] && !studyRoomNextStudents[room].includes(data.name)) {
-        studyRoomNextStudents[room].push(data.name);
-      }
+    // 교시 시작 전이거나 종료 후면 표시 안 함
+    if (adjMin < start || adjMin > end) return;
+
+    // 이미 퇴실한 학생은 제외
+    const isCheckedOut = todayRecords.some(r => r.studentName === data.name && r.outTime);
+    const isPresent    = todayRecords.some(r => r.studentName === data.name && !r.outTime);
+    if (isCheckedOut && !isPresent) return;
+
+    const room = data.room;
+    if (studyRoomStudents[room] && !studyRoomStudents[room].includes(data.name)) {
+      studyRoomStudents[room].push(data.name);
     }
   });
   if (document.getElementById('fp-room')) buildFloorplan();
@@ -4721,7 +4692,7 @@ function showAdminToast(msg) {
 // ══════════════════════════════════════
 // 📓 관리자 플래너 (type=module 블록 안 - import 가능)
 // ══════════════════════════════════════
-import { getStorage, ref as storageRef, getDownloadURL, listAll } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
+import { getStorage, ref as storageRef, getDownloadURL, listAll, getMetadata } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
 let _apcYear = new Date().getFullYear();
 let _apcMonth = new Date().getMonth();
@@ -4734,16 +4705,31 @@ function _apcGetStorage() {
   return _apcStorage;
 }
 
-function _apcFillStudents() {
+async function _apcFillStudents() {
   const sel = document.getElementById('apc-student');
   if (!sel) return;
   if (!STUDENTS || STUDENTS.length === 0) { setTimeout(_apcFillStudents, 500); return; }
   const prev = sel.value;
   sel.innerHTML = '<option value="">-- 학생을 선택하세요 --</option>';
-  STUDENTS.forEach(s => {
+  const st = _apcGetStorage();
+  const now = new Date();
+  const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+  const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
+  const opts = await Promise.all(STUDENTS.map(async s => {
+    const key = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    let isNew = false;
+    try {
+      const fileRef = storageRef(st, 'planners/' + key + '/' + todayStr + '.jpg');
+      const meta = await getMetadata(fileRef);
+      if (new Date(meta.timeCreated) >= twelveHoursAgo) isNew = true;
+    } catch(e) {}
+    return { key, label: s.name + ' (' + s.seat + '번)', isNew };
+  }));
+  opts.forEach(({ key, label, isNew }) => {
     const opt = document.createElement('option');
-    opt.value = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g, '_');
-    opt.textContent = s.name + ' (' + s.seat + '번)';
+    opt.value = key;
+    opt.textContent = label + (isNew ? ' 🆕 NEW' : '');
+    if (isNew) opt.style.fontWeight = '700';
     sel.appendChild(opt);
   });
   if (prev) sel.value = prev;
