@@ -44,136 +44,162 @@ console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#F0D020;color:#fff;fo
 window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
+/* ── 디자인 시스템 ── */
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7f5;color:#1a1a1a;min-height:100vh}
+:root{
+  --p:#D97706;--p-light:#FEF3C7;--p-dark:#92400E;
+  --text:#1E293B;--muted:#64748B;--border:#E2E8F0;
+  --bg:#F1F5F9;--card:#FFFFFF;
+  --green:#059669;--green-bg:#ECFDF5;--green-bd:#A7F3D0;
+  --red:#DC2626;--red-bg:#FEF2F2;--red-bd:#FECACA;
+  --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md:0 4px 12px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  --r:16px;--r-sm:10px;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
 
 /* ── 로그인 화면 ── */
-.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#C8900A 0%,#1d5c38 100%)}
+.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#1E293B 0%,#0F172A 100%)}
 .login-logo{margin-bottom:8px;display:flex;align-items:center;justify-content:center}
-.login-title{font-size:22px;font-weight:700;color:#fff;margin-bottom:4px}
-.login-sub{font-size:14px;color:rgba(255,255,255,0.7);margin-bottom:40px}
-.login-card{background:#fff;border-radius:20px;padding:28px 24px;width:100%;max-width:340px;box-shadow:0 8px 32px rgba(0,0,0,0.15)}
-.login-label{font-size:13px;font-weight:600;color:#555;margin-bottom:8px}
-.login-hint{font-size:12px;color:#999;margin-bottom:16px}
-.pin-display{display:flex;gap:12px;justify-content:center;margin-bottom:24px}
-.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ddd;transition:all 0.15s}
-.pin-dot.filled{background:#F0D020;border-color:#C8900A}
+.login-title{font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;letter-spacing:-0.5px}
+.login-sub{font-size:14px;color:rgba(255,255,255,0.4);margin-bottom:36px;letter-spacing:0.3px}
+.login-card{background:rgba(255,255,255,0.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px 24px;width:100%;max-width:340px}
+.login-label{font-size:13px;font-weight:600;color:rgba(255,255,255,0.6);margin-bottom:6px;text-align:center}
+.login-hint{font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:22px;text-align:center}
+.pin-display{display:flex;gap:18px;justify-content:center;margin-bottom:28px}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);transition:all 0.2s}
+.pin-dot.filled{background:#F59E0B;border-color:#F59E0B;transform:scale(1.15);box-shadow:0 0 12px rgba(245,158,11,0.45)}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.np-btn{padding:16px;font-size:22px;font-weight:500;border:none;background:#f5f7f5;border-radius:14px;cursor:pointer;transition:background 0.1s;color:#1a1a1a}
-.np-btn:active{background:#e0e8e3}
-.np-del{font-size:18px;color:#888}
-.np-clear{font-size:13px;font-weight:600;color:#C62828;background:#FCEBEB}
-.np-clear:active{background:#f5c6c6}
-.login-error{text-align:center;font-size:13px;color:#C62828;background:#FCEBEB;border-radius:10px;padding:10px;margin-top:12px;display:none}
+.np-btn{padding:18px;font-size:22px;font-weight:500;border:none;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;transition:all 0.12s;color:#fff}
+.np-btn:active{background:rgba(255,255,255,0.18);transform:scale(0.94)}
+.np-del{font-size:18px;color:rgba(255,255,255,0.4)}
+.np-clear{font-size:12px;font-weight:700;color:#FCA5A5;background:rgba(239,68,68,0.12)}
+.np-clear:active{background:rgba(239,68,68,0.22)}
+.login-error{text-align:center;font-size:13px;color:#FCA5A5;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:10px;margin-top:16px;display:none}
 
 /* ── 앱 메인 ── */
-.app-screen{display:none;min-height:100vh;flex-direction:column}
+.app-screen{display:none;min-height:100vh;flex-direction:column;padding-bottom:68px}
 .app-screen.visible{display:flex}
 
 /* 상단 헤더 */
-.app-header{background:linear-gradient(135deg,#C8900A 0%,#A87008 100%);padding:16px 20px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
-.header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.app-header{background:#fff;border-bottom:1px solid var(--border);padding:12px 16px;position:sticky;top:0;z-index:100}
+.header-top{display:flex;align-items:center;justify-content:space-between}
 .header-info{display:flex;align-items:center;gap:10px}
-.header-avatar{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#A87008}
-.header-name{font-size:15px;font-weight:700;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,0.2)}
-.header-seat{font-size:12px;color:rgba(255,255,255,0.9);font-weight:500}
-.logout-btn{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
+.header-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#F59E0B,#D97706);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0}
+.header-name{font-size:15px;font-weight:700;color:var(--text);line-height:1.2}
+.header-seat{font-size:11px;color:var(--muted);font-weight:500;margin-top:1px}
+.logout-btn{background:var(--bg);border:none;color:var(--muted);padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s}
+.logout-btn:active{background:var(--border);color:var(--text)}
 
-/* 탭 */
-.app-tabs{display:flex;gap:0;overflow-x:auto;scrollbar-width:none}
-.app-tabs::-webkit-scrollbar{display:none}
-.app-tab{flex:0 0 auto;padding:10px 10px;background:transparent;border:none;color:rgba(255,255,255,0.8);font-size:11px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;transition:all 0.15s;white-space:nowrap}
-.app-tab.active{color:#fff;border-bottom:3px solid #fff;font-weight:700}
+/* 바텀 내비게이션 */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none;z-index:150;padding:0 4px;padding-bottom:env(safe-area-inset-bottom,0px)}
+.bottom-nav::-webkit-scrollbar{display:none}
+.bnav-btn{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 10px 6px;border:none;background:none;cursor:pointer;color:#94A3B8;font-size:10px;font-weight:600;gap:2px;transition:color 0.15s;min-width:52px;position:relative}
+.bnav-btn.active{color:var(--p)}
+.bnav-icon{font-size:22px;line-height:1}
+.bnav-badge{position:absolute;top:5px;right:8px;background:#EF4444;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;line-height:1.4;min-width:16px;text-align:center}
+
+/* 탭 (하위 호환 - 숨김) */
+.app-tabs{display:none}
+.app-tab{}
 
 /* 콘텐츠 */
 .app-content{flex:1;padding:16px;overflow-y:auto;max-width:480px;width:100%;margin:0 auto}
 
 /* ── 공지사항 ── */
-.notice-card{background:#fff;border-radius:16px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-.notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:8px}
-.badge-important{background:#FCEBEB;color:#C62828}
-.badge-general{background:#FFF8DC;color:#C8900A}
-.badge-event{background:#E3F2FD;color:#A87008}
-.notice-title{font-size:15px;font-weight:700;margin-bottom:6px;line-height:1.4}
-.notice-body{font-size:13px;color:#555;line-height:1.6;margin-bottom:10px}
-.notice-date{font-size:11px;color:#aaa}
+.notice-card{background:var(--card);border-radius:var(--r);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
+.notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;margin-bottom:6px}
+.badge-important{background:#FEE2E2;color:#DC2626}
+.badge-general{background:#FEF3C7;color:#D97706}
+.badge-event{background:#EDE9FE;color:#7C3AED}
+.notice-title{font-size:15px;font-weight:700;margin-bottom:4px;line-height:1.4;color:var(--text)}
+.notice-body{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px}
+.notice-date{font-size:11px;color:#94A3B8}
 .notice-header{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.notice-expand{font-size:20px;color:#ccc;flex-shrink:0;margin-top:2px;transition:transform 0.2s}
+.notice-expand{font-size:18px;color:#CBD5E1;flex-shrink:0;margin-top:2px;transition:transform 0.2s}
 .notice-expand.open{transform:rotate(180deg)}
-.notice-detail{padding:0 16px 14px;border-top:0.5px solid #f0f0f0;display:none}
+.notice-detail{padding:0 16px 14px;border-top:1px solid #F8FAFC;display:none}
 .notice-detail.open{display:block}
-.notice-detail p{font-size:13px;color:#444;line-height:1.7;margin-top:10px}
+.notice-detail p{font-size:13px;color:#475569;line-height:1.7;margin-top:10px}
 
 /* 공지 없을 때 */
-.empty-state{text-align:center;padding:48px 24px;color:#aaa}
-.empty-icon{font-size:40px;margin-bottom:12px}
-.empty-text{font-size:14px}
+.empty-state{text-align:center;padding:60px 24px;color:#94A3B8}
+.empty-icon{font-size:44px;margin-bottom:12px}
+.empty-text{font-size:14px;font-weight:500}
 
 /* ── 스케줄 탭 공통 ── */
-.section-label{font-size:12px;font-weight:700;color:#888;letter-spacing:0.5px;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
+.section-label{font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
 
 /* 요일 탭 */
 .day-tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px}
-.day-tab{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid #ddd;background:#fff;font-size:13px;font-weight:500;color:#888;cursor:pointer;transition:all 0.15s}
-.day-tab.active{background:#F0D020;color:#fff;border-color:#C8900A}
-.day-tab.today{border-color:#C8900A;color:#C8900A}
+.day-tab{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.15s}
+.day-tab.active{background:#F59E0B;color:#fff;border-color:#F59E0B}
+.day-tab.today{border-color:#F59E0B;color:var(--p)}
+.day-tab:active{transform:scale(0.94)}
 
 /* 교시 카드 */
-.period-card{background:#fff;border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 1px 4px rgba(0,0,0,0.06);transition:opacity 0.15s}
+.period-card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);transition:all 0.15s}
 .period-left{display:flex;align-items:center;gap:12px}
-.period-num{font-size:13px;font-weight:700;color:#C8900A;width:52px;flex-shrink:0;white-space:nowrap}
-.period-time{font-size:12px;color:#aaa;margin-top:1px}
+.period-num{font-size:13px;font-weight:700;color:var(--p);width:52px;flex-shrink:0;white-space:nowrap}
+.period-time{font-size:11px;color:#94A3B8;margin-top:2px}
 .period-toggle{display:flex;gap:6px}
-.toggle-btn{padding:7px 16px;border-radius:20px;border:1.5px solid #ddd;background:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.12s}
-.toggle-btn.attend{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
-.toggle-btn.absent{background:#FCEBEB;color:#C62828;border-color:#F09595}
-.toggle-btn:active{transform:scale(0.96)}
+.toggle-btn{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--muted)}
+.toggle-btn.attend{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
+.toggle-btn.absent{background:var(--red-bg);color:var(--red);border-color:var(--red-bd)}
+.toggle-btn:active{transform:scale(0.93)}
 
 /* 결석 사유 */
-.absent-reason{margin-top:8px;display:none}
+.absent-reason{margin-top:6px;display:none}
 .absent-reason.show{display:flex;align-items:center;gap:8px}
-.reason-label{font-size:12px;color:#C62828;white-space:nowrap;font-weight:500}
-.reason-input{flex:1;border:1.5px solid #F09595;border-radius:8px;padding:6px 10px;font-size:13px;color:#1a1a1a;background:#fff;outline:none}
-.reason-input:focus{border-color:#C62828}
+.reason-label{font-size:12px;color:var(--red);white-space:nowrap;font-weight:600}
+.reason-input{flex:1;border:1.5px solid var(--red-bd);border-radius:10px;padding:7px 12px;font-size:13px;color:var(--text);background:#fff;outline:none;transition:border-color 0.15s}
+.reason-input:focus{border-color:var(--red)}
 
 /* 주간 시간표 */
-.weekly-table-wrap{overflow-x:auto;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-.weekly-table{width:100%;border-collapse:collapse;background:#fff;min-width:360px}
-.weekly-table th{background:#F0D020;color:#fff;padding:8px 6px;font-size:11px;font-weight:600;text-align:center}
-.weekly-table th:first-child{text-align:left;padding-left:10px;min-width:70px}
-.weekly-table td{padding:7px 4px;border-bottom:0.5px solid #f0f0f0;text-align:center;font-size:12px}
+.weekly-table-wrap{overflow-x:auto;border-radius:var(--r);box-shadow:var(--shadow)}
+.weekly-table{width:100%;border-collapse:collapse;background:var(--card);min-width:360px}
+.weekly-table th{background:var(--p);color:#fff;padding:9px 6px;font-size:11px;font-weight:700;text-align:center}
+.weekly-table th:first-child{text-align:left;padding-left:12px;min-width:70px}
+.weekly-table td{padding:7px 4px;border-bottom:1px solid #F8FAFC;text-align:center;font-size:12px}
 .weekly-table tr:last-child td{border-bottom:none}
-.weekly-table tr:hover td{background:#fafff8}
-.wk-cell-attend{background:#FFF8DC;color:#27500A;border-radius:6px;padding:3px 6px;font-size:11px;font-weight:600;display:inline-block;cursor:pointer;min-width:32px}
-.wk-cell-absent{background:#FCEBEB;color:#C62828;border-radius:6px;padding:3px 6px;font-size:11px;font-weight:600;display:inline-block;cursor:pointer;min-width:32px}
-.wk-cell-empty{color:#ddd;font-size:14px;cursor:pointer;display:inline-block;min-width:32px}
-.wk-period-label{font-size:12px;color:#555;font-weight:600}
-.wk-period-time{font-size:10px;color:#aaa}
+.weekly-table tr:hover td{background:#FAFAFA}
+.wk-cell-attend{background:var(--green-bg);color:#065F46;border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
+.wk-cell-absent{background:var(--red-bg);color:var(--red);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
+.wk-cell-empty{color:#CBD5E1;font-size:16px;cursor:pointer;display:inline-block;min-width:32px}
+.wk-period-label{font-size:12px;color:#374151;font-weight:600}
+.wk-period-time{font-size:10px;color:#94A3B8}
 
 /* 저장 버튼 */
-.save-fab{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#F0D020;color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:15px;font-weight:700;box-shadow:0 4px 16px rgba(45,122,79,0.4);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s}
+.save-fab{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(245,158,11,0.45);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;white-space:nowrap}
 .save-fab.show{display:flex}
-.save-fab:active{transform:translateX(-50%) scale(0.97)}
+.save-fab:active{transform:translateX(-50%) scale(0.96)}
 
 /* 저장 완료 토스트 */
-.toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:300;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
+.toast{position:fixed;bottom:82px;left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:300;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.18)}
 .toast.show{opacity:1}
 
 /* 내 현황 카드 */
 .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.stat-card{background:#fff;border-radius:14px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-.stat-card-label{font-size:11px;color:#aaa;margin-bottom:4px}
-.stat-card-val{font-size:22px;font-weight:700;color:#C8900A}
-.stat-card-val.blue{color:#A87008}
-.this-week-card{background:#fff;border-radius:14px;padding:14px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.06);margin-bottom:16px}
-.week-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:0.5px solid #f5f5f5}
+.stat-card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
+.stat-card-label{font-size:11px;color:#94A3B8;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
+.stat-card-val{font-size:26px;font-weight:800;color:var(--p)}
+.stat-card-val.blue{color:#3B82F6}
+.this-week-card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:16px}
+.week-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F8FAFC}
 .week-row:last-child{border-bottom:none}
-.week-day{font-size:13px;font-weight:600;color:#555;width:28px}
+.week-day{font-size:13px;font-weight:700;color:#374151;width:28px}
 .week-periods{display:flex;gap:4px;flex-wrap:wrap}
-.week-chip{font-size:11px;padding:2px 7px;border-radius:10px;font-weight:500}
-.chip-attend{background:#FFF8DC;color:#27500A}
-.chip-absent{background:#FCEBEB;color:#C62828}
-.chip-none{color:#ccc;font-size:12px}
+.week-chip{font-size:11px;padding:3px 8px;border-radius:10px;font-weight:600}
+.chip-attend{background:var(--green-bg);color:#065F46}
+.chip-absent{background:var(--red-bg);color:var(--red)}
+.chip-none{color:#CBD5E1;font-size:12px}
+
+/* ── 더보기 탭 ── */
+.more-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:4px 0}
+.more-item{background:var(--card);border:none;border-radius:var(--r);padding:20px 10px 16px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:var(--shadow);transition:all 0.15s;width:100%}
+.more-item:active{transform:scale(0.94);box-shadow:none}
+.more-item-icon{width:50px;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.more-item-label{font-size:12px;font-weight:700;color:var(--text)}
 </style>
 </head>
 <body>
@@ -222,15 +248,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         </div>
       </div>
       <button class="logout-btn" onclick="logout()">로그아웃</button>
-    </div>
-    <div class="app-tabs">
-      <button class="app-tab active" onclick="showTab('notice',this)">공지</button>
-      <button class="app-tab" onclick="showTab('daily',this)">요일별</button>
-      <button class="app-tab" onclick="showTab('weekly',this)">주간설정</button>
-      <button class="app-tab" onclick="showTab('mystats',this)">내 현황</button>
-      <button class="app-tab" onclick="showTab('studyroom',this)">스터디룸</button>
-      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">자리선택</button>
-      <button class="app-tab" onclick="showTab('planner',this)">📓 플래너</button>
     </div>
   </div>
 
@@ -335,8 +352,49 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       </div>
     </div>
 
+    <!-- 더보기 탭 -->
+    <div id="tab-more" style="display:none">
+      <div class="more-grid">
+        <button class="more-item" onclick="showTabFromMore('studyroom')">
+          <div class="more-item-icon" style="background:#EDE9FE;color:#7C3AED"><i class="ti ti-school"></i></div>
+          <span class="more-item-label">스터디룸</span>
+        </button>
+        <button class="more-item" onclick="showTabFromMore('seatmap')">
+          <div class="more-item-icon" style="background:#ECFDF5;color:#059669"><i class="ti ti-armchair"></i></div>
+          <span class="more-item-label">자리선택</span>
+        </button>
+        <button class="more-item" onclick="showTabFromMore('planner')">
+          <div class="more-item-icon" style="background:#FFF7ED;color:#EA580C"><i class="ti ti-notebook"></i></div>
+          <span class="more-item-label">플래너</span>
+        </button>
+      </div>
+    </div>
 
   </div>
+
+  <!-- 바텀 내비게이션 -->
+  <nav class="bottom-nav" id="bottom-nav">
+    <button class="bnav-btn active" data-tab="notice" onclick="showTab('notice',this)">
+      <i class="ti ti-bell bnav-icon"></i>
+      <span>공지</span>
+    </button>
+    <button class="bnav-btn" data-tab="daily" onclick="showTab('daily',this)">
+      <i class="ti ti-calendar-event bnav-icon"></i>
+      <span>요일별</span>
+    </button>
+    <button class="bnav-btn" data-tab="weekly" onclick="showTab('weekly',this)">
+      <i class="ti ti-layout-grid bnav-icon"></i>
+      <span>주간</span>
+    </button>
+    <button class="bnav-btn" data-tab="mystats" onclick="showTab('mystats',this)">
+      <i class="ti ti-chart-bar bnav-icon"></i>
+      <span>현황</span>
+    </button>
+    <button class="bnav-btn" data-tab="more" onclick="showTab('more',this)">
+      <i class="ti ti-grid-dots bnav-icon"></i>
+      <span>더보기</span>
+    </button>
+  </nav>
 </div>
 
 <!-- 저장 버튼 (FAB) -->
@@ -508,6 +566,16 @@ function enterApp() {
   document.getElementById('hdr-name').textContent = currentStudent.name;
   document.getElementById('hdr-seat').textContent = currentStudent.seat + ' · 새봄 면학관';
 
+  // 바텀 네비 초기화 → 공지 탭 활성
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
+  const noticeNavBtn = document.querySelector('.bnav-btn[data-tab="notice"]');
+  if (noticeNavBtn) noticeNavBtn.classList.add('active');
+  ['daily','weekly','mystats','seatmap','studyroom','planner','more'].forEach(t => {
+    const el = document.getElementById('tab-'+t); if (el) el.style.display='none';
+  });
+  const noticeTab = document.getElementById('tab-notice');
+  if (noticeTab) noticeTab.style.display = 'block';
+
   // 오늘 요일로 초기화
   const dn=['일','월','화','수','목','금','토'];
   const todayIdx = new Date().getDay();
@@ -573,29 +641,36 @@ function parsePeriodStatus(sched, pNum) {
 
 // ── 탭 전환 ──
 function showTab(id, btn) {
-  // 자리선택 탭 이탈 시 구독 해제
   if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
-  // 현재 탭 저장
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','daily','weekly','mystats','seatmap','studyroom','planner'].forEach(t => {
+  ['notice','daily','weekly','mystats','seatmap','studyroom','planner','more'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   if (id === 'planner') { initPlannerCalendar(); }
-  document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.bnav-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-
-  // 저장 버튼: daily, weekly 탭에서만 표시
   const showSave = (id==='daily'||id==='weekly') && isDirty;
   document.getElementById('save-fab').classList.toggle('show', showSave);
-
-  // 공지 탭 클릭 시 읽음 처리
   if (id === 'notice') {
     localStorage.setItem('saebom_notice_read', String(NOTICES.length));
-    const dot = document.querySelector('.notice-badge-dot');
-    if (dot) dot.remove();
+    const dot = document.querySelector('.bnav-badge');
+    if (dot && dot.closest('[data-tab="notice"]')) dot.remove();
   }
+}
+
+function showTabFromMore(id) {
+  const moreBtn = document.querySelector('.bnav-btn[data-tab="more"]');
+  const fakeBtn = { classList: { add: ()=>{}, remove: ()=>{} } };
+  // hide more, show target without changing bnav active state
+  document.getElementById('tab-more').style.display = 'none';
+  ['notice','daily','weekly','mystats','seatmap','studyroom','planner'].forEach(t => {
+    document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
+  });
+  try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
+  if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
+  if (id === 'planner') { initPlannerCalendar(); }
 }
 
 // ── 공지사항 ──
@@ -838,15 +913,14 @@ function loadNoticesFromFirebase() {
 function updateNoticeBadge(total) {
   const lastRead = parseInt(localStorage.getItem('saebom_notice_read') || '0');
   const unread = Math.max(0, total - lastRead);
-  const btn = document.querySelector('.app-tab[onclick*="notice"]');
+  const btn = document.querySelector('.bnav-btn[data-tab="notice"]');
   if (!btn) return;
-  const existing = btn.querySelector('.notice-badge-dot');
+  const existing = btn.querySelector('.bnav-badge');
   if (existing) existing.remove();
   if (unread > 0) {
     const dot = document.createElement('span');
-    dot.className = 'notice-badge-dot';
-    dot.textContent = unread;
-    dot.style.cssText = 'display:inline-block;background:#C62828;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;margin-left:4px;vertical-align:middle';
+    dot.className = 'bnav-badge';
+    dot.textContent = unread > 9 ? '9+' : unread;
     btn.appendChild(dot);
   }
 }
@@ -1277,7 +1351,7 @@ function restoreTab() {
   try {
     const tab = sessionStorage.getItem('saebom_active_tab_student');
     if (tab && tab !== 'notice') {
-      const btn = document.querySelector('.app-tab[onclick*="' + tab + '"]');
+      const btn = document.querySelector('.bnav-btn[data-tab="' + tab + '"]') || document.querySelector('.bnav-btn[data-tab="more"]');
       if (btn) setTimeout(() => showTab(tab, btn), 500);
     }
   } catch(e) {}
