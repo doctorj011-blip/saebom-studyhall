@@ -5025,4 +5025,11 @@ window.adminPlannerInit = function() {
 
 window.adminPlannerRefreshList = _apcFillStudents;
 
+// 페이지 로드 시 localStorage에서 복원된 알림을 즉시 화면에 표시
+document.addEventListener('DOMContentLoaded', function() {
+  if (scheduleAlerts.length > 0 && window.renderScheduleAlerts) {
+    window.renderScheduleAlerts();
+  }
+});
+
 </script>
