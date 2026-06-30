@@ -2793,19 +2793,31 @@ function parseScheduleStr(str) {
     const validList = hasSatPeriod ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
 
     tokens.forEach((token, i) => {
-      const p = validList[i];
-      if (p === undefined) return;
-      const absentM = token.match(/^x\(([^)]*)\)$/i);
-      if (absentM) {
-        absentPeriods.add(p);
-        if (absentM[1]) absentReasons[p] = absentM[1];
+      // 1) 명시적 결석 (교시 번호 포함): x10 또는 x10(사유)
+      const absNumM = token.match(/^x(\d+)(?:\(([^)]*)\))?$/i);
+      if (absNumM) {
+        const ap = Number(absNumM[1]);
+        absentPeriods.add(ap);
+        if (absNumM[2]) absentReasons[ap] = absNumM[2];
         return;
       }
-      if (token === 'x') {
-        absentPeriods.add(p);
+      // 2) 구버전 위치기반 결석 (번호 없음): x 또는 x(사유)
+      const absM = token.match(/^x(?:\(([^)]*)\))?$/i);
+      if (absM) {
+        const p = validList[i];
+        if (p !== undefined) {
+          absentPeriods.add(p);
+          if (absM[1]) absentReasons[p] = absM[1];
+        }
         return;
       }
-      // 숫자 토큰 — 해당 교시 출석
+      // 3) 출석 범위: a~b
+      const rangeM = token.match(/^(\d+)~(\d+)$/);
+      if (rangeM) {
+        for (let k = Number(rangeM[1]); k <= Number(rangeM[2]); k++) periods.add(k);
+        return;
+      }
+      // 4) 출석 단일 번호
       const num = Number(token);
       if (!isNaN(num) && num >= 1 && num <= 11) periods.add(num);
     });
@@ -2828,7 +2840,7 @@ function draftToStr(draft, isSat) {
   for (const p of validPeriods) {
     if (draft.absentPeriods.has(p)) {
       const reason = draft.absentReasons[p] || '';
-      parts.push(reason ? 'x(' + reason + ')' : 'x');
+      parts.push(reason ? 'x' + p + '(' + reason + ')' : 'x' + p);
     } else if (draft.periods.has(p)) {
       parts.push(String(p));
     }
