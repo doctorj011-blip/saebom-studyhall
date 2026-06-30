@@ -234,8 +234,8 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 
 /* ── 새 홈화면 ── */
 .home-screen{background:var(--bg)}
-.home-header{background:linear-gradient(135deg,#C8900A 0%,#9A6A05 100%);padding:20px 20px 28px}
-.home-header-info{display:flex;align-items:center;gap:12px;margin-bottom:16px;justify-content:space-between}
+.home-header{background:linear-gradient(135deg,#C8900A 0%,#9A6A05 100%);padding:14px 20px}
+.home-header-info{display:flex;align-items:center;justify-content:space-between;margin-bottom:0}
 .home-user-row{display:flex;align-items:center;gap:12px}
 .home-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid rgba(255,255,255,0.4)}
 .home-welcome{font-size:12px;color:rgba(255,255,255,0.72);margin-bottom:2px;letter-spacing:0.2px}
@@ -302,7 +302,6 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
       <div class="home-user-row">
         <div class="home-avatar" id="home-avatar"></div>
         <div>
-          <div class="home-welcome">안녕하세요 👋</div>
           <div class="home-name" id="home-name"></div>
           <div class="home-seat" id="home-seat"></div>
         </div>
@@ -337,27 +336,23 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
         <div class="quick-card-sub">출석률 · 누적 시간</div>
         <div class="quick-card-bg">📊</div>
       </div>
-      <div class="quick-card quick-card-wide" onclick="openSection('planner','#C8900A')">
+      <div class="quick-card" onclick="openSection('planner','#C8900A')">
         <div class="quick-card-icon">📓</div>
-        <div class="quick-card-wide-body">
-          <div class="quick-card-title">플래너</div>
-          <div class="quick-card-sub">월별 학습 기록 & 사진</div>
-        </div>
+        <div class="quick-card-title">플래너</div>
+        <div class="quick-card-sub">월별 학습 기록 & 사진</div>
         <div class="quick-card-bg">📓</div>
       </div>
-      <div class="quick-card quick-card-wide" onclick="openSection('studyroom','#C8900A')">
+      <div class="quick-card" onclick="openSection('studyroom','#C8900A')">
         <div class="quick-card-icon">🚪</div>
-        <div class="quick-card-wide-body">
-          <div class="quick-card-title">스터디룸 신청</div>
-          <div class="quick-card-sub">교시별 스터디룸 배정</div>
-        </div>
+        <div class="quick-card-title">스터디룸 신청</div>
+        <div class="quick-card-sub">교시별 스터디룸 배정</div>
         <div class="quick-card-bg">🚪</div>
       </div>
-      <div class="quick-card quick-card-wide" onclick="openSection('seatmap','#C8900A')">
+      <div class="quick-card quick-card-wide" id="home-seatmap-card" style="display:none" onclick="openSection('seatmap','#C8900A')">
         <div class="quick-card-icon">🪑</div>
         <div class="quick-card-wide-body">
           <div class="quick-card-title">자리 선택</div>
-          <div class="quick-card-sub">배치도에서 내 자리 선택</div>
+          <div class="quick-card-sub" id="home-seatmap-deadline">배치도에서 내 자리 선택</div>
         </div>
         <div class="quick-card-bg">🪑</div>
       </div>
@@ -1190,16 +1185,19 @@ async function checkSeatSelectionActive() {
     const d = snap.data ? snap.data() : null;
     const now = new Date();
     const active = d && d.active && new Date(d.start) <= now && new Date(d.end) >= now;
+    const card = document.getElementById('home-seatmap-card');
     if (active) {
       const deadline = new Date(d.end);
-      document.getElementById('seatmap-deadline').textContent =
-        `⏰ 선택 마감: ${deadline.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}`;
+      const deadlineStr = deadline.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      document.getElementById('seatmap-deadline').textContent = `⏰ 선택 마감: ${deadlineStr}`;
       document.getElementById('student-seatmap').innerHTML = '';
+      if (card) { card.style.display = ''; document.getElementById('home-seatmap-deadline').textContent = `⏰ 마감: ${deadlineStr}`; }
       buildStudentSeatmap();
     } else {
       document.getElementById('seatmap-deadline').textContent = '';
       document.getElementById('student-seatmap').innerHTML =
         '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div>';
+      if (card) card.style.display = 'none';
     }
   } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
 }
