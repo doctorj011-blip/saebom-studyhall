@@ -137,6 +137,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .toggle-btn.attend{background:var(--amber-pale);color:var(--amber-dark);border-color:rgba(200,144,10,0.4)}
 .toggle-btn.absent{background:var(--red-pale);color:var(--red);border-color:var(--red-border)}
 .toggle-btn:active{transform:scale(0.95)}
+.toggle-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
 
 /* 결석 사유 */
 .absent-reason{margin-top:8px;display:none}
@@ -629,6 +630,7 @@ let currentDayTab = '월';
 let draftSchedule = {}; // { 월: { 7: 'attend'|'absent'|'none', reason: '' }, ... }
 let isDirty = false;
 let scheduleEditEnabled = false;
+let todayDay = '';
 
 // ── 로그인 ──
 let pinBuffer = '';
@@ -712,7 +714,8 @@ function enterApp() {
   // 오늘 요일로 초기화
   const dn=['일','월','화','수','목','금','토'];
   const todayIdx = new Date().getDay();
-  currentDayTab = dn[todayIdx] === '일' ? '월' : dn[todayIdx];
+  todayDay = dn[todayIdx];
+  currentDayTab = todayDay === '일' ? '월' : todayDay;
 
   buildNotices();
   buildDayTabs();
@@ -949,6 +952,16 @@ function buildDailyPeriods() {
   const periods = currentDayTab === '토' ? PERIODS_SAT : PERIODS_WEEK;
   const dayDraft = draftSchedule[currentDayTab];
   const el = document.getElementById('daily-periods');
+  const isToday = currentDayTab === todayDay;
+
+  const banner = document.getElementById('daily-edit-banner');
+  if (isToday) {
+    banner.style.cssText = 'font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px';
+    banner.innerHTML = '✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.';
+  } else {
+    banner.style.cssText = 'font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px';
+    banner.innerHTML = '🔒 오늘 일정만 수정할 수 있습니다. 다른 날짜는 조회만 가능합니다.';
+  }
 
   el.innerHTML = periods.map(p => {
     const status = dayDraft.periods[p.n] || 'none';
@@ -961,20 +974,21 @@ function buildDailyPeriods() {
         </div>
       </div>
       <div class="period-toggle">
-        <button class="toggle-btn${status==='attend'?' attend':''}" onclick="setPeriod('${currentDayTab}',${p.n},'attend')">참여</button>
-        <button class="toggle-btn${status==='absent'?' absent':''}" onclick="setPeriod('${currentDayTab}',${p.n},'absent')">불참</button>
+        <button class="toggle-btn${status==='attend'?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
+        <button class="toggle-btn${status==='absent'?' absent':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
       </div>
     </div>
     <div class="absent-reason${status==='absent'?' show':''}" id="reason-${currentDayTab}-${p.n}">
       <span class="reason-label">불참 사유</span>
       <input class="reason-input" type="text" placeholder="예: 수학학원"
         value="${dayDraft.reason||''}"
-        oninput="setReason('${currentDayTab}','${p.n}',this.value)">
+        ${isToday?`oninput="setReason('${currentDayTab}','${p.n}',this.value)"`:'readonly'}>
     </div>`;
   }).join('');
 }
 
 function setPeriod(day, pNum, status) {
+  if (day !== todayDay) { showToast('🔒 오늘 일정만 수정할 수 있습니다'); return; }
   const prev = draftSchedule[day].periods[pNum];
   // 같은 버튼 다시 누르면 none으로
   draftSchedule[day].periods[pNum] = prev === status ? 'none' : status;
