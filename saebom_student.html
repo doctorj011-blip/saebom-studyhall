@@ -422,7 +422,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 
     <!-- 주간 시간표 -->
     <div id="tab-weekly" style="display:none">
-      <p style="font-size:12px;color:#888;margin-bottom:12px">교시를 탭하면 출석↔결석↔공란 순으로 바뀝니다</p>
+      <div id="weekly-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px">🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.</div>
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
@@ -627,6 +627,7 @@ let currentStudent = null;
 let currentDayTab = '월';
 let draftSchedule = {}; // { 월: { 7: 'attend'|'absent'|'none', reason: '' }, ... }
 let isDirty = false;
+let scheduleEditEnabled = false;
 
 // ── 로그인 ──
 let pinBuffer = '';
@@ -723,12 +724,43 @@ function enterApp() {
     loadStudentScheduleFromFirebase();
     checkSeatSelectionActive();
     loadNoticesFromFirebase();
+    subscribeScheduleEdit();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
-    checkSeatSelectionActive();
+      checkSeatSelectionActive();
       loadNoticesFromFirebase();
+      subscribeScheduleEdit();
     }, { once: true });
+  }
+}
+
+function subscribeScheduleEdit() {
+  if (!window._firebaseReady) return;
+  try {
+    const db = window._db;
+    const ref = window._fsDoc(db, 'settings', 'schedule_edit');
+    window._fsOnSnapshot(ref, snap => {
+      scheduleEditEnabled = snap.exists() ? !!snap.data().enabled : false;
+      updateScheduleEditBanner();
+      buildWeeklyTable();
+    });
+  } catch(e) {}
+}
+
+function updateScheduleEditBanner() {
+  const banner = document.getElementById('weekly-edit-banner');
+  if (!banner) return;
+  if (scheduleEditEnabled) {
+    banner.style.background = '#F0FBF0';
+    banner.style.borderColor = '#A5D6A7';
+    banner.style.color = '#1B4D2E';
+    banner.innerHTML = '✏️ 관리자가 주간 시간표 수정을 허용했습니다. 교시를 탭해서 수정하세요.';
+  } else {
+    banner.style.background = '#FEF0F0';
+    banner.style.borderColor = '#F5BABA';
+    banner.style.color = '#C62828';
+    banner.innerHTML = '🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.';
   }
 }
 
@@ -942,6 +974,10 @@ function buildDailyPeriods() {
 }
 
 function setPeriod(day, pNum, status) {
+  if (!scheduleEditEnabled) {
+    showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
+    return;
+  }
   const prev = draftSchedule[day].periods[pNum];
   // 같은 버튼 다시 누르면 none으로
   draftSchedule[day].periods[pNum] = prev === status ? 'none' : status;
@@ -988,6 +1024,10 @@ function buildWeeklyTable() {
 }
 
 function wkToggle(day, pNum) {
+  if (!scheduleEditEnabled) {
+    showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
+    return;
+  }
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
   const next = cur === 'none' ? 'attend' : cur === 'attend' ? 'absent' : 'none';
   draftSchedule[day].periods[pNum] = next;

@@ -743,6 +743,20 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       <div style="font-size:12px;color:#8B6010;margin-bottom:10px">
         학생이 직접 스케줄을 수정하면 관리자앱에 실시간 알림이 옵니다.
       </div>
+
+      <!-- 주간 시간표 수정 허용 -->
+      <div style="background:#FFF8DC;border:1.5px solid #E0B020;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:6px">📝 주간 시간표 수정 허용</div>
+        <div style="font-size:11px;color:#8B6010;margin-bottom:10px">활성화하면 학생이 학생앱에서 주간 시간표를 직접 수정할 수 있습니다.</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button id="schedule-edit-toggle-btn" onclick="toggleScheduleEdit()"
+            style="padding:8px 18px;background:#bdc1c6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
+            🔒 수정 잠금 중
+          </button>
+          <span id="schedule-edit-status" style="font-size:11px;color:#888"></span>
+        </div>
+      </div>
+
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html" target="_blank"
           style="padding:6px 12px;background:#C8900A;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">
@@ -990,9 +1004,52 @@ function loadSettingsTab() {
   const sn = document.getElementById('cfg-sender');
   if (k) k.value = SOLAPI_API_KEY;
   loadSeatSelectionStatus();
+  loadScheduleEditStatus();
   if (s) s.value = SOLAPI_API_SECRET;
   if (sn) sn.value = SOLAPI_SENDER;
 }
+
+async function loadScheduleEditStatus() {
+  try {
+    const db = window._adminDb;
+    if (!db) return;
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'schedule_edit'));
+    const enabled = snap.exists() ? !!snap.data().enabled : false;
+    updateScheduleEditBtn(enabled);
+  } catch(e) {}
+}
+
+function updateScheduleEditBtn(enabled) {
+  const btn = document.getElementById('schedule-edit-toggle-btn');
+  const status = document.getElementById('schedule-edit-status');
+  if (!btn) return;
+  if (enabled) {
+    btn.textContent = '✏️ 수정 허용 중';
+    btn.style.background = '#C8900A';
+    if (status) { status.textContent = '학생이 주간 시간표를 수정할 수 있습니다'; status.style.color = '#27500A'; }
+  } else {
+    btn.textContent = '🔒 수정 잠금 중';
+    btn.style.background = '#bdc1c6';
+    if (status) { status.textContent = '학생이 시간표를 수정할 수 없습니다'; status.style.color = '#888'; }
+  }
+  btn.dataset.enabled = enabled ? '1' : '0';
+}
+
+window.toggleScheduleEdit = async function() {
+  try {
+    const db = window._adminDb;
+    if (!db) return;
+    const btn = document.getElementById('schedule-edit-toggle-btn');
+    const nowEnabled = btn.dataset.enabled === '1';
+    const next = !nowEnabled;
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'schedule_edit'), {
+      enabled: next,
+      updatedAt: window._fsServerTimestamp()
+    });
+    updateScheduleEditBtn(next);
+    showAdminToast(next ? '✅ 주간 시간표 수정 허용됨' : '🔒 주간 시간표 수정 잠금됨');
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
 window.saveSettingsFromTab = function() {
   SOLAPI_API_KEY    = document.getElementById('cfg-key').value.trim();
   SOLAPI_API_SECRET = document.getElementById('cfg-secret').value.trim();
