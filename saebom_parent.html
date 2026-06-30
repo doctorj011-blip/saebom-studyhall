@@ -59,6 +59,10 @@
   .sched-attend { color: #166534; font-weight: 600; }
   .sched-absent { color: #C62828; }
   .sched-none { color: #D1D5DB; }
+  /* 고정 시간표에서 변경된 교시 표기 */
+  .sched-changed { background: #FFF4E6 !important; position: relative; cursor: pointer; }
+  .chg-dot { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: #E8590C; }
+  .chg-reason { font-size: 9px; color: #C62828; margin-top: 1px; line-height: 1.1; word-break: keep-all; }
 
   /* 누적시간 */
   .hours-bar { height: 8px; background: #F3F4F6; border-radius: 4px; overflow: hidden; margin-top: 6px; }
@@ -323,6 +327,9 @@ function enterApp() {
 }
 
 function doLogout() {
+  if (_statusUnsub) { _statusUnsub(); _statusUnsub = null; }
+  if (_scheduleUnsub) { _scheduleUnsub(); _scheduleUnsub = null; }
+  _changedSchedule = null;
   currentStudent = null;
   try { sessionStorage.removeItem('saebom_parent'); } catch(e) {}
   document.getElementById('app-screen').classList.remove('visible');
@@ -334,7 +341,7 @@ function doLogout() {
 // ── 데이터 로드 ──
 async function loadAllData() {
   await startStatusRealtime();  // 실시간 먼저
-  loadSchedule();
+  startScheduleRealtime();      // 스케줄도 실시간 구독
   loadHours();
   loadNotices();
 }
@@ -434,40 +441,134 @@ function renderStatus(todayRecs) {
   document.getElementById('month-seat').textContent = currentStudent.seat ? currentStudent.seat+'번' : '-';
 }
 
+// ── 스케줄 문자열 파서 (관리자/학생앱과 동일 로직 — 포맷 불일치 방지) ──
+// 반환: { periods:Set(출석), absentPeriods:Set(결석), absentReasons:{교시:사유} }
+function parseScheduleStr(str) {
+  const empty = { periods: new Set(), absentPeriods: new Set(), absentReasons: {} };
+  if (!str || str === '-') return empty;
+  const periods = new Set(), absentPeriods = new Set(), absentReasons = {};
+  const tokens = str.split(',').map(t => t.trim()).filter(Boolean);
+  const legacyMatch = str.match(/^x\(([^)]*)\)(.*)/);
+  const isLegacy = legacyMatch && (tokens[0] === 'x' || tokens[0].match(/^x\([^)]*\)$/));
+  if (isLegacy) {
+    // 구버전: x(사유)가 전체 결석 prefix, 뒤 숫자는 출석
+    const reason = legacyMatch ? legacyMatch[1] : '';
+    tokens.forEach(token => {
+      if (token.startsWith('x')) return;
+      const rangeM = token.match(/^(\d+)~(\d+)$/);
+      if (rangeM) { for (let i=Number(rangeM[1]); i<=Number(rangeM[2]); i++) periods.add(i); return; }
+      const num = Number(token);
+      if (!isNaN(num) && num>=1 && num<=11) periods.add(num);
+    });
+    [7,8,9,10,11].forEach(n => { if (!periods.has(n)) { absentPeriods.add(n); if(reason) absentReasons[n]=reason; } });
+  } else {
+    // 새 형식: 토큰 순서 = 유효 교시 순서. x{n}(사유) 또는 위치기반 x(사유)
+    const firstNum = tokens.find(t => /^\d+$/.test(t));
+    const hasSatPeriod = firstNum && Number(firstNum)>=1 && Number(firstNum)<=6;
+    const validList = hasSatPeriod ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+    tokens.forEach((token, i) => {
+      const absNumM = token.match(/^x(\d+)(?:\(([^)]*)\))?$/i);
+      if (absNumM) { const ap=Number(absNumM[1]); absentPeriods.add(ap); if(absNumM[2]) absentReasons[ap]=absNumM[2]; return; }
+      const absM = token.match(/^x(?:\(([^)]*)\))?$/i);
+      if (absM) { const p=validList[i]; if(p!==undefined){ absentPeriods.add(p); if(absM[1]) absentReasons[p]=absM[1]; } return; }
+      const rangeM = token.match(/^(\d+)~(\d+)$/);
+      if (rangeM) { for (let k=Number(rangeM[1]); k<=Number(rangeM[2]); k++) periods.add(k); return; }
+      const num = Number(token);
+      if (!isNaN(num) && num>=1 && num<=11) periods.add(num);
+    });
+  }
+  return { periods, absentPeriods, absentReasons };
+}
+
+// 고정(원본) 시간표 문자열: students 문서는 최상위 요일 필드, 더미는 schedule 객체
+function getBaseDayStr(day) {
+  if (!currentStudent) return '-';
+  if (currentStudent[day] != null && currentStudent[day] !== '') return currentStudent[day];
+  if (currentStudent.schedule && currentStudent.schedule[day] != null) return currentStudent.schedule[day];
+  return '-';
+}
+
+// 특정 교시의 상태
+function periodStatus(parsed, n) {
+  if (parsed.periods.has(n)) return { s: 'attend', reason: '' };
+  if (parsed.absentPeriods.has(n)) return { s: 'absent', reason: parsed.absentReasons[n] || '' };
+  return { s: 'none', reason: '' };
+}
+
+let _changedSchedule = null;   // schedules 컬렉션(학생 수정본) 요일 문자열 맵
+let _scheduleUnsub = null;
+
+// 변경 스케줄 실시간 구독 — 학생이 수정하면 즉시 반영
+function startScheduleRealtime() {
+  if (_scheduleUnsub) { _scheduleUnsub(); _scheduleUnsub = null; }
+  _changedSchedule = null;
+  loadSchedule(); // 우선 고정 시간표로 즉시 렌더
+  if (!currentStudent || !window._onSnapshot || !window._db) return;
+  const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '');
+  if (!seatKey) return;
+  try {
+    _scheduleUnsub = window._onSnapshot(
+      window._doc(window._db, 'schedules', seatKey),
+      snap => { _changedSchedule = snap.exists() ? snap.data() : null; loadSchedule(); }
+    );
+  } catch(e) { /* 실패 시 고정 시간표만 표시 */ }
+}
+
 function loadSchedule() {
   if (!currentStudent) return;
-  const sched = currentStudent.schedule || {};
-  const periodNums = [...new Set([...PERIODS_WEEK.map(p=>p.n), ...PERIODS_SAT.map(p=>p.n)])].sort((a,b)=>a-b);
+  let changedCount = 0;
 
   let html = '<table class="sched-table"><thead><tr><th>교시</th>';
   DAYS.forEach(d => { html += `<th>${d}</th>`; });
   html += '</tr></thead><tbody>';
 
   // 표시할 교시: 평일은 7~11, 토요일은 1~11
-  const allPeriods = PERIODS_SAT;
-  allPeriods.forEach(p => {
+  PERIODS_SAT.forEach(p => {
     html += `<tr><td style="font-size:10px;color:#888;white-space:nowrap">${p.n}교시</td>`;
     DAYS.forEach(day => {
-      const str = sched[day] || '-';
-      if (str === '-') { html += '<td class="sched-none">—</td>'; return; }
-      // 토요일 아닌데 1~6교시면 패스
+      // 평일은 1~6교시 없음
       if (day !== '토' && p.n <= 6) { html += '<td></td>'; return; }
-      const tokens = str.split(',');
-      const periodIdx = (day === '토' ? PERIODS_SAT : PERIODS_WEEK).findIndex(pp => pp.n === p.n);
-      if (periodIdx < 0) { html += '<td></td>'; return; }
-      const token = tokens[periodIdx];
-      if (!token) { html += '<td class="sched-none">—</td>'; return; }
-      if (token.startsWith('x')) {
-        const reason = token.match(/\(([^)]+)\)/)?.[1] || '';
-        html += `<td class="sched-absent" title="${reason}">✕</td>`;
+
+      const base = parseScheduleStr(getBaseDayStr(day));
+      const changedStr = _changedSchedule ? _changedSchedule[day] : null;
+      const cur = changedStr ? parseScheduleStr(changedStr) : base;
+
+      const bSt = periodStatus(base, p.n);
+      const cSt = periodStatus(cur, p.n);
+      const isChanged = !!changedStr && (bSt.s !== cSt.s || bSt.reason !== cSt.reason);
+
+      // 표시값 = 현재(변경 반영) 상태
+      let inner, cls;
+      if (cSt.s === 'attend') { inner = '○'; cls = 'sched-attend'; }
+      else if (cSt.s === 'absent') { inner = '✕'; cls = 'sched-absent'; }
+      else { inner = '—'; cls = 'sched-none'; }
+
+      const reasonHtml = (cSt.s === 'absent' && cSt.reason) ? `<div class="chg-reason">${cSt.reason}</div>` : '';
+
+      if (isChanged) {
+        changedCount++;
+        const lbl = st => st.s === 'attend' ? '출석' : st.s === 'absent' ? ('결석' + (st.reason ? `(${st.reason})` : '')) : '없음';
+        const tip = `${day} ${p.n}교시 변경됨\n고정: ${lbl(bSt)} → 변경: ${lbl(cSt)}`;
+        const tipEsc = tip.replace(/"/g,'&quot;');
+        html += `<td class="sched-changed ${cls}" data-tip="${tipEsc}" title="${tipEsc}" onclick="showToast(this.dataset.tip.replace(/\\n/g,' · '))">`
+              + `<span class="chg-dot"></span>${inner}${reasonHtml}</td>`;
       } else {
-        html += `<td class="sched-attend">○</td>`;
+        const titleAttr = (cSt.s === 'absent' && cSt.reason) ? ` title="${cSt.reason.replace(/"/g,'&quot;')}"` : '';
+        html += `<td class="${cls}"${titleAttr}>${inner}${reasonHtml}</td>`;
       }
     });
     html += '</tr>';
   });
   html += '</tbody></table>';
-  html += '<div style="margin-top:10px;font-size:11px;color:#888">○: 출석 / ✕: 결석 / —: 해당없음</div>';
+
+  if (changedCount > 0) {
+    html = `<div style="font-size:12px;color:#E8590C;background:#FFF4E6;border:1px solid #FFD8A8;border-radius:8px;padding:8px 10px;margin-bottom:10px">✏️ 고정 시간표에서 변경된 교시가 <b>${changedCount}건</b> 있습니다. 주황 표시 셀을 누르면 변경 내용을 볼 수 있어요.</div>` + html;
+  }
+  html += '<div style="margin-top:10px;font-size:11px;color:#888;line-height:1.7">'
+        + '○: 출석 / ✕: 결석 / —: 해당없음<br>'
+        + '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#E8590C;vertical-align:middle;margin-right:4px"></span>'
+        + '주황 표시 = 고정 시간표에서 <b>변경된 부분</b>'
+        + '</div>';
   document.getElementById('schedule-content').innerHTML = html;
 }
 
@@ -725,6 +826,7 @@ async function doLoginFirebase(name, phone) {
 document.addEventListener('visibilitychange', function() {
   if (document.hidden || !currentStudent) return;
   startStatusRealtime();
+  startScheduleRealtime();
   loadNotices();
   if (currentTab === 'planner') { _ppRenderCal(); _ppLoadMonth(); }
   if (currentTab === 'notice') loadNotices();
