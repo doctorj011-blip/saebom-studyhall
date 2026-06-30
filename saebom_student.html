@@ -572,12 +572,9 @@ function enterApp() {
   document.getElementById('home-screen').classList.add('visible');
 
   // 헤더
-  document.getElementById('hdr-avatar').textContent = currentStudent.name[0];
-  document.getElementById('home-avatar').textContent = document.getElementById('hdr-avatar').textContent;
-  document.getElementById('hdr-name').textContent = currentStudent.name;
-  document.getElementById('home-name').textContent = document.getElementById('hdr-name').textContent;
-  document.getElementById('hdr-seat').textContent = currentStudent.seat + ' · 새봄 면학관';
-  document.getElementById('home-seat').textContent = document.getElementById('hdr-seat').textContent;
+  document.getElementById('home-avatar').textContent = currentStudent.name[0];
+  document.getElementById('home-name').textContent = currentStudent.name;
+  document.getElementById('home-seat').textContent = currentStudent.seat + ' · 새봄 면학관';
 
   // 오늘 요일로 초기화
   const dn=['일','월','화','수','목','금','토'];
@@ -1408,9 +1405,10 @@ document.addEventListener('visibilitychange', function() {
 function restoreTab() {
   try {
     const tab = sessionStorage.getItem('saebom_active_tab_student');
-    if (tab && tab !== 'notice') {
-      const btn = document.querySelector('.app-tab[onclick*="' + tab + '"]');
-      if (btn) setTimeout(() => showTab(tab, btn), 500);
+    if (tab) {
+      const colorMap = { notice:'#6B7FC4', daily:'#E8A040', weekly:'#E05E7A', mystats:'#3BBFB5', planner:'#9B7FD4' };
+      const color = colorMap[tab] || '#6B7FC4';
+      setTimeout(() => openSection(tab, color), 500);
     }
   } catch(e) {}
 }
