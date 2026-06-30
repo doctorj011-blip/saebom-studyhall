@@ -1779,6 +1779,7 @@ function formatTotalTime(totalMin) {
 const KAKAO_PF_ID       = 'KA01PF250331012230026QtFDIwwp8qt';
 const KAKAO_TPL_IN      = 'KA01TP260629075724381ioWs4XlJ4Fb';
 const KAKAO_TPL_OUT     = 'KA01TP260629075832864ZAgymUVvhgt';
+const KAKAO_TPL_SCHEDULE = 'KA01TP260629080354196BK3rZ4aVQLD';
 
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   const parentPhone = (student.parent || '').replace(/-/g, '');
@@ -4324,18 +4325,20 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
     });
   });
 
-  const message =
-    `[새봄면학관]\n` +
-    `${studentName} 학생의 스케줄이 변경되었습니다. 확인해주세요~\n\n` +
-    changeLines.join('\n');
+  const changeContent = changeLines.join('\n');
+  const variables = { 이름: studentName, 변경내용: changeContent };
+  const messageText =
+    `[새봄면학관]\n새봄면학관을 이용중인 ${studentName} 학생의 스케줄이 변경되었습니다.\n\n${changeContent}\n\n면학관 앱에서 확인해주세요.😊`;
 
   const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   try {
-    const result = await solapiSend(parentPhone, message);
-    const success = result === true;
-    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: message, success, error: success ? null : JSON.stringify(result), time: timeStr });
+    const sendFn = window.solapiAlimtalkSend;
+    if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
+    const result = await sendFn(parentPhone, KAKAO_PF_ID, KAKAO_TPL_SCHEDULE, variables);
+    const success = result?.groupInfo?.count?.total > 0 || result?.messageId != null;
+    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: messageText, success, error: success ? null : JSON.stringify(result), time: timeStr });
     if (success) {
-      showAdminToast(`✅ ${studentName} 학부모님께 문자를 발송했습니다`);
+      showAdminToast(`✅ ${studentName} 학부모님께 알림톡을 발송했습니다`);
       const alertObj = scheduleAlerts[idx];
       if (alertObj) {
         alertObj.smsSent = true;
@@ -4345,8 +4348,8 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
       showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
     }
   } catch(e) {
-    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: message, success: false, error: e.message, time: timeStr });
-    showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
+    saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: messageText, success: false, error: e.message, time: timeStr });
+    showAdminToast('⚠️ 알림톡 발송 중 오류가 발생했습니다');
     console.error(e);
   }
 };
