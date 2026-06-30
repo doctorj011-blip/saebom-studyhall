@@ -302,9 +302,12 @@ async function doLogin() {
       enterApp();
       return;
     }
-    // Firebase에 없으면 더미 데이터로 폴백 (테스트용)
+    // Firebase는 연결됐지만 일치하는 학생이 없음.
+    // 더미 데이터로 위장하면 실제와 다른 좌석/시간표가 노출되므로 오류만 표시한다.
+    errEl.textContent = '이름 또는 전화번호 뒷 4자리가 일치하지 않습니다';
+    return;
   }
-  // 로컬 테스트 모드
+  // Firebase 미연결(로컬 테스트) 시에만 더미 데이터 사용
   currentStudent = { ...DUMMY_STUDENT, name };
   try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
   enterApp();
