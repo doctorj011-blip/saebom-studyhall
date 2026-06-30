@@ -416,6 +416,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 
     <!-- 요일별 스케줄 -->
     <div id="tab-daily" style="display:none">
+      <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
       <div class="day-tabs" id="student-day-tabs"></div>
       <div id="daily-periods"></div>
     </div>
@@ -974,10 +975,6 @@ function buildDailyPeriods() {
 }
 
 function setPeriod(day, pNum, status) {
-  if (!scheduleEditEnabled) {
-    showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
-    return;
-  }
   const prev = draftSchedule[day].periods[pNum];
   // 같은 버튼 다시 누르면 none으로
   draftSchedule[day].periods[pNum] = prev === status ? 'none' : status;
@@ -1076,7 +1073,6 @@ async function saveToFirebase() {
   if (!window._firebaseReady) return;
   try {
     const db = window._db;
-    // seat에서 숫자만 추출 (예: "37번" → "37")
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
     const docRef = window._fsDoc(db, 'schedules', seatKey);
     const payload = {
@@ -1087,8 +1083,36 @@ async function saveToFirebase() {
     };
     DAYS.forEach(day => { payload[day] = currentStudent.schedule[day] || '-'; });
     await window._fsSetDoc(docRef, payload);
+    await saveDailyReportToFirebase(db, seatKey);
   } catch(e) {
     console.error('Firebase 저장 실패:', e);
+  }
+}
+
+async function saveDailyReportToFirebase(db, seatKey) {
+  try {
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const dn = ['일','월','화','수','목','금','토'];
+    const todayDay = dn[today.getDay()];
+    const todayDraft = draftSchedule[todayDay] || {};
+    const periods = todayDay === '토' ? PERIODS_SAT : PERIODS_WEEK;
+    const periodsPayload = {};
+    periods.forEach(p => {
+      periodsPayload[p.n] = todayDraft.periods?.[p.n] || 'none';
+    });
+    const reportRef = window._fsDoc(db, 'daily_reports', `${dateStr}_${seatKey}`);
+    await window._fsSetDoc(reportRef, {
+      name: currentStudent.name,
+      seat: currentStudent.seat,
+      date: dateStr,
+      day: todayDay,
+      schedule: currentStudent.schedule[todayDay] || '-',
+      periods: periodsPayload,
+      updatedAt: window._fsServerTimestamp(),
+    });
+  } catch(e) {
+    console.error('일일 리포트 저장 실패:', e);
   }
 }
 
