@@ -3385,7 +3385,6 @@ window.dismissAlert = function(idx) {
   const alerts = window._scheduleAlerts;
   if (!alerts) return;
   alerts.splice(idx, 1);
-  _saveScheduleAlerts();
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
@@ -3393,7 +3392,6 @@ window.clearAllScheduleAlerts = function() {
   const alerts = window._scheduleAlerts;
   if (!alerts) return;
   alerts.length = 0;
-  _saveScheduleAlerts();
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
