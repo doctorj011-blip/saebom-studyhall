@@ -4728,7 +4728,7 @@ async function _apcFillStudents() {
   opts.forEach(({ key, label, isNew }) => {
     const opt = document.createElement('option');
     opt.value = key;
-    opt.textContent = label + (isNew ? ' 🆕 NEW' : '');
+    opt.textContent = label + (isNew ? ' 🆕' : '');
     if (isNew) opt.style.fontWeight = '700';
     sel.appendChild(opt);
   });
