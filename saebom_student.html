@@ -44,60 +44,131 @@ console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#F0D020;color:#fff;fo
 window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
-/* ── 디자인 시스템 ── */
+/* ── 새봄 럭셔리 다크 디자인 시스템 ── */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
-  --p:#D97706;--p-light:#FEF3C7;--p-dark:#92400E;
-  --text:#1E293B;--muted:#64748B;--border:#E2E8F0;
-  --bg:#F1F5F9;--card:#FFFFFF;
-  --green:#059669;--green-bg:#ECFDF5;--green-bd:#A7F3D0;
-  --red:#DC2626;--red-bg:#FEF2F2;--red-bd:#FECACA;
-  --shadow:0 1px 3px rgba(0,0,0,0.08),0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md:0 4px 12px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
+  /* 골드/앰버 — 면학관 조명·대리석 */
+  --p:#C8963E;--p-light:rgba(200,150,62,0.15);--p-dark:#8B6420;
+  --gold:#D4AF6A;--gold-dim:#8B6420;
+  /* 다크 배경 — 월넛 우드 */
+  --bg:#0E0B08;--bg2:#17120D;--bg3:#211A12;
+  /* 카드 — 어두운 유리/우드 */
+  --card:#1C1510;--card2:#241C13;--card3:#2C2218;
+  /* 텍스트 */
+  --text:#F0E8D8;--muted:#9B8C76;--dim:#5C5040;
+  /* 보더 */
+  --border:rgba(200,150,62,0.18);--border2:rgba(255,255,255,0.07);
+  /* 상태 */
+  --green:#4CAF7D;--green-bg:rgba(76,175,125,0.12);--green-bd:rgba(76,175,125,0.3);
+  --red:#E06060;--red-bg:rgba(224,96,96,0.12);--red-bd:rgba(224,96,96,0.3);
+  /* 그림자 */
+  --shadow:0 2px 12px rgba(0,0,0,0.4),0 1px 3px rgba(0,0,0,0.3);
+  --shadow-md:0 8px 32px rgba(0,0,0,0.5),0 2px 8px rgba(0,0,0,0.3);
+  --shadow-gold:0 4px 20px rgba(200,150,62,0.25);
   --r:16px;--r-sm:10px;
 }
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+input,textarea,select{background:var(--card)!important;color:var(--text)!important;border-color:var(--border)!important}
+input::placeholder,textarea::placeholder{color:var(--dim)!important}
 
 /* ── 로그인 화면 ── */
-.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#1E293B 0%,#0F172A 100%)}
-.login-logo{margin-bottom:8px;display:flex;align-items:center;justify-content:center}
-.login-title{font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;letter-spacing:-0.5px}
-.login-sub{font-size:14px;color:rgba(255,255,255,0.4);margin-bottom:36px;letter-spacing:0.3px}
-.login-card{background:rgba(255,255,255,0.06);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,0.1);border-radius:24px;padding:28px 24px;width:100%;max-width:340px}
-.login-label{font-size:13px;font-weight:600;color:rgba(255,255,255,0.6);margin-bottom:6px;text-align:center}
-.login-hint{font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:22px;text-align:center}
+.login-screen{
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;
+  background:radial-gradient(ellipse at 30% 20%, #2A1F0E 0%, #0E0B08 50%, #05040203 100%),
+             linear-gradient(180deg,#1A1208 0%,#0A0805 100%);
+  position:relative;overflow:hidden
+}
+.login-screen::before{
+  content:'';position:absolute;inset:0;
+  background:radial-gradient(ellipse at 70% 80%, rgba(200,150,62,0.08) 0%, transparent 60%);
+  pointer-events:none
+}
+.login-screen::after{
+  content:'새봄면학관';position:absolute;bottom:-20px;left:50%;transform:translateX(-50%);
+  font-size:120px;font-weight:900;color:rgba(200,150,62,0.03);white-space:nowrap;letter-spacing:-4px;
+  pointer-events:none;font-family:'Noto Serif KR',serif
+}
+.login-logo{margin-bottom:12px;display:flex;align-items:center;justify-content:center}
+.login-logo svg,.login-logo img{filter:drop-shadow(0 0 20px rgba(200,150,62,0.4))}
+.login-title{
+  font-size:26px;font-weight:800;color:var(--text);margin-bottom:4px;letter-spacing:-0.5px;
+  text-shadow:0 0 40px rgba(200,150,62,0.3)
+}
+.login-sub{font-size:13px;color:var(--muted);margin-bottom:36px;letter-spacing:1px;text-transform:uppercase}
+.login-card{
+  background:linear-gradient(145deg,rgba(36,28,19,0.9),rgba(22,17,11,0.95));
+  backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+  border:1px solid rgba(200,150,62,0.2);
+  border-radius:24px;padding:28px 24px;width:100%;max-width:340px;
+  box-shadow:0 8px 40px rgba(0,0,0,0.6),inset 0 1px 0 rgba(200,150,62,0.12)
+}
+.login-label{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;text-align:center;letter-spacing:1.5px;text-transform:uppercase}
+.login-hint{font-size:12px;color:var(--dim);margin-bottom:22px;text-align:center}
 .pin-display{display:flex;gap:18px;justify-content:center;margin-bottom:28px}
-.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(255,255,255,0.2);transition:all 0.2s}
-.pin-dot.filled{background:#F59E0B;border-color:#F59E0B;transform:scale(1.15);box-shadow:0 0 12px rgba(245,158,11,0.45)}
+.pin-dot{width:14px;height:14px;border-radius:50%;border:2px solid rgba(200,150,62,0.25);transition:all 0.2s}
+.pin-dot.filled{background:linear-gradient(135deg,#D4AF6A,#C8963E);border-color:#C8963E;transform:scale(1.15);box-shadow:0 0 16px rgba(200,150,62,0.6)}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.np-btn{padding:18px;font-size:22px;font-weight:500;border:none;background:rgba(255,255,255,0.08);border-radius:14px;cursor:pointer;transition:all 0.12s;color:#fff}
-.np-btn:active{background:rgba(255,255,255,0.18);transform:scale(0.94)}
-.np-del{font-size:18px;color:rgba(255,255,255,0.4)}
-.np-clear{font-size:12px;font-weight:700;color:#FCA5A5;background:rgba(239,68,68,0.12)}
-.np-clear:active{background:rgba(239,68,68,0.22)}
-.login-error{text-align:center;font-size:13px;color:#FCA5A5;background:rgba(239,68,68,0.12);border:1px solid rgba(239,68,68,0.2);border-radius:12px;padding:10px;margin-top:16px;display:none}
+.np-btn{
+  padding:18px;font-size:22px;font-weight:500;border:none;
+  background:rgba(255,255,255,0.05);
+  border:1px solid rgba(200,150,62,0.12);
+  border-radius:14px;cursor:pointer;transition:all 0.12s;color:var(--text)
+}
+.np-btn:active{background:rgba(200,150,62,0.15);transform:scale(0.94);box-shadow:0 0 12px rgba(200,150,62,0.2)}
+.np-del{font-size:18px;color:var(--muted)}
+.np-clear{font-size:12px;font-weight:700;color:#E06060;background:rgba(224,96,96,0.08);border-color:rgba(224,96,96,0.15)}
+.np-clear:active{background:rgba(224,96,96,0.18)}
+.login-error{text-align:center;font-size:13px;color:#E06060;background:rgba(224,96,96,0.1);border:1px solid rgba(224,96,96,0.2);border-radius:12px;padding:10px;margin-top:16px;display:none}
 
 /* ── 앱 메인 ── */
-.app-screen{display:none;min-height:100vh;flex-direction:column;padding-bottom:68px}
+.app-screen{display:none;min-height:100vh;flex-direction:column;padding-bottom:68px;background:var(--bg)}
 .app-screen.visible{display:flex}
 
 /* 상단 헤더 */
-.app-header{background:#fff;border-bottom:1px solid var(--border);padding:12px 16px;position:sticky;top:0;z-index:100}
+.app-header{
+  background:linear-gradient(180deg,var(--bg3) 0%,var(--bg2) 100%);
+  border-bottom:1px solid var(--border);
+  padding:12px 16px;position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 16px rgba(0,0,0,0.4)
+}
 .header-top{display:flex;align-items:center;justify-content:space-between}
 .header-info{display:flex;align-items:center;gap:10px}
-.header-avatar{width:38px;height:38px;border-radius:50%;background:linear-gradient(135deg,#F59E0B,#D97706);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:800;color:#fff;flex-shrink:0}
+.header-avatar{
+  width:38px;height:38px;border-radius:50%;
+  background:linear-gradient(135deg,#D4AF6A,#C8963E);
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:800;color:#0E0B08;flex-shrink:0;
+  box-shadow:0 0 16px rgba(200,150,62,0.4)
+}
 .header-name{font-size:15px;font-weight:700;color:var(--text);line-height:1.2}
 .header-seat{font-size:11px;color:var(--muted);font-weight:500;margin-top:1px}
-.logout-btn{background:var(--bg);border:none;color:var(--muted);padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s}
-.logout-btn:active{background:var(--border);color:var(--text)}
+.logout-btn{
+  background:rgba(255,255,255,0.05);border:1px solid var(--border2);
+  color:var(--muted);padding:7px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;transition:all 0.15s
+}
+.logout-btn:active{background:rgba(200,150,62,0.1);color:var(--gold)}
 
 /* 바텀 내비게이션 */
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--border);display:flex;overflow-x:auto;scrollbar-width:none;z-index:150;padding:0 4px;padding-bottom:env(safe-area-inset-bottom,0px)}
+.bottom-nav{
+  position:fixed;bottom:0;left:0;right:0;
+  background:linear-gradient(0deg,rgba(14,11,8,0.98) 0%,rgba(22,17,11,0.96) 100%);
+  border-top:1px solid rgba(200,150,62,0.15);
+  display:flex;overflow-x:auto;scrollbar-width:none;z-index:150;
+  padding:0 4px;padding-bottom:env(safe-area-inset-bottom,0px);
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  box-shadow:0 -4px 20px rgba(0,0,0,0.5)
+}
 .bottom-nav::-webkit-scrollbar{display:none}
-.bnav-btn{flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:8px 10px 6px;border:none;background:none;cursor:pointer;color:#94A3B8;font-size:10px;font-weight:600;gap:2px;transition:color 0.15s;min-width:52px;position:relative}
-.bnav-btn.active{color:var(--p)}
-.bnav-icon{font-size:22px;line-height:1}
-.bnav-badge{position:absolute;top:5px;right:8px;background:#EF4444;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;line-height:1.4;min-width:16px;text-align:center}
+.bnav-btn{
+  flex:1 0 auto;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:8px 10px 6px;border:none;background:none;cursor:pointer;
+  color:var(--dim);font-size:10px;font-weight:600;gap:2px;transition:all 0.2s;min-width:52px;position:relative
+}
+.bnav-btn.active{color:var(--gold)}
+.bnav-btn.active .bnav-icon{text-shadow:0 0 12px rgba(212,175,106,0.6)}
+.bnav-icon{font-size:22px;line-height:1;transition:all 0.2s}
+.bnav-badge{position:absolute;top:5px;right:8px;background:#E06060;color:#fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;line-height:1.4;min-width:16px;text-align:center}
 
 /* 탭 (하위 호환 - 숨김) */
 .app-tabs{display:none}
@@ -107,43 +178,61 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 .app-content{flex:1;padding:16px;overflow-y:auto;max-width:480px;width:100%;margin:0 auto}
 
 /* ── 공지사항 ── */
-.notice-card{background:var(--card);border-radius:var(--r);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)}
-.notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;margin-bottom:6px}
-.badge-important{background:#FEE2E2;color:#DC2626}
-.badge-general{background:#FEF3C7;color:#D97706}
-.badge-event{background:#EDE9FE;color:#7C3AED}
+.notice-card{
+  background:linear-gradient(145deg,var(--card2),var(--card));
+  border:1px solid var(--border2);
+  border-radius:var(--r);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow)
+}
+.notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;margin-bottom:6px;letter-spacing:0.5px}
+.badge-important{background:rgba(224,96,96,0.15);color:#E06060;border:1px solid rgba(224,96,96,0.25)}
+.badge-general{background:rgba(200,150,62,0.15);color:#C8963E;border:1px solid rgba(200,150,62,0.25)}
+.badge-event{background:rgba(160,130,200,0.15);color:#B09ACB;border:1px solid rgba(160,130,200,0.25)}
 .notice-title{font-size:15px;font-weight:700;margin-bottom:4px;line-height:1.4;color:var(--text)}
 .notice-body{font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:10px}
-.notice-date{font-size:11px;color:#94A3B8}
+.notice-date{font-size:11px;color:var(--dim)}
 .notice-header{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.notice-expand{font-size:18px;color:#CBD5E1;flex-shrink:0;margin-top:2px;transition:transform 0.2s}
+.notice-expand{font-size:18px;color:var(--dim);flex-shrink:0;margin-top:2px;transition:transform 0.2s}
 .notice-expand.open{transform:rotate(180deg)}
-.notice-detail{padding:0 16px 14px;border-top:1px solid #F8FAFC;display:none}
+.notice-detail{padding:0 16px 14px;border-top:1px solid rgba(255,255,255,0.06);display:none}
 .notice-detail.open{display:block}
-.notice-detail p{font-size:13px;color:#475569;line-height:1.7;margin-top:10px}
+.notice-detail p{font-size:13px;color:var(--muted);line-height:1.7;margin-top:10px}
 
 /* 공지 없을 때 */
-.empty-state{text-align:center;padding:60px 24px;color:#94A3B8}
+.empty-state{text-align:center;padding:60px 24px;color:var(--dim)}
 .empty-icon{font-size:44px;margin-bottom:12px}
 .empty-text{font-size:14px;font-weight:500}
 
 /* ── 스케줄 탭 공통 ── */
-.section-label{font-size:11px;font-weight:700;color:#94A3B8;letter-spacing:0.8px;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
+.section-label{font-size:10px;font-weight:700;color:var(--gold-dim);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
 
 /* 요일 탭 */
 .day-tabs{display:flex;gap:6px;margin-bottom:16px;overflow-x:auto;padding-bottom:2px}
-.day-tab{flex-shrink:0;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.15s}
-.day-tab.active{background:#F59E0B;color:#fff;border-color:#F59E0B}
-.day-tab.today{border-color:#F59E0B;color:var(--p)}
+.day-tab{
+  flex-shrink:0;padding:7px 14px;border-radius:20px;
+  border:1px solid var(--border2);
+  background:var(--card);font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;transition:all 0.15s
+}
+.day-tab.active{background:linear-gradient(135deg,#D4AF6A,#C8963E);color:#0E0B08;border-color:transparent;box-shadow:var(--shadow-gold)}
+.day-tab.today{border-color:rgba(200,150,62,0.4);color:var(--gold)}
 .day-tab:active{transform:scale(0.94)}
 
 /* 교시 카드 */
-.period-card{background:var(--card);border-radius:14px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow);transition:all 0.15s}
+.period-card{
+  background:linear-gradient(145deg,var(--card2),var(--card));
+  border:1px solid var(--border2);
+  border-radius:14px;padding:14px 16px;margin-bottom:8px;
+  display:flex;align-items:center;justify-content:space-between;
+  box-shadow:var(--shadow);transition:all 0.15s
+}
 .period-left{display:flex;align-items:center;gap:12px}
-.period-num{font-size:13px;font-weight:700;color:var(--p);width:52px;flex-shrink:0;white-space:nowrap}
-.period-time{font-size:11px;color:#94A3B8;margin-top:2px}
+.period-num{font-size:13px;font-weight:700;color:var(--gold);width:52px;flex-shrink:0;white-space:nowrap}
+.period-time{font-size:11px;color:var(--dim);margin-top:2px}
 .period-toggle{display:flex;gap:6px}
-.toggle-btn{padding:8px 16px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--muted)}
+.toggle-btn{
+  padding:8px 16px;border-radius:20px;
+  border:1px solid var(--border2);background:rgba(255,255,255,0.04);
+  font-size:13px;font-weight:600;cursor:pointer;transition:all 0.15s;color:var(--muted)
+}
 .toggle-btn.attend{background:var(--green-bg);color:var(--green);border-color:var(--green-bd)}
 .toggle-btn.absent{background:var(--red-bg);color:var(--red);border-color:var(--red-bd)}
 .toggle-btn:active{transform:scale(0.93)}
@@ -152,53 +241,84 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 .absent-reason{margin-top:6px;display:none}
 .absent-reason.show{display:flex;align-items:center;gap:8px}
 .reason-label{font-size:12px;color:var(--red);white-space:nowrap;font-weight:600}
-.reason-input{flex:1;border:1.5px solid var(--red-bd);border-radius:10px;padding:7px 12px;font-size:13px;color:var(--text);background:#fff;outline:none;transition:border-color 0.15s}
+.reason-input{
+  flex:1;border:1px solid var(--red-bd);border-radius:10px;
+  padding:7px 12px;font-size:13px;color:var(--text);
+  background:var(--card);outline:none;transition:border-color 0.15s
+}
 .reason-input:focus{border-color:var(--red)}
 
 /* 주간 시간표 */
 .weekly-table-wrap{overflow-x:auto;border-radius:var(--r);box-shadow:var(--shadow)}
 .weekly-table{width:100%;border-collapse:collapse;background:var(--card);min-width:360px}
-.weekly-table th{background:var(--p);color:#fff;padding:9px 6px;font-size:11px;font-weight:700;text-align:center}
+.weekly-table th{background:linear-gradient(135deg,#3A2810,#2A1E0C);color:var(--gold);padding:9px 6px;font-size:11px;font-weight:700;text-align:center;border-bottom:1px solid var(--border)}
 .weekly-table th:first-child{text-align:left;padding-left:12px;min-width:70px}
-.weekly-table td{padding:7px 4px;border-bottom:1px solid #F8FAFC;text-align:center;font-size:12px}
+.weekly-table td{padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center;font-size:12px;color:var(--text)}
 .weekly-table tr:last-child td{border-bottom:none}
-.weekly-table tr:hover td{background:#FAFAFA}
-.wk-cell-attend{background:var(--green-bg);color:#065F46;border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
+.weekly-table tr:hover td{background:rgba(200,150,62,0.05)}
+.wk-cell-attend{background:var(--green-bg);color:var(--green);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-absent{background:var(--red-bg);color:var(--red);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
-.wk-cell-empty{color:#CBD5E1;font-size:16px;cursor:pointer;display:inline-block;min-width:32px}
-.wk-period-label{font-size:12px;color:#374151;font-weight:600}
-.wk-period-time{font-size:10px;color:#94A3B8}
+.wk-cell-empty{color:var(--dim);font-size:16px;cursor:pointer;display:inline-block;min-width:32px}
+.wk-period-label{font-size:12px;color:var(--text);font-weight:600}
+.wk-period-time{font-size:10px;color:var(--dim)}
 
 /* 저장 버튼 */
-.save-fab{position:fixed;bottom:76px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#F59E0B,#D97706);color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(245,158,11,0.45);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;white-space:nowrap}
+.save-fab{
+  position:fixed;bottom:76px;left:50%;transform:translateX(-50%);
+  background:linear-gradient(135deg,#D4AF6A,#C8963E);
+  color:#0E0B08;border:none;border-radius:24px;padding:14px 36px;
+  font-size:14px;font-weight:700;box-shadow:0 4px 24px rgba(200,150,62,0.5);
+  cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;white-space:nowrap
+}
 .save-fab.show{display:flex}
 .save-fab:active{transform:translateX(-50%) scale(0.96)}
 
 /* 저장 완료 토스트 */
-.toast{position:fixed;bottom:82px;left:50%;transform:translateX(-50%);background:#1E293B;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:300;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,0.18)}
+.toast{
+  position:fixed;bottom:82px;left:50%;transform:translateX(-50%);
+  background:linear-gradient(135deg,#2C2218,#1C1510);
+  border:1px solid rgba(200,150,62,0.2);
+  color:var(--text);padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;
+  z-index:300;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;
+  box-shadow:0 4px 24px rgba(0,0,0,0.5)
+}
 .toast.show{opacity:1}
 
 /* 내 현황 카드 */
 .stat-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
-.stat-card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow)}
-.stat-card-label{font-size:11px;color:#94A3B8;font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px}
-.stat-card-val{font-size:26px;font-weight:800;color:var(--p)}
-.stat-card-val.blue{color:#3B82F6}
-.this-week-card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:16px}
-.week-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F8FAFC}
+.stat-card{
+  background:linear-gradient(145deg,var(--card2),var(--card));
+  border:1px solid var(--border2);
+  border-radius:var(--r);padding:16px;box-shadow:var(--shadow)
+}
+.stat-card-label{font-size:10px;color:var(--dim);font-weight:600;margin-bottom:6px;text-transform:uppercase;letter-spacing:1px}
+.stat-card-val{font-size:26px;font-weight:800;color:var(--gold)}
+.stat-card-val.blue{color:#6B9FD4}
+.this-week-card{
+  background:linear-gradient(145deg,var(--card2),var(--card));
+  border:1px solid var(--border2);
+  border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:16px
+}
+.week-row{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.05)}
 .week-row:last-child{border-bottom:none}
-.week-day{font-size:13px;font-weight:700;color:#374151;width:28px}
+.week-day{font-size:13px;font-weight:700;color:var(--text);width:28px}
 .week-periods{display:flex;gap:4px;flex-wrap:wrap}
 .week-chip{font-size:11px;padding:3px 8px;border-radius:10px;font-weight:600}
-.chip-attend{background:var(--green-bg);color:#065F46}
+.chip-attend{background:var(--green-bg);color:var(--green)}
 .chip-absent{background:var(--red-bg);color:var(--red)}
-.chip-none{color:#CBD5E1;font-size:12px}
+.chip-none{color:var(--dim);font-size:12px}
 
 /* ── 더보기 탭 ── */
 .more-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding:4px 0}
-.more-item{background:var(--card);border:none;border-radius:var(--r);padding:20px 10px 16px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:10px;box-shadow:var(--shadow);transition:all 0.15s;width:100%}
-.more-item:active{transform:scale(0.94);box-shadow:none}
-.more-item-icon{width:50px;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.more-item{
+  background:linear-gradient(145deg,var(--card2),var(--card));
+  border:1px solid var(--border2);
+  border-radius:var(--r);padding:20px 10px 16px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+  box-shadow:var(--shadow);transition:all 0.15s;width:100%
+}
+.more-item:active{transform:scale(0.94);box-shadow:none;border-color:rgba(200,150,62,0.3)}
+.more-item-icon{width:50px;height:50px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:24px;background:rgba(200,150,62,0.1)}
 .more-item-label{font-size:12px;font-weight:700;color:var(--text)}
 </style>
 </head>
@@ -266,7 +386,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
 
     <!-- 주간 시간표 -->
     <div id="tab-weekly" style="display:none">
-      <p style="font-size:12px;color:#888;margin-bottom:12px">교시를 탭하면 출석↔결석↔공란 순으로 바뀝니다</p>
+      <p style="font-size:12px;color:#9B8C76;margin-bottom:12px">교시를 탭하면 출석↔결석↔공란 순으로 바뀝니다</p>
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
@@ -281,30 +401,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
     <!-- 자리선택 배치도 -->
     <!-- 스터디룸 신청 -->
     <div id="tab-studyroom" style="display:none;padding:16px">
-      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">📚 스터디룸 신청</div>
-      <div style="font-size:12px;color:#888;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
+      <div style="font-size:15px;font-weight:700;color:#D4AF6A;margin-bottom:4px">📚 스터디룸 신청</div>
+      <div style="font-size:12px;color:#9B8C76;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
       <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">오늘 교시 선택</div>
+        <div style="font-size:12px;font-weight:700;color:#D4AF6A;margin-bottom:8px">오늘 교시 선택</div>
         <div id="studyroom-period-btns" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div style="margin-bottom:16px">
-        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">내 신청 현황</div>
-        <div id="studyroom-my-requests"><div style="font-size:13px;color:#aaa">신청 내역 없음</div></div>
+        <div style="font-size:12px;font-weight:700;color:#D4AF6A;margin-bottom:8px">내 신청 현황</div>
+        <div id="studyroom-my-requests"><div style="font-size:13px;color:#5C5040">신청 내역 없음</div></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">스터디룸 현황</div>
+        <div style="font-size:12px;font-weight:700;color:#D4AF6A;margin-bottom:8px">스터디룸 현황</div>
         <div id="studyroom-status" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
 
     <div id="tab-seatmap" style="display:none;padding:12px">
       <div id="seatmap-header" style="margin-bottom:12px">
-        <div style="font-size:14px;font-weight:700;color:#5C3D08;margin-bottom:4px">🪑 자리 선택</div>
-        <div id="seatmap-deadline" style="font-size:12px;color:#C62828;font-weight:600"></div>
-        <div style="font-size:12px;color:#888;margin-top:4px">
-          <span style="display:inline-block;width:14px;height:14px;background:#4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
-          <span style="display:inline-block;width:14px;height:14px;background:#E5E7EB;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
-          <span style="display:inline-block;width:14px;height:14px;background:#C8900A;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
+        <div style="font-size:14px;font-weight:700;color:#D4AF6A;margin-bottom:4px">🪑 자리 선택</div>
+        <div id="seatmap-deadline" style="font-size:12px;color:#E06060;font-weight:600"></div>
+        <div style="font-size:12px;color:#9B8C76;margin-top:4px">
+          <span style="display:inline-block;width:14px;height:14px;background:#4CAF7D;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
+          <span style="display:inline-block;width:14px;height:14px;background:rgba(255,255,255,0.1);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
+          <span style="display:inline-block;width:14px;height:14px;background:#C8963E;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
         </div>
       </div>
       <div id="student-seatmap" style="overflow-x:auto"></div>
@@ -312,42 +432,42 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <button onclick="plannerPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
-        <div id="planner-month-title" style="font-size:16px;font-weight:700;color:#5C3D08"></div>
-        <button onclick="plannerNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
+        <button onclick="plannerPrevMonth()" style="background:rgba(200,150,62,0.15);border:1px solid rgba(200,150,62,0.25);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#D4AF6A">◀</button>
+        <div id="planner-month-title" style="font-size:16px;font-weight:700;color:#D4AF6A"></div>
+        <button onclick="plannerNextMonth()" style="background:rgba(200,150,62,0.15);border:1px solid rgba(200,150,62,0.25);border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#D4AF6A">▶</button>
       </div>
       <div id="planner-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px"></div>
       <!-- 사진 업로드/조회 영역 -->
       <div id="planner-detail" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div id="planner-selected-date" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
-          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">✕</button>
+          <div id="planner-selected-date" style="font-size:15px;font-weight:700;color:#D4AF6A"></div>
+          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#5C5040">✕</button>
         </div>
         <div id="planner-photo-view" style="text-align:center;margin-bottom:12px">
           <img id="planner-photo-img" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
-          <div id="planner-no-photo" style="color:#aaa;font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
+          <div id="planner-no-photo" style="color:#5C5040;font-size:13px;padding:30px 0;text-align:center">아직 등록된 플래너 사진이 없습니다</div>
         </div>
         <!-- 선생님 코멘트 -->
         <div id="planner-comments-area" style="display:none;margin-bottom:12px">
-          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div style="font-size:12px;font-weight:700;color:#D4AF6A;margin-bottom:8px">✏️ 선생님 코멘트</div>
           <div id="planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
         <div style="display:flex;gap:8px;justify-content:center">
-          <label style="flex:1;background:#C8900A;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+          <label style="flex:1;background:linear-gradient(135deg,#D4AF6A,#C8963E);color:#0E0B08;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
             📷 카메라
             <input type="file" accept="image/*" capture="environment" id="planner-camera-input" style="display:none" onchange="plannerUploadPhoto(this)">
           </label>
-          <label style="flex:1;background:#E0B020;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+          <label style="flex:1;background:rgba(200,150,62,0.15);border:1px solid rgba(200,150,62,0.25);color:#D4AF6A;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
             🖼️ 갤러리
             <input type="file" accept="image/*" id="planner-gallery-input" style="display:none" onchange="plannerUploadPhoto(this)">
           </label>
-          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:#C62828;color:#fff;padding:10px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer">🗑️ 삭제</button>
+          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:rgba(224,96,96,0.15);border:1px solid rgba(224,96,96,0.3);color:#E06060;padding:10px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer">🗑️ 삭제</button>
         </div>
         <div id="planner-upload-progress" style="display:none;margin-top:10px">
-          <div style="background:#eee;border-radius:20px;height:6px">
-            <div id="planner-progress-bar" style="background:#C8900A;height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
+          <div style="background:rgba(255,255,255,0.08);border-radius:20px;height:6px">
+            <div id="planner-progress-bar" style="background:linear-gradient(90deg,#D4AF6A,#C8963E);height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
           </div>
-          <div style="text-align:center;font-size:12px;color:#888;margin-top:4px">업로드 중...</div>
+          <div style="text-align:center;font-size:12px;color:#9B8C76;margin-top:4px">업로드 중...</div>
         </div>
       </div>
     </div>
@@ -356,15 +476,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans
     <div id="tab-more" style="display:none">
       <div class="more-grid">
         <button class="more-item" onclick="showTabFromMore('studyroom')">
-          <div class="more-item-icon" style="background:#EDE9FE;color:#7C3AED"><i class="ti ti-school"></i></div>
+          <div class="more-item-icon" style="background:rgba(176,154,203,0.12);color:#B09ACB"><i class="ti ti-school"></i></div>
           <span class="more-item-label">스터디룸</span>
         </button>
         <button class="more-item" onclick="showTabFromMore('seatmap')">
-          <div class="more-item-icon" style="background:#ECFDF5;color:#059669"><i class="ti ti-armchair"></i></div>
+          <div class="more-item-icon" style="background:rgba(76,175,125,0.12);color:#4CAF7D"><i class="ti ti-armchair"></i></div>
           <span class="more-item-label">자리선택</span>
         </button>
         <button class="more-item" onclick="showTabFromMore('planner')">
-          <div class="more-item-icon" style="background:#FFF7ED;color:#EA580C"><i class="ti ti-notebook"></i></div>
+          <div class="more-item-icon" style="background:rgba(200,150,62,0.12);color:#C8963E"><i class="ti ti-notebook"></i></div>
           <span class="more-item-label">플래너</span>
         </button>
       </div>
@@ -989,7 +1109,7 @@ function buildMyStats() {
     html += `<div class="week-row">
       <div class="week-day" style="font-size:12px">${monthLabels[m]}</div>
       <div style="flex:1;display:flex;align-items:center;gap:10px">
-        <div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden">
+        <div style="flex:1;height:8px;background:rgba(255,255,255,0.08);border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div>
         </div>
         <span style="font-size:13px;font-weight:600;color:${color};width:40px;text-align:right">${h}h</span>
@@ -1011,7 +1131,7 @@ async function checkSeatSelectionActive() {
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
     const tabBtn = document.getElementById('seat-tab-btn');
     if (!snap.exists()) {
-      document.getElementById('student-seatmap').innerHTML = '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.</div>';
+      document.getElementById('student-seatmap').innerHTML = '<div style="text-align:center;padding:40px 20px;color:#5C5040;font-size:14px">현재 자리 선택 기간이 아닙니다.</div>';
       return;
     }
     const d = snap.data ? snap.data() : null;
@@ -1026,7 +1146,7 @@ async function checkSeatSelectionActive() {
     } else {
       document.getElementById('seatmap-deadline').textContent = '';
       document.getElementById('student-seatmap').innerHTML =
-        '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div>';
+        '<div style="text-align:center;padding:40px 20px;color:#5C5040;font-size:14px">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div>';
     }
   } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
 }
@@ -1042,7 +1162,7 @@ function buildStudentSeatmap() {
   // 기존 구독 해제
   if (seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
 
-  el.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">로딩 중...</div>';
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:#5C5040;font-size:13px">로딩 중...</div>';
 
   // onSnapshot으로 실시간 감시
   seatmapUnsubscribe = window._fsOnSnapshot(
@@ -1087,10 +1207,10 @@ function renderSeatmap(takenSeats) {
   let html = `<style>
     #sm-grid { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(11,44px); gap:3px; max-width:420px; }
     .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:600; cursor:default; transition:transform 0.1s; }
-    .sm-taken { background:#E5E7EB; color:#9CA3AF; }
-    .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
+    .sm-taken { background:rgba(255,255,255,0.06); color:#5C5040; }
+    .sm-available { background:rgba(76,175,125,0.15); border:1.5px solid #4CAF7D; color:#4CAF7D; cursor:pointer; }
     .sm-available:active { transform:scale(0.95); }
-    .sm-mine { background:#C8900A; color:#fff; border:2px solid #8B6010; }
+    .sm-mine { background:linear-gradient(135deg,#D4AF6A,#C8963E); color:#0E0B08; border:2px solid #8B6420; }
   </style>
   <div id="sm-grid">`;
 
@@ -1175,7 +1295,7 @@ function buildStudyroomPeriodBtns() {
   if (!el) return;
 
   if (isSun) {
-    el.innerHTML = '<div style="color:#aaa;font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
+    el.innerHTML = '<div style="color:#5C5040;font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
     return;
   }
 
@@ -1189,9 +1309,9 @@ function buildStudyroomPeriodBtns() {
 
   el.innerHTML = periods.map(p =>
     `<button onclick="applyStudyroom(${p.n})"
-      style="padding:8px 14px;border:1.5px solid #E0B020;border-radius:10px;background:#FFFDF5;
-             color:#5C3D08;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
-      ${p.n}교시<br><span style="font-size:10px;color:#888;font-weight:400">${p.t}</span>
+      style="padding:8px 14px;border:1px solid rgba(200,150,62,0.25);border-radius:10px;background:rgba(200,150,62,0.08);
+             color:#D4AF6A;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
+      ${p.n}교시<br><span style="font-size:10px;color:#9B8C76;font-weight:400">${p.t}</span>
     </button>`
   ).join('');
 }
@@ -1222,17 +1342,17 @@ function showStudyroomModal(periodNum, totalCount, roomCounts) {
   overlay.id = 'studyroom-apply-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   const countMsg = totalCount === 0 ? '현재 신청 인원이 없습니다.' : `현재 ${totalCount}명이 사용 대기중입니다.`;
-  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.2)">
-    <div style="font-size:15px;font-weight:700;color:#1F2937;margin-bottom:4px">📚 스터디룸 신청</div>
-    <div style="font-size:13px;color:#7C3AED;font-weight:600;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
-    <div style="font-size:12px;color:#555;margin-bottom:6px">사용 사유 <span style="color:#C62828">*</span></div>
+  overlay.innerHTML = `<div style="background:linear-gradient(145deg,#241C13,#1C1510);border:1px solid rgba(200,150,62,0.2);border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.7)">
+    <div style="font-size:15px;font-weight:700;color:#F0E8D8;margin-bottom:4px">📚 스터디룸 신청</div>
+    <div style="font-size:13px;color:#B09ACB;font-weight:600;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
+    <div style="font-size:12px;color:#9B8C76;margin-bottom:6px">사용 사유 <span style="color:#E06060">*</span></div>
     <textarea id="studyroom-reason-input" placeholder="사용 사유를 입력하세요" rows="3"
-      style="width:100%;border:1.5px solid #E0B020;border-radius:10px;padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box"></textarea>
+      style="width:100%;border:1px solid rgba(200,150,62,0.25);border-radius:10px;padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box;background:#0E0B08;color:#F0E8D8"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="document.getElementById('studyroom-apply-modal').remove()"
-        style="flex:1;padding:10px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:13px;cursor:pointer">취소</button>
+        style="flex:1;padding:10px;background:rgba(255,255,255,0.06);color:#9B8C76;border:1px solid rgba(255,255,255,0.08);border-radius:10px;font-size:13px;cursor:pointer">취소</button>
       <button onclick="submitStudyroomReq(${periodNum},${JSON.stringify(roomCounts).replace(/"/g,'&quot;')})"
-        style="flex:2;padding:10px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
+        style="flex:2;padding:10px;background:linear-gradient(135deg,#D4AF6A,#C8963E);color:#0E0B08;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -1275,7 +1395,7 @@ function loadStudyroomData() {
       const myEl = document.getElementById('studyroom-my-requests');
       if (myEl) {
         myEl.innerHTML = myReqs.length === 0
-          ? '<div style="font-size:13px;color:#aaa">신청 내역 없음</div>'
+          ? '<div style="font-size:13px;color:#5C5040">신청 내역 없음</div>'
           : myReqs.map(r => {
               const sc = r.status==='approved'?'#2D7A4F':r.status==='rejected'?'#C62828':'#C8900A';
               const st = r.status==='approved'?'✅ 사용가능':r.status==='rejected'?'❌ 거절됨':'⏳ 대기중';
@@ -1287,7 +1407,7 @@ function loadStudyroomData() {
                   <span style="font-size:11px;font-weight:700;color:${sc}">${st}</span>
                 </div>
                 ${r.reason?`<div style="font-size:11px;color:#666">📝 ${r.reason}</div>`:''}
-                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:#C62828;background:none;border:1px solid #F09595;border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
+                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:#E06060;background:rgba(224,96,96,0.1);border:1px solid rgba(224,96,96,0.3);border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
               </div>`;
             }).join('');
       }
@@ -1296,10 +1416,10 @@ function loadStudyroomData() {
       const stEl = document.getElementById('studyroom-status');
       if (stEl) {
         stEl.innerHTML = [1,2,3].map(room =>
-          `<div style="background:#F3E8FF;border:1.5px solid #C084FC;border-radius:10px;padding:10px 14px">
-            <div style="font-size:12px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
-            ${rc[room].length===0?'<div style="font-size:12px;color:#aaa">신청자 없음</div>'
-              :rc[room].map(m=>`<div style="font-size:12px;color:#5C3D08">${m.period}교시 · 이용자</div>`).join('')}
+          `<div style="background:rgba(176,154,203,0.08);border:1px solid rgba(176,154,203,0.2);border-radius:10px;padding:10px 14px">
+            <div style="font-size:12px;font-weight:700;color:#B09ACB;margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
+            ${rc[room].length===0?'<div style="font-size:12px;color:#5C5040">신청자 없음</div>'
+              :rc[room].map(m=>`<div style="font-size:12px;color:#D4AF6A">${m.period}교시 · 이용자</div>`).join('')}
           </div>`
         ).join('');
       }
@@ -1415,7 +1535,7 @@ function renderPlannerCalendar() {
   let html = '';
   // 요일 헤더
   days.forEach((d,i) => {
-    const color = i===0?'#C62828':i===6?'#1565C0':'#5C3D08';
+    const color = i===0?'#E06060':i===6?'#6B9FD4':'#9B8C76';
     html += `<div style="text-align:center;font-size:11px;font-weight:700;color:${color};padding:4px 0">${d}</div>`;
   });
 
@@ -1430,10 +1550,10 @@ function renderPlannerCalendar() {
     const isToday = dateStr === todayStr;
     const hasPhoto = !!plannerUploadedDates[dateStr];
     const dow = new Date(plannerYear, plannerMonth, d).getDay();
-    const textColor = dow===0?'#C62828':dow===6?'#1565C0':'#333';
-    const bgColor = isToday ? '#C8900A' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
-    const border = isToday ? '2px solid #C8900A' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
-    const dateColor = isToday ? '#fff' : textColor;
+    const textColor = dow===0?'#E06060':dow===6?'#6B9FD4':'#F0E8D8';
+    const bgColor = isToday ? '#C8963E' : hasPhoto ? 'rgba(200,150,62,0.15)' : 'rgba(255,255,255,0.04)';
+    const border = isToday ? '2px solid #C8963E' : hasPhoto ? '2px solid rgba(200,150,62,0.4)' : '1px solid rgba(255,255,255,0.07)';
+    const dateColor = isToday ? '#0E0B08' : textColor;
     html += `<div onclick="plannerSelectDate('${dateStr}')"
       style="border-radius:10px;padding:6px 2px;text-align:center;cursor:pointer;background:${bgColor};border:${border};position:relative">
       <div style="font-size:13px;font-weight:${isToday?'700':'500'};color:${dateColor}">${d}</div>
@@ -1488,9 +1608,9 @@ async function plannerLoadComments(dateStr) {
       if (comments.length > 0) {
         area.style.display = 'block';
         list.innerHTML = comments.map(c => `
-          <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
-            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+          <div style="background:rgba(200,150,62,0.08);border:1px solid rgba(200,150,62,0.2);border-radius:8px;padding:8px 10px">
+            <div style="font-size:13px;color:#F0E8D8;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div style="font-size:11px;color:#5C5040">${c.time || ''}</div>
           </div>`).join('');
         return;
       }
