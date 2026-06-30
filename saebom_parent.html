@@ -6,58 +6,105 @@
 <title>새봄 면학관 학부모</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: #F5F5F5; color: #1F2937; min-height: 100vh; }
+  :root {
+    --brand: #C8900A;
+    --brand-dark: #8B6010;
+    --brand-light: #E0B020;
+    --brand-50: #FFF8DC;
+    --bg: #F4F5F7;
+    --card: #fff;
+    --text: #1F2937;
+    --text-soft: #6B7280;
+    --text-faint: #9CA3AF;
+    --border: #EFF1F4;
+    --radius-lg: 20px;
+    --radius-md: 16px;
+    --radius-sm: 10px;
+    --shadow-card: 0 1px 2px rgba(16,24,40,0.04), 0 4px 14px rgba(16,24,40,0.05);
+    --shadow-pop: 0 10px 36px rgba(139,96,16,0.16);
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { -webkit-font-smoothing: antialiased; }
+  body { font-family: 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; letter-spacing: -0.1px; }
+  button { font-family: inherit; }
+  ::selection { background: rgba(200,144,10,0.2); }
 
   /* 로그인 */
-  #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #C8900A 0%, #8B6010 100%); padding: 24px; }
-  .login-logo { margin-bottom: 8px; display: flex; align-items: center; justify-content: center; }
-  .login-title { font-size: 22px; font-weight: 800; color: #fff; margin-bottom: 4px; }
-  .login-sub { font-size: 13px; color: rgba(255,255,255,0.8); margin-bottom: 32px; }
-  .login-card { background: #fff; border-radius: 20px; padding: 24px; width: 100%; max-width: 340px; box-shadow: 0 8px 40px rgba(0,0,0,0.2); }
-  .login-label { font-size: 12px; color: #888; margin-bottom: 6px; }
-  .login-input { width: 100%; padding: 12px 14px; border: 1.5px solid #E5E7EB; border-radius: 12px; font-size: 15px; outline: none; transition: border 0.2s; }
-  .login-input:focus { border-color: #C8900A; }
-  .login-btn { width: 100%; padding: 14px; background: #C8900A; color: #fff; border: none; border-radius: 12px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 16px; }
-  .login-btn:active { background: #8B6010; }
-  .login-error { color: #C62828; font-size: 12px; margin-top: 8px; text-align: center; min-height: 16px; }
+  #login-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: radial-gradient(120% 100% at 50% 0%, #E0B020 0%, #C8900A 42%, #7A5610 100%); padding: 32px 24px; position: relative; overflow: hidden; }
+  #login-screen::before, #login-screen::after { content: ''; position: absolute; border-radius: 50%; background: rgba(255,255,255,0.07); pointer-events: none; }
+  #login-screen::before { width: 280px; height: 280px; top: -120px; right: -80px; }
+  #login-screen::after { width: 220px; height: 220px; bottom: -100px; left: -60px; background: rgba(0,0,0,0.06); }
+  .login-logo { margin-bottom: 14px; display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; border-radius: 22px; background: rgba(255,255,255,0.16); box-shadow: 0 8px 24px rgba(0,0,0,0.18); position: relative; z-index: 1; padding: 10px; }
+  .login-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 14px; }
+  .login-title { font-size: 23px; font-weight: 800; color: #fff; margin-bottom: 4px; position: relative; z-index: 1; letter-spacing: -0.3px; }
+  .login-sub { font-size: 13px; color: rgba(255,255,255,0.82); margin-bottom: 30px; position: relative; z-index: 1; }
+  .login-card { background: #fff; border-radius: 24px; padding: 26px 22px; width: 100%; max-width: 340px; box-shadow: var(--shadow-pop); position: relative; z-index: 1; animation: cardIn 0.4s cubic-bezier(.2,.8,.2,1); }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  .login-label { font-size: 12px; font-weight: 600; color: var(--text-soft); margin-bottom: 7px; }
+  .login-field { position: relative; margin-bottom: 14px; }
+  .login-field i { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--text-faint); pointer-events: none; }
+  .login-input { width: 100%; padding: 13px 14px 13px 40px; border: 1.5px solid var(--border); background: #FAFAFA; border-radius: 14px; font-size: 15px; outline: none; transition: border 0.15s, background 0.15s; }
+  .login-input:focus { border-color: var(--brand); background: #fff; }
+  .login-btn { width: 100%; padding: 15px; background: linear-gradient(135deg, var(--brand-light), var(--brand)); color: #fff; border: none; border-radius: 14px; font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 6px; box-shadow: 0 6px 16px rgba(200,144,10,0.35); transition: transform 0.1s, box-shadow 0.1s; }
+  .login-btn:active { transform: scale(0.98); box-shadow: 0 3px 10px rgba(200,144,10,0.3); }
+  .login-error { color: #C62828; font-size: 12px; margin-top: 10px; text-align: center; min-height: 16px; font-weight: 600; }
 
   /* 앱 */
   #app-screen { display: none; min-height: 100vh; flex-direction: column; }
   #app-screen.visible { display: flex; }
 
   /* 헤더 */
-  .app-header { background: linear-gradient(135deg, #C8900A 0%, #8B6010 100%); padding: 16px 16px 0; }
-  .hdr-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-  .hdr-avatar { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.25); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; }
-  .hdr-info { flex: 1; margin-left: 10px; }
-  .hdr-name { font-size: 15px; font-weight: 700; color: #fff; }
-  .hdr-sub { font-size: 11px; color: rgba(255,255,255,0.8); }
-  .logout-btn { background: rgba(255,255,255,0.2); border: none; color: #fff; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; }
+  .app-header { background: linear-gradient(135deg, var(--brand-light) 0%, var(--brand) 55%, var(--brand-dark) 100%); padding: calc(16px + var(--safe-t)) 18px 18px; border-radius: 0 0 28px 28px; box-shadow: 0 6px 24px rgba(139,96,16,0.18); }
+  .hdr-top { display: flex; align-items: center; justify-content: space-between; }
+  .hdr-avatar { width: 46px; height: 46px; border-radius: 50%; background: rgba(255,255,255,0.22); border: 2px solid rgba(255,255,255,0.55); display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; flex-shrink: 0; }
+  .hdr-info { flex: 1; margin-left: 12px; min-width: 0; }
+  .hdr-name { font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -0.2px; }
+  .hdr-sub { font-size: 11.5px; color: rgba(255,255,255,0.82); margin-top: 2px; }
+  .logout-btn { background: rgba(255,255,255,0.18); border: none; color: #fff; padding: 7px 14px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; gap: 4px; }
+  .logout-btn:active { background: rgba(255,255,255,0.3); }
 
-  /* 탭 */
-  .app-tabs { display: flex; overflow-x: auto; scrollbar-width: none; }
-  .app-tabs::-webkit-scrollbar { display: none; }
-  .app-tab { flex: 0 0 auto; padding: 10px 14px; background: transparent; border: none; color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
-  .app-tab.active { color: #fff; border-bottom: 3px solid #fff; font-weight: 700; }
+  /* 하단 탭 바 */
+  .app-tabs { display: flex; position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid var(--border); padding: 6px 4px calc(6px + var(--safe-b)); box-shadow: 0 -4px 18px rgba(16,24,40,0.06); z-index: 50; }
+  .app-tab { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 7px 2px; background: transparent; border: none; color: var(--text-faint); font-size: 11px; font-weight: 600; cursor: pointer; border-radius: 14px; transition: color 0.15s; white-space: nowrap; }
+  .app-tab i { font-size: 20px; line-height: 1; }
+  .app-tab.active { color: var(--brand); font-weight: 700; }
+  .app-tab.active i { color: var(--brand); }
+  .app-tab:active { background: var(--brand-50); }
 
   /* 컨텐츠 */
-  .app-content { flex: 1; padding: 16px; }
+  .app-content { flex: 1; padding: 16px 16px calc(92px + var(--safe-b)); animation: fadeIn 0.25s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
   /* 카드 */
-  .card { background: #fff; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
-  .card-title { font-size: 13px; font-weight: 700; color: #5C3D08; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; }
+  .card { background: var(--card); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow-card); border: 1px solid var(--border); }
+  .card-title { font-size: 13.5px; font-weight: 700; color: var(--brand-dark); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
+
+  /* 상태 히어로 카드 */
+  .status-hero { text-align: center; padding: 18px 0 6px; }
+  .status-icon-ring { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 26px; transition: background 0.2s, color 0.2s; }
+  .stat-card { text-align: center; padding: 14px 10px; background: var(--brand-50); border-radius: var(--radius-md); }
+  .stat-label { font-size: 11px; color: var(--text-soft); margin-bottom: 4px; font-weight: 600; }
+  .stat-value { font-size: 23px; font-weight: 800; color: var(--brand); }
 
   /* 상태 배지 */
-  .badge-in { background: #DCFCE7; color: #166534; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
-  .badge-out { background: #F3F4F6; color: #6B7280; padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .badge-in { background: #DCFCE7; color: #166534; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+  .badge-out { background: #F3F4F6; color: #6B7280; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
+
+  /* 오늘 입퇴실 기록 */
+  .record-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .record-row:last-child { border-bottom: none; }
+  .record-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-light); flex-shrink: 0; }
 
   /* 스케줄 표 */
-  .sched-table { width: 100%; border-collapse: collapse; font-size: 11px; }
-  .sched-table th { background: #FFF8DC; color: #5C3D08; padding: 6px 4px; text-align: center; border: 1px solid #F0E0A0; font-weight: 700; }
-  .sched-table td { padding: 5px 4px; text-align: center; border: 1px solid #F0E0A0; }
-  .sched-attend { color: #166534; font-weight: 600; }
-  .sched-absent { color: #C62828; }
+  .sched-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
+  .sched-table th { background: var(--brand-50); color: var(--brand-dark); padding: 8px 4px; text-align: center; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); font-weight: 700; }
+  .sched-table th:last-child, .sched-table td:last-child { border-right: none; }
+  .sched-table td { padding: 6px 4px; text-align: center; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .sched-table tr:last-child td { border-bottom: none; }
+  .sched-attend { color: #166534; font-weight: 700; }
+  .sched-absent { color: #C62828; font-weight: 600; }
   .sched-none { color: #D1D5DB; }
   /* 고정 시간표에서 변경된 교시 표기 */
   .sched-changed { background: #FFF4E6 !important; position: relative; cursor: pointer; }
@@ -65,29 +112,31 @@
   .chg-reason { font-size: 9px; color: #C62828; margin-top: 1px; line-height: 1.1; word-break: keep-all; }
 
   /* 누적시간 */
-  .hours-bar { height: 8px; background: #F3F4F6; border-radius: 4px; overflow: hidden; margin-top: 6px; }
-  .hours-fill { height: 100%; background: linear-gradient(90deg, #C8900A, #E0B020); border-radius: 4px; transition: width 0.5s; }
+  .hours-bar { height: 9px; background: #F0F1F3; border-radius: 5px; overflow: hidden; margin-top: 6px; }
+  .hours-fill { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-light)); border-radius: 5px; transition: width 0.6s cubic-bezier(.2,.8,.2,1); }
 
   /* 공지 */
-  .notice-card{background:#fff;border-radius:16px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-  .notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:8px}
+  .notice-card{background:#fff;border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-card);border:1px solid var(--border);border-left:4px solid var(--brand-light)}
+  .notice-card.imp{border-left-color:#E03131}
+  .notice-card.evt{border-left-color:#1C7ED6}
+  .notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;margin-bottom:8px}
   .badge-important{background:#FCEBEB;color:#C62828}
   .badge-general{background:#FFF8DC;color:#C8900A}
   .badge-event{background:#E3F2FD;color:#A87008}
-  .notice-title{font-size:15px;font-weight:700;margin-bottom:6px;line-height:1.4}
-  .notice-date{font-size:11px;color:#aaa}
-  .notice-header{padding:14px 16px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-  .notice-expand{font-size:20px;color:#ccc;flex-shrink:0;margin-top:2px;transition:transform 0.2s}
+  .notice-title{font-size:15px;font-weight:700;margin-bottom:6px;line-height:1.4;color:var(--text)}
+  .notice-date{font-size:11px;color:var(--text-faint)}
+  .notice-header{padding:16px 18px;cursor:pointer;display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+  .notice-expand{font-size:18px;color:#ccc;flex-shrink:0;margin-top:2px;transition:transform 0.2s}
   .notice-expand.open{transform:rotate(180deg)}
-  .notice-detail{padding:0 16px 14px;border-top:0.5px solid #f0f0f0;display:none}
+  .notice-detail{padding:0 18px 16px;border-top:1px solid var(--border);display:none}
   .notice-detail.open{display:block}
   .notice-detail p{font-size:13px;color:#444;line-height:1.7;margin-top:10px}
-  .empty-state{text-align:center;padding:48px 24px;color:#aaa}
-  .empty-icon{font-size:40px;margin-bottom:12px}
-  .empty-text{font-size:14px}
+  .empty-state{text-align:center;padding:64px 24px;color:var(--text-faint)}
+  .empty-icon{font-size:40px;margin-bottom:14px;opacity:0.6}
+  .empty-text{font-size:14px;font-weight:500}
 
   /* 토스트 */
-  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; }
+  .toast { position: fixed; bottom: calc(84px + var(--safe-b)); left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 11px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
   .toast.show { opacity: 1; }
 </style>
 </head>
@@ -100,10 +149,16 @@
   <div class="login-sub">학부모 전용 앱</div>
   <div class="login-card">
     <div class="login-label">자녀 이름</div>
-    <input class="login-input" id="login-name" type="text" placeholder="홍길동" autocomplete="off">
-    <div class="login-label" style="margin-top:12px">학부모 전화번호 (뒷 4자리)</div>
-    <input class="login-input" id="login-phone" type="tel" placeholder="1234" maxlength="4" inputmode="numeric">
-    <button class="login-btn" onclick="doLogin()">로그인</button>
+    <div class="login-field">
+      <i class="ti ti-user"></i>
+      <input class="login-input" id="login-name" type="text" placeholder="홍길동" autocomplete="off">
+    </div>
+    <div class="login-label">학부모 전화번호 (뒷 4자리)</div>
+    <div class="login-field" style="margin-bottom:4px">
+      <i class="ti ti-phone"></i>
+      <input class="login-input" id="login-phone" type="tel" placeholder="1234" maxlength="4" inputmode="numeric">
+    </div>
+    <button class="login-btn" onclick="doLogin()">로그인 <i class="ti ti-arrow-right" style="font-size:15px;vertical-align:-2px"></i></button>
     <div class="login-error" id="login-error"></div>
   </div>
 </div>
@@ -117,14 +172,7 @@
         <div class="hdr-name" id="hdr-name"></div>
         <div class="hdr-sub" id="hdr-sub">새봄 면학관</div>
       </div>
-      <button class="logout-btn" onclick="doLogout()">로그아웃</button>
-    </div>
-    <div class="app-tabs">
-      <button class="app-tab active" onclick="showTab('notice',this)">공지</button>
-      <button class="app-tab" onclick="showTab('status',this)">현황</button>
-      <button class="app-tab" onclick="showTab('schedule',this)">스케줄</button>
-      <button class="app-tab" onclick="showTab('hours',this)">누적시간</button>
-      <button class="app-tab" onclick="showTab('planner',this)">플래너</button>
+      <button class="logout-btn" onclick="doLogout()"><i class="ti ti-logout-2"></i>로그아웃</button>
     </div>
   </div>
 
@@ -137,27 +185,27 @@
 
     <div id="tab-status" style="display:none">
       <div class="card">
-        <div class="card-title">📍 현재 상태</div>
-        <div id="status-content" style="text-align:center;padding:12px 0">
+        <div id="status-content" class="status-hero">
+          <div id="status-icon-ring" class="status-icon-ring" style="background:#F3F4F6;color:#9CA3AF"><i class="ti ti-door-exit"></i></div>
           <div id="status-badge" class="badge-out">확인 중...</div>
-          <div id="status-time" style="font-size:12px;color:#888;margin-top:8px"></div>
+          <div id="status-time" style="font-size:12px;color:#888;margin-top:10px"></div>
           <div id="status-seat" style="font-size:13px;font-weight:600;color:#5C3D08;margin-top:6px"></div>
         </div>
       </div>
       <div class="card">
-        <div class="card-title">📅 오늘 입퇴실 기록</div>
+        <div class="card-title"><i class="ti ti-history"></i> 오늘 입퇴실 기록</div>
         <div id="today-records" style="font-size:13px;color:#888">불러오는 중...</div>
       </div>
       <div class="card">
-        <div class="card-title">📊 이번 달 현황</div>
+        <div class="card-title"><i class="ti ti-chart-bar"></i> 이번 달 현황</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div style="text-align:center;padding:10px;background:#FFF8DC;border-radius:10px">
-            <div style="font-size:11px;color:#888;margin-bottom:4px">누적 시간</div>
-            <div id="month-hours" style="font-size:22px;font-weight:800;color:#C8900A">0h</div>
+          <div class="stat-card">
+            <div class="stat-label">누적 시간</div>
+            <div id="month-hours" class="stat-value">0h</div>
           </div>
-          <div style="text-align:center;padding:10px;background:#FFF8DC;border-radius:10px">
-            <div style="font-size:11px;color:#888;margin-bottom:4px">좌석</div>
-            <div id="month-seat" style="font-size:22px;font-weight:800;color:#C8900A">-</div>
+          <div class="stat-card">
+            <div class="stat-label">좌석</div>
+            <div id="month-seat" class="stat-value">-</div>
           </div>
         </div>
       </div>
@@ -166,7 +214,7 @@
     <!-- 스케줄 탭 -->
     <div id="tab-schedule" style="display:none">
       <div class="card">
-        <div class="card-title">📋 주간 스케줄</div>
+        <div class="card-title"><i class="ti ti-calendar-event"></i> 주간 스케줄</div>
         <div id="schedule-content" style="overflow-x:auto">불러오는 중...</div>
       </div>
     </div>
@@ -174,7 +222,7 @@
     <!-- 누적시간 탭 -->
     <div id="tab-hours" style="display:none">
       <div class="card">
-        <div class="card-title">⏱ 월별 누적시간</div>
+        <div class="card-title"><i class="ti ti-clock-hour-4"></i> 월별 누적시간</div>
         <div id="hours-content">불러오는 중...</div>
       </div>
     </div>
@@ -182,32 +230,40 @@
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
       <!-- 월 이동 -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <button onclick="ppPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
-        <div id="pp-title" style="font-size:16px;font-weight:700;color:#5C3D08"></div>
-        <button onclick="ppNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;background:#fff;border-radius:14px;padding:6px 8px;box-shadow:var(--shadow-card);border:1px solid var(--border)">
+        <button onclick="ppPrevMonth()" style="background:var(--brand-50);border:none;border-radius:10px;width:34px;height:34px;font-size:15px;cursor:pointer;font-weight:700;color:var(--brand-dark);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-left"></i></button>
+        <div id="pp-title" style="font-size:15.5px;font-weight:800;color:var(--brand-dark)"></div>
+        <button onclick="ppNextMonth()" style="background:var(--brand-50);border:none;border-radius:10px;width:34px;height:34px;font-size:15px;cursor:pointer;font-weight:700;color:var(--brand-dark);display:flex;align-items:center;justify-content:center"><i class="ti ti-chevron-right"></i></button>
       </div>
       <!-- 달력 -->
-      <div id="pp-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px"></div>
+      <div id="pp-cal" style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-bottom:16px;background:#fff;border-radius:16px;padding:10px;box-shadow:var(--shadow-card);border:1px solid var(--border)"></div>
       <!-- 날짜 선택 시 사진+코멘트 -->
-      <div id="pp-detail" style="display:none">
+      <div id="pp-detail" class="card" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div id="pp-detail-title" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
           <button onclick="document.getElementById('pp-detail').style.display='none'"
-            style="background:none;border:none;font-size:18px;cursor:pointer;color:#888;line-height:1">✕</button>
+            style="background:#F3F4F6;border:none;border-radius:50%;width:28px;height:28px;font-size:14px;cursor:pointer;color:#888;line-height:1;display:flex;align-items:center;justify-content:center"><i class="ti ti-x"></i></button>
         </div>
         <!-- 사진 -->
         <div id="pp-photo-view" style="text-align:center;margin-bottom:12px">
           <img id="pp-photo" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15);cursor:pointer" onclick="openParentImage(this.src)">
-          <div id="pp-nophoto" style="color:#aaa;font-size:13px;padding:30px 0">이 날짜에 등록된 플래너 사진이 없습니다</div>
+          <div id="pp-nophoto" style="color:#B0B5BC;font-size:13px;padding:36px 0"><i class="ti ti-photo-off" style="font-size:30px;display:block;margin-bottom:8px;opacity:0.6"></i>이 날짜에 등록된 플래너 사진이 없습니다</div>
         </div>
         <!-- 선생님 코멘트 -->
         <div id="pp-comments-area" style="display:none;margin-bottom:12px">
-          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px;display:flex;align-items:center;gap:5px"><i class="ti ti-message-2"></i> 선생님 코멘트</div>
           <div id="pp-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="app-tabs">
+    <button class="app-tab active" onclick="showTab('notice',this)"><i class="ti ti-bell"></i>공지</button>
+    <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-map-pin"></i>현황</button>
+    <button class="app-tab" onclick="showTab('schedule',this)"><i class="ti ti-calendar-event"></i>스케줄</button>
+    <button class="app-tab" onclick="showTab('hours',this)"><i class="ti ti-clock-hour-4"></i>누적시간</button>
+    <button class="app-tab" onclick="showTab('planner',this)"><i class="ti ti-notebook"></i>플래너</button>
   </div>
 </div>
 
@@ -405,18 +461,22 @@ function renderStatus(todayRecs) {
   const badge = document.getElementById('status-badge');
   const timeEl = document.getElementById('status-time');
   const seatEl = document.getElementById('status-seat');
+  const ring = document.getElementById('status-icon-ring');
 
   if (isIn) {
-    badge.className = 'badge-in'; badge.textContent = '✅ 입실 중';
+    badge.className = 'badge-in'; badge.innerHTML = '<i class="ti ti-circle-check-filled"></i> 입실 중';
+    if (ring) { ring.style.background = '#DCFCE7'; ring.style.color = '#166534'; ring.innerHTML = '<i class="ti ti-door-enter"></i>'; }
     const inRec = todayRecs.find(r => r.inTime && !r.outTime);
     timeEl.textContent = `입실 시각: ${inRec?.inTime || ''}`;
     seatEl.textContent = `좌석: ${currentStudent.seat || '-'}번`;
   } else if (lastRec) {
-    badge.className = 'badge-out'; badge.textContent = '🏠 퇴실';
+    badge.className = 'badge-out'; badge.innerHTML = '<i class="ti ti-home"></i> 퇴실';
+    if (ring) { ring.style.background = '#F3F4F6'; ring.style.color = '#6B7280'; ring.innerHTML = '<i class="ti ti-door-exit"></i>'; }
     timeEl.textContent = `퇴실 시각: ${lastRec.outTime || ''}`;
     seatEl.textContent = '';
   } else {
     badge.className = 'badge-out'; badge.textContent = '미입실';
+    if (ring) { ring.style.background = '#F3F4F6'; ring.style.color = '#9CA3AF'; ring.innerHTML = '<i class="ti ti-moon"></i>'; }
     timeEl.textContent = '오늘 아직 입실하지 않았어요';
     seatEl.textContent = '';
   }
@@ -427,8 +487,9 @@ function renderStatus(todayRecs) {
     recEl.innerHTML = '<div style="color:#aaa;padding:8px 0">오늘 입퇴실 기록이 없습니다</div>';
   } else {
     recEl.innerHTML = todayRecs.map(r =>
-      `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F3F4F6;font-size:13px">
-        <span style="color:#5C3D08;font-weight:600">📌 입실 ${r.inTime}</span>
+      `<div class="record-row">
+        <span class="record-dot"></span>
+        <span style="color:#5C3D08;font-weight:600;flex:1">입실 ${r.inTime}</span>
         <span style="color:#6B7280">${r.outTime ? '퇴실 '+r.outTime : '입실 중'}</span>
       </div>`
     ).join('');
@@ -592,9 +653,9 @@ function loadHours() {
   }).join('');
 
   const total = Object.values(hours).reduce((a,b)=>a+b, 0);
-  html += `<div style="margin-top:16px;padding:12px;background:#FFF8DC;border-radius:10px;text-align:center">
-    <div style="font-size:11px;color:#888;margin-bottom:2px">총 누적 시간</div>
-    <div style="font-size:24px;font-weight:800;color:#C8900A">${Math.round(total*10)/10}h</div>
+  html += `<div class="stat-card" style="margin-top:18px">
+    <div class="stat-label">총 누적 시간</div>
+    <div class="stat-value" style="font-size:26px">${Math.round(total*10)/10}h</div>
   </div>`;
 
   document.getElementById('hours-content').innerHTML = html;
@@ -628,18 +689,18 @@ function _buildParentNotices() {
   const el = document.getElementById('notice-list');
   if (!el) return;
   if (!_ppNotices.length) {
-    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">공지사항이 없습니다</div></div>`;
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="ti ti-bell-off"></i></div><div class="empty-text">공지사항이 없습니다</div></div>`;
     return;
   }
   el.innerHTML = _ppNotices.map((n, i) => `
-    <div class="notice-card">
+    <div class="notice-card ${n.badge==='important'?'imp':n.badge==='event'?'evt':''}">
       <div class="notice-header" onclick="_toggleParentNotice(${i})">
         <div style="flex:1">
           <span class="notice-badge badge-${n.badge||'general'}">${n.badgeLabel||n.badge||'공지'}</span>
           <div class="notice-title">${n.title||''}</div>
           <div class="notice-date">${n.date||''}</div>
         </div>
-        <span class="notice-expand" id="pnexp-${i}">⌄</span>
+        <span class="notice-expand" id="pnexp-${i}"><i class="ti ti-chevron-down"></i></span>
       </div>
       <div class="notice-detail" id="pndet-${i}">
         ${(n.body||'').split('\n').map(line => line ? `<p>${line.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</p>` : '<br>').join('')}
@@ -701,12 +762,13 @@ function _ppRenderCal() {
     const hasPhoto = !!_ppDates[ds];
     const dow = new Date(_ppYear, _ppMonth, d).getDay();
     const tc = dow===0 ? '#C62828' : dow===6 ? '#1565C0' : '#333';
-    const bg = isSelected ? '#C8900A' : isToday ? '#FFF3CD' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
-    const bd = isSelected ? '2px solid #C8900A' : isToday ? '2px solid #E0B020' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
+    const bg = isSelected ? 'linear-gradient(135deg,#E0B020,#C8900A)' : isToday ? '#FFF3CD' : hasPhoto ? '#FFF8DC' : 'transparent';
+    const bd = isSelected ? '2px solid #C8900A' : isToday ? '2px solid #E0B020' : hasPhoto ? '1.5px solid #E0B020' : '1.5px solid transparent';
     const dc = isSelected ? '#fff' : tc;
-    h += `<div onclick="ppPickDate('${ds}')" style="border-radius:10px;padding:7px 2px;text-align:center;cursor:pointer;background:${bg};border:${bd}">
+    const shadow = isSelected ? 'box-shadow:0 4px 10px rgba(200,144,10,0.35);' : '';
+    h += `<div onclick="ppPickDate('${ds}')" style="border-radius:12px;padding:8px 2px;text-align:center;cursor:pointer;background:${bg};border:${bd};${shadow}transition:transform 0.1s">
       <div style="font-size:13px;font-weight:${(isToday||isSelected)?'700':'500'};color:${dc}">${d}</div>
-      ${hasPhoto ? '<div style="font-size:10px;margin-top:1px">📷</div>' : ''}
+      ${hasPhoto ? `<div style="font-size:9px;margin-top:2px"><i class="ti ti-photo" style="color:${isSelected?'#fff':'#C8900A'}"></i></div>` : ''}
     </div>`;
   }
   calEl.innerHTML = h;
@@ -773,9 +835,9 @@ async function _ppLoadComments(ds) {
       if (comments.length > 0) {
         commentsArea.style.display = 'block';
         commentsList.innerHTML = comments.map(c => `
-          <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
-            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${(c.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+          <div style="background:var(--brand-50);border:1px solid #F0E0A0;border-radius:12px;padding:10px 12px">
+            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:5px;line-height:1.5">${(c.text||'').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div style="font-size:11px;color:#9CA3AF;display:flex;align-items:center;gap:4px"><i class="ti ti-clock" style="font-size:12px"></i>${c.time || ''}</div>
           </div>`).join('');
       }
     }
