@@ -3555,11 +3555,15 @@ async function loadTodayCheckinFromFirebase() {
   _loadCheckinLock = true;
   try {
     const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const yd = new Date(Date.now() - 86400000);
+    const yesterday = yd.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const snap = await getDocs(collection(db, 'checkin_logs'));
     const todayDocs = [];
+    const yesterdayDocs = [];
     snap.forEach(d => {
       const data = d.data();
       if (data.date === today) todayDocs.push(data);
+      else if (data.date === yesterday) yesterdayDocs.push(data);
     });
 
     // todayRecords, PRESENT 초기화 후 재구성
@@ -3591,6 +3595,26 @@ async function loadTodayCheckinFromFirebase() {
       }
     });
 
+    // 어제 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
+    const ydByStudent = {};
+    yesterdayDocs.forEach(d => {
+      if (!d.studentName) return;
+      if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
+      if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
+      else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
+    });
+    Object.entries(ydByStudent).forEach(([name, rec]) => {
+      if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
+        // 오늘 이미 입실 기록 있으면 중복 추가 안 함
+        const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
+        if (!alreadyIn) {
+          const lastIn = rec.ins[rec.ins.length - 1];
+          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null });
+          if (!PRESENT.includes(name)) PRESENT.push(name);
+        }
+      }
+    });
+
     buildDashboard();
     buildCheckinTodayList();
     if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
@@ -3618,7 +3642,8 @@ onSnapshot(
       if (change.type === 'removed') return;
       const d = change.doc.data();
       // 오늘 날짜 기록만 처리
-      if (!d.date || d.date !== _todayStr) return;
+      const _curDay = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+      if (!d.date || d.date !== _curDay) return;
 
       const name = d.studentName;
       const seat = d.seat;
