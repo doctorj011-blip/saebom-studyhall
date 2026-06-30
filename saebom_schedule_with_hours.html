@@ -3385,6 +3385,7 @@ window.dismissAlert = function(idx) {
   const alerts = window._scheduleAlerts;
   if (!alerts) return;
   alerts.splice(idx, 1);
+  _saveScheduleAlerts();
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
@@ -3392,6 +3393,7 @@ window.clearAllScheduleAlerts = function() {
   const alerts = window._scheduleAlerts;
   if (!alerts) return;
   alerts.length = 0;
+  _saveScheduleAlerts();
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
@@ -3668,6 +3670,15 @@ onSnapshot(
 // ── 스터디룸 신청 실시간 감시 ──
 const _studyroomReqAlerts = [];
 const _knownStudyroomReqs = {};
+const _dismissedStudyroomIds = (() => {
+  try {
+    const s = localStorage.getItem('saebom_dismissedStudyroomIds');
+    return new Set(s ? JSON.parse(s) : []);
+  } catch(e) { return new Set(); }
+})();
+function _saveDismissedStudyroomIds() {
+  try { localStorage.setItem('saebom_dismissedStudyroomIds', JSON.stringify([..._dismissedStudyroomIds])); } catch(e) {}
+}
 
 function _syncStudyRoomStudents() {
   // studyRoomStudents 초기화 후 approved 항목으로 재구성
@@ -3719,7 +3730,7 @@ onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
     const data = { id: change.doc.id, ...change.doc.data() };
     if (change.type === 'added' && _knownStudyroomReqs[data.id] === undefined) {
       _knownStudyroomReqs[data.id] = data;
-      if (data.status === 'pending') { _studyroomReqAlerts.unshift(data); changed = true; }
+      if (data.status === 'pending' && !_dismissedStudyroomIds.has(data.id)) { _studyroomReqAlerts.unshift(data); changed = true; }
       if (data.status === 'approved') _syncStudyRoomStudents();
       return;
     }
@@ -3776,18 +3787,37 @@ window.rejectStudyroomReq = async function(id) {
 };
 window.removeStudyroomAlert = function(id) {
   const idx = _studyroomReqAlerts.findIndex(a=>a.id===id);
-  if (idx!==-1) { _studyroomReqAlerts.splice(idx,1); renderStudyroomAlerts(); }
+  if (idx!==-1) { _studyroomReqAlerts.splice(idx,1); _dismissedStudyroomIds.add(id); _saveDismissedStudyroomIds(); renderStudyroomAlerts(); }
 };
 window.clearAllStudyroomAlerts = function() {
-  _studyroomReqAlerts.length=0; renderStudyroomAlerts();
+  _studyroomReqAlerts.forEach(a=>_dismissedStudyroomIds.add(a.id));
+  _studyroomReqAlerts.length=0; _saveDismissedStudyroomIds(); renderStudyroomAlerts();
 };
 
 
 // ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
 // 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
 const knownSchedules = {};   // { seat: { 월,화,...,updatedAt } }
-const scheduleAlerts = [];
+const scheduleAlerts = (() => {
+  try {
+    const s = localStorage.getItem('saebom_scheduleAlerts');
+    return s ? JSON.parse(s) : [];
+  } catch(e) { return []; }
+})();
 window._scheduleAlerts = scheduleAlerts;   // 화면에 표시할 변경 알림 목록
+
+function _saveScheduleAlerts() {
+  try {
+    const toSave = scheduleAlerts.map(a => ({
+      ...a,
+      _timeStr: a.updatedAt?.toDate
+        ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
+        : (a._timeStr || null),
+      updatedAt: a.updatedAt?.toDate ? {_ms: a.updatedAt.toDate().getTime()} : a.updatedAt
+    }));
+    localStorage.setItem('saebom_scheduleAlerts', JSON.stringify(toSave));
+  } catch(e) {}
+}
 // knownSchedules는 onSnapshot 첫 'added' 이벤트에서 Firebase 실제값으로 초기화
 // (STUDENTS 배열로 초기화하면 schedules 컬렉션 실제값과 달라서 오탐/무감지 발생)
 
@@ -3871,7 +3901,7 @@ function renderScheduleAlerts() {
 
     const time = a.updatedAt?.toDate
       ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
-      : '방금';
+      : (a._timeStr || '방금');
 
     const applied = a.applied;
 
@@ -3903,6 +3933,7 @@ function renderScheduleAlerts() {
       </div>
     </div>`;
   }).join('');
+  _saveScheduleAlerts();
 }
 
 
