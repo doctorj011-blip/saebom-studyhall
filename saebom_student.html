@@ -649,6 +649,7 @@ const SECTION_NAMES = {
 };
 
 function openSection(id, color) {
+  history.pushState({ section: id, color: color }, ');
   // 헤더 색상 + 타이틀 변경
   const hdr = document.getElementById('section-header');
   hdr.style.background = color;
@@ -672,10 +673,17 @@ function openSection(id, color) {
   }
 }
 
-function goHome() {
+function goHome(fromPopstate) {
   document.getElementById('app-screen').classList.remove('visible');
   document.getElementById('home-screen').classList.add('visible');
+  if (!fromPopstate) history.back();
 }
+
+window.addEventListener('popstate', function(e) {
+  if (document.getElementById('app-screen').classList.contains('visible')) {
+    goHome(true);
+  }
+});
 // ── 탭 전환 ──
 function showTab(id, btn) {
   // 자리선택 탭 이탈 시 구독 해제
