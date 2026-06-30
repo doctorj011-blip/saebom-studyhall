@@ -6,9 +6,11 @@
 <title>새봄 면학관 — 학생</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+import { getStorage, ref as storageRef, uploadBytesResumable, getDownloadURL, deleteObject, listAll }
+  from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
@@ -33,6 +35,10 @@ window._fsAddDoc = addDoc;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
 window._fsGetDoc = getDoc;
+// Storage 전역 노출 (플래너 - 즉시 사용 가능)
+const _storage = getStorage(app);
+window._plannerStorage = { storage: _storage, ref: storageRef, uploadBytesResumable, getDownloadURL, deleteObject, listAll };
+
 window._firebaseReady = true;
 console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#F0D020;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
 window.dispatchEvent(new Event('firebase-ready'));
@@ -1286,26 +1292,15 @@ let plannerUploadedDates = {}; // { 'YYYY-MM-DD': downloadURL }
 let plannerSelectedDate = null;
 let plannerStorageRef = null;
 
-// Firebase Storage 초기화
-async function getPlannerStorage() {
-  if (plannerStorageRef) return plannerStorageRef;
-  const mod = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js');
-  const { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } = mod;
-  // firebase app 인스턴스에서 storage 가져오기
-  const { getApps } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js');
-  const apps = getApps();
-  const storage = apps.length > 0 ? getStorage(apps[0]) : getStorage();
-  plannerStorageRef = {
-    storage,
-    ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll,
-    getStorage: () => storage
-  };
-  return plannerStorageRef;
+// Firebase Storage 초기화 (앱 시작 시 이미 로드됨)
+function getPlannerStorage() {
+  return window._plannerStorage;
 }
 
 // 플래너 탭 초기화
 async function initPlannerCalendar() {
-  // currentStudent 없어도 달력은 렌더링 (사진 로드만 스킵)
+  // 달력 즉시 렌더링 후 사진 목록을 백그라운드에서 로드
+  renderPlannerCalendar();
   await loadPlannerMonthData();
   renderPlannerCalendar();
 }
@@ -1321,14 +1316,11 @@ async function loadPlannerMonthData() {
     const monthPrefix = `${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
     const listRef = st.ref(storage, `planners/${seat}`);
     const result = await st.listAll(listRef);
-    for (const item of result.items) {
-      const name = item.name.replace(/\.jpg$/i,'');
-      if (!name.startsWith(monthPrefix)) continue;
-      try {
-        const url = await st.getDownloadURL(item);
-        plannerUploadedDates[name] = url;
-      } catch(e2) { /* 개별 URL 실패 무시 */ }
-    }
+    const monthItems = result.items.filter(item => item.name.replace(/\.jpg$/i,'').startsWith(monthPrefix));
+    const urls = await Promise.all(monthItems.map(item => st.getDownloadURL(item).catch(() => null)));
+    monthItems.forEach((item, i) => {
+      if (urls[i]) plannerUploadedDates[item.name.replace(/\.jpg$/i,'')] = urls[i];
+    });
   } catch(e) {
     // Storage 미설정 또는 빈 달 - 달력은 계속 렌더링
     console.warn('[Planner] Storage 로드 실패 (정상 - 사진 없음):', e.message || e);
