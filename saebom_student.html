@@ -774,17 +774,33 @@ function initDraft() {
   draftSchedule = {};
   DAYS.forEach(day => {
     const sched = currentStudent.schedule[day] || '';
-    draftSchedule[day] = { reason: '', periods: {} };
+    draftSchedule[day] = { reason: '', reasons: {}, periods: {} };
 
     const reasonMatch = sched.match(/x\(([^)]+)\)/);
     if (reasonMatch) draftSchedule[day].reason = reasonMatch[1];
 
-    // 모든 교시(1~11) 파싱
+    // 모든 교시(1~11) 파싱 — 상태와 교시별 불참 사유를 함께 복원
     const allPeriods = [1,2,3,4,5,6,7,8,9,10,11];
     allPeriods.forEach(n => {
       draftSchedule[day].periods[n] = parsePeriodStatus(sched, n);
+      const r = parsePeriodReason(sched, n);
+      if (r) draftSchedule[day].reasons[n] = r;
     });
   });
+}
+
+// 특정 교시의 불참 사유 추출 (교시별 x{n}(사유) 우선, 없으면 구버전 요일 단일 사유)
+function parsePeriodReason(sched, pNum) {
+  if (!sched || sched === '-') return '';
+  const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
+  for (const t of tokens) {
+    const m = t.match(/^x(\d+)\(([^)]*)\)$/i);
+    if (m && Number(m[1]) === pNum) return m[2] || '';
+  }
+  // 구버전: 요일 전체에 적용되던 단일 사유
+  const legacy = sched.match(/x\(([^)]+)\)/);
+  if (legacy && parsePeriodStatus(sched, pNum) === 'absent') return legacy[1];
+  return '';
 }
 
 function parsePeriodStatus(sched, pNum) {
@@ -988,8 +1004,8 @@ function buildDailyPeriods() {
     <div class="absent-reason${status==='absent'?' show':''}" id="reason-${currentDayTab}-${p.n}">
       <span class="reason-label">불참 사유</span>
       <input class="reason-input" type="text" placeholder="예: 수학학원"
-        value="${dayDraft.reason||''}"
-        ${isToday?`oninput="setReason('${currentDayTab}','${p.n}',this.value)"`:'readonly'}>
+        value="${((dayDraft.reasons&&dayDraft.reasons[p.n])||'').replace(/"/g,'&quot;')}"
+        ${isToday?`oninput="setReason('${currentDayTab}',${p.n},this.value)"`:'readonly'}>
     </div>`;
   }).join('');
 }
@@ -1006,8 +1022,10 @@ function setPeriod(day, pNum, status) {
 }
 
 function setReason(day, pNum, val) {
-  draftSchedule[day].reason = val;
+  if (!draftSchedule[day].reasons) draftSchedule[day].reasons = {};
+  draftSchedule[day].reasons[pNum] = val;
   isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
 }
 
 // ── 주간 시간표 ──
