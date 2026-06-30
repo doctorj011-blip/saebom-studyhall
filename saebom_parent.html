@@ -350,17 +350,37 @@ async function startStatusRealtime() {
   }
   if (!currentStudent) { loadStatus(); return; }
   try {
+    // 관리자앱이 기록하는 'checkin_logs' 컬렉션을 구독한다.
+    // (이벤트 단위 문서: { studentName, seat, type:'in'|'out', time, date })
     _statusUnsub = window._onSnapshot(
-      window._query(window._collection(window._db, 'checkin_records'), window._where('studentName','==', currentStudent.name)),
+      window._query(window._collection(window._db, 'checkin_logs'), window._where('studentName','==', currentStudent.name)),
       snap => {
-        const today = getTodayKST(); // KST 기준 오늘 날짜 (콜백마다 갱신)
-        const records = [];
-        snap.forEach(d => records.push(d.data()));
-        const todayRecs = records.filter(r => r.date === today).sort((a,b)=>(a.inTime||'').localeCompare(b.inTime||''));
+        const today = getTodayAdminDate(); // 관리자앱과 동일한 날짜 포맷 (콜백마다 갱신)
+        // 오늘 이벤트만 시간순 정렬 후 입실/퇴실 기록으로 재구성
+        const events = [];
+        snap.forEach(d => { const x = d.data(); if (x.date === today) events.push(x); });
+        events.sort((a,b) => (a.time||'').localeCompare(b.time||''));
+        const todayRecs = [];
+        events.forEach(e => {
+          if (e.type === 'in') {
+            todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: e.time, outTime: null });
+          } else if (e.type === 'out') {
+            // 가장 최근의 미퇴실 기록에 퇴실시각 매칭
+            const open = [...todayRecs].reverse().find(r => !r.outTime);
+            if (open) open.outTime = e.time;
+            else todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: '?', outTime: e.time });
+          }
+        });
         renderStatus(todayRecs);
       }
     );
   } catch(e) { loadStatus(); }
+}
+
+// 관리자앱과 동일한 날짜 문자열 포맷 (KST 기준, 0 패딩 없음): "2026-7-1"
+function getTodayAdminDate() {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  return `${kst.getUTCFullYear()}-${kst.getUTCMonth() + 1}-${kst.getUTCDate()}`;
 }
 
 function loadStatus() {
