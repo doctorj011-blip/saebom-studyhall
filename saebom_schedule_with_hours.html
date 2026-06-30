@@ -4334,7 +4334,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   try {
     const sendFn = window.solapiAlimtalkSend;
     if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
-    const result = await sendFn(parentPhone, KAKAO_PF_ID, KAKAO_TPL_SCHEDULE, variables, messageText);
+    const result = await sendFn(parentPhone, KAKAO_PF_ID, KAKAO_TPL_SCHEDULE, variables);
     const success = !!(result?.errorCount === 0 || (result?.groupId && !result?.errorCount));
     saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: messageText, success, error: success ? null : JSON.stringify(result), time: timeStr });
     if (success) {
