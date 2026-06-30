@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -39,7 +39,7 @@ window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f7f5;color:#1a1a1a;min-height:100vh}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#ffffff;color:#1a1a1a;min-height:100vh}
 
 /* ── 로그인 화면 ── */
 .login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,#C8900A 0%,#1d5c38 100%)}
@@ -53,7 +53,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ddd;transition:all 0.15s}
 .pin-dot.filled{background:#F0D020;border-color:#C8900A}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.np-btn{padding:16px;font-size:22px;font-weight:500;border:none;background:#f5f7f5;border-radius:14px;cursor:pointer;transition:background 0.1s;color:#1a1a1a}
+.np-btn{padding:16px;font-size:22px;font-weight:500;border:none;background:#ffffff;border-radius:14px;cursor:pointer;transition:background 0.1s;color:#1a1a1a}
 .np-btn:active{background:#e0e8e3}
 .np-del{font-size:18px;color:#888}
 .np-clear{font-size:13px;font-weight:600;color:#C62828;background:#FCEBEB}
@@ -168,6 +168,30 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .chip-attend{background:#FFF8DC;color:#27500A}
 .chip-absent{background:#FCEBEB;color:#C62828}
 .chip-none{color:#ccc;font-size:12px}
+
+/* ── 홈 메뉴 화면 ── */
+.home-screen{display:none;min-height:100vh;flex-direction:column}
+.home-screen.visible{display:flex}
+.home-header{background:linear-gradient(135deg,#C8900A 0%,#A87008 100%);padding:20px 20px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.home-header-info{display:flex;align-items:center;gap:10px}
+.home-avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#A87008}
+.home-name{font-size:16px;font-weight:700;color:#fff}
+.home-seat{font-size:12px;color:rgba(255,255,255,0.85)}
+.menu-blocks{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.menu-block{flex:1;display:flex;align-items:center;justify-content:space-between;padding:0 28px;cursor:pointer;position:relative;transition:filter 0.1s;min-height:80px}
+.menu-block:active{filter:brightness(0.9)}
+.menu-block-left{display:flex;align-items:center;gap:18px}
+.menu-block-icon{font-size:32px;opacity:0.9}
+.menu-block-label{font-size:22px;font-weight:800;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.15)}
+.menu-block-sub{font-size:12px;color:rgba(255,255,255,0.75);margin-top:3px;font-weight:500}
+.menu-block-arrow{font-size:24px;color:rgba(255,255,255,0.6);font-weight:300}
+.menu-block-badge{position:absolute;top:16px;right:52px;background:rgba(255,255,255,0.3);color:#fff;border-radius:12px;font-size:11px;font-weight:700;padding:2px 8px}
+
+/* 섹션 헤더 (뒤로가기) */
+.section-header{display:flex;align-items:center;gap:12px;padding:16px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.back-btn{background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-title{font-size:17px;font-weight:700;color:#fff;flex:1}
+.section-logout{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
 </style>
 </head>
 <body>
@@ -205,27 +229,76 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <!-- ── 앱 메인 화면 ── -->
-<div class="app-screen" id="app-screen">
-  <div class="app-header">
-    <div class="header-top">
-      <div class="header-info">
-        <div class="header-avatar" id="hdr-avatar"></div>
+<!-- ── 홈 메뉴 화면 ── -->
+<div class="home-screen" id="home-screen">
+  <div class="home-header">
+    <div class="home-header-info">
+      <div class="home-avatar" id="home-avatar"></div>
+      <div>
+        <div class="home-name" id="home-name"></div>
+        <div class="home-seat" id="home-seat"></div>
+      </div>
+    </div>
+    <button class="logout-btn" onclick="logout()">로그아웃</button>
+  </div>
+  <div class="menu-blocks">
+    <div class="menu-block" style="background:#6B7FC4" onclick="openSection('notice','#6B7FC4')">
+      <div class="menu-block-left">
+        <span class="menu-block-icon">📢</span>
         <div>
-          <div class="header-name" id="hdr-name"></div>
-          <div class="header-seat" id="hdr-seat"></div>
+          <div class="menu-block-label">공지</div>
+          <div class="menu-block-sub">새봄 면학관 공지사항</div>
         </div>
       </div>
-      <button class="logout-btn" onclick="logout()">로그아웃</button>
+      <span class="menu-block-arrow">›</span>
     </div>
-    <div class="app-tabs">
-      <button class="app-tab active" onclick="showTab('notice',this)">공지</button>
-      <button class="app-tab" onclick="showTab('daily',this)">요일별</button>
-      <button class="app-tab" onclick="showTab('weekly',this)">주간설정</button>
-      <button class="app-tab" onclick="showTab('mystats',this)">내 현황</button>
-      <button class="app-tab" onclick="showTab('studyroom',this)">스터디룸</button>
-      <button class="app-tab" id="seat-tab-btn" onclick="showTab('seatmap',this)">자리선택</button>
-      <button class="app-tab" onclick="showTab('planner',this)">📓 플래너</button>
+    <div class="menu-block" style="background:#E8A040" onclick="openSection('daily','#E8A040')">
+      <div class="menu-block-left">
+        <span class="menu-block-icon">📅</span>
+        <div>
+          <div class="menu-block-label">오늘 일정</div>
+          <div class="menu-block-sub">오늘 교시 출결 확인</div>
+        </div>
+      </div>
+      <span class="menu-block-arrow">›</span>
     </div>
+    <div class="menu-block" style="background:#E05E7A" onclick="openSection('weekly','#E05E7A')">
+      <div class="menu-block-left">
+        <span class="menu-block-icon">📆</span>
+        <div>
+          <div class="menu-block-label">월간 일정</div>
+          <div class="menu-block-sub">FIX · 전체 출결 시간표</div>
+        </div>
+      </div>
+      <span class="menu-block-arrow">›</span>
+    </div>
+    <div class="menu-block" style="background:#3BBFB5" onclick="openSection('mystats','#3BBFB5')">
+      <div class="menu-block-left">
+        <span class="menu-block-icon">📊</span>
+        <div>
+          <div class="menu-block-label">내 현황</div>
+          <div class="menu-block-sub">출석률 및 누적 시간</div>
+        </div>
+      </div>
+      <span class="menu-block-arrow">›</span>
+    </div>
+    <div class="menu-block" style="background:#9B7FD4" onclick="openSection('planner','#9B7FD4')">
+      <div class="menu-block-left">
+        <span class="menu-block-icon">📓</span>
+        <div>
+          <div class="menu-block-label">플래너</div>
+          <div class="menu-block-sub">월별 학습 기록</div>
+        </div>
+      </div>
+      <span class="menu-block-arrow">›</span>
+    </div>
+  </div>
+</div>
+<div class="app-screen" id="app-screen">
+  <div class="section-header" id="section-header" style="background:#6B7FC4">
+    <button class="back-btn" onclick="goHome()">‹</button>
+    <div class="section-title" id="section-title">공지</div>
+    <button class="section-logout" onclick="logout()">로그아웃</button>
   </div>
 
   <div class="app-content">
@@ -490,17 +563,21 @@ function logout() {
   updatePinDisplay();
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('app-screen').classList.remove('visible');
+  document.getElementById('home-screen').classList.remove('visible');
   document.getElementById('save-fab').classList.remove('show');
 }
 
 function enterApp() {
   document.getElementById('login-screen').style.display='none';
-  document.getElementById('app-screen').classList.add('visible');
+  document.getElementById('home-screen').classList.add('visible');
 
   // 헤더
   document.getElementById('hdr-avatar').textContent = currentStudent.name[0];
+  document.getElementById('home-avatar').textContent = document.getElementById('hdr-avatar').textContent;
   document.getElementById('hdr-name').textContent = currentStudent.name;
+  document.getElementById('home-name').textContent = document.getElementById('hdr-name').textContent;
   document.getElementById('hdr-seat').textContent = currentStudent.seat + ' · 새봄 면학관';
+  document.getElementById('home-seat').textContent = document.getElementById('hdr-seat').textContent;
 
   // 오늘 요일로 초기화
   const dn=['일','월','화','수','목','금','토'];
@@ -565,6 +642,43 @@ function parsePeriodStatus(sched, pNum) {
   return 'none';
 }
 
+// ── 홈 메뉴 네비게이션 ──
+const SECTION_NAMES = {
+  notice: '공지',
+  daily: '오늘 일정',
+  weekly: '월간 일정',
+  mystats: '내 현황',
+  planner: '플래너'
+};
+
+function openSection(id, color) {
+  // 헤더 색상 + 타이틀 변경
+  const hdr = document.getElementById('section-header');
+  hdr.style.background = color;
+  document.getElementById('section-title').textContent = SECTION_NAMES[id] || id;
+
+  // 홈 숨기고 앱 화면 표시
+  document.getElementById('home-screen').classList.remove('visible');
+  document.getElementById('app-screen').classList.add('visible');
+
+  // 탭 콘텐츠 전환 (btn 없이 직접 호출)
+  const fakeBtn = { classList: { add: ()=>{}, remove: ()=>{} } };
+  showTab(id, fakeBtn);
+
+  // daily 탭은 오늘 요일로 자동 이동
+  if (id === 'daily') {
+    const today = ['일','월','화','수','목','금','토'][new Date().getDay()];
+    setTimeout(() => {
+      const todayBtn = [...document.querySelectorAll('.day-tab')].find(b => b.textContent.includes(today));
+      if (todayBtn) todayBtn.click();
+    }, 100);
+  }
+}
+
+function goHome() {
+  document.getElementById('app-screen').classList.remove('visible');
+  document.getElementById('home-screen').classList.add('visible');
+}
 // ── 탭 전환 ──
 function showTab(id, btn) {
   // 자리선택 탭 이탈 시 구독 해제
@@ -1011,7 +1125,31 @@ function renderSeatmap(takenSeats) {
     .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
     .sm-available:active { transform:scale(0.95); }
     .sm-mine { background:#C8900A; color:#fff; border:2px solid #8B6010; }
-  </style>
+  
+/* ── 홈 메뉴 화면 ── */
+.home-screen{display:none;min-height:100vh;flex-direction:column}
+.home-screen.visible{display:flex}
+.home-header{background:linear-gradient(135deg,#C8900A 0%,#A87008 100%);padding:20px 20px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
+.home-header-info{display:flex;align-items:center;gap:10px}
+.home-avatar{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#A87008}
+.home-name{font-size:16px;font-weight:700;color:#fff}
+.home-seat{font-size:12px;color:rgba(255,255,255,0.85)}
+.menu-blocks{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.menu-block{flex:1;display:flex;align-items:center;justify-content:space-between;padding:0 28px;cursor:pointer;position:relative;transition:filter 0.1s;min-height:80px}
+.menu-block:active{filter:brightness(0.9)}
+.menu-block-left{display:flex;align-items:center;gap:18px}
+.menu-block-icon{font-size:32px;opacity:0.9}
+.menu-block-label{font-size:22px;font-weight:800;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.15)}
+.menu-block-sub{font-size:12px;color:rgba(255,255,255,0.75);margin-top:3px;font-weight:500}
+.menu-block-arrow{font-size:24px;color:rgba(255,255,255,0.6);font-weight:300}
+.menu-block-badge{position:absolute;top:16px;right:52px;background:rgba(255,255,255,0.3);color:#fff;border-radius:12px;font-size:11px;font-weight:700;padding:2px 8px}
+
+/* 섹션 헤더 (뒤로가기) */
+.section-header{display:flex;align-items:center;gap:12px;padding:16px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.back-btn{background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-title{font-size:17px;font-weight:700;color:#fff;flex:1}
+.section-logout{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
+</style>
   <div id="sm-grid">`;
 
   // 빈 셀 채우기
