@@ -2995,14 +2995,23 @@ function saveSchedule() {
   buildStudentList(document.getElementById('student-search').value);
   buildScheduleTable(currentDay);
   // Firebase에 저장
-  saveScheduleToFirebase(s).catch(console.error);
-
-  // 저장 토스트
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)';
-  toast.textContent = `✅ ${s.name} 정보가 저장됐습니다`;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2000);
+  const _saveName = s.name;
+  (window.saveScheduleToFirebase ? window.saveScheduleToFirebase(s) : Promise.reject(new Error('Firebase 미연결')))
+    .then(() => {
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)';
+      toast.textContent = `✅ ${_saveName} 정보가 저장됐습니다`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 2000);
+    })
+    .catch(err => {
+      console.error('저장 실패:', err);
+      const toast = document.createElement('div');
+      toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C62828;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2)';
+      toast.textContent = `❌ 저장 실패: ${err.message}`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 5000);
+    });
 }
 
 // ===== 교시별 학생 팝업 =====
@@ -3545,6 +3554,7 @@ async function loadStudentsFromFirebase() {
 
 // Firebase 전역 함수 노출
 window.saveStudentToFirebase = saveStudentToFirebase;
+window.saveScheduleToFirebase = saveScheduleToFirebase;
 window.deleteStudentFromFirebase = deleteStudentFromFirebase;
 window.loadStudentsFromFirebase = loadStudentsFromFirebase;
 
@@ -3821,6 +3831,7 @@ window.clearAllStudyroomAlerts = function() {
 // ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
 // 각 학생의 최신 스케줄을 seat 기준으로 메모리에 보관
 const knownSchedules = {};   // { seat: { 월,화,...,updatedAt } }
+let _schedulesInitDone = false;  // 초기 로딩 완료 후 true
 const scheduleAlerts = (() => {
   try {
     const s = localStorage.getItem('saebom_scheduleAlerts');
@@ -3898,7 +3909,7 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     const prev = knownSchedules[seat];
 
     // 최초 로딩(앱 시작 시 added이고 아직 기준값 없는 경우)은 알림 생략
-    if (change.type === 'added' && !prev) {
+    if (!_schedulesInitDone && change.type === 'added' && !prev) {
       knownSchedules[seat] = data;
       return;
     }
@@ -3932,6 +3943,7 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     changed = true;
   });
 
+  _schedulesInitDone = true;  // 첫 콜백 이후 초기 로딩 완료 — 이후 added는 신규 저장으로 감지
   if (changed) renderScheduleAlerts();
 }, (error) => {
   console.error('❌ onSnapshot 에러:', error);

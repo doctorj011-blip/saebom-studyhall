@@ -1134,7 +1134,8 @@ async function loadStudentScheduleFromFirebase() {
   if (!window._firebaseReady) return;
   try {
     const db = window._db;
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', currentStudent.seat));
+    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', seatKey));
     if (snap.exists()) {
       const data = snap.data();
       DAYS.forEach(day => {
