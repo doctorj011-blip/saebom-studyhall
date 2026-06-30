@@ -234,6 +234,12 @@ const MONTHS = [
 
 let currentStudent = null;
 let currentTab = 'notice';
+let _statusUnsub = null;
+
+// KST(한국) 기준 오늘 날짜 반환 (UTC+9)
+function getTodayKST() {
+  return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 
 function showTab(id, btn) {
   if (id === 'planner') loadParentPlanner();
@@ -332,6 +338,9 @@ async function loadAllData() {
 
 // 입퇴실 실시간 감지 - Firebase 준비될 때까지 대기 후 연결
 async function startStatusRealtime() {
+  // 기존 리스너 해제 (중복 방지)
+  if (_statusUnsub) { _statusUnsub(); _statusUnsub = null; }
+
   // Firebase가 준비될 때까지 최대 3초 대기
   let waited = 0;
   while (!window._onSnapshot || !window._db) {
@@ -340,11 +349,11 @@ async function startStatusRealtime() {
     waited += 100;
   }
   if (!currentStudent) { loadStatus(); return; }
-  const today = new Date().toISOString().slice(0,10);
   try {
-    window._onSnapshot(
+    _statusUnsub = window._onSnapshot(
       window._query(window._collection(window._db, 'checkin_records'), window._where('studentName','==', currentStudent.name)),
       snap => {
+        const today = getTodayKST(); // KST 기준 오늘 날짜 (콜백마다 갱신)
         const records = [];
         snap.forEach(d => records.push(d.data()));
         const todayRecs = records.filter(r => r.date === today).sort((a,b)=>(a.inTime||'').localeCompare(b.inTime||''));
