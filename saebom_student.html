@@ -1429,24 +1429,50 @@ async function plannerLoadComments(dateStr) {
   }
 }
 
+// 이미지 압축 (Canvas 리사이즈, 최대 1200px, quality 0.82)
+function compressImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1200;
+      let w = img.width, h = img.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => resolve(blob || file), 'image/jpeg', 0.82);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
 // 사진 업로드
 async function plannerUploadPhoto(input) {
   if (!input.files || !input.files[0]) return;
   if (!currentStudent || !plannerSelectedDate) return;
-  const file = input.files[0];
+  const raw = input.files[0];
 
   try {
-    const st = await getPlannerStorage();
+    const progress = document.getElementById('planner-upload-progress');
+    const bar = document.getElementById('planner-progress-bar');
+    progress.style.display = 'block';
+    bar.style.width = '5%';
+
+    const file = await compressImage(raw);
+
+    const st = getPlannerStorage();
     const storage = st.storage;
     const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
     const path = `planners/${seat}/${plannerSelectedDate}.jpg`;
     const storageRef = st.ref(storage, path);
 
-    const progress = document.getElementById('planner-upload-progress');
-    const bar = document.getElementById('planner-progress-bar');
-    progress.style.display = 'block';
-
-    const uploadTask = st.uploadBytesResumable(storageRef, file, { contentType: file.type });
+    const uploadTask = st.uploadBytesResumable(storageRef, file, { contentType: 'image/jpeg' });
     uploadTask.on('state_changed',
       (snap) => {
         const pct = Math.round((snap.bytesTransferred / snap.totalBytes) * 100);
