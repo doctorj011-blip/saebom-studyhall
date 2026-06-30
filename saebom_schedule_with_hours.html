@@ -4326,7 +4326,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   });
 
   const changeContent = changeLines.join('\n');
-  const variables = { 이름: studentName, 변경내용: changeContent };
+  const variables = { '#{이름}': studentName, '#{변경내용}': changeContent };
   const messageText =
     `[새봄면학관]\n새봄면학관을 이용중인 ${studentName} 학생의 스케줄이 변경되었습니다.\n\n${changeContent}\n\n면학관 앱에서 확인해주세요.😊`;
 
