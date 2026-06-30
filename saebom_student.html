@@ -649,7 +649,7 @@ const SECTION_NAMES = {
 };
 
 function openSection(id, color) {
-  history.pushState({ section: id, color: color }, ');
+  history.pushState({ section: id, color: color }, '');
   // 헤더 색상 + 타이틀 변경
   const hdr = document.getElementById('section-header');
   hdr.style.background = color;
