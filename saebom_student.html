@@ -789,21 +789,28 @@ function initDraft() {
 
 function parsePeriodStatus(sched, pNum) {
   if (!sched || sched === '-') return 'none';
-  // 범위
-  const ranges = sched.match(/(\d+)~(\d+)/g) || [];
-  for (const r of ranges) {
-    const [a,b] = r.split('~').map(Number);
-    if (pNum >= a && pNum <= b) {
+  const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
+
+  // 1) 명시적 결석: x10 또는 x10(사유)
+  for (const t of tokens) {
+    const m = t.match(/^x(\d+)(?:\(([^)]*)\))?$/i);
+    if (m && Number(m[1]) === pNum) return 'absent';
+  }
+  // 2) 출석: 개별 번호 또는 범위(a~b)
+  for (const t of tokens) {
+    if (/^\d+$/.test(t) && Number(t) === pNum) return 'attend';
+    const rm = t.match(/^(\d+)~(\d+)$/);
+    if (rm && pNum >= Number(rm[1]) && pNum <= Number(rm[2])) {
+      // 구버전: x(사유)로 시작하면 범위는 결석 의미
       return sched.startsWith('x(') ? 'absent' : 'attend';
     }
   }
-  // 개별
-  const nums = sched.match(/\b\d+\b/g)?.map(Number) || [];
-  if (nums.includes(pNum)) {
-    return sched.startsWith('x(') && !nums.includes(pNum) ? 'absent' : 'attend';
+  // 3) 구버전 위치기반 결석: x 또는 x(사유) (번호 없음)
+  const hasBareAbsent = tokens.some(t => /^x(\([^)]*\))?$/i.test(t));
+  if (hasBareAbsent || sched.startsWith('x(')) {
+    const nums = sched.match(/\b\d+\b/g)?.map(Number) || [];
+    if (!nums.includes(pNum)) return 'absent';
   }
-  // x( 로 시작하면 결석
-  if (sched.startsWith('x(') && !nums.includes(pNum)) return 'absent';
   return 'none';
 }
 
@@ -1065,7 +1072,8 @@ async function saveSchedule() {
         hasAny = true;
       } else if (state === 'absent') {
         const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
-        tokens.push(reason ? `x(${reason})` : 'x');
+        // 교시 번호를 명시적으로 저장 (위치 기반 인코딩의 오프셋 버그 방지)
+        tokens.push(reason ? `x${p.n}(${reason})` : `x${p.n}`);
         hasAny = true;
       }
       // 'none' 또는 미정의 → 토큰 추가 안 함
@@ -1074,17 +1082,27 @@ async function saveSchedule() {
     currentStudent.schedule[day] = hasAny ? tokens.join(',') : '-';
   });
 
+  // 로컬에 즉시 반영 → 새로고침해도 저장 결과가 유지됨 (Firebase 로드 전/실패와 무관)
+  try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+
   isDirty = false;
   document.getElementById('save-fab').classList.remove('show');
   buildMyStats();
 
   // Firebase에 저장
-  await saveToFirebase();
-  showToast('✅ 스케줄이 저장됐습니다');
+  const ok = await saveToFirebase();
+  if (ok) {
+    try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {}
+    showToast('✅ 스케줄이 저장됐습니다');
+  } else {
+    // 서버 동기화 실패 → 미동기화 표시(새로고침 시 옛 서버 데이터가 로컬을 덮어쓰지 않도록)
+    try { sessionStorage.setItem('saebom_pending_sync', '1'); } catch(e) {}
+    showToast('⚠️ 저장됐지만 서버 동기화 실패 — 인터넷 연결을 확인하세요');
+  }
 }
 
 async function saveToFirebase() {
-  if (!window._firebaseReady) return;
+  if (!window._firebaseReady) return false;
   try {
     const db = window._db;
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
@@ -1098,8 +1116,10 @@ async function saveToFirebase() {
     DAYS.forEach(day => { payload[day] = currentStudent.schedule[day] || '-'; });
     await window._fsSetDoc(docRef, payload);
     await saveDailyReportToFirebase(db, seatKey);
+    return true;
   } catch(e) {
     console.error('Firebase 저장 실패:', e);
+    return false;
   }
 }
 
@@ -1132,6 +1152,15 @@ async function saveDailyReportToFirebase(db, seatKey) {
 // Firebase에서 기존 저장된 스케줄 로드
 async function loadStudentScheduleFromFirebase() {
   if (!window._firebaseReady) return;
+  // 로컬에 아직 서버로 못 올린 변경이 있으면, 서버에서 끌어오지 말고(옛 데이터로 덮어쓰기 방지)
+  // 로컬 변경을 서버로 다시 올린다.
+  let pendingSync = false;
+  try { pendingSync = sessionStorage.getItem('saebom_pending_sync') === '1'; } catch(e) {}
+  if (pendingSync) {
+    const ok = await saveToFirebase();
+    if (ok) { try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {} }
+    return;
+  }
   try {
     const db = window._db;
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
@@ -1141,6 +1170,8 @@ async function loadStudentScheduleFromFirebase() {
       DAYS.forEach(day => {
         if (data[day]) currentStudent.schedule[day] = data[day];
       });
+      // 서버 값을 로컬 캐시에도 반영 (새로고침 시 일관성 유지)
+      try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
       initDraft();
       buildDailyPeriods();
       buildWeeklyTable();
