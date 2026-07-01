@@ -1679,6 +1679,25 @@ window.checkinConfirm = function() {
   const student = btn._student;
   const isCheckout = btn._isCheckout;
   const existing = btn._existingRecord;
+
+  // ── 중복 기록 방지 ──
+  // (1) 처리 중 재진입(확인 버튼 더블탭) 차단
+  if (window._checkinProcessing) return;
+  // (2) 현재 실제 상태와 어긋나는 요청은 기록하지 않는다
+  //     (입실 중인데 또 입실 → in 중복 / 이미 퇴실인데 또 퇴실 → out 중복 방지)
+  const openRec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  if (!isCheckout && openRec) {
+    showAdminToast(`ℹ️ ${student.name} 학생은 이미 입실 중입니다`);
+    checkinReset();
+    return;
+  }
+  if (isCheckout && !openRec) {
+    showAdminToast(`ℹ️ ${student.name} 학생은 이미 퇴실 상태입니다`);
+    checkinReset();
+    return;
+  }
+  window._checkinProcessing = true;
+
   const now = new Date();
   const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
 
@@ -1891,7 +1910,28 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
     });
     const db = await waitDb();
     if (!db) return;
-    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, setDoc, serverTimestamp, collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+
+    // ── 다기기 동시 사용 시 중복 이벤트 방지 (쓰기 직전 서버 상태 확인) ──
+    // 같은 학생의 같은 날짜 '마지막' 이벤트가 지금 쓰려는 것과 동일 type이면 기록하지 않는다.
+    // (다른 기기가 이미 같은 입실/퇴실을 기록한 경우 in-in / out-out 중복 문서 방지)
+    try {
+      const snap = await getDocs(query(collection(db, 'checkin_logs'), where('studentName','==', student.name)));
+      let last = null;
+      snap.forEach(d => {
+        const x = d.data();
+        if (x.date !== today) return;
+        if (last === null || (timeToMin(x.time) ?? 0) > (timeToMin(last.time) ?? 0)) last = x;
+      });
+      if (last && last.type === type) {
+        console.warn(`[입퇴실] 중복 방지: ${student.name} 마지막 이벤트가 이미 '${type}' → 저장 건너뜀`);
+        return;
+      }
+    } catch(e) {
+      // 조회 실패(권한/네트워크)는 저장을 막지 않는다 — 최소한 기록은 남긴다.
+      console.warn('[입퇴실] 중복 검사 실패(무시하고 저장 진행):', e);
+    }
+
     await setDoc(doc(db, 'checkin_logs', logId), {
       studentName: student.name,
       seat: student.seat,
@@ -1905,6 +1945,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
 }
 
 window.checkinReset = function() {
+  window._checkinProcessing = false; // 처리 잠금 해제
   numpadBuffer = '';
   updateCheckinDisplay();
   hideCheckinError();
