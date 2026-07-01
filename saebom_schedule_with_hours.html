@@ -1785,6 +1785,8 @@ window.checkinConfirm = function() {
             if (studyRoomStudents[r].length === minCount && studyRoomStudents[r].length < 4) {
               studyRoomStudents[r].push(student.name);
               assignedRoom = r;
+              // 자동배정을 approved 신청 문서로 저장 → 스냅샷 재구성 후에도 배치도에 유지
+              saveAutoStudyroomAssignment(student, r, curPeriod);
               break;
             }
           }
@@ -1971,6 +1973,39 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
     });
 
   } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
+}
+
+// ── 입실 자동배정을 studyroom_requests(approved)로 영속화 ──
+// 자동배정은 원래 메모리(studyRoomStudents)에만 반영돼, 직후 _syncStudyRoomStudents가
+// 승인된 신청만으로 명단을 재구성하면 즉시 사라져 배치도에 표시되지 않았다.
+// 자동배정도 approved 신청 문서로 남겨 스냅샷 재구성 후에도 유지·표시되게 한다.
+async function saveAutoStudyroomAssignment(student, room, period) {
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    // _syncStudyRoomStudents 와 동일한 날짜 형식(ISO YYYY-MM-DD) 사용
+    const date = new Date().toISOString().slice(0,10);
+    const seatNum = String(student.seat).replace('번','').trim();
+    // (좌석·날짜·교시)당 하나로 고정 → 재입실 시 중복 문서 생성 방지(덮어쓰기)
+    const id = `auto_${date}_${seatNum}_p${period}`;
+    await setDoc(doc(db, 'studyroom_requests', id), {
+      name: student.name,
+      seat: student.seat,
+      period: period,
+      room: room,
+      status: 'approved',
+      date: date,
+      auto: true,
+      reason: '자동배정',
+      ts: Date.now(),
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.error('스터디룸 자동배정 저장 실패:', e); }
 }
 
 window.checkinReset = function() {
