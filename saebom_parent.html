@@ -464,11 +464,29 @@ function doLogout() {
 }
 
 // ── 데이터 로드 ──
+// ── 최신 학생 데이터 갱신 (sessionStorage 캐시 stale 방지) ──
+async function refreshParentData() {
+  try {
+    if (!currentStudent || !window._db || !window._getDoc || !window._doc) return;
+    const seat = String(currentStudent.seat || '').replace('번','');
+    if (!seat) return;
+    const snap = await window._getDoc(window._doc(window._db, 'students', seat));
+    if (snap.exists()) {
+      currentStudent.hours = _normalizeHours(snap.data().hours);
+      try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
+      loadHours();
+      const el = document.getElementById('month-hours');
+      if (el) el.textContent = _readHour(currentStudent.hours, _curYm()) + 'h';
+    }
+  } catch(e) { console.error('학부모 데이터 갱신 실패:', e); }
+}
+
 async function loadAllData() {
   await startStatusRealtime();  // 실시간 먼저
   startScheduleRealtime();      // 스케줄도 실시간 구독
   loadHours();
   loadNotices();
+  refreshParentData();          // 최신 hours 재조회 (캐시 갱신)
 }
 
 // 입퇴실 실시간 감지 - Firebase 준비될 때까지 대기 후 연결
@@ -1006,6 +1024,7 @@ async function doLoginFirebase(name, phone) {
 // 화면 복귀 시 갱신
 document.addEventListener('visibilitychange', function() {
   if (document.hidden || !currentStudent) return;
+  refreshParentData();
   startStatusRealtime();
   startScheduleRealtime();
   loadNotices();

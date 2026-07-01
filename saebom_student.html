@@ -744,14 +744,31 @@ function enterApp() {
     checkSeatSelectionActive();
     loadNoticesFromFirebase();
     subscribeScheduleEdit();
+    refreshStudentData();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
       checkSeatSelectionActive();
       loadNoticesFromFirebase();
       subscribeScheduleEdit();
+      refreshStudentData();
     }, { once: true });
   }
+}
+
+// ── 최신 학생 데이터 갱신 (sessionStorage 캐시 stale 방지) ──
+async function refreshStudentData() {
+  try {
+    if (!currentStudent || !window._db || !window._fsGetDoc || !window._fsDoc) return;
+    const seat = String(currentStudent.seat || '').replace('번','');
+    if (!seat) return;
+    const snap = await window._fsGetDoc(window._fsDoc(window._db, 'students', seat));
+    if (snap && snap.exists && snap.exists()) {
+      currentStudent.hours = _normalizeHours(snap.data().hours);
+      try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+      buildMyStats();
+    }
+  } catch(e) { console.error('학생 데이터 갱신 실패:', e); }
 }
 
 function subscribeScheduleEdit() {
@@ -1667,6 +1684,7 @@ window.cancelStudyroom = async function(reqId) {
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
   if (!currentStudent) return;
+  refreshStudentData();
   // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
   if (activeTab === 'seatmap') buildStudentSeatmap();
