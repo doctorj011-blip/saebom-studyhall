@@ -276,6 +276,180 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .home-banner-ko{font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:2px}
 .home-banner-en{font-size:19px;font-weight:800;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 4px rgba(0,0,0,0.3)}
 </style>
+<!-- ══════════════════════════════════════════════════════════════════
+     APPLE REDESIGN OVERRIDE  ·  add-only, 기존 코드 무수정
+     Mail + Health + Home 감성 · Glass · SF Pro · 다크모드 · 반응형
+     ══════════════════════════════════════════════════════════════════ -->
+<style id="apple-redesign">
+/* ── 0. 디자인 토큰 (라이트) ───────────────────────────────── */
+:root{
+  /* Apple system grouped background & materials */
+  --bg:#F2F2F7;
+  --card:#FFFFFF;
+  --surface:#EFEFF4;
+  --text:#1C1C1E;
+  --text2:#3C3C4399;   /* secondaryLabel */
+  --text3:#3C3C4360;   /* tertiaryLabel */
+  --border:rgba(60,60,67,0.12);
+  --border-light:rgba(60,60,67,0.08);
+  /* 브랜드 앰버는 액센트로 유지 + 애플식 채도 보정 */
+  --amber:#C8900A;--amber-dark:#A87008;--amber-light:#E8B030;
+  --amber-pale:#FBF1D8;
+  --red:#FF3B30;--red-pale:rgba(255,59,48,0.10);--red-border:rgba(255,59,48,0.25);
+  /* HIG radius */
+  --r-sm:10px;--r-md:14px;--r-lg:20px;--r-xl:26px;
+  /* soft, low-contrast shadows (Apple는 그림자를 거의 안 씀) */
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md:0 4px 16px rgba(0,0,0,0.06);
+  --shadow-lg:0 12px 40px rgba(0,0,0,0.10);
+  /* spring easing */
+  --spring:cubic-bezier(0.34,1.56,0.64,1);
+  --ease:cubic-bezier(0.32,0.72,0,1);
+  --header-glass:rgba(200,144,10,0.82);
+}
+
+/* ── 1. 타이포그래피 · SF Pro ──────────────────────────────── */
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Pretendard","Segoe UI",sans-serif;
+  background:var(--bg);
+  letter-spacing:-0.01em;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+}
+
+/* ── 2. Glass 헤더 (Mail/Home 상단 재질) ───────────────────── */
+/* 흰 글자 가독성 유지를 위해 앰버 틴트 글래스 사용 */
+.home-header,.app-topbar,.section-header,.app-header{
+  background:var(--header-glass) !important;
+  -webkit-backdrop-filter:saturate(180%) blur(22px);
+  backdrop-filter:saturate(180%) blur(22px);
+  border-bottom:0.5px solid rgba(255,255,255,0.18);
+  box-shadow:0 1px 12px rgba(120,70,0,0.12) !important;
+}
+.home-header{padding:16px 20px}
+.topbar-title,.section-title{letter-spacing:-0.3px;font-weight:700}
+.home-name{letter-spacing:-0.4px}
+
+/* ── 3. 카드형 대시보드 (Home 타일 + Health 카드) ──────────── */
+.quick-grid{gap:14px}
+.quick-card{
+  border-radius:var(--r-lg);
+  border:0.5px solid var(--border-light);
+  box-shadow:var(--shadow-md);
+  background:var(--card);
+  padding:18px 16px 16px;
+  transition:transform 0.32s var(--spring),box-shadow 0.3s var(--ease);
+}
+.quick-card:active{transform:scale(0.95);box-shadow:var(--shadow-sm)}
+.quick-card-icon{font-size:30px}
+.quick-card-title{font-weight:600;letter-spacing:-0.2px}
+.quick-card-bg{opacity:0.04;font-size:60px}
+
+.notice-card,.period-card,.stat-card,.this-week-card,.weekly-table-wrap{
+  border-radius:var(--r-lg) !important;
+  border:0.5px solid var(--border-light) !important;
+  box-shadow:var(--shadow-md) !important;
+}
+.stat-card-val{color:var(--amber);letter-spacing:-0.8px}
+.period-card{transition:transform 0.3s var(--spring),box-shadow 0.3s var(--ease)}
+.period-card:active{transform:scale(0.985)}
+
+/* ── 4. 버튼 / 칩 (iOS pill + spring) ──────────────────────── */
+.toggle-btn,.day-tab,.np-btn,.logout-btn,.topbar-logout,.back-btn,.section-logout{
+  transition:transform 0.28s var(--spring),background 0.2s var(--ease),color 0.2s var(--ease),box-shadow 0.2s var(--ease);
+}
+.toggle-btn:active,.day-tab:active,.np-btn:active{transform:scale(0.92)}
+.day-tab.active{box-shadow:0 4px 14px rgba(200,144,10,0.32)}
+.np-btn{border-radius:16px;font-weight:400}
+
+/* ── 5. 반투명 탭바 (모바일 = 사이드바 대체, iOS Tab Bar) ──── */
+.bottom-nav{
+  background:rgba(255,255,255,0.72) !important;
+  -webkit-backdrop-filter:saturate(180%) blur(24px);
+  backdrop-filter:saturate(180%) blur(24px);
+  border-top:0.5px solid var(--border) !important;
+  box-shadow:none !important;
+}
+.bn-item{transition:color 0.2s var(--ease)}
+.bn-item i{transition:transform 0.3s var(--spring)}
+.bn-item.active i{transform:scale(1.14)}
+
+/* ── 6. 로그인 · 글래스 카드 ───────────────────────────────── */
+.login-card{
+  background:rgba(255,255,255,0.72) !important;
+  -webkit-backdrop-filter:saturate(180%) blur(30px);
+  backdrop-filter:saturate(180%) blur(30px);
+  border:0.5px solid rgba(255,255,255,0.5) !important;
+  border-radius:var(--r-xl) !important;
+  box-shadow:0 24px 70px rgba(0,0,0,0.3) !important;
+}
+.pin-dot.filled{transform:scale(1.2)}
+
+/* ── 7. FAB / 토스트 (iOS material) ────────────────────────── */
+.save-fab{
+  border-radius:30px !important;
+  box-shadow:0 8px 28px rgba(200,144,10,0.4) !important;
+  transition:transform 0.3s var(--spring) !important;
+}
+.toast{
+  background:rgba(28,26,22,0.72) !important;
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  backdrop-filter:blur(20px) saturate(180%);
+  border-radius:22px !important;
+}
+
+/* ── 8. 진입 애니메이션 (iOS view push) ────────────────────── */
+@keyframes appleFadeUp{from{opacity:0;transform:translateY(14px) scale(0.99)}to{opacity:1;transform:none}}
+.home-screen.visible .quick-card,
+.app-content>*{animation:appleFadeUp 0.5s var(--ease) both}
+.quick-card:nth-child(1){animation-delay:.02s}.quick-card:nth-child(2){animation-delay:.05s}
+.quick-card:nth-child(3){animation-delay:.08s}.quick-card:nth-child(4){animation-delay:.11s}
+.quick-card:nth-child(5){animation-delay:.14s}.quick-card:nth-child(6){animation-delay:.17s}
+
+/* ── 9. 완전 반응형 (태블릿/데스크톱) ──────────────────────── */
+@media (min-width:700px){
+  .app-content,.home-content{max-width:720px}
+  .quick-grid{grid-template-columns:repeat(3,1fr)}
+}
+@media (min-width:1000px){
+  .app-content,.home-content{max-width:840px;padding-left:24px;padding-right:24px}
+}
+
+/* ── 10. 다크 모드 ─────────────────────────────────────────── */
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#000000;
+    --card:#1C1C1E;
+    --surface:#2C2C2E;
+    --text:#FFFFFF;
+    --text2:#EBEBF599;
+    --text3:#EBEBF54D;
+    --border:rgba(84,84,88,0.55);
+    --border-light:rgba(84,84,88,0.3);
+    --amber:#E8B030;--amber-dark:#E8B030;--amber-light:#F0C040;
+    --amber-pale:rgba(232,176,48,0.14);
+    --red:#FF453A;--red-pale:rgba(255,69,58,0.16);--red-border:rgba(255,69,58,0.35);
+    --header-glass:rgba(120,86,8,0.72);
+    --shadow-sm:0 1px 2px rgba(0,0,0,0.5);
+    --shadow-md:0 4px 16px rgba(0,0,0,0.5);
+    --shadow-lg:0 12px 40px rgba(0,0,0,0.6);
+  }
+  body{background:#000}
+  .bottom-nav{background:rgba(28,28,30,0.72) !important}
+  .login-card{background:rgba(28,28,30,0.72) !important;border-color:rgba(255,255,255,0.12) !important}
+  .weekly-table{background:var(--card) !important}
+  .weekly-table td{color:var(--text)}
+  .np-btn{background:var(--surface);border-color:var(--border-light);color:var(--text)}
+  /* inline-styled 배너 다크 대응 */
+  #daily-edit-banner{background:rgba(48,209,88,0.14) !important;border-color:rgba(48,209,88,0.4) !important;color:#5DE07C !important}
+  #weekly-edit-banner{background:rgba(255,69,58,0.14) !important;border-color:rgba(255,69,58,0.4) !important;color:#FF6B61 !important}
+  .stat-card-val.blue{color:var(--amber-light)}
+}
+
+/* ── 11. 접근성: 모션 최소화 ───────────────────────────────── */
+@media (prefers-reduced-motion:reduce){
+  *,.quick-card,.app-content>*{animation:none !important;transition:none !important}
+}
+</style>
 </head>
 <body>
 
