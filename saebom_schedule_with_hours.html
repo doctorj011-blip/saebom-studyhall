@@ -863,9 +863,19 @@ let PERIOD_OFFSET = 6;
 
 let STUDENTS=[];
 
-const MONTHS=[{k:3,label:'3월'},{k:4,label:'4월'},{k:5,label:'5월'},{k:6,label:'6월'}];
+// ── 누적시간 key 헬퍼 (YYYY-MM) ──
+// hours 객체의 key를 "월번호(1~12)"에서 "연-월(YYYY-MM)"로 전환.
+// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
+function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
+function _ymLabel(key){ return parseInt(String(key).split('-')[1],10)+'월'; }
+function _readHour(hours, key){ if(!hours) return 0; if(hours[key]!=null) return hours[key]; if(String(key)<_curYm()){ const p=String(key).split('-'); if(p[0]==='2026'){ const n=parseInt(p[1],10); if(hours[n]!=null) return hours[n]; } } return 0; }
+
+const MONTHS=_recentMonths(5);
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
-let currentMonth=6;
+let currentMonth=_curYm();
 let currentView='table';
 
 let ALERTS = []; // 동적으로 계산됨
@@ -1099,20 +1109,20 @@ function getHoursChip(h){
 }
 
 function getTrend(s,m){
-  const prev=s.hours[m-1];
-  const cur=s.hours[m];
+  const prev=_readHour(s.hours,_prevYm(m));
+  const cur=_readHour(s.hours,m);
   if(!prev) return '<span class="trend-same">—</span>';
-  const diff=cur-prev;
+  const diff=Math.round((cur-prev)*10)/10;
   if(diff>0) return `<span class="trend-up"><i class="ti ti-trending-up" aria-hidden="true"></i> +${diff}h</span>`;
   if(diff<0) return `<span class="trend-down"><i class="ti ti-trending-down" aria-hidden="true"></i> ${diff}h</span>`;
   return '<span class="trend-same">±0</span>';
 }
 
 function buildHoursTable(){
-  const sorted=[...STUDENTS].sort((a,b)=>(b.hours[currentMonth]||0)-(a.hours[currentMonth]||0));
+  const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   if (!sorted.length) return;
-  const vals=sorted.map(s=>s.hours[currentMonth]||0);
-  const maxH=Math.max(...vals,0);
+  const vals=sorted.map(s=>_readHour(s.hours,currentMonth));
+  const maxH=Math.max(...vals,1);
   const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
   const over180=vals.filter(v=>v>=180).length;
   const under100=vals.filter(v=>v<100).length;
@@ -1144,14 +1154,14 @@ function buildHoursTable(){
     <th style="width:32px">순위</th>
     <th>이름</th><th>좌석</th>
     <th>1일 사용시간</th>
-    <th>${currentMonth}월 사용시간</th>
+    <th>${_ymLabel(currentMonth)} 사용시간</th>
     <th style="width:100px">그래프</th>
     <th>전월 대비</th>
-    <th>3월</th><th>4월</th><th>5월</th><th>6월</th>
+    ${MONTHS.map(m=>`<th>${m.label}</th>`).join('')}
   </tr></thead><tbody>`;
 
   sorted.forEach((s,i)=>{
-    const h=s.hours[currentMonth]||0;
+    const h=_readHour(s.hours,currentMonth);
     const pct=Math.round(h/maxH*100);
     const rankClass=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
     const todayMin = todayHoursMap[s.name] || 0;
@@ -1169,7 +1179,7 @@ function buildHoursTable(){
       <td>${getHoursChip(h)}</td>
       <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
       <td>${getTrend(s,currentMonth)}</td>
-      ${MONTHS.map(m=>`<td style="font-size:11px;color:var(--color-text-secondary)">${s.hours[m.k]||'—'}</td>`).join('')}
+      ${MONTHS.map(m=>{const hv=_readHour(s.hours,m.k);return `<td style="font-size:11px;color:var(--color-text-secondary)">${hv||'—'}</td>`;}).join('')}
     </tr>`;
   });
   html+='</tbody>';
@@ -1177,13 +1187,13 @@ function buildHoursTable(){
 }
 
 function buildHoursChart(){
-  const sorted=[...STUDENTS].sort((a,b)=>(b.hours[currentMonth]||0)-(a.hours[currentMonth]||0));
-  const maxH=Math.max(...sorted.map(s=>s.hours[currentMonth]||0), 1);
+  const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
+  const maxH=Math.max(...sorted.map(s=>_readHour(s.hours,currentMonth)), 1);
   const chartH=120;
-  document.getElementById('chart-month-label').textContent=`— ${currentMonth}월`;
+  document.getElementById('chart-month-label').textContent=`— ${_ymLabel(currentMonth)}`;
 
   document.getElementById('bar-chart').innerHTML=sorted.map(s=>{
-    const h=s.hours[currentMonth]||0;
+    const h=_readHour(s.hours,currentMonth);
     const barH=Math.round(h/maxH*chartH);
     const color=h>=180?'#C8900A':h>=120?'#A87008':'#C62828';
     return `<div class="bar-col">
@@ -1202,7 +1212,7 @@ function buildHoursChart(){
           <span style="font-size:11px;width:50px;color:var(--color-text-secondary);flex-shrink:0">${s.name}</span>
           <div style="flex:1;display:flex;align-items:center;gap:4px">
             ${MONTHS.map(m=>{
-              const h=s.hours[m.k]||0;
+              const h=_readHour(s.hours,m.k);
               const w=Math.round(h/250*100);
               return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
                 <div style="width:100%;height:18px;background:var(--color-background-secondary);border-radius:3px;overflow:hidden">
@@ -1270,7 +1280,7 @@ window.selectDay = function(day,el){
 
 function buildMonthTabs(){
   document.getElementById('month-tabs').innerHTML=MONTHS.map(m=>
-    `<div class="month-tab${m.k===currentMonth?' active':''}" onclick="selectMonth(${m.k},this)">${m.label}</div>`
+    `<div class="month-tab${m.k===currentMonth?' active':''}" onclick="selectMonth('${m.k}',this)">${m.label}</div>`
   ).join('');
 }
 
@@ -1384,7 +1394,7 @@ function buildDashboard(){
   const avgEl = document.getElementById('stat-avg-hours');
   if (avgEl && STUDENTS.length > 0) {
     const validStudents = STUDENTS.filter(s => parseInt(s.seat) < 54); // 관리자 제외
-    const vals = validStudents.map(s => s.hours[currentMonth] || 0);
+    const vals = validStudents.map(s => _readHour(s.hours, currentMonth));
     const avg = vals.length > 0 ? Math.round(vals.reduce((a,b) => a+b, 0) / vals.length) : 0;
     avgEl.innerHTML = `${avg}<span style="font-size:13px">h</span>`;
   }
@@ -1472,7 +1482,7 @@ function buildStudentList(filter=''){
     .filter(s=>s.name.includes(filter)||s.seat.includes(filter)||(s.phone&&s.phone.replace(/\D/g,'').includes(filter.replace(/\D/g,''))))
     .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat))
     .map(s=>{
-      const h=s.hours[currentMonth]||0;
+      const h=_readHour(s.hours,currentMonth);
       const idx=STUDENTS.indexOf(s);
       const isAdmin = parseInt(s.seat) >= 54;
       const hColor = h>=180?'#27500A':h>=120?'#7A5008':'#A32D2D';
@@ -1724,7 +1734,7 @@ window.checkinConfirm = function() {
     _checkoutTotalMin = diffMin;
     const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
 
-    const monthKey = new Date().getMonth() + 1; // 1~12
+    const monthKey = _curYm(); // "YYYY-MM"
     if (!student.hours) student.hours = {};
     student.hours[monthKey] = Math.round(((student.hours[monthKey] || 0) + diffHr) * 10) / 10;
 
