@@ -873,7 +873,12 @@ function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ 
 function _ymLabel(key){ return parseInt(String(key).split('-')[1],10)+'월'; }
 function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
 // 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)
-function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={}; for(const k of Object.keys(hours)){ let nk=k; if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12) nk=_ymKey(2026,m); } out[nk]=(out[nk]||0)+(Number(hours[k])||0); } return out; }
+function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={};
+  // 신형식(YYYY-MM) 우선 복사
+  for(const k of Object.keys(hours)){ if(/^\d{4}-\d{2}$/.test(k)) out[k]=Number(hours[k])||0; }
+  // 구형식 숫자키(1~12)는 같은 달의 신형식이 없을 때만 보완 (중복 합산 방지)
+  for(const k of Object.keys(hours)){ if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12){ const nk=_ymKey(2026,m); if(out[nk]==null) out[nk]=Number(hours[k])||0; } } }
+  return out; }
 
 const MONTHS=_recentMonths(5);
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
@@ -3543,7 +3548,7 @@ window.clearAllScheduleAlerts = function() {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, setDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -3593,7 +3598,7 @@ async function saveStudentToFirebase(student) {
 // 일회성·멱등: 변환할 구형식 키가 없으면 아무 것도 쓰지 않음. Firebase students 문서를 영구 정리.
 async function migrateHoursKeys() {
   try {
-    if (localStorage.getItem('saebom_hours_migrated_v1') === 'done') return;
+    if (localStorage.getItem('saebom_hours_migrated_v2') === 'done') return;
     const snap = await getDocs(collection(db, 'students'));
     let migrated = 0;
     for (const d of snap.docs) {
@@ -3602,10 +3607,12 @@ async function migrateHoursKeys() {
       if (!hours || typeof hours !== 'object') continue;
       const hasLegacy = Object.keys(hours).some(k => /^\d{1,2}$/.test(k) && +k >= 1 && +k <= 12);
       if (!hasLegacy) continue;
-      await setDoc(doc(db, 'students', d.id), { hours: _normalizeHours(hours), updatedAt: serverTimestamp() }, { merge: true });
+      // updateDoc: hours 필드를 통째로 교체 → 구형식 숫자키가 실제로 삭제됨
+      // (setDoc merge:true 는 map을 깊게 병합해 구형식이 남는 문제가 있었음)
+      await updateDoc(doc(db, 'students', d.id), { hours: _normalizeHours(hours), updatedAt: serverTimestamp() });
       migrated++;
     }
-    localStorage.setItem('saebom_hours_migrated_v1', 'done');
+    localStorage.setItem('saebom_hours_migrated_v2', 'done');
     if (migrated > 0) console.log(`[마이그레이션] 누적시간 key 변환 완료: ${migrated}개 학생`);
   } catch(e) {
     console.error('[마이그레이션] 실패:', e);

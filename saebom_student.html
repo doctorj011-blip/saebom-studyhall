@@ -614,7 +614,10 @@ function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new D
 function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
 function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
 // 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로그인 시 1회 적용)
-function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={}; for(const k of Object.keys(hours)){ let nk=k; if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12) nk=_ymKey(2026,m); } out[nk]=(out[nk]||0)+(Number(hours[k])||0); } return out; }
+function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={};
+  for(const k of Object.keys(hours)){ if(/^\d{4}-\d{2}$/.test(k)) out[k]=Number(hours[k])||0; }
+  for(const k of Object.keys(hours)){ if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12){ const nk=_ymKey(2026,m); if(out[nk]==null) out[nk]=Number(hours[k])||0; } } }
+  return out; }
 
 // ── 교시 데이터 ──
 const DAYS = ['월','화','수','목','금','토'];
