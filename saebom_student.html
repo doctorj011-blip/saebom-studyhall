@@ -1164,6 +1164,20 @@ async function saveToFirebase() {
     };
     DAYS.forEach(day => { payload[day] = currentStudent.schedule[day] || '-'; });
     await window._fsSetDoc(docRef, payload);
+
+    // 원칙1: 주간 시간표 수정기간(관리자 허용) 저장은 '원본(base)'도 갱신 →
+    // 다음 수정기간까지 유지된다. (당일 변경은 scheduleEditEnabled=false 라 여기 안 탐)
+    if (scheduleEditEnabled) {
+      const baseRef = window._fsDoc(db, 'schedule_base', seatKey);
+      const basePayload = {
+        name: currentStudent.name,
+        seat: currentStudent.seat,
+        updatedAt: window._fsServerTimestamp(),
+      };
+      DAYS.forEach(day => { basePayload[day] = currentStudent.schedule[day] || '-'; });
+      await window._fsSetDoc(baseRef, basePayload);
+    }
+
     await saveDailyReportToFirebase(db, seatKey);
     return true;
   } catch(e) {
@@ -1214,19 +1228,77 @@ async function loadStudentScheduleFromFirebase() {
     const db = window._db;
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
     const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', seatKey));
-    if (snap.exists()) {
-      const data = snap.data();
+    const liveData = snap.exists() ? snap.data() : null;
+    if (liveData) {
       DAYS.forEach(day => {
-        if (data[day]) currentStudent.schedule[day] = data[day];
+        if (liveData[day]) currentStudent.schedule[day] = liveData[day];
       });
-      // 서버 값을 로컬 캐시에도 반영 (새로고침 시 일관성 유지)
-      try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
-      initDraft();
-      buildDailyPeriods();
-      buildWeeklyTable();
-      buildMyStats();
     }
+
+    // 원칙1·2: 원본(base) 기준으로 재구성하고 지난 당일변경을 복구한다.
+    await applyBaseAndRevert(db, seatKey, liveData);
+
+    // 서버 값을 로컬 캐시에도 반영 (새로고침 시 일관성 유지)
+    try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+    initDraft();
+    buildDailyPeriods();
+    buildWeeklyTable();
+    buildMyStats();
   } catch(e) { console.error('스케줄 로드 실패:', e); }
+}
+
+// ── 원본(base) 기준 복구 ──
+// 원칙1: 관리자/주간수정기간에 등록한 원본은 schedule_base에 보관되어 다음 수정기간까지 유지된다.
+// 원칙2: 학생의 당일 변경은 '오늘 날짜'의 daily_reports 에만 임시로 살아있고,
+//        날짜가 바뀌면 원본으로 자동 복구된다. (지난 당일변경이 schedules에 남아있으면 되돌려 씀)
+async function applyBaseAndRevert(db, seatKey, liveData) {
+  try {
+    // 1) 원본 로드 (없으면 현재 등록값을 원본으로 최초 저장 = 마이그레이션)
+    const baseRef = window._fsDoc(db, 'schedule_base', seatKey);
+    const baseSnap = await window._fsGetDoc(baseRef);
+    const base = {};
+    if (baseSnap.exists()) {
+      const bd = baseSnap.data();
+      DAYS.forEach(day => { base[day] = bd[day] || '-'; });
+    } else {
+      DAYS.forEach(day => { base[day] = currentStudent.schedule[day] || '-'; });
+      const basePayload = { name: currentStudent.name, seat: currentStudent.seat, updatedAt: window._fsServerTimestamp() };
+      DAYS.forEach(day => { basePayload[day] = base[day]; });
+      try { await window._fsSetDoc(baseRef, basePayload); } catch(e) {}
+    }
+
+    // 2) '오늘 날짜'의 당일변경(daily_reports)만 오늘 요일에 유지
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const tDay = DAY_NAMES[now.getDay()];
+    let todayOverride = null;
+    try {
+      const rptSnap = await window._fsGetDoc(window._fsDoc(db, 'daily_reports', `${dateStr}_${seatKey}`));
+      if (rptSnap.exists() && typeof rptSnap.data().schedule === 'string') {
+        todayOverride = rptSnap.data().schedule;
+      }
+    } catch(e) {}
+
+    // 3) 표시값 재구성: 모든 요일 = 원본, 단 오늘 요일은 오늘자 당일변경이 있으면 그 값
+    const rebuilt = {};
+    DAYS.forEach(day => { rebuilt[day] = base[day]; });
+    if (DAYS.includes(tDay) && todayOverride != null) rebuilt[tDay] = todayOverride;
+    DAYS.forEach(day => { currentStudent.schedule[day] = rebuilt[day]; });
+
+    // 4) Firebase schedules가 재구성값과 다르면 되돌려 씀 (지난 당일변경 복구).
+    //    원칙3: 이 되돌림도 관리앱 감지 로직이 정상 감지 — 감지 로직은 건드리지 않음.
+    if (liveData) {
+      const diff = DAYS.some(day => (liveData[day] || '-') !== (rebuilt[day] || '-'));
+      if (diff) {
+        const payload = {
+          name: currentStudent.name, seat: currentStudent.seat,
+          phone: currentStudent.phone || '', updatedAt: window._fsServerTimestamp(),
+        };
+        DAYS.forEach(day => { payload[day] = rebuilt[day] || '-'; });
+        try { await window._fsSetDoc(window._fsDoc(db, 'schedules', seatKey), payload); } catch(e) {}
+      }
+    }
+  } catch(e) { console.error('원본 복구 실패:', e); }
 }
 
 function loadNoticesFromFirebase() {
