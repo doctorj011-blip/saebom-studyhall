@@ -3585,6 +3585,9 @@ window.applyStudentSchedule = function(seat, idx) {
   else if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
   buildScheduleTable(currentDay);
   buildStudentList(document.getElementById('student-search')?.value || '');
+  // 적용 즉시 미입실 알림 대상 재계산 (불참 교시 배제 등 반영) — 1분 자동갱신을 기다리지 않도록
+  // buildScheduleTable/buildStudentList와 동일 스코프의 함수라 직접 호출 (window에 미등록)
+  buildDashboard();
   a.applied = true;
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
   showAdminToast(`✅ ${student.name} 스케줄 적용 완료`);
