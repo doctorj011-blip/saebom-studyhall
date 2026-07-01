@@ -486,7 +486,12 @@ async function startStatusRealtime() {
         const events = [];
         snap.forEach(d => { const x = d.data(); if (isSameDay(x.date, today)) events.push(x); });
         console.log(`[현황] ${currentStudent.name} · 오늘(${today}) 이벤트 ${events.length}건 / 전체 문서 ${snap.size}건`);
-        events.sort((a,b) => (a.time||'').localeCompare(b.time||''));
+        // ⚠️ time 은 "오후 02:35" 처럼 오전/오후 + 12시간제 문자열이라
+        //    localeCompare(문자열 비교)로 정렬하면 시간순이 되지 않는다.
+        //    (예: 입실 "오후 12:30" 이 퇴실 "오후 02:35" 보다 뒤로 정렬되어
+        //     out→in 순서가 뒤집히고, 퇴실했는데도 '입실 중'으로 표시됨)
+        //    관리자 앱과 동일하게 분(minute) 단위로 변환해 정렬한다.
+        events.sort((a,b) => (timeToMin(a.time) ?? 0) - (timeToMin(b.time) ?? 0));
         const todayRecs = [];
         events.forEach(e => {
           if (e.type === 'in') {
@@ -517,6 +522,20 @@ async function startStatusRealtime() {
       }
     );
   } catch(e) { console.error('[현황] 구독 설정 오류:', e); loadStatus(); }
+}
+
+// "오후 02:35" / "오전 9:05" / "14:30" 등을 자정 기준 분(minute)으로 변환
+// (관리자 앱의 timeToMin 과 동일 로직 — 시간순 정렬에 사용)
+function timeToMin(t) {
+  if (t === null || t === undefined) return null;
+  const s = String(t);
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (/오후/.test(s) && h !== 12) h += 12;   // 오후 1~11시 → +12
+  if (/오전/.test(s) && h === 12) h = 0;      // 오전 12시(자정) → 0시
+  return h * 60 + min;
 }
 
 // 두 날짜 문자열이 같은 날인지 포맷/0패딩 무관하게 비교
