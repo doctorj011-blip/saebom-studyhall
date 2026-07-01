@@ -439,6 +439,11 @@ async function startStatusRealtime() {
             else todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: '?', outTime: e.time });
           }
         });
+        // 진단: 이 학생의 전체 기록(모든 날짜) 덤프 — 이월/누락 여부 확인용
+        const _all = [];
+        snap.forEach(d => { const x = d.data(); _all.push(`${x.date} ${x.type} ${x.time}`); });
+        _all.sort();
+        console.log('[현황] 전체 기록(날짜순):', _all);
         // 진단: 오늘 이벤트 원본과 재구성 결과, 최종 입실여부를 그대로 출력
         console.log('[현황] 오늘 이벤트(정렬후):', events.map(e => `${e.type} ${e.time} 좌석${e.seat}`));
         console.log('[현황] 재구성 기록:', JSON.parse(JSON.stringify(todayRecs)),
