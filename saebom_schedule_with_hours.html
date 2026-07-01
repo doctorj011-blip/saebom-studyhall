@@ -3874,6 +3874,29 @@ async function loadTodayCheckinFromFirebase() {
     todayRecords.length = 0;
     PRESENT.length = 0;
 
+    // ── 어제 '미퇴실 입실'의 열린 입실시각을 먼저 계산 (자정 넘김 대비) ──
+    // 자정을 넘겨 오늘 새벽에 퇴실하면 out은 '오늘' 날짜, 짝이 되는 in은 '어제' 날짜라
+    // 오늘 문서만으로는 짝을 못 찾아 입실시각이 '?'로 표시됐다. 어제 열린 입실시각을 미리 확보해
+    //  (1) 오늘 새벽 퇴실과 짝지어 '닫힌 기록'으로 만들고
+    //  (2) 아직 퇴실 안 한 학생은 오늘 입실 중으로 이월한다.
+    const ydByStudent = {};
+    yesterdayDocs.forEach(d => {
+      if (!d.studentName) return;
+      if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
+      if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
+      else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
+    });
+    // name → 어제의 마지막(미퇴실) 입실 { time, seat }
+    const carryIn = {};
+    Object.entries(ydByStudent).forEach(([name, rec]) => {
+      if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
+        const lastIn = rec.ins[rec.ins.length - 1];
+        carryIn[name] = { time: lastIn.time || '?', seat: lastIn.seat || '' };
+      }
+    });
+    // 실시간 onSnapshot 핸들러도 같은 정보를 써서 '?' 대신 어제 입실시각을 넣도록 공유
+    window._carryIn = carryIn;
+
     // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
     // ts(epoch ms)로 정렬하되, 같은 시각이면 입실(in)을 먼저 처리해
     // 퇴실이 짝(열린 입실)을 찾도록 한다.
@@ -3901,29 +3924,22 @@ async function loadTodayCheckinFromFirebase() {
           rec.outTime = time;
           const idx = PRESENT.indexOf(name);
           if (idx !== -1) PRESENT.splice(idx, 1);
+        } else if (carryIn[name]) {
+          // 어제 입실 → 오늘 새벽 퇴실: 어제 입실시각과 짝지어 닫힌 기록으로 저장 ('?' 방지)
+          todayRecords.push({ studentName: name, seat: seat || carryIn[name].seat, inTime: carryIn[name].time, outTime: time, carriedOver: true, carryFromDate: yesterday });
+          delete carryIn[name]; // 소비됨 → 아래 이월(입실 중)에서 되살아나지 않도록
         }
+        // 그 외(어제 입실 기록도 없는 진짜 고아 퇴실)은 표시하지 않는다.
       }
     });
 
-    // 어제 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
-    const ydByStudent = {};
-    yesterdayDocs.forEach(d => {
-      if (!d.studentName) return;
-      if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
-      if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
-      else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
-    });
-    Object.entries(ydByStudent).forEach(([name, rec]) => {
-      if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
-        // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
-        // ※ 예전에는 '아직 입실 중(!outTime)'인 기록만 검사해서, 오늘 퇴실 처리한 학생이
-        //   어제 미퇴실 기록으로부터 다시 입실로 되살아나는 버그가 있었다.
-        const hasTodayRecord = todayRecords.some(r => r.studentName === name);
-        if (!hasTodayRecord) {
-          const lastIn = rec.ins[rec.ins.length - 1];
-          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, carriedOver: true, carryFromDate: yesterday });
-          if (!PRESENT.includes(name)) PRESENT.push(name);
-        }
+    // 어제 입실 후 아직 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
+    // 위에서 오늘 새벽 퇴실과 짝지어 소비된 학생은 carryIn에서 제거되어 제외된다.
+    Object.entries(carryIn).forEach(([name, info]) => {
+      const hasTodayRecord = todayRecords.some(r => r.studentName === name);
+      if (!hasTodayRecord) {
+        todayRecords.push({ studentName: name, seat: info.seat, inTime: info.time, outTime: null, carriedOver: true, carryFromDate: yesterday });
+        if (!PRESENT.includes(name)) PRESENT.push(name);
       }
     });
 
@@ -3984,7 +4000,10 @@ onSnapshot(
           // 입실 기록 없이 퇴실만 온 경우 - 입실 기록 생성 후 퇴실 처리
           const alreadyOut = todayRecords.find(r => r.studentName === name && r.outTime === time);
           if (!alreadyOut) {
-            todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
+            // 자정 넘김: 어제 열린 입실이 있으면 그 시각을 입실시각으로 사용 ('?' 방지)
+            const ci = window._carryIn && window._carryIn[name];
+            todayRecords.push({ studentName: name, seat: seat || (ci ? ci.seat : ''), inTime: ci ? ci.time : '?', outTime: time, carriedOver: !!ci });
+            if (ci) delete window._carryIn[name];
             const idx = PRESENT.indexOf(name);
             if (idx !== -1) PRESENT.splice(idx, 1);
             changed = true;
