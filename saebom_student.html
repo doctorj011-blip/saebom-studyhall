@@ -606,6 +606,16 @@ const NOTICES = [
   },
 ];
 
+// ── 누적시간 key 헬퍼 (YYYY-MM) ──
+// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
+function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
+function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
+// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로그인 시 1회 적용)
+function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={}; for(const k of Object.keys(hours)){ let nk=k; if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12) nk=_ymKey(2026,m); } out[nk]=(out[nk]||0)+(Number(hours[k])||0); } return out; }
+
 // ── 교시 데이터 ──
 const DAYS = ['월','화','수','목','금','토'];
 const PERIODS_WEEK = [
@@ -703,6 +713,7 @@ function logout() {
 }
 
 function enterApp() {
+  if (currentStudent) currentStudent.hours = _normalizeHours(currentStudent.hours);
   document.getElementById('login-screen').style.display='none';
   document.getElementById('home-screen').classList.add('visible');
 
@@ -1245,11 +1256,10 @@ function showToast(msg) {
 // ── 내 현황 ──
 function buildMyStats() {
   const s = currentStudent;
-  const months = [3,4,5,6];
-  const monthLabels = {3:'3월',4:'4월',5:'5월',6:'6월'};
-  const currentMonth = new Date().getMonth() + 1;
-  const curH = Math.round((s.hours[currentMonth] || 0) * 10) / 10;
-  const prevH = Math.round((s.hours[currentMonth-1] || 0) * 10) / 10;
+  const months = _recentMonths(5);
+  const currentMonth = _curYm();
+  const curH = Math.round(_readHour(s.hours, currentMonth) * 10) / 10;
+  const prevH = Math.round(_readHour(s.hours, _prevYm(currentMonth)) * 10) / 10;
   const diff = Math.round((curH - prevH) * 10) / 10;
   const diffStr = diff > 0 ? `+${diff}h` : `${diff}h`;
   const diffColor = diff > 0 ? '#C8900A' : '#C62828';
@@ -1292,12 +1302,12 @@ function buildMyStats() {
     <div class="section-label">월별 누적시간</div>
     <div class="this-week-card">`;
 
-  months.forEach(m => {
-    const h = s.hours[m] || 0;
+  months.forEach(mo => {
+    const h = _readHour(s.hours, mo.key);
     const pct = Math.min(100, Math.round(h/250*100));
     const color = h>=180?'#C8900A':h>=120?'#A87008':'#C62828';
     html += `<div class="week-row">
-      <div class="week-day" style="font-size:12px">${monthLabels[m]}</div>
+      <div class="week-day" style="font-size:12px">${mo.label}</div>
       <div style="flex:1;display:flex;align-items:center;gap:10px">
         <div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden">
           <div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div>

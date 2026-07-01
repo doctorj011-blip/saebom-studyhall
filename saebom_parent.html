@@ -315,11 +315,17 @@ const PERIODS_SAT = [
   {n:9,label:'9교시',t:'20:30~22:00'},{n:10,label:'10교시',t:'22:30~23:50'},
   {n:11,label:'11교시',t:'00:00~01:00'},
 ];
-const MONTHS = [
-  {k:1,label:'1월'},{k:2,label:'2월'},{k:3,label:'3월'},{k:4,label:'4월'},
-  {k:5,label:'5월'},{k:6,label:'6월'},{k:7,label:'7월'},{k:8,label:'8월'},
-  {k:9,label:'9월'},{k:10,label:'10월'},{k:11,label:'11월'},{k:12,label:'12월'},
-];
+// ── 누적시간 key 헬퍼 (YYYY-MM) ──
+// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
+function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
+function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
+// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로그인 시 1회 적용)
+function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={}; for(const k of Object.keys(hours)){ let nk=k; if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12) nk=_ymKey(2026,m); } out[nk]=(out[nk]||0)+(Number(hours[k])||0); } return out; }
+
+const MONTHS = _recentMonths(6);
 
 let currentStudent = null;
 let currentTab = 'notice';
@@ -432,6 +438,7 @@ async function doLogin() {
 }
 
 function enterApp() {
+  if (currentStudent) currentStudent.hours = _normalizeHours(currentStudent.hours);
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('app-screen').classList.add('visible');
   document.getElementById('hdr-avatar').textContent = currentStudent.name[0];
@@ -606,8 +613,7 @@ function renderStatus(todayRecs) {
   }
 
   // 이번 달 누적
-  const monthKey = new Date().getMonth() + 1;
-  const h = currentStudent.hours?.[monthKey] || 0;
+  const h = _readHour(currentStudent.hours, _curYm());
   document.getElementById('month-hours').textContent = h + 'h';
   document.getElementById('month-seat').textContent = currentStudent.seat ? currentStudent.seat+'번' : '-';
 }
@@ -746,11 +752,11 @@ function loadSchedule() {
 function loadHours() {
   if (!currentStudent) return;
   const hours = currentStudent.hours || {};
-  const currentMonth = new Date().getMonth() + 1;
-  const maxH = Math.max(...MONTHS.map(m => hours[m.k] || 0), 1);
+  const currentMonth = _curYm();
+  const maxH = Math.max(...MONTHS.map(m => _readHour(hours, m.k)), 1);
 
   let html = MONTHS.map(m => {
-    const h = hours[m.k] || 0;
+    const h = _readHour(hours, m.k);
     const pct = Math.round(h / maxH * 100);
     const isCurrent = m.k === currentMonth;
     return `<div style="margin-bottom:12px">

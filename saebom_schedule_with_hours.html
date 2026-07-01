@@ -871,7 +871,9 @@ function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth
 function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
 function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
 function _ymLabel(key){ return parseInt(String(key).split('-')[1],10)+'월'; }
-function _readHour(hours, key){ if(!hours) return 0; if(hours[key]!=null) return hours[key]; if(String(key)<_curYm()){ const p=String(key).split('-'); if(p[0]==='2026'){ const n=parseInt(p[1],10); if(hours[n]!=null) return hours[n]; } } return 0; }
+function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
+// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)
+function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={}; for(const k of Object.keys(hours)){ let nk=k; if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12) nk=_ymKey(2026,m); } out[nk]=(out[nk]||0)+(Number(hours[k])||0); } return out; }
 
 const MONTHS=_recentMonths(5);
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
@@ -3587,6 +3589,29 @@ async function saveStudentToFirebase(student) {
   });
 }
 
+// ── 누적시간 key 마이그레이션 (구형식 숫자키 1~12 → "2026-MM") ──
+// 일회성·멱등: 변환할 구형식 키가 없으면 아무 것도 쓰지 않음. Firebase students 문서를 영구 정리.
+async function migrateHoursKeys() {
+  try {
+    if (localStorage.getItem('saebom_hours_migrated_v1') === 'done') return;
+    const snap = await getDocs(collection(db, 'students'));
+    let migrated = 0;
+    for (const d of snap.docs) {
+      const v = d.data();
+      const hours = v.hours;
+      if (!hours || typeof hours !== 'object') continue;
+      const hasLegacy = Object.keys(hours).some(k => /^\d{1,2}$/.test(k) && +k >= 1 && +k <= 12);
+      if (!hasLegacy) continue;
+      await setDoc(doc(db, 'students', d.id), { hours: _normalizeHours(hours), updatedAt: serverTimestamp() }, { merge: true });
+      migrated++;
+    }
+    localStorage.setItem('saebom_hours_migrated_v1', 'done');
+    if (migrated > 0) console.log(`[마이그레이션] 누적시간 key 변환 완료: ${migrated}개 학생`);
+  } catch(e) {
+    console.error('[마이그레이션] 실패:', e);
+  }
+}
+
 // ── Firebase에서 학생 삭제 ──
 async function deleteStudentFromFirebase(seat) {
   try {
@@ -3602,7 +3627,7 @@ function _parseStudentDoc(v) {
     phone: v.phone || '', parent: v.parent || '',
     gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
     schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-    hours: v.hours || {}
+    hours: _normalizeHours(v.hours)
   };
 }
 
@@ -3624,7 +3649,7 @@ async function loadStudentsFromFirebase() {
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-          hours: v.hours || {}
+          hours: _normalizeHours(v.hours)
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -3632,6 +3657,7 @@ async function loadStudentsFromFirebase() {
   } catch(e) {
     console.error('Firebase 로드 실패:', e);
   }
+  migrateHoursKeys(); // 구형식 hours key 영구 정리 (백그라운드·멱등)
   if (window.initApp) window.initApp();
 
   // students 컬렉션 실시간 감시 - added 무시, modified/removed만 처리
@@ -3663,7 +3689,7 @@ async function loadStudentsFromFirebase() {
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-        hours: v.hours || {}
+        hours: _normalizeHours(v.hours)
       };
       const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       if (idx !== -1) { STUDENTS[idx] = updated; }
