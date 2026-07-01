@@ -518,8 +518,12 @@ async function startStatusRealtime() {
         //    localeCompare(문자열 비교)로 정렬하면 시간순이 되지 않는다.
         //    (예: 입실 "오후 12:30" 이 퇴실 "오후 02:35" 보다 뒤로 정렬되어
         //     out→in 순서가 뒤집히고, 퇴실했는데도 '입실 중'으로 표시됨)
-        //    관리자 앱과 동일하게 분(minute) 단위로 변환해 정렬한다.
-        events.sort((a,b) => (timeToMin(a.time) ?? 0) - (timeToMin(b.time) ?? 0));
+        //    관리자 앱과 동일하게 ts(epoch ms) 기준으로 '실제 시간순' 정렬한다.
+        //    ⚠️ timeToMin(시분)만으로 정렬하면, 이전 입실이 큰 시분("오후 09:24"=1284)이고
+        //       이후 퇴실/재입실이 작은 시분(예 "오후 12:5x")이면 순서가 뒤집혀
+        //       재구성이 꼬이고 '퇴실'로 오판된다. ts 가 없는 구버전 문서는 시분으로 폴백.
+        const eventSortKey = x => (x && typeof x.ts === 'number') ? x.ts : (timeToMin(x && x.time) ?? 0) * 60000;
+        events.sort((a,b) => eventSortKey(a) - eventSortKey(b));
         const todayRecs = [];
         events.forEach(e => {
           if (e.type === 'in') {
