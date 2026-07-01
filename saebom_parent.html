@@ -495,7 +495,11 @@ async function startStatusRealtime() {
         const todayRecs = [];
         events.forEach(e => {
           if (e.type === 'in') {
-            todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: e.time, outTime: null });
+            // ⚠️ 이미 입실 중(열린 기록)이면 중복 in 은 무시한다 — 학생당 열린 기록은 하나만.
+            //    이 처리가 없으면 in 이 여러 번 쌓일 때 짝 없는 열린 기록이 남아
+            //    퇴실했는데도 계속 '입실 중'으로 표시된다. (관리자 앱 loadToday 와 동일 로직)
+            const alreadyOpen = todayRecs.find(r => !r.outTime);
+            if (!alreadyOpen) todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: e.time, outTime: null });
           } else if (e.type === 'out') {
             // 가장 최근의 미퇴실 기록에 퇴실시각 매칭
             const open = [...todayRecs].reverse().find(r => !r.outTime);
