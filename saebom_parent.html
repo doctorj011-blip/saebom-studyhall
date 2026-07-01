@@ -423,8 +423,10 @@ async function startStatusRealtime() {
       snap => {
         const today = getTodayAdminDate(); // 관리자앱과 동일한 날짜 포맷 (콜백마다 갱신)
         // 오늘 이벤트만 시간순 정렬 후 입실/퇴실 기록으로 재구성
+        // 날짜는 포맷/0패딩/시간대 차이에 영향받지 않도록 정규화 후 비교한다.
         const events = [];
-        snap.forEach(d => { const x = d.data(); if (x.date === today) events.push(x); });
+        snap.forEach(d => { const x = d.data(); if (isSameDay(x.date, today)) events.push(x); });
+        console.log(`[현황] ${currentStudent.name} · 오늘(${today}) 이벤트 ${events.length}건 / 전체 문서 ${snap.size}건`);
         events.sort((a,b) => (a.time||'').localeCompare(b.time||''));
         const todayRecs = [];
         events.forEach(e => {
@@ -438,9 +440,26 @@ async function startStatusRealtime() {
           }
         });
         renderStatus(todayRecs);
+      },
+      err => {
+        // onSnapshot 의 오류(예: Firestore 보안규칙이 checkin_logs 읽기를 막는 경우)는
+        // 여기 비동기 에러 콜백으로 온다. 조용히 실패하지 않도록 로그를 남기고 폴백한다.
+        console.error('[현황] checkin_logs 실시간 구독 실패:', err && err.code, err && err.message, err);
+        loadStatus();
       }
     );
-  } catch(e) { loadStatus(); }
+  } catch(e) { console.error('[현황] 구독 설정 오류:', e); loadStatus(); }
+}
+
+// 두 날짜 문자열이 같은 날인지 포맷/0패딩 무관하게 비교
+// ("2026-7-1", "2026-07-01", "2026. 7. 1." 등을 모두 [2026,7,1]로 정규화)
+function isSameDay(a, b) {
+  const norm = s => {
+    if (!s) return '';
+    const m = String(s).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? `${+m[1]}-${+m[2]}-${+m[3]}` : String(s).trim();
+  };
+  return norm(a) === norm(b);
 }
 
 // 관리자앱과 동일한 날짜 문자열 포맷 (KST 기준, 0 패딩 없음): "2026-7-1"
