@@ -641,6 +641,13 @@ body{
       <div style="margin-bottom:16px">
         <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">내 신청 현황</div>
         <div id="studyroom-my-requests"><div style="font-size:13px;color:#aaa">신청 내역 없음</div></div>
+        <div id="studyroom-history-wrap" style="display:none;margin-top:10px">
+          <div onclick="var b=document.getElementById('studyroom-history-body');var a=document.getElementById('studyroom-history-arrow');var o=b.style.display==='none';b.style.display=o?'block':'none';a.textContent=o?'▾':'▸';"
+               style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#aaa;cursor:pointer;user-select:none">
+            <span id="studyroom-history-arrow">▸</span><span>오늘 이용 이력</span><span id="studyroom-history-count" style="font-weight:400"></span>
+          </div>
+          <div id="studyroom-history-body" style="display:none;margin-top:6px"></div>
+        </div>
       </div>
       <div>
         <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">스터디룸 현황</div>
@@ -1116,7 +1123,7 @@ function showTab(id, btn) {
   if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
   // 현재 탭 저장
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
-  if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
+  if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; if (studyroomRefreshTimer) { clearInterval(studyroomRefreshTimer); studyroomRefreshTimer = null; } }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
   ['notice','daily','weekly','mystats','seatmap','studyroom','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
@@ -1868,6 +1875,8 @@ window.selectSeat = async function(seatNum) {
 
 // ── 스터디룸 신청 ──
 let studyroomUnsubscribe = null;
+let studyroomRefreshTimer = null;
+let _lastStudyroomAll = null;
 
 function buildStudyroomPeriodBtns() {
   const today = DAY_NAMES[new Date().getDay()];
@@ -1966,14 +1975,23 @@ function loadStudyroomData() {
   const db = window._db;
   if (!db || !currentStudent) return;
   if (studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} }
+  if (studyroomRefreshTimer) { clearInterval(studyroomRefreshTimer); studyroomRefreshTimer = null; }
   const today = new Date().toISOString().slice(0,10);
-  studyroomUnsubscribe = window._fsOnSnapshot(
-    window._fsCollection(db, 'studyroom_requests'),
-    snap => {
-      const all = [];
-      snap.forEach(d => all.push({ id: d.id, ...d.data() }));
+  // 교시 종료 시각(분) — 관리앱과 동일. 자정 넘김은 +1440으로 보정.
+  const PERIOD_END = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
+  const isExpired = r => {
+    const now = new Date();
+    let cur = now.getHours() * 60 + now.getMinutes();
+    if (now.getHours() < 3) cur += 1440;
+    const end = PERIOD_END[r.period];
+    return end !== undefined && cur > end;
+  };
+  function renderStudyroomView(all) {
       const todayReqs = all.filter(r => r.date === today);
-      const myReqs = todayReqs.filter(r => r.name === currentStudent.name).sort((a,b) => a.period - b.period);
+      const myAll = todayReqs.filter(r => r.name === currentStudent.name).sort((a,b) => a.period - b.period);
+      // 사용시간이 지난 신청은 활성 목록에서 빼고 '이용 이력'으로 접어 보관
+      const myReqs = myAll.filter(r => !isExpired(r));
+      const myHistory = myAll.filter(r => isExpired(r));
       const myEl = document.getElementById('studyroom-my-requests');
       if (myEl) {
         myEl.innerHTML = myReqs.length === 0
@@ -1993,8 +2011,31 @@ function loadStudyroomData() {
               </div>`;
             }).join('');
       }
+      // 오늘 이용 이력 (사용시간이 지난 신청) — 흐리게 접어서 표시
+      const histWrap = document.getElementById('studyroom-history-wrap');
+      const histBody = document.getElementById('studyroom-history-body');
+      const histCount = document.getElementById('studyroom-history-count');
+      if (histWrap && histBody) {
+        if (myHistory.length === 0) {
+          histWrap.style.display = 'none';
+        } else {
+          histWrap.style.display = 'block';
+          if (histCount) histCount.textContent = `(${myHistory.length})`;
+          histBody.innerHTML = myHistory.map(r => {
+            const st = r.status==='approved'?'✅ 사용완료':r.status==='rejected'?'❌ 거절됨':'⏳ 미승인 종료';
+            return `<div style="padding:8px 12px;background:#F7F7F7;border:1px solid #E5E5E5;border-radius:10px;margin-bottom:6px;opacity:0.65">
+              <div style="display:flex;align-items:center;justify-content:space-between">
+                <span style="font-size:12px;font-weight:600;color:#888">${r.period}교시 · 스터디룸 ${r.room}번</span>
+                <span style="font-size:11px;font-weight:700;color:#aaa">${st}</span>
+              </div>
+              ${r.reason?`<div style="font-size:11px;color:#aaa;margin-top:2px">📝 ${r.reason}</div>`:''}
+            </div>`;
+          }).join('');
+        }
+      }
       const rc = {1:[],2:[],3:[]};
-      todayReqs.forEach(r => { if(rc[r.room]) rc[r.room].push(r); });
+      // 현황도 사용시간이 지난 신청은 제외 (관리앱과 동일하게 현재 이용자만)
+      todayReqs.filter(r => !isExpired(r)).forEach(r => { if(rc[r.room]) rc[r.room].push(r); });
       const stEl = document.getElementById('studyroom-status');
       if (stEl) {
         stEl.innerHTML = [1,2,3].map(room =>
@@ -2005,8 +2046,22 @@ function loadStudyroomData() {
           </div>`
         ).join('');
       }
+  }
+
+  studyroomUnsubscribe = window._fsOnSnapshot(
+    window._fsCollection(db, 'studyroom_requests'),
+    snap => {
+      const all = [];
+      snap.forEach(d => all.push({ id: d.id, ...d.data() }));
+      _lastStudyroomAll = all;
+      renderStudyroomView(all);
     }
   );
+  // 시간이 지나면 DB 변화가 없어도 이력으로 내려가도록 1분마다 재렌더
+  if (studyroomRefreshTimer) clearInterval(studyroomRefreshTimer);
+  studyroomRefreshTimer = setInterval(() => {
+    if (_lastStudyroomAll) renderStudyroomView(_lastStudyroomAll);
+  }, 60000);
 }
 
 window.cancelStudyroom = async function(reqId) {
