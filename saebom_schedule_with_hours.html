@@ -3639,6 +3639,70 @@ async function deleteStudentFromFirebase(seat) {
   } catch(e) { console.error('삭제 실패:', e); }
 }
 
+// ── [일회성] 특정 학생 데이터 '완전' 삭제 도구 (브라우저 콘솔에서 실행) ──
+//   모든 컬렉션(students·schedules·checkin_logs·planner_comments·studyroom_requests)에서
+//   해당 좌석/이름 데이터를 찾아 삭제한다.  ⚠️ 되돌릴 수 없음.
+//   1) 미리보기:  purgeStudentData('36','정원혁')
+//   2) 실제삭제:  purgeStudentData('36','정원혁', true)
+window.purgeStudentData = async function(seat, name, execute) {
+  seat = String(seat).replace('번','').trim();
+  const dry = execute !== true;
+  const targets = [];  // {col, id}
+
+  // 1) students / schedules : 문서 ID = 좌석번호 (없으면 삭제는 무시됨)
+  targets.push({ col:'students',  id: seat });
+  targets.push({ col:'schedules', id: seat });
+
+  // 2) checkin_logs : seat 또는 studentName 필드로 매칭
+  (await getDocs(collection(db,'checkin_logs'))).forEach(d => {
+    const v = d.data();
+    if (String(v.seat).replace('번','') === seat || v.studentName === name)
+      targets.push({ col:'checkin_logs', id: d.id });
+  });
+
+  // 3) planner_comments : 문서 ID가 "<좌석>_..." 형식
+  (await getDocs(collection(db,'planner_comments'))).forEach(d => {
+    if (d.id === seat || d.id.startsWith(seat + '_'))
+      targets.push({ col:'planner_comments', id: d.id });
+  });
+
+  // 4) studyroom_requests : name/seat 필드로 매칭
+  (await getDocs(collection(db,'studyroom_requests'))).forEach(d => {
+    const v = d.data();
+    if (v.name === name || String(v.seat).replace('번','') === seat)
+      targets.push({ col:'studyroom_requests', id: d.id });
+  });
+
+  console.log(`[삭제대상] ${name}(${seat}번) — 총 ${targets.length}건`);
+  targets.forEach(t => console.log('   ' + t.col + '/' + t.id));
+
+  if (dry) {
+    console.warn(`※ 미리보기입니다. 실제로 지우려면: purgeStudentData("${seat}","${name}", true)`);
+    return targets;
+  }
+
+  let ok = 0, fail = 0;
+  for (const t of targets) {
+    try { await deleteDoc(doc(db, t.col, t.id)); ok++; }
+    catch(e) { fail++; console.warn('삭제 실패:', t.col, t.id, e); }
+  }
+
+  // 로컬(화면) 상태에서도 즉시 제거
+  const si = STUDENTS.findIndex(s => String(s.seat).replace('번','') === seat);
+  if (si !== -1) STUDENTS.splice(si, 1);
+  for (let i = todayRecords.length - 1; i >= 0; i--) {
+    const r = todayRecords[i];
+    if (r.studentName === name || String(r.seat).replace('번','') === seat) todayRecords.splice(i, 1);
+  }
+  const pi = PRESENT.indexOf(name); if (pi !== -1) PRESENT.splice(pi, 1);
+  try { buildDashboard(); buildCheckinTodayList(); if (document.getElementById('fp-room')) buildFloorplan(); } catch(e){}
+  try { if (typeof buildHoursTable === 'function') buildHoursTable(); } catch(e){}
+
+  console.log(`✅ 삭제 완료: 성공 ${ok}건, 실패 ${fail}건`);
+  if (window.showAdminToast) showAdminToast(`✅ ${name}(${seat}번) 데이터 ${ok}건 삭제 완료`);
+  return { ok, fail };
+};
+
 // ── 학생 데이터 파싱 헬퍼 ──
 function _parseStudentDoc(v) {
   return {
