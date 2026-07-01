@@ -539,6 +539,22 @@ async function startStatusRealtime() {
             else todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: '?', outTime: e.time });
           }
         });
+        // ── 어제 미퇴실 이월 (관리자앱 loadTodayCheckinFromFirebase 와 동일 로직) ──
+        // 자정을 넘겨 아직 입실 중인 학생은 오늘 이벤트가 0건이라 여기까지 못 잡힌다.
+        // 오늘 기록이 하나도 없고, 어제 입실 수 > 퇴실 수이면 '입실 중'으로 이월한다.
+        // (이 처리가 없으면 관리자앱은 입실중으로 보이는데 학부모앱만 미입실로 표시됨)
+        if (todayRecs.length === 0) {
+          const yesterday = getAdminDate(-1);
+          const yEvents = [];
+          snap.forEach(d => { const x = d.data(); if (isSameDay(x.date, yesterday)) yEvents.push(x); });
+          const yIns = yEvents.filter(e => e.type === 'in').sort((a,b) => eventSortKey(a) - eventSortKey(b));
+          const yOuts = yEvents.filter(e => e.type === 'out');
+          if (yIns.length > 0 && yIns.length > yOuts.length) {
+            const lastIn = yIns[yIns.length - 1];
+            todayRecs.push({ studentName: lastIn.studentName, seat: lastIn.seat, inTime: lastIn.time, outTime: null, carriedOver: true });
+            console.log(`[현황] ${currentStudent.name} · 어제(${yesterday}) 미퇴실 → 오늘 입실 중으로 이월`);
+          }
+        }
         // 진단: 이 학생의 전체 기록(모든 날짜) 덤프 — 이월/누락 여부 확인용
         const _all = [];
         snap.forEach(d => { const x = d.data(); _all.push(`${x.date} ${x.type} ${x.time}`); });
@@ -586,10 +602,12 @@ function isSameDay(a, b) {
 }
 
 // 관리자앱과 동일한 날짜 문자열 포맷 (KST 기준, 0 패딩 없음): "2026-7-1"
-function getTodayAdminDate() {
-  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000);
+// offsetDays: 0=오늘, -1=어제
+function getAdminDate(offsetDays) {
+  const kst = new Date(Date.now() + 9 * 60 * 60 * 1000 + (offsetDays || 0) * 86400000);
   return `${kst.getUTCFullYear()}-${kst.getUTCMonth() + 1}-${kst.getUTCDate()}`;
 }
+function getTodayAdminDate() { return getAdminDate(0); }
 
 function loadStatus() {
   const today = new Date().toISOString().slice(0,10);
@@ -609,7 +627,9 @@ function renderStatus(todayRecs) {
     badge.className = 'badge-in'; badge.innerHTML = '<i class="ti ti-circle-check-filled"></i> 입실 중';
     if (ring) { ring.style.background = '#DCFCE7'; ring.style.color = '#166534'; ring.innerHTML = '<i class="ti ti-door-enter"></i>'; }
     const inRec = todayRecs.find(r => r.inTime && !r.outTime);
-    timeEl.textContent = `입실 시각: ${inRec?.inTime || ''}`;
+    timeEl.textContent = inRec?.carriedOver
+      ? `입실 시각: 어제 ${inRec?.inTime || ''} (미퇴실 유지)`
+      : `입실 시각: ${inRec?.inTime || ''}`;
     seatEl.textContent = `좌석: ${currentStudent.seat || '-'}번`;
   } else if (lastRec) {
     badge.className = 'badge-out'; badge.innerHTML = '<i class="ti ti-home"></i> 퇴실';
