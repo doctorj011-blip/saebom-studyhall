@@ -439,6 +439,10 @@ async function startStatusRealtime() {
             else todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: '?', outTime: e.time });
           }
         });
+        // 진단: 오늘 이벤트 원본과 재구성 결과, 최종 입실여부를 그대로 출력
+        console.log('[현황] 오늘 이벤트(정렬후):', events.map(e => `${e.type} ${e.time} 좌석${e.seat}`));
+        console.log('[현황] 재구성 기록:', JSON.parse(JSON.stringify(todayRecs)),
+                    '→ 입실중?', todayRecs.some(r => r.inTime && !r.outTime));
         renderStatus(todayRecs);
       },
       err => {
