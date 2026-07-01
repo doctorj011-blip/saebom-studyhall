@@ -51,6 +51,18 @@
   .login-btn:active { transform: scale(0.98); box-shadow: 0 3px 10px rgba(200,144,10,0.3); }
   .login-error { color: #C62828; font-size: 12px; margin-top: 10px; text-align: center; min-height: 16px; font-weight: 600; }
 
+  /* 로그인 키패드 (전화번호 뒷 4자리) */
+  .pin-display { display: flex; justify-content: center; gap: 14px; margin: 4px 0 16px; }
+  .pin-dot { width: 42px; height: 50px; border-radius: 12px; border: 1.5px solid var(--border); background: #FAFAFA; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: var(--text); transition: border 0.15s, background 0.15s; }
+  .pin-dot.filled { border-color: var(--brand); background: #fff; }
+  .pin-dot.active { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(200,144,10,0.15); }
+  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
+  .keypad-btn { padding: 14px 0; border: none; background: #F4F5F7; border-radius: 14px; font-size: 21px; font-weight: 700; color: var(--text); cursor: pointer; transition: transform 0.08s, background 0.15s; user-select: none; -webkit-user-select: none; }
+  .keypad-btn:active { transform: scale(0.94); background: var(--brand-50); }
+  .keypad-btn.empty { background: transparent; pointer-events: none; }
+  .keypad-btn.action { font-size: 14px; line-height: 1.15; color: var(--text-soft); }
+  .keypad-btn.action i { font-size: 22px; }
+
   /* 앱 */
   #app-screen { display: none; min-height: 100vh; flex-direction: column; }
   #app-screen.visible { display: flex; }
@@ -154,9 +166,26 @@
       <input class="login-input" id="login-name" type="text" placeholder="홍길동" autocomplete="off">
     </div>
     <div class="login-label">학부모 전화번호 (뒷 4자리)</div>
-    <div class="login-field" style="margin-bottom:4px">
-      <i class="ti ti-phone"></i>
-      <input class="login-input" id="login-phone" type="tel" placeholder="1234" maxlength="4" inputmode="numeric">
+    <input id="login-phone" type="hidden" value="">
+    <div class="pin-display" id="pin-display">
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+      <div class="pin-dot"></div>
+    </div>
+    <div class="keypad">
+      <button type="button" class="keypad-btn" onclick="pinPress('1')">1</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('2')">2</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('3')">3</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('4')">4</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('5')">5</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('6')">6</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('7')">7</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('8')">8</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('9')">9</button>
+      <button type="button" class="keypad-btn action" onclick="pinClear()" aria-label="전체삭제">전체<br>삭제</button>
+      <button type="button" class="keypad-btn" onclick="pinPress('0')">0</button>
+      <button type="button" class="keypad-btn action" onclick="pinDelete()" aria-label="지우기"><i class="ti ti-backspace"></i></button>
     </div>
     <button class="login-btn" onclick="doLogin()">로그인 <i class="ti ti-arrow-right" style="font-size:15px;vertical-align:-2px"></i></button>
     <div class="login-error" id="login-error"></div>
@@ -344,6 +373,35 @@ const DUMMY_RECORDS = [
   { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'14:30', outTime:null },
 ];
 
+// ── 전화번호 키패드 ──
+function renderPin() {
+  const phone = document.getElementById('login-phone').value;
+  const dots = document.querySelectorAll('#pin-display .pin-dot');
+  dots.forEach((dot, i) => {
+    dot.textContent = phone[i] || '';
+    dot.classList.toggle('filled', i < phone.length);
+    dot.classList.toggle('active', i === phone.length);
+  });
+}
+function pinPress(digit) {
+  const el = document.getElementById('login-phone');
+  if (el.value.length >= 4) return;
+  el.value += digit;
+  renderPin();
+  const errEl = document.getElementById('login-error');
+  if (errEl) errEl.textContent = '';
+  if (el.value.length === 4) doLogin();
+}
+function pinDelete() {
+  const el = document.getElementById('login-phone');
+  el.value = el.value.slice(0, -1);
+  renderPin();
+}
+function pinClear() {
+  document.getElementById('login-phone').value = '';
+  renderPin();
+}
+
 async function doLogin() {
   const name = document.getElementById('login-name').value.trim();
   const phone = document.getElementById('login-phone')?.value.trim() || '';
@@ -392,6 +450,7 @@ function doLogout() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-name').value = '';
   document.getElementById('login-phone').value = '';
+  renderPin();
 }
 
 // ── 데이터 로드 ──
