@@ -901,6 +901,12 @@ function timeToMin(t) {
   if (/오전/.test(s) && h === 12) h = 0;      // 오전 12시(자정) → 0시
   return h * 60 + min;
 }
+// 입퇴실 이벤트 정렬 키: 같은 '분'에 발생한 입실·퇴실이 섞이지 않도록
+// epoch ms(ts)를 우선 사용하고, 없으면(구버전 기록) 분 단위 시각으로 대체한다.
+function eventSortKey(x) {
+  if (x && typeof x.ts === 'number') return x.ts;
+  return (timeToMin(x && x.time) ?? 0) * 60000;
+}
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 
@@ -1919,7 +1925,10 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
   try {
     const today = dateOverride || new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const type = isCheckout ? 'out' : 'in';
-    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(':','')}`;
+    // 같은 '분' 안에 같은 종류(입실/입실)가 들어와도 서로 다른 문서가 되도록
+    // epoch ms를 ID 끝에 붙여 고유성을 보장한다. (기존엔 분 단위라 setDoc이 덮어써 유실됐음)
+    const nowMs = Date.now();
+    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(/[:\s]/g,'')}_${nowMs}`;
     // Firebase가 준비될 때까지 대기
     const waitDb = () => new Promise(res => {
       if (window._adminDb) return res(window._adminDb);
@@ -1938,7 +1947,9 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
       snap.forEach(d => {
         const x = d.data();
         if (x.date !== today) return;
-        if (last === null || (timeToMin(x.time) ?? 0) > (timeToMin(last.time) ?? 0)) last = x;
+        // 분 단위 시각(timeToMin)은 같은 분의 입실·퇴실을 구분하지 못하므로
+        // ts(epoch ms) 기준으로 실제 마지막 이벤트를 판정한다.
+        if (last === null || eventSortKey(x) > eventSortKey(last)) last = x;
       });
       if (last && last.type === type) {
         console.warn(`[입퇴실] 중복 방지: ${student.name} 마지막 이벤트가 이미 '${type}' → 저장 건너뜀`);
@@ -1955,6 +1966,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
       type: isCheckout ? 'out' : 'in',
       time: timeStr,
       date: today,
+      ts: nowMs,            // 초 단위 유실 방지용 정렬 키(epoch ms)
       createdAt: serverTimestamp()
     });
 
@@ -3746,7 +3758,13 @@ async function loadTodayCheckinFromFirebase() {
     PRESENT.length = 0;
 
     // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
-    todayDocs.sort((a, b) => (timeToMin(a.time) ?? 0) - (timeToMin(b.time) ?? 0));
+    // ts(epoch ms)로 정렬하되, 같은 시각이면 입실(in)을 먼저 처리해
+    // 퇴실이 짝(열린 입실)을 찾도록 한다.
+    todayDocs.sort((a, b) => {
+      const diff = eventSortKey(a) - eventSortKey(b);
+      if (diff !== 0) return diff;
+      return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
+    });
 
     todayDocs.forEach(d => {
       if (!d.studentName || !d.type) return;
