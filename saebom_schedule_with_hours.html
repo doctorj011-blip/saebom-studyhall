@@ -3441,12 +3441,18 @@ window.initApp = function(){
 window.initApp();
 
 // ── 대기 모드 후 재연결 처리 ──
-document.addEventListener('visibilitychange', function() {
+document.addEventListener('visibilitychange', async function() {
   if (document.hidden) return;
-  // 화면이 다시 보일 때 입퇴실 기록만 갱신 (학생 데이터는 onSnapshot이 처리)
-  if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
-  buildDashboard();
-  if (document.getElementById('fp-room')) buildFloorplan();
+  // 화면이 다시 보일 때 입퇴실 기록 갱신 (학생 데이터는 onSnapshot이 처리)
+  // loadTodayCheckinFromFirebase가 완료된 뒤 내부에서 buildDashboard/buildFloorplan을
+  // 다시 그리므로, 여기서 곧바로 그리면 '갱신 전(과거) 상태'가 잠깐 표시되어
+  // 퇴실 → 입실로 되돌아 보이는 문제가 있었다. 반드시 로드 완료를 await 한다.
+  if (window.loadTodayCheckinFromFirebase) {
+    await window.loadTodayCheckinFromFirebase();
+  } else {
+    buildDashboard();
+    if (document.getElementById('fp-room')) buildFloorplan();
+  }
 });
 
 // ── 스케줄 알림 버튼 함수 ──
@@ -3690,9 +3696,11 @@ async function loadTodayCheckinFromFirebase() {
     });
     Object.entries(ydByStudent).forEach(([name, rec]) => {
       if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
-        // 오늘 이미 입실 기록 있으면 중복 추가 안 함
-        const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
-        if (!alreadyIn) {
+        // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
+        // ※ 예전에는 '아직 입실 중(!outTime)'인 기록만 검사해서, 오늘 퇴실 처리한 학생이
+        //   어제 미퇴실 기록으로부터 다시 입실로 되살아나는 버그가 있었다.
+        const hasTodayRecord = todayRecords.some(r => r.studentName === name);
+        if (!hasTodayRecord) {
           const lastIn = rec.ins[rec.ins.length - 1];
           todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, carriedOver: true, carryFromDate: yesterday });
           if (!PRESENT.includes(name)) PRESENT.push(name);
