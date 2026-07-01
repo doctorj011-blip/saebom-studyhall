@@ -433,7 +433,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
       <div class="confirm-seat" id="confirm-seat"></div>
       <div class="confirm-status" id="confirm-status"></div>
       <div class="confirm-time" id="confirm-time"></div>
-      <div class="confirm-btns">
+      <div class="confirm-btns" id="confirm-btns">
         <button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>
         <button class="confirm-btn confirm-ok" id="confirm-ok-btn" onclick="checkinConfirm()">확인</button>
       </div>
@@ -1113,17 +1113,24 @@ function buildHoursTable(){
   // 1일 사용시간 계산
   const parseTimeMin = t => {
     if (!t || t === '?') return null;
+    const isPM = /오후|pm/i.test(t);
+    const isAM = /오전|am/i.test(t);
     const clean = t.replace(/[^0-9:]/g,'');
     const parts = clean.split(':');
     if (parts.length < 2) return null;
-    return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    let h = parseInt(parts[0]);
+    const m = parseInt(parts[1]);
+    if (isNaN(h) || isNaN(m)) return null;
+    if (isPM && h < 12) h += 12;   // 오후 → 24시간제
+    if (isAM && h === 12) h = 0;   // 오전 12시 → 0시
+    return h * 60 + m;
   };
 
   const todayHoursMap = {};
   todayRecords.forEach(r => {
     const inMin = parseTimeMin(r.inTime);
     if (inMin === null) return;
-    const outMin = r.outTime ? parseTimeMin(r.outTime) : parseTimeMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+    const outMin = r.outTime ? parseTimeMin(r.outTime) : parseTimeMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}));
     if (outMin === null) return;
     const diff = Math.max(0, (outMin < inMin ? outMin + 1440 : outMin) - inMin);
     todayHoursMap[r.studentName] = (todayHoursMap[r.studentName] || 0) + diff;
@@ -1624,15 +1631,32 @@ async function processCheckin() {
 
   const statusEl = document.getElementById('confirm-status');
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false});
 
-  if (isCheckout) {
+  const btnWrap = document.getElementById('confirm-btns');
+  // 이전 날짜의 미퇴실(이월) 기록인지 판별
+  const isStaleCarry = isCheckout && existing && existing.carriedOver;
+
+  if (isStaleCarry) {
+    // 강제 퇴실 대신 "퇴실 처리 / 새로 입실" 선택지 제공
+    statusEl.textContent = '이전 미퇴실 기록 있음';
+    statusEl.className = 'confirm-status status-checkout';
+    document.getElementById('confirm-time').innerHTML =
+      `이전 입실 기록: <b>${existing.inTime}</b> (퇴실 처리 안 됨)<br>어떻게 처리할까요?`;
+    btnWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
+    btnWrap.innerHTML =
+        '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
+      + '<button class="confirm-btn confirm-ok checkout-mode" id="confirm-ok-btn" onclick="checkinConfirm()">퇴실 처리</button>'
+      + '<button class="confirm-btn confirm-ok" onclick="checkinFreshCheckin()">새로 입실</button>';
+  } else if (isCheckout) {
+    btnWrap.style.gridTemplateColumns = '1fr 1fr';
     statusEl.textContent = '퇴실 처리';
     statusEl.className = 'confirm-status status-checkout';
     document.getElementById('confirm-time').textContent = `입실 시각: ${existing.inTime} → 퇴실: ${timeStr}`;
     document.getElementById('confirm-ok-btn').textContent = '퇴실 확인';
     document.getElementById('confirm-ok-btn').className = 'confirm-btn confirm-ok checkout-mode';
   } else {
+    btnWrap.style.gridTemplateColumns = '1fr 1fr';
     statusEl.textContent = '입실 처리';
     statusEl.className = 'confirm-status status-checkin';
     document.getElementById('confirm-time').textContent = `입실 시각: ${timeStr}`;
@@ -1640,7 +1664,7 @@ async function processCheckin() {
     document.getElementById('confirm-ok-btn').className = 'confirm-btn confirm-ok';
   }
 
-  // 확인 버튼에 학생 정보 저장
+  // 확인 버튼에 학생 정보 저장 (버튼 재구성 이후에 저장)
   document.getElementById('confirm-ok-btn')._student = student;
   document.getElementById('confirm-ok-btn')._isCheckout = isCheckout;
   document.getElementById('confirm-ok-btn')._existingRecord = existing;
@@ -1652,7 +1676,7 @@ window.checkinConfirm = function() {
   const isCheckout = btn._isCheckout;
   const existing = btn._existingRecord;
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false});
 
   let _checkoutTotalMin = 0;
   if (isCheckout) {
@@ -1665,7 +1689,12 @@ window.checkinConfirm = function() {
 
     // ── 누적시간 계산 및 저장 ──
     const parseTime = t => {
-      const [h, m] = t.replace(/[^0-9:]/g,'').split(':').map(Number);
+      const isPM = /오후|pm/i.test(t || '');
+      const isAM = /오전|am/i.test(t || '');
+      let [h, m] = (t || '').replace(/[^0-9:]/g,'').split(':').map(Number);
+      h = h || 0;
+      if (isPM && h < 12) h += 12;   // 오후 → 24시간제
+      if (isAM && h === 12) h = 0;   // 오전 12시 → 0시
       return h * 60 + (m || 0);
     };
     let inMin  = parseTime(existing.inTime);
@@ -1765,6 +1794,31 @@ window.checkinConfirm = function() {
   }, isDuringPeriod && assignedRoom ? 6000 : 2200);
 }
 
+// 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
+window.checkinFreshCheckin = function() {
+  const btn = document.getElementById('confirm-ok-btn');
+  const student = btn._student;
+  const stale = btn._existingRecord;
+
+  // 1) 이월된 미퇴실 기록 제거
+  if (stale) {
+    const i = todayRecords.indexOf(stale);
+    if (i !== -1) todayRecords.splice(i, 1);
+    const pi = PRESENT.indexOf(student.name);
+    if (pi !== -1) PRESENT.splice(pi, 1);
+    // 어제 날짜로 퇴실 로그를 남겨 다음 새로고침 때 재이월되지 않도록 마감
+    if (stale.carryFromDate) {
+      const closeTime = (stale.inTime && /\d/.test(stale.inTime)) ? stale.inTime : '23:59';
+      saveCheckinToFirebase(student, true, closeTime, stale.carryFromDate).catch(console.error);
+    }
+  }
+
+  // 2) 신규 입실로 재구성 후 확정
+  btn._isCheckout = false;
+  btn._existingRecord = null;
+  checkinConfirm();
+};
+
 // ── 총 이용시간 포맷 (분 → "X시간 Y분") ──
 function formatTotalTime(totalMin) {
   if (!totalMin || totalMin <= 0) return '0분';
@@ -1824,11 +1878,14 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
 }
 
 // Firebase에 입퇴실 기록 저장
-async function saveCheckinToFirebase(student, isCheckout, timeStr) {
+async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride) {
   try {
-    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const today = dateOverride || new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const type = isCheckout ? 'out' : 'in';
-    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(':','')}`;
+    // 좌석·분 단위만으로는 같은 분 재입력/좌석빈값이 충돌해 덮어쓰기됨 → 좌석식별자 + 초 + 랜덤으로 고유화
+    const seatKey = (student.seat || student.name || 'x').toString().replace(/\s/g,'');
+    const uniq = `${new Date().getSeconds()}${Math.floor(Math.random()*1000)}`;
+    const logId = `${today}_${seatKey}_${type}_${timeStr.replace(/[:\s]/g,'')}_${uniq}`;
     // Firebase가 준비될 때까지 대기
     const waitDb = () => new Promise(res => {
       if (window._adminDb) return res(window._adminDb);
@@ -1856,6 +1913,14 @@ window.checkinReset = function() {
   document.getElementById('checkin-confirm-panel').style.display = 'none';
   document.getElementById('checkin-done-panel').style.display = 'none';
   document.getElementById('checkin-input-panel').style.display = 'block';
+  // 확인 버튼 영역을 기본(취소/확인) 2버튼으로 복구
+  const btnWrap = document.getElementById('confirm-btns');
+  if (btnWrap) {
+    btnWrap.style.gridTemplateColumns = '1fr 1fr';
+    btnWrap.innerHTML =
+        '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
+      + '<button class="confirm-btn confirm-ok" id="confirm-ok-btn" onclick="checkinConfirm()">확인</button>';
+  }
 }
 
 function buildCheckinTodayList() {
@@ -3631,7 +3696,7 @@ async function loadTodayCheckinFromFirebase() {
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (!alreadyIn) {
           const lastIn = rec.ins[rec.ins.length - 1];
-          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null });
+          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, carriedOver: true, carryFromDate: yesterday });
           if (!PRESENT.includes(name)) PRESENT.push(name);
         }
       }
@@ -3857,7 +3922,7 @@ function _saveScheduleAlerts() {
     const toSave = scheduleAlerts.map(a => ({
       ...a,
       _timeStr: a.updatedAt?.toDate
-        ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
+        ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})
         : (a._timeStr || null),
       updatedAt: a.updatedAt?.toDate ? {_ms: a.updatedAt.toDate().getTime()} : a.updatedAt
     }));
@@ -3982,7 +4047,7 @@ function renderScheduleAlerts() {
     ).join('<br>');
 
     const time = a.updatedAt?.toDate
-      ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
+      ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})
       : (a._timeStr || '방금');
 
     const applied = a.applied;
@@ -4088,11 +4153,11 @@ ${a.name} 학생이 ${a.period}(${a.time}) 미입실 상태입니다.
   try {
     const result = await solapiSend(parentPhone, text);
     const success = result === true;
-    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}) });
     if (success) showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
     else showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
   } catch(e) {
-    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}) });
     showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
     console.error(e);
   }
@@ -4398,39 +4463,27 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   });
 
   // parseScheduleStr()을 재활용해 교시별 상태를 정확히 파싱
+  // 변경분(diff)이 아니라 "그날 현재 전체 일정"을 표시한다.
   let changeLines = [];
   Object.keys(byDay).forEach(day => {
     const isSat = day === '토';
     const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
     const dayChanges = byDay[day];
+    // 같은 날 변경이 여러 건이면 가장 마지막(최신) 값이 현재 일정
+    const latest = dayChanges[dayChanges.length - 1];
+    const parsed = parseScheduleStr(latest.newVal);
     changeLines.push(`${dayMap[day]||day}`);
 
-    dayChanges.forEach(c => {
-      const oldParsed = parseScheduleStr(c.oldVal);
-      const newParsed = parseScheduleStr(c.newVal);
-
-      validPeriods.forEach(p => {
-        const wasAttend = oldParsed.periods.has(p) && !oldParsed.absentPeriods.has(p);
-        const wasAbsent = oldParsed.absentPeriods.has(p);
-        const nowAttend = newParsed.periods.has(p) && !newParsed.absentPeriods.has(p);
-        const nowAbsent = newParsed.absentPeriods.has(p);
-
-        let before, after;
-        if (wasAttend)      before = '참여';
-        else if (wasAbsent) before = `불참${oldParsed.absentReasons[p] ? `(${oldParsed.absentReasons[p]})` : ''}`;
-        else                before = null;
-
-        if (nowAttend)      after = '참여';
-        else if (nowAbsent) after = `불참${newParsed.absentReasons[p] ? `(${newParsed.absentReasons[p]})` : ''}`;
-        else                after = null;
-
-        const beforeStr = before ?? '미등록';
-        const afterStr  = after  ?? '미등록';
-        if (beforeStr !== afterStr && (before !== null || after !== null)) {
-          const time = periodTimes[p] || '';
-          changeLines.push(`${p}교시(${time}) : ${beforeStr} → ${afterStr}`);
-        }
-      });
+    validPeriods.forEach(p => {
+      const isAttend = parsed.periods.has(p) && !parsed.absentPeriods.has(p);
+      const isAbsent = parsed.absentPeriods.has(p);
+      // 참여/불참으로 지정된 교시만 표시 (미등록 교시는 생략)
+      if (!isAttend && !isAbsent) return;
+      const time = periodTimes[p] || '';
+      const status = isAttend
+        ? '참여'
+        : `불참${parsed.absentReasons[p] ? `(${parsed.absentReasons[p]})` : ''}`;
+      changeLines.push(`${p}교시(${time}) : ${status}`);
     });
   });
 
@@ -4439,7 +4492,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   const messageText =
     `[새봄면학관]\n새봄면학관을 이용중인 ${studentName} 학생의 스케줄이 변경되었습니다.\n\n${changeContent}\n\n면학관 앱에서 확인해주세요.😊`;
 
-  const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
+  const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
   try {
     const sendFn = window.solapiAlimtalkSend;
     if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
@@ -4646,7 +4699,7 @@ window.showTodayAttendees = function() {
 window.adminForceCheckout = function(name) {
   if (!confirm(`${name} 학생을 퇴실 처리할까요?`)) return;
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false});
   const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
   if (rec) rec.outTime = timeStr;
   const idx = PRESENT.indexOf(name);
@@ -4760,7 +4813,7 @@ function renderStudyroomOverflow() {
   const list = document.getElementById('studyroom-overflow-list');
   if (!list) return;
   list.innerHTML = studyroomOverflowAlerts.map((a, i) => {
-    const timeStr = a.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    const timeStr = a.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12:false });
     return `<div style="position:relative;background:#FFF0F0;border:1.5px solid #F09595;border-radius:12px;padding:12px 14px;margin-bottom:8px">
       <button onclick="studyroomOverflowAlerts.splice(${i},1);renderStudyroomOverflow();if(!studyroomOverflowAlerts.length)document.getElementById('studyroom-overflow-section').style.display='none'"
         style="position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:12px;cursor:pointer">✕</button>
