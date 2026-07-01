@@ -1685,6 +1685,12 @@ window.checkinConfirm = function() {
   let _checkoutTotalMin = 0;
   if (isCheckout) {
     existing.outTime = timeStr;
+    // 이월(어제 미퇴실) 기록을 퇴실하는 경우: 원래 날짜에도 퇴실 로그를 남겨
+    // 다음 새로고침/탭 복귀 시 다시 입실로 이월되지 않도록 마감한다.
+    if (existing.carriedOver && existing.carryFromDate) {
+      const closeTime = (existing.inTime && /\d/.test(existing.inTime)) ? existing.inTime : timeStr;
+      saveCheckinToFirebase(student, true, closeTime, existing.carryFromDate).catch(console.error);
+    }
     // 퇴실 시 스터디룸에서도 제거
     [1,2,3].forEach(r => {
       const i = studyRoomStudents[r].indexOf(student.name);
