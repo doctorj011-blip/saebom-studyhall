@@ -3657,14 +3657,27 @@ async function loadTodayCheckinFromFirebase() {
     todayRecords.length = 0;
     PRESENT.length = 0;
 
-    // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
-    todayDocs.sort((a, b) => (a.time||'').localeCompare(b.time||''));
+    // 시간순 정렬: createdAt(서버시각) 우선 → time 문자열 → 최후엔 in을 out보다 먼저.
+    // 같은 분에 입/퇴실이 겹쳐도 항상 같은 순서로 처리되도록 정렬을 결정적으로 만든다.
+    const _ms = d => (d.createdAt && typeof d.createdAt.toMillis === 'function') ? d.createdAt.toMillis() : null;
+    todayDocs.sort((a, b) => {
+      const ma = _ms(a), mb = _ms(b);
+      if (ma != null && mb != null && ma !== mb) return ma - mb;
+      const ta = a.time || '', tb = b.time || '';
+      if (ta !== tb) return ta.localeCompare(tb);
+      if (a.type !== b.type) return a.type === 'in' ? -1 : 1;
+      return 0;
+    });
 
+    // 학생별로 시간순 처리 → "마지막 이벤트"가 현재 상태를 결정한다.
+    // (입실은 퇴실 전까지 계속 입실, 퇴실은 입실 전까지 계속 퇴실)
+    const _touchedToday = new Set();
     todayDocs.forEach(d => {
       if (!d.studentName || !d.type) return;
       const name = d.studentName;
       const seat = d.seat || '';
       const time = d.time || '';
+      _touchedToday.add(name);
 
       if (d.type === 'in') {
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
@@ -3676,9 +3689,13 @@ async function loadTodayCheckinFromFirebase() {
         const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (rec) {
           rec.outTime = time;
-          const idx = PRESENT.indexOf(name);
-          if (idx !== -1) PRESENT.splice(idx, 1);
+        } else {
+          // 짝 없는 퇴실 기록도 반드시 반영 → 학생은 '퇴실' 상태가 되어야 한다.
+          // (onSnapshot 실시간 처리와 동작을 일치시켜 새로고침/탭복귀 시 상태가 뒤집히지 않게 함)
+          todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
         }
+        const idx = PRESENT.indexOf(name);
+        if (idx !== -1) PRESENT.splice(idx, 1);
       }
     });
 
@@ -3691,6 +3708,9 @@ async function loadTodayCheckinFromFirebase() {
       else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
     });
     Object.entries(ydByStudent).forEach(([name, rec]) => {
+      // 오늘 입실이든 퇴실이든 활동 기록이 있으면 오늘 기록이 우선 → 어제 기록 이월 금지.
+      // (오늘 퇴실한 학생을 어제 미퇴실 기록으로 다시 입실 상태로 되살리는 버그 방지)
+      if (_touchedToday.has(name)) return;
       if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
         // 오늘 이미 입실 기록 있으면 중복 추가 안 함
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
