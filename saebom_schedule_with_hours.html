@@ -870,6 +870,20 @@ let currentView='table';
 
 let ALERTS = []; // 동적으로 계산됨
 const PRESENT=[];
+
+// 시각 문자열("오후 02:05", "14:05", "오전 08:00" 등)을 하루 기준 분으로 변환.
+// 12시간제(오전/오후)와 24시간제를 모두 처리해 시간순 정렬·계산을 정확히 한다.
+function timeToMin(t) {
+  if (t === null || t === undefined) return null;
+  const s = String(t);
+  const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (/오후/.test(s) && h !== 12) h += 12;   // 오후 1~11시 → +12
+  if (/오전/.test(s) && h === 12) h = 0;      // 오전 12시(자정) → 0시
+  return h * 60 + min;
+}
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 
@@ -1113,24 +1127,14 @@ function buildHoursTable(){
   // 1일 사용시간 계산
   const parseTimeMin = t => {
     if (!t || t === '?') return null;
-    const isPM = /오후|pm/i.test(t);
-    const isAM = /오전|am/i.test(t);
-    const clean = t.replace(/[^0-9:]/g,'');
-    const parts = clean.split(':');
-    if (parts.length < 2) return null;
-    let h = parseInt(parts[0]);
-    const m = parseInt(parts[1]);
-    if (isNaN(h) || isNaN(m)) return null;
-    if (isPM && h < 12) h += 12;   // 오후 → 24시간제
-    if (isAM && h === 12) h = 0;   // 오전 12시 → 0시
-    return h * 60 + m;
+    return timeToMin(t);
   };
 
   const todayHoursMap = {};
   todayRecords.forEach(r => {
     const inMin = parseTimeMin(r.inTime);
     if (inMin === null) return;
-    const outMin = r.outTime ? parseTimeMin(r.outTime) : parseTimeMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}));
+    const outMin = r.outTime ? parseTimeMin(r.outTime) : parseTimeMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
     if (outMin === null) return;
     const diff = Math.max(0, (outMin < inMin ? outMin + 1440 : outMin) - inMin);
     todayHoursMap[r.studentName] = (todayHoursMap[r.studentName] || 0) + diff;
@@ -1631,7 +1635,7 @@ async function processCheckin() {
 
   const statusEl = document.getElementById('confirm-status');
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false});
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
 
   const btnWrap = document.getElementById('confirm-btns');
   // 이전 날짜의 미퇴실(이월) 기록인지 판별
@@ -1676,7 +1680,7 @@ window.checkinConfirm = function() {
   const isCheckout = btn._isCheckout;
   const existing = btn._existingRecord;
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false});
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
 
   let _checkoutTotalMin = 0;
   if (isCheckout) {
@@ -1688,17 +1692,8 @@ window.checkinConfirm = function() {
     });
 
     // ── 누적시간 계산 및 저장 ──
-    const parseTime = t => {
-      const isPM = /오후|pm/i.test(t || '');
-      const isAM = /오전|am/i.test(t || '');
-      let [h, m] = (t || '').replace(/[^0-9:]/g,'').split(':').map(Number);
-      h = h || 0;
-      if (isPM && h < 12) h += 12;   // 오후 → 24시간제
-      if (isAM && h === 12) h = 0;   // 오전 12시 → 0시
-      return h * 60 + (m || 0);
-    };
-    let inMin  = parseTime(existing.inTime);
-    let outMin = parseTime(timeStr);
+    let inMin  = timeToMin(existing.inTime) ?? 0;
+    let outMin = timeToMin(timeStr) ?? 0;
     if (outMin < inMin) outMin += 24 * 60; // 자정 넘긴 경우
     const diffMin = Math.max(0, outMin - inMin);
     _checkoutTotalMin = diffMin;
@@ -1882,10 +1877,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
   try {
     const today = dateOverride || new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const type = isCheckout ? 'out' : 'in';
-    // 좌석·분 단위만으로는 같은 분 재입력/좌석빈값이 충돌해 덮어쓰기됨 → 좌석식별자 + 초 + 랜덤으로 고유화
-    const seatKey = (student.seat || student.name || 'x').toString().replace(/\s/g,'');
-    const uniq = `${new Date().getSeconds()}${Math.floor(Math.random()*1000)}`;
-    const logId = `${today}_${seatKey}_${type}_${timeStr.replace(/[:\s]/g,'')}_${uniq}`;
+    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(':','')}`;
     // Firebase가 준비될 때까지 대기
     const waitDb = () => new Promise(res => {
       if (window._adminDb) return res(window._adminDb);
@@ -3657,27 +3649,14 @@ async function loadTodayCheckinFromFirebase() {
     todayRecords.length = 0;
     PRESENT.length = 0;
 
-    // 시간순 정렬: createdAt(서버시각) 우선 → time 문자열 → 최후엔 in을 out보다 먼저.
-    // 같은 분에 입/퇴실이 겹쳐도 항상 같은 순서로 처리되도록 정렬을 결정적으로 만든다.
-    const _ms = d => (d.createdAt && typeof d.createdAt.toMillis === 'function') ? d.createdAt.toMillis() : null;
-    todayDocs.sort((a, b) => {
-      const ma = _ms(a), mb = _ms(b);
-      if (ma != null && mb != null && ma !== mb) return ma - mb;
-      const ta = a.time || '', tb = b.time || '';
-      if (ta !== tb) return ta.localeCompare(tb);
-      if (a.type !== b.type) return a.type === 'in' ? -1 : 1;
-      return 0;
-    });
+    // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
+    todayDocs.sort((a, b) => (timeToMin(a.time) ?? 0) - (timeToMin(b.time) ?? 0));
 
-    // 학생별로 시간순 처리 → "마지막 이벤트"가 현재 상태를 결정한다.
-    // (입실은 퇴실 전까지 계속 입실, 퇴실은 입실 전까지 계속 퇴실)
-    const _touchedToday = new Set();
     todayDocs.forEach(d => {
       if (!d.studentName || !d.type) return;
       const name = d.studentName;
       const seat = d.seat || '';
       const time = d.time || '';
-      _touchedToday.add(name);
 
       if (d.type === 'in') {
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
@@ -3689,13 +3668,9 @@ async function loadTodayCheckinFromFirebase() {
         const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (rec) {
           rec.outTime = time;
-        } else {
-          // 짝 없는 퇴실 기록도 반드시 반영 → 학생은 '퇴실' 상태가 되어야 한다.
-          // (onSnapshot 실시간 처리와 동작을 일치시켜 새로고침/탭복귀 시 상태가 뒤집히지 않게 함)
-          todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
+          const idx = PRESENT.indexOf(name);
+          if (idx !== -1) PRESENT.splice(idx, 1);
         }
-        const idx = PRESENT.indexOf(name);
-        if (idx !== -1) PRESENT.splice(idx, 1);
       }
     });
 
@@ -3708,9 +3683,6 @@ async function loadTodayCheckinFromFirebase() {
       else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
     });
     Object.entries(ydByStudent).forEach(([name, rec]) => {
-      // 오늘 입실이든 퇴실이든 활동 기록이 있으면 오늘 기록이 우선 → 어제 기록 이월 금지.
-      // (오늘 퇴실한 학생을 어제 미퇴실 기록으로 다시 입실 상태로 되살리는 버그 방지)
-      if (_touchedToday.has(name)) return;
       if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
         // 오늘 이미 입실 기록 있으면 중복 추가 안 함
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
@@ -3942,7 +3914,7 @@ function _saveScheduleAlerts() {
     const toSave = scheduleAlerts.map(a => ({
       ...a,
       _timeStr: a.updatedAt?.toDate
-        ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})
+        ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
         : (a._timeStr || null),
       updatedAt: a.updatedAt?.toDate ? {_ms: a.updatedAt.toDate().getTime()} : a.updatedAt
     }));
@@ -4067,7 +4039,7 @@ function renderScheduleAlerts() {
     ).join('<br>');
 
     const time = a.updatedAt?.toDate
-      ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false})
+      ? a.updatedAt.toDate().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
       : (a._timeStr || '방금');
 
     const applied = a.applied;
@@ -4173,11 +4145,11 @@ ${a.name} 학생이 ${a.period}(${a.time}) 미입실 상태입니다.
   try {
     const result = await solapiSend(parentPhone, text);
     const success = result === true;
-    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}) });
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
     if (success) showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
     else showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
   } catch(e) {
-    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false}) });
+    saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
     showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
     console.error(e);
   }
@@ -4512,7 +4484,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   const messageText =
     `[새봄면학관]\n새봄면학관을 이용중인 ${studentName} 학생의 스케줄이 변경되었습니다.\n\n${changeContent}\n\n면학관 앱에서 확인해주세요.😊`;
 
-  const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit',hour12:false});
+  const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   try {
     const sendFn = window.solapiAlimtalkSend;
     if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
@@ -4719,7 +4691,7 @@ window.showTodayAttendees = function() {
 window.adminForceCheckout = function(name) {
   if (!confirm(`${name} 학생을 퇴실 처리할까요?`)) return;
   const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit', hour12:false});
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
   const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
   if (rec) rec.outTime = timeStr;
   const idx = PRESENT.indexOf(name);
@@ -4833,7 +4805,7 @@ function renderStudyroomOverflow() {
   const list = document.getElementById('studyroom-overflow-list');
   if (!list) return;
   list.innerHTML = studyroomOverflowAlerts.map((a, i) => {
-    const timeStr = a.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12:false });
+    const timeStr = a.time.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
     return `<div style="position:relative;background:#FFF0F0;border:1.5px solid #F09595;border-radius:12px;padding:12px 14px;margin-bottom:8px">
       <button onclick="studyroomOverflowAlerts.splice(${i},1);renderStudyroomOverflow();if(!studyroomOverflowAlerts.length)document.getElementById('studyroom-overflow-section').style.display='none'"
         style="position:absolute;top:8px;right:8px;width:20px;height:20px;border-radius:50%;border:none;background:rgba(0,0,0,0.08);color:#888;font-size:12px;cursor:pointer">✕</button>
