@@ -1272,7 +1272,12 @@ function buildWeeklyTable() {
       const status = draftSchedule[day]?.periods[pNum] || 'none';
       let cell = '';
       if (status === 'attend') cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
-      else if (status === 'absent') cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`;
+      else if (status === 'absent') {
+        const rsn = (draftSchedule[day]?.reasons && draftSchedule[day].reasons[pNum]) || '';
+        const rsnAttr = rsn ? ` title="불참 사유: ${rsn.replace(/"/g,'&quot;')}"` : '';
+        const mark = rsn ? '<sup style="font-size:8px;margin-left:1px">📝</sup>' : '';
+        cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})"${rsnAttr}>X${mark}</span>`;
+      }
       else cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       html += `<td>${cell}</td>`;
     });
@@ -1291,6 +1296,52 @@ function wkToggle(day, pNum) {
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
   const next = cur === 'none' ? 'attend' : cur === 'attend' ? 'absent' : 'none';
   draftSchedule[day].periods[pNum] = next;
+  // none으로 돌아가면 저장돼있던 불참 사유도 정리
+  if (next !== 'absent' && draftSchedule[day].reasons) {
+    delete draftSchedule[day].reasons[pNum];
+  }
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
+  buildWeeklyTable();
+  if (currentDayTab === day) buildDailyPeriods();
+  // 불참으로 지정하면 사유 입력 모달을 띄운다
+  if (next === 'absent') showWkAbsentReasonModal(day, pNum);
+}
+
+// 주간 시간표에서 불참 사유 입력 모달
+function showWkAbsentReasonModal(day, pNum) {
+  document.getElementById('wk-absent-reason-modal')?.remove();
+  const cur = (draftSchedule[day].reasons && draftSchedule[day].reasons[pNum]) || '';
+  const overlay = document.createElement('div');
+  overlay.id = 'wk-absent-reason-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.2)">
+    <div style="font-size:15px;font-weight:700;color:#1F2937;margin-bottom:4px">🚫 불참 사유</div>
+    <div style="font-size:13px;color:#C62828;font-weight:600;margin-bottom:12px">${day}요일 ${pNum}교시</div>
+    <div style="font-size:12px;color:#555;margin-bottom:6px">사유 (선택 사항)</div>
+    <input id="wk-absent-reason-input" type="text" placeholder="예: 수학학원"
+      value="${cur.replace(/"/g,'&quot;')}"
+      style="width:100%;border:1.5px solid #F5BABA;border-radius:10px;padding:10px;font-size:13px;outline:none;font-family:inherit;box-sizing:border-box">
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="document.getElementById('wk-absent-reason-modal').remove()"
+        style="flex:1;padding:10px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:13px;cursor:pointer">건너뛰기</button>
+      <button onclick="submitWkAbsentReason('${day}',${pNum})"
+        style="flex:2;padding:10px;background:#C62828;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">저장</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+  const input = document.getElementById('wk-absent-reason-input');
+  setTimeout(() => input?.focus(), 100);
+  input?.addEventListener('keydown', e => { if(e.key==='Enter') submitWkAbsentReason(day, pNum); });
+}
+
+function submitWkAbsentReason(day, pNum) {
+  const val = (document.getElementById('wk-absent-reason-input')?.value || '').trim();
+  if (!draftSchedule[day].reasons) draftSchedule[day].reasons = {};
+  if (val) draftSchedule[day].reasons[pNum] = val;
+  else delete draftSchedule[day].reasons[pNum];
+  document.getElementById('wk-absent-reason-modal')?.remove();
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
   buildWeeklyTable();
