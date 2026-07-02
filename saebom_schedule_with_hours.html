@@ -183,30 +183,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-drag-wrap.dragging{cursor:grabbing;}
 .fp-room{display:grid;gap:6px;width:fit-content;transition:none;}
 
-/* 배치도 영역 레이아웃 */
-.fp-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px}
-.fp-area-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:5px}
-.fp-grid{display:grid;gap:5px}
-
-/* 좌석 카드 */
-.fp-seat{border-radius:8px;padding:6px 7px;min-height:56px;cursor:pointer;transition:all 0.12s;border:0.5px solid transparent;position:relative;display:flex;flex-direction:column;justify-content:space-between}
-.fp-seat:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
-.fp-seat.fp-in{background:#FFF8DC;border-color:#E0B020}
-.fp-seat.fp-vacant{background:var(--color-background-secondary);border-color:var(--color-border-tertiary)}
-.fp-seat.fp-out-today{background:#F3F4F6;border-color:#D1D5DB}
-.fp-seat-num{font-size:9px;color:var(--color-text-tertiary);font-weight:500;line-height:1}
-.fp-seat-name{font-size:12px;font-weight:600;color:var(--color-text-primary);margin-top:2px;line-height:1.2}
-.fp-seat-status{font-size:9px;margin-top:3px;display:flex;align-items:center;gap:3px}
-.fp-status-in{color:#C8900A}
-.fp-status-out{color:#9CA3AF}
-.fp-status-empty{color:var(--color-text-tertiary)}
-.fp-in-dot{width:6px;height:6px;border-radius:50%;background:#C8900A;flex-shrink:0;animation:fp-pulse 2s infinite}
-
-/* 위치수정 버튼 */
-.fp-edit-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s}
-.fp-edit-btn:hover{background:var(--color-background-secondary)}
-.fp-edit-btn.active{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
-.fp-drag-over{outline:2px solid #C8900A!important;outline-offset:-2px;background:rgba(200,144,10,0.08)!important;}
 /* ── 학생카드 드래그&드롭 좌석변경 ── */
 .fp-side-card-drag{cursor:grab;transition:box-shadow 0.12s,transform 0.12s;user-select:none}
 .fp-side-card-drag.dragging-card{opacity:0.5;transform:scale(0.96)}
@@ -214,18 +190,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-cell-drop-hover{outline:3px solid #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.18) !important;transform:scale(1.05);z-index:10;transition:all 0.1s;}
 .fp-side-drag-hint{font-size:10px;color:#9CA3AF;text-align:center;padding:5px 4px;border-top:1px solid #F3F4F6;margin-top:4px;display:none}
 .fp-side-drag-hint.visible{display:block}
-.fp-edit-btn.saving{background:#A87008;color:#fff;border-color:#A87008}
 
-/* 위치수정 모드: 좌석을 absolute로 자유 배치 */
-.fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
-.fp-seat.draggable{cursor:move!important;box-shadow:0 0 0 2px #C8900A40;}
-.fp-seat.draggable:hover{box-shadow:0 0 0 2px #C8900A,0 4px 12px rgba(0,0,0,0.15);z-index:100;}
-.fp-studio.draggable{cursor:move!important;box-shadow:0 0 0 2px #C8900A40;}
-.fp-studio.draggable:hover{box-shadow:0 0 0 2px #C8900A,0 4px 12px rgba(0,0,0,0.15);z-index:100;}
-.fp-seat.seat-dragging{box-shadow:0 8px 24px rgba(0,0,0,0.2)!important;z-index:999!important;opacity:0.92;transform:scale(1.03);}
-.fp-studio.seat-dragging{box-shadow:0 8px 24px rgba(0,0,0,0.2)!important;z-index:999!important;opacity:0.92;transform:scale(1.03);}
-
-@keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
 .admin-toast.show{opacity:1}
@@ -262,15 +227,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .sched-legend{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
 .sched-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
 .sched-legend-dot{width:12px;height:12px;border-radius:3px}
-
-/* 스터디룸 박스 */
-.fp-studio{background:var(--color-background-secondary);border:0.5px dashed var(--color-border-secondary);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:center;min-height:56px}
-.fp-studio-label{font-size:12px;color:var(--color-text-tertiary);font-weight:500}
-
-/* 관리자석 */
-.fp-seat.fp-admin{background:#FFF8E1;border-color:#FFD54F}
-.fp-seat.fp-admin .fp-seat-num{color:#7A5008}
-.fp-seat.fp-admin .fp-seat-name{color:#7A5008}
 
 .chart-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px;margin-bottom:14px}
 .bar-chart{display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:8px}
@@ -1327,34 +1283,7 @@ function getCurrentPeriod() {
   return null; // 교시 외 시간
 }
 
-// 오늘 입실 현황 팝업
-function showTodayAttendees() {
-  const old = document.getElementById('today-popup-overlay');
-  if (old) { old.remove(); return; }
-  const inStudents = PRESENT.map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
-  const overlay = document.createElement('div');
-  overlay.id = 'today-popup-overlay';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;display:flex;align-items:center;justify-content:center';
-  overlay.innerHTML = `
-    <div style="background:#fff;border-radius:16px;width:min(94vw,480px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FFF8DC">
-        <div style="font-size:15px;font-weight:700;color:#5C3D08">현재 입실 중 · <span style="color:#C8900A">${inStudents.length}명</span></div>
-        <button onclick="document.getElementById('today-popup-overlay').remove()"
-          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
-      </div>
-      <div style="overflow-y:auto;padding:14px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
-        ${inStudents.length === 0
-          ? '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#aaa;font-size:14px">현재 입실 중인 학생이 없습니다</div>'
-          : inStudents.map(s=>`
-            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px">
-              <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${s.name[0]}</div>
-              <div><div style="font-size:13px;font-weight:600">${s.name}</div><div style="font-size:11px;color:#8B6010">${s.seat}</div></div>
-            </div>`).join('')}
-      </div>
-    </div>`;
-  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-  document.body.appendChild(overlay);
-}
+// 오늘 입실 현황 팝업은 하단 모듈 스크립트의 window.showTodayAttendees 사용
 
 // ALERTS 동적 계산: 현재 교시에 출석해야 하는데 PRESENT에 없는 학생
 function calcAlerts() {
@@ -2051,7 +1980,6 @@ function buildCheckinTodayList() {
 }
 
 // ===== 배치도 =====
-let _fpDragDist = 0;
 //
 // 그리드 10행 × 9열:
 //  C1: 관리자석 63→54 (r1~r10)
@@ -2082,89 +2010,6 @@ function calcDday(expiry) {
   const today = new Date(); today.setHours(0,0,0,0);
   const exp = new Date(expiry); exp.setHours(0,0,0,0);
   return Math.ceil((exp - today) / 86400000);
-}
-
-function buildSeatCard(seatNum) {
-  const student = getFpStudentBySeat(seatNum);
-  const status = getFpStatus(student);
-
-  if (!student) {
-    // 공석
-    const onclick = `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
-    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px">
-      <div style="font-size:10px;color:#bbb;font-weight:500">${seatNum}번</div>
-      <div style="font-size:10px;color:#ccc">공석</div>
-    </div>`;
-  }
-
-  // 만료일 D-day
-  const dday = calcDday(student.expiry);
-  const expiryStr = student.expiry ? student.expiry.replace(/^\d{2}(\d{2})-(\d{2})-(\d{2})$/, '$1/$2/$3') : '';
-  let badgeBg, badgeColor;
-  if (status === 'in') { badgeBg = '#2D7A4F'; badgeColor = '#fff'; }
-  else if (dday !== null && dday <= 7) { badgeBg = '#E07000'; badgeColor = '#fff'; }
-  else { badgeBg = '#9CA3AF'; badgeColor = '#fff'; }
-
-  const ddayLabel = dday !== null ? ` D${dday >= 0 ? '-' : '+'}${Math.abs(dday)}` : '';
-  const genderIcon = student.gender === 'm' ? '<span style="color:#4A90D9;font-size:10px">♂</span>' : '<span style="color:#E05C8A;font-size:10px">♀</span>';
-
-  // 스터디룸 대기 여부
-  const inStudyRoom = studyRoomStudents && Object.values(studyRoomStudents).some(arr => arr.includes(student.name));
-
-  const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
-  const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
-
-  let cardBorder, cardBg;
-  if (status === 'in') { cardBorder = '#2D7A4F'; cardBg = '#F0FFF4'; }
-  else if (inStudyRoom) { cardBorder = '#C8900A'; cardBg = '#FFF8DC'; }
-  else { cardBorder = '#D1D5DB'; cardBg = '#fff'; }
-
-  const onclick = `onclick="if(!fpEditMode)fpSeatClick(${seatNum})"`;
-
-  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0;height:100%;box-sizing:border-box">
-    <!-- 상단 배지 -->
-    <div style="background:${badgeBg};padding:2px 5px;display:flex;align-items:center;justify-content:space-between">
-      <span style="font-size:9px;color:${badgeColor};font-weight:600">고정석${expiryStr ? ' '+expiryStr : ''}</span>
-      <span style="font-size:9px;color:${badgeColor};font-weight:700">${ddayLabel}</span>
-    </div>
-    <!-- 이름/번호 -->
-    <div style="padding:4px 6px 3px;flex:1;display:flex;flex-direction:column;justify-content:center">
-      <div style="font-size:9px;color:#9CA3AF;margin-bottom:1px">${seatNum}번</div>
-      <div style="display:flex;align-items:center;gap:3px">
-        <span style="font-size:12px;font-weight:700;color:#1F2937">${student.name}</span>
-        ${genderIcon}
-      </div>
-      <div style="font-size:9px;margin-top:2px;color:${status==='in'?'#2D7A4F':inStudyRoom?'#C8900A':'#9CA3AF'}">
-        ${status==='in' ? `● 입실 ${rec?.inTime||''}` : inStudyRoom ? '📚 ST-R 대기' : '미입실'}
-      </div>
-    </div>
-  </div>`;
-}
-
-function buildAdminCard(num, name) {
-  return `<div class="fp-seat fp-admin">
-    <div class="fp-seat-num">${num}번 관리</div>
-    <div class="fp-seat-name" style="font-size:11px;color:#7A5008">${name||''}</div>
-  </div>`;
-}
-
-function G(r, c, html) {
-  return `<div style="grid-row:${r};grid-column:${c}">${html}</div>`;
-}
-function GS(r, c, rs, cs, html) {
-  return `<div style="grid-row:${r}/span ${rs};grid-column:${c}/span ${cs}">${html}</div>`;
-}
-function studio(label) {
-  const m = label.match(/(\d+)/);
-  const roomNum = m ? parseInt(m[1]) : 0;
-  const students = (studyRoomStudents && studyRoomStudents[roomNum]) || [];
-  const studentHtml = students.length > 0
-    ? students.map(n => `<div style="font-size:9px;background:#FFF8DC;color:#7A5008;border-radius:4px;padding:1px 5px;margin-top:2px;font-weight:600">${n}</div>`).join('')
-    : `<div style="font-size:9px;color:#ccc;margin-top:2px">비어있음</div>`;
-  return `<div class="fp-studio" style="height:100%;min-height:0;flex-direction:column;align-items:flex-start;padding:6px 8px">
-    <div class="fp-studio-label" style="font-size:11px">🚪 ${label}</div>
-    ${studentHtml}
-  </div>`;
 }
 
 // ── 관리자석 전역 정의 (배석 해제 시 수정 가능) ──
@@ -2260,7 +2105,8 @@ function buildFloorplan() {
   const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
   let html = `<style>
     #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
-    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
+    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; cursor:default; }
+    .fp-drag-wrap.dragging .fp-cell { cursor:grabbing; }
     .fp-cell-admin { background:#FFF8DC; border:1px solid #E0B020; }
     .fp-cell-studio { background:#F5F0FF; border:1px dashed #C4A4E0; align-items:center; justify-content:center; }
     .fp-cell-in { background:#DCFCE7; border:1.5px solid #4ADE80; }
@@ -2268,9 +2114,6 @@ function buildFloorplan() {
     .fp-cell-absent { background:#F9FAFB; border:1px solid #D1D5DB; }
     .fp-cell-vacant { background:transparent; border:none; }
     .fp-cell-vacant-seat { background:#F9FAFB; border:1px solid #E5E7EB; }
-    .fp-cell-empty-edit { background:#FAFAFA; border:1.5px dashed #E0E0E0; cursor:pointer; }
-    .fp-cell-edit { cursor:pointer; }
-    .fp-cell-selected { outline:3px solid #C8900A !important; outline-offset:-2px; }
     .fp-num { font-size:9px; color:#9CA3AF; line-height:1; }
     .fp-name { font-size:12px; font-weight:700; color:#1F2937; line-height:1.3; margin-top:1px; }
     .fp-badge { font-size:9px; font-weight:600; padding:1px 4px; border-radius:3px; margin-top:2px; display:inline-block; }
@@ -2290,8 +2133,6 @@ function buildFloorplan() {
       if (studioSpan[key]) continue;
 
       const fixed = FIXED[key];
-      const isSelected = fpSelectedSlot && fpSelectedSlot.key === key;
-      const selClass = isSelected ? ' fp-cell-selected' : '';
 
       if (fixed) {
         if (fixed.type === 'admin') {
@@ -2303,7 +2144,7 @@ function buildFloorplan() {
           // 관리자석: 학생 있으면 우클릭으로 배석해제만 가능, 빈자리 클릭 불가
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
           const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : '';
-          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'pointer':'default'}" ${clickAttr} ${ctxAttr}>
+          html += `<div class="fp-cell fp-cell-admin" style="grid-row:${r};grid-column:${c}" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
             <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : ''}</div>
             ${ddayHtml}
@@ -2322,10 +2163,9 @@ function buildFloorplan() {
           const waitHtml = waiting.length
             ? waiting.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
             : `<div style="font-size:10px;color:#C4A4E0;margin-top:4px">비어있음</div>`;
-          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : '';
-          html += `<div class="fp-cell fp-cell-studio${fpEditMode?' fp-cell-edit':''}${selClass}"
+          html += `<div class="fp-cell fp-cell-studio"
             style="grid-row:${r}/span 2;grid-column:${c};flex-direction:column;align-items:flex-start;padding:8px 10px"
-            data-slot-key="${key}" ${editAttr}>
+            data-slot-key="${key}">
             <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${roomNum}</div>
             ${waitHtml}
           </div>`;
@@ -2358,10 +2198,10 @@ function buildFloorplan() {
             ? `<span class="fp-badge" style="background:#7C3AED;color:#fff">ST-R ${studyRoomNum}</span>`
             : '';
 
-          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
-          const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
+          const clickAttr = student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`;
+          const ctxAttr = student ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
+          html += `<div class="fp-cell ${cellCls}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${clickAttr} ${ctxAttr}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -2375,13 +2215,7 @@ function buildFloorplan() {
           </div>`;
         } else {
           // 빈 칸
-          if (fpEditMode) {
-            html += `<div class="fp-cell fp-cell-empty-edit${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" onclick="fpSlotClick('${key}',0)">
-              <div style="color:#E0E0E0;font-size:10px;text-align:center;width:100%">＋</div>
-            </div>`;
-          } else {
-            html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
-          }
+          html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
         }
       }
     }
@@ -2390,78 +2224,6 @@ function buildFloorplan() {
   html += '</div>';
   el.innerHTML = html;
   buildFpSidePanel();
-}
-
-// ===== 위치수정 모드// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
-const fpEditMode = false; // 위치수정 모드 비활성화
-
-// 좌석 배치 순서 저장: { slot_key: seatNum } 예) "r1_c4": 9
-// slot_key = "r{row}_c{col}"
-const fpGridLayout = {}; // 배치 확정 — 저장값 미사용
-
-function saveFpGridLayout() {
-  try { localStorage.setItem('saebom_fp_grid_layout', JSON.stringify(fpGridLayout)); } catch(e) {}
-}
-
-let fpSelectedSlot = null;
-
-window.toggleFpEditMode = function() {
-  fpEditMode = !fpEditMode;
-  fpSelectedSlot = null;
-  const btn = document.getElementById('fp-edit-btn');
-  if (fpEditMode) {
-    btn.className = 'fp-edit-btn active';
-    btn.innerHTML = '<i class="ti ti-check" style="font-size:13px"></i> 저장';
-    showAdminToast('💡 이동할 좌석 클릭 → 목적지 클릭으로 위치를 바꿔주세요');
-  } else {
-    saveFpGridLayout();
-    btn.className = 'fp-edit-btn';
-    btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정';
-    showFpSaveToast();
-  }
-  buildFloorplan();
-};
-
-window.fpSlotClick = function(key, seatNum) {
-  if (!fpEditMode) return;
-  // seatNum: 양수=좌석, 0=빈칸
-  if (fpSelectedSlot === null) {
-    fpSelectedSlot = { key, seatNum };
-    buildFloorplan(); // 선택 강조 반영
-  } else {
-    if (fpSelectedSlot.key === key) {
-      // 같은 칸 다시 클릭 → 취소
-      fpSelectedSlot = null;
-      buildFloorplan();
-      return;
-    }
-    // 두 칸 교환 (빈칸=0, 스터디룸=음수도 교환 가능)
-    fpGridLayout[fpSelectedSlot.key] = seatNum;
-    fpGridLayout[key] = fpSelectedSlot.seatNum;
-    fpSelectedSlot = null;
-    buildFloorplan();
-  }
-};
-
-window.resetFpPositions = function() {
-  if (!confirm('배치도 위치를 초기 상태로 되돌릴까요?')) return;
-  fpGridLayout = {};
-  localStorage.removeItem('saebom_fp_grid_layout');
-  localStorage.removeItem('saebom_fp_positions');
-  fpEditMode = false;
-  const btn = document.getElementById('fp-edit-btn');
-  if (btn) { btn.className = 'fp-edit-btn'; btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정'; }
-  buildFloorplan();
-  showAdminToast('✅ 배치도가 초기 위치로 돌아왔습니다');
-};
-
-
-function showFpSaveToast() {
-  const toast = document.createElement('div');
-  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:toastIn 0.2s ease';
-  toast.textContent = '✅ 배치도 위치가 저장됐습니다 (새로고침 후에도 유지)';
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 2200);
 }
 
 // ── 배치도 사이드패널 ──
@@ -2755,7 +2517,6 @@ async function _saveSeatDoc(student, oldDocId) {
 
 // ──────────────────────────────────────────────────────
 function fpSeatClick(seatNum) {
-  if (fpEditMode) return; // 수정 모드 중엔 정보창 안 띄움
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
   // 학생 정보 간단 팝업 (alert 대신 대시보드 정보로)
@@ -2847,7 +2608,6 @@ function initFpDrag() {
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     dragDist = Math.sqrt(dx*dx + dy*dy);
-    _fpDragDist = dragDist;
     applyPos(scrollLeft + dx, scrollTop + dy);
   });
 
@@ -2855,11 +2615,6 @@ function initFpDrag() {
     if (!isDragging) return;
     isDragging = false;
     wrap.classList.remove('dragging');
-    if (dragDist > 5) {
-      window._fpLastDragged = true;
-      setTimeout(() => {  }, 500);
-    }
-    setTimeout(() => { _fpDragDist = 0; }, 50);
   });
 
   // 터치 지원
@@ -2884,10 +2639,6 @@ function initFpDrag() {
   }, {passive: false});
 
   wrap.addEventListener('touchend', () => {
-    if (dragDist > 8) {
-      window._fpLastDragged = true;
-      setTimeout(() => { window._fpLastDragged = false; }, 700);
-    }
     isDragging = false;
   });
 
@@ -3621,20 +3372,6 @@ window.applyStudentSchedule = function(seat, idx) {
   a.applied = true;
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
   showAdminToast(`✅ ${student.name} 스케줄 적용 완료`);
-};
-
-window.dismissAlert = function(idx) {
-  const alerts = window._scheduleAlerts;
-  if (!alerts) return;
-  alerts.splice(idx, 1);
-  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
-};
-
-window.clearAllScheduleAlerts = function() {
-  const alerts = window._scheduleAlerts;
-  if (!alerts) return;
-  alerts.length = 0;
-  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
 </script>
