@@ -357,6 +357,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
+    <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
@@ -715,6 +716,49 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <div class="card">
       <div style="font-size:13px;font-weight:700;color:#5C3D08;margin-bottom:12px">📋 등록된 공지</div>
       <div id="notice-list-admin" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 이벤트 관리 ── -->
+<div id="sec-events" class="section">
+  <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+
+    <!-- 이벤트 등록 / 수정 폼 -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div id="event-form-title" style="font-size:15px;font-weight:700;color:#5C3D08">🎉 새 이벤트 등록</div>
+        <button id="event-cancel-edit-btn" onclick="eventResetForm()" style="display:none;padding:5px 12px;background:#F3F4F6;border:none;border-radius:8px;font-size:12px;color:#555;cursor:pointer">✕ 취소</button>
+      </div>
+      <input id="event-name-inp" type="text" autocomplete="off" placeholder="이벤트 이름 (예: 끝.끝.아 이벤트)" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
+      <textarea id="event-desc-inp" autocomplete="off" placeholder="이벤트 설명 (줄바꿈 가능) — 학생앱에 그대로 표시됩니다" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+        <label style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          유형
+          <select id="event-type-sel" onchange="eventTypeChanged()" style="padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff">
+            <option value="studytime">공부시간형 (게이지바)</option>
+            <option value="streak">연속 출석형 (게이지바)</option>
+            <option value="general">일반 이벤트</option>
+          </select>
+        </label>
+        <label style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          목표 <input id="event-goal-inp" type="number" value="42" min="1" style="width:60px;padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff"><span id="event-goal-unit">시간</span>
+        </label>
+        <label id="event-period-label" style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          기간 <input id="event-start-inp" type="date" value="2026-07-06" style="padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff"> ~ <input id="event-end-inp" type="date" value="2026-07-19" style="padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff">
+        </label>
+        <label style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          <input id="event-active-inp" type="checkbox" checked> 진행 중 (학생앱 노출)
+        </label>
+      </div>
+      <button id="event-submit-btn" onclick="publishEvent()" style="width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">이벤트 등록</button>
+    </div>
+
+    <!-- 등록된 이벤트 목록 -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;color:#5C3D08;margin-bottom:12px">📋 등록된 이벤트</div>
+      <div id="event-list-admin" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
   </div>
@@ -1259,6 +1303,7 @@ window.showSection = function(id,btn){
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); }
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
+  if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
@@ -4380,7 +4425,8 @@ window.publishNotice = async function() {
     } else {
       items.push(noticeObj);
     }
-    await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
+    // merge: 같은 문서의 events 필드(이벤트 목록)를 보존
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { items }, { merge: true });
 
     noticeResetForm();
     showAdminToast(isEdit ? '✅ 공지가 수정됐습니다' : '✅ 공지사항이 발행됐습니다');
@@ -4408,12 +4454,195 @@ window.deleteNotice = async function(i) {
   try {
     const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const items = (window._adminNotices || []).filter((_,idx) => idx !== i);
-    await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { items }, { merge: true });
     window._adminNotices = items;
     if (window._noticeEditIdx === i) noticeResetForm();
     showAdminToast('✅ 공지가 삭제됐습니다');
     loadNoticesAdmin();
   } catch(e) { console.error('공지 삭제 실패:', e); }
+};
+
+// ── 이벤트 관리 (학생앱 이벤트 탭과 Firebase events/list로 연동) ──
+window._adminEvents = null;
+window._eventEditIdx = null;
+
+// 학생앱 DEFAULT_EVENTS와 동일한 기본 정의
+const DEFAULT_ADMIN_EVENTS = [{
+  id: 'kkeutkkeuta', type: 'studytime', active: true,
+  name: '끝.끝.아 이벤트',
+  desc: '"끝나도 끝난게 아니야" 이벤트\n기간 : 7/6(월) ~ 7/19(일)\n대상 : 새봄면학관 썸머 신청 학생\n내용 : 14일간 공부시간 42시간 달성\n보상 : 시간 달성 시 썸머 비용에서 5만원 장학금 지원',
+  goal: 42, start: '2026-07-06', end: '2026-07-19'
+}, {
+  id: 'streakquest', type: 'streak', active: true,
+  name: '연속 출석 퀘스트',
+  desc: '내용 : 연속 20일 출석\n시작일 : 퀘스트 수락 다음 날부터 시작\n보상 : 이용권 기간 연장(1일) (+5일 / 시간권 : +15시간)',
+  goal: 20
+}];
+
+async function loadEventsAdmin() {
+  if (!window._adminDb) return;
+  try {
+    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    // 보안규칙상 쓰기 가능한 문서가 notices/list뿐이므로 events 필드에 함께 저장
+    const snap = await getDoc(doc(window._adminDb, 'notices', 'list'));
+    const items = snap.exists() && Array.isArray(snap.data().events) ? snap.data().events : [];
+    window._adminEvents = items;
+    const el = document.getElementById('event-list-admin');
+    if (!el) return;
+    if (items.length === 0) {
+      el.innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:16px">등록된 이벤트 없음 — 위 폼으로 끝.끝.아 이벤트를 등록하세요</div>';
+      // 첫 사용 시 끝.끝.아 이벤트 기본값을 폼에 채워 한 번에 등록 가능하게
+      if (window._eventEditIdx === null && !document.getElementById('event-name-inp').value) {
+        const def = DEFAULT_ADMIN_EVENTS[0];
+        document.getElementById('event-name-inp').value = def.name;
+        document.getElementById('event-desc-inp').value = def.desc;
+        document.getElementById('event-goal-inp').value = def.goal;
+        document.getElementById('event-type-sel').value = def.type;
+        document.getElementById('event-start-inp').value = def.start;
+        document.getElementById('event-end-inp').value = def.end;
+        eventTypeChanged();
+      }
+      return;
+    }
+    el.innerHTML = items.map((ev, i) => {
+      const active = ev.active !== false;
+      const icon = ev.type === 'streak' ? '🔥' : '🎉';
+      let goalLine = '';
+      if (ev.type === 'streak') goalLine = `목표 ${ev.goal || 20}일 연속 출석`;
+      else if (ev.type === 'studytime') goalLine = `목표 ${ev.goal || 42}시간 공부 (${ev.start || ''} ~ ${ev.end || ''})`;
+      return `
+      <div style="background:${active ? '#FFFDF5' : '#F7F7F7'};border:1px solid ${active ? '#E0B020' : '#ddd'};border-radius:10px;padding:10px 12px${active ? '' : ';opacity:0.75'}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="min-width:0;flex:1">
+            <span style="font-size:10px;font-weight:700;color:${active ? '#2E9E6B' : '#aaa'};margin-right:6px">${active ? '진행 중' : '중지'}</span>
+            <span style="font-size:12px;font-weight:600">${icon} ${ev.name || '이벤트'}</span>
+            <div style="font-size:11px;color:#aaa;margin-top:2px;white-space:pre-line">${(ev.desc || '').slice(0, 80)}${(ev.desc || '').length > 80 ? '…' : ''}</div>
+            ${goalLine ? `<div style="font-size:11px;color:#8B6010;margin-top:2px">${goalLine}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0">
+            <button onclick="toggleEventActive(${i})" style="background:${active ? '#EEF7F1' : '#E8F3EC'};color:${active ? '#777' : '#2E9E6B'};border:1px solid ${active ? '#ccc' : '#2E9E6B'};border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">${active ? '비활성화' : '활성화'}</button>
+            <button onclick="editEvent(${i})" style="background:#FFF8DC;color:#8B6010;border:1px solid #E0B020;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">수정</button>
+            <button onclick="deleteEvent(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">삭제</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('이벤트 로드 실패:', e); }
+}
+
+// 날짜 문자열('2026-07-06' 등) → input[type=date] 값('YYYY-MM-DD')으로 0패딩
+function _evDateInp(s, fallback) {
+  const p = String(s || fallback).split('-').map(Number);
+  if (p.length !== 3 || p.some(isNaN)) return fallback;
+  return p[0] + '-' + String(p[1]).padStart(2, '0') + '-' + String(p[2]).padStart(2, '0');
+}
+
+window.eventTypeChanged = function() {
+  const t = document.getElementById('event-type-sel').value;
+  document.getElementById('event-goal-unit').textContent = t === 'studytime' ? '시간' : '일';
+  document.getElementById('event-period-label').style.display = t === 'studytime' ? 'flex' : 'none';
+};
+
+window.eventResetForm = function() {
+  window._eventEditIdx = null;
+  document.getElementById('event-form-title').textContent = '🎉 새 이벤트 등록';
+  document.getElementById('event-submit-btn').textContent = '이벤트 등록';
+  document.getElementById('event-cancel-edit-btn').style.display = 'none';
+  document.getElementById('event-name-inp').value = '';
+  document.getElementById('event-desc-inp').value = '';
+  document.getElementById('event-goal-inp').value = 42;
+  document.getElementById('event-type-sel').value = 'studytime';
+  document.getElementById('event-start-inp').value = '2026-07-06';
+  document.getElementById('event-end-inp').value = '2026-07-19';
+  document.getElementById('event-active-inp').checked = true;
+  eventTypeChanged();
+};
+
+window.editEvent = function(i) {
+  const ev = (window._adminEvents || [])[i];
+  if (!ev) return;
+  window._eventEditIdx = i;
+  document.getElementById('event-form-title').textContent = '✏️ 이벤트 수정';
+  document.getElementById('event-submit-btn').textContent = '수정 완료';
+  document.getElementById('event-cancel-edit-btn').style.display = 'inline-block';
+  document.getElementById('event-name-inp').value = ev.name || '';
+  document.getElementById('event-desc-inp').value = ev.desc || '';
+  document.getElementById('event-goal-inp').value = ev.goal || (ev.type === 'studytime' ? 42 : 20);
+  document.getElementById('event-type-sel').value = ev.type === 'streak' ? 'streak' : ev.type === 'studytime' ? 'studytime' : 'general';
+  document.getElementById('event-start-inp').value = _evDateInp(ev.start, '2026-07-06');
+  document.getElementById('event-end-inp').value = _evDateInp(ev.end, '2026-07-19');
+  document.getElementById('event-active-inp').checked = ev.active !== false;
+  eventTypeChanged();
+  document.getElementById('sec-events').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+// 활성화/비활성화 토글 — active만 뒤집어 저장 (비활성 이벤트는 학생앱에서 숨김)
+window.toggleEventActive = async function(i) {
+  if (!window._adminDb) { showAdminToast('⚠️ Firebase 연결 필요'); return; }
+  const items = [...(window._adminEvents || [])];
+  if (!items[i]) return;
+  const nowActive = items[i].active !== false;
+  items[i] = Object.assign({}, items[i], { active: !nowActive });
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+    window._adminEvents = items;
+    showAdminToast(nowActive ? '⏸️ 이벤트가 비활성화됐습니다 (학생앱에서 숨김)' : '✅ 이벤트가 활성화됐습니다');
+    loadEventsAdmin();
+  } catch(e) {
+    console.error('이벤트 상태 변경 실패:', e);
+    showAdminToast('❌ 변경 실패: ' + e.message);
+  }
+};
+
+window.publishEvent = async function() {
+  const name = document.getElementById('event-name-inp').value.trim();
+  const desc = document.getElementById('event-desc-inp').value.trim();
+  const type = document.getElementById('event-type-sel').value;
+  const goal = Math.max(1, parseInt(document.getElementById('event-goal-inp').value, 10) || 20);
+  const active = document.getElementById('event-active-inp').checked;
+  if (!name) { showAdminToast('⚠️ 이벤트 이름을 입력하세요'); return; }
+  if (!window._adminDb) { showAdminToast('⚠️ Firebase 연결 필요'); return; }
+  const btn = document.getElementById('event-submit-btn');
+  btn.disabled = true;
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const isEdit = window._eventEditIdx !== null;
+    const prev = isEdit ? window._adminEvents[window._eventEditIdx] : null;
+    const evObj = {
+      id: prev ? prev.id : (type === 'studytime' ? 'kkeutkkeuta' : type === 'streak' ? 'streakquest' : Date.now()),
+      type, name, desc, goal, active,
+      date: prev && prev.date ? prev.date : new Date().toLocaleDateString('ko-KR')
+    };
+    if (type === 'studytime') {
+      evObj.start = document.getElementById('event-start-inp').value || '2026-07-06';
+      evObj.end = document.getElementById('event-end-inp').value || '2026-07-19';
+    }
+    let items = [...(window._adminEvents || [])];
+    if (isEdit) items[window._eventEditIdx] = evObj; else items.push(evObj);
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+    window._adminEvents = items;
+    eventResetForm();
+    showAdminToast(isEdit ? '✅ 이벤트가 수정됐습니다' : '✅ 이벤트가 등록됐습니다');
+    loadEventsAdmin();
+  } catch(e) {
+    console.error('이벤트 저장 실패:', e);
+    showAdminToast('❌ 저장 실패: ' + e.message);
+  } finally { btn.disabled = false; }
+};
+
+window.deleteEvent = async function(i) {
+  if (!window._adminDb) return;
+  if (!confirm('이 이벤트를 삭제할까요?')) return;
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const items = (window._adminEvents || []).filter((_, idx) => idx !== i);
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+    window._adminEvents = items;
+    if (window._eventEditIdx === i) eventResetForm();
+    showAdminToast('✅ 이벤트가 삭제됐습니다');
+    loadEventsAdmin();
+  } catch(e) { console.error('이벤트 삭제 실패:', e); }
 };
 
 function showAdminToast(msg) {
@@ -5415,7 +5644,8 @@ function renderScheduleAlerts() {
 
 // 공지사항 저장 함수
 window.saveNoticesToFirebase = async function(notices) {
-  await setDoc(doc(db, 'notices', 'list'), { items: notices });
+  // merge: 같은 문서의 events 필드(이벤트 목록)를 보존
+  await setDoc(doc(db, 'notices', 'list'), { items: notices }, { merge: true });
 };
 
 // ── 솔라피 문자 발송 ──
