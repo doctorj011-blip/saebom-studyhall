@@ -2470,8 +2470,8 @@ function buildFpSidePanel() {
   const countEl = document.getElementById('fp-side-count');
   if (!listEl) return;
 
-  // 전체 학생 (입실중 → 미입실 순)
-  const sorted = [...STUDENTS]
+  // 전체 학생 (입실중 → 미입실 순), 미배정 학생은 맨 아래로
+  const assigned = [...STUDENTS]
     .filter(s => s.seat && parseInt(s.seat) > 0)
     .sort((a, b) => {
       const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
@@ -2480,6 +2480,10 @@ function buildFpSidePanel() {
       if (!aIn && bIn) return 1;
       return parseInt(a.seat) - parseInt(b.seat);
     });
+  const unassignedList = [...STUDENTS]
+    .filter(s => !s.seat || parseInt(s.seat) <= 0)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+  const sorted = [...assigned, ...unassignedList];
 
   const inCount = sorted.filter(s => todayRecords.some(r => r.studentName === s.name && !r.outTime)).length;
   if (countEl) countEl.textContent = `${inCount}명 입실중`;
@@ -2495,9 +2499,14 @@ function buildFpSidePanel() {
     const strRoom = Object.entries(studyRoomStudents).find(([r, arr]) => arr.includes(s.name));
     const strNum = strRoom ? strRoom[0] : null;
 
+    const isUnassigned = !s.seat || parseInt(s.seat) <= 0;
+
     // 배지 및 배경 결정
     let badgeText, badgeBg, cardBg, cardBorder;
-    if (isIn && strNum) {
+    if (isUnassigned) {
+      badgeText = '미배정';
+      badgeBg = '#7A5008'; cardBg = '#FFF7ED'; cardBorder = '#E0B020';
+    } else if (isIn && strNum) {
       badgeText = `이용 · ST-R ${strNum}`;
       badgeBg = '#7C3AED'; cardBg = '#FAF5FF'; cardBorder = '#C084FC';
     } else if (isIn) {
@@ -2527,7 +2536,7 @@ function buildFpSidePanel() {
       data-student-name="${s.name}"
       data-student-seat="${s.seat}"
       draggable="true"
-      onclick="fpSeatClick(${parseInt(s.seat)})"
+      onclick="${isUnassigned ? `openScheduleModal(${STUDENTS.indexOf(s)})` : `fpSeatClick(${parseInt(s.seat)})`}"
       onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
       style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative">
       <div style="position:absolute;top:7px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
@@ -2535,7 +2544,7 @@ function buildFpSidePanel() {
         <div style="display:flex;align-items:center;gap:5px">
           <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${badgeBg};color:#fff">${badgeText}</span>
         </div>
-        <span style="font-size:10px;color:#6B7280;margin-right:14px">${s.seat}번</span>
+        <span style="font-size:10px;color:#6B7280;margin-right:14px">${isUnassigned ? '드래그해 자리 지정' : s.seat + '번'}</span>
       </div>
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
         <span style="font-size:13px;font-weight:700;color:#1F2937">${s.name}</span>
@@ -2618,23 +2627,33 @@ async function _onCellDrop(e) {
   this.classList.remove('fp-cell-drop-hover');
   deactivateSeatDropTargets();
 
-  if (!_dragStudentName || !_dragFromSeat) return;
+  if (!_dragStudentName) return; // 미배정 학생은 _dragFromSeat가 '' 이므로 이름만으로 판별
 
   const targetSeat = this.dataset.seatNum;
   if (!targetSeat || parseInt(targetSeat) <= 0) { showAdminToast('💡 유효하지 않은 좌석입니다'); return; }
 
   const targetSeatStr = String(targetSeat);
   const studentName   = _dragStudentName;
-  const fromSeat      = _dragFromSeat;
+  const fromSeat      = _dragFromSeat || ''; // '' = 미배정 학생 배정
+  const isFromUnassigned = !fromSeat;
 
   if (targetSeatStr === fromSeat) { showAdminToast('💡 같은 좌석입니다'); return; }
 
   const occupant = STUDENTS.find(s => s.seat === targetSeatStr);
-  let confirmMsg = `${studentName} 학생을\n${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경할까요?`;
-  if (occupant) confirmMsg += `\n\n⚠️ ${targetSeatStr}번의 "${occupant.name}" 학생과 자리가 교환됩니다.`;
+  // 미배정 학생을 이미 사용 중인 좌석에 놓으면 상대가 미배정돼버리므로 차단
+  if (isFromUnassigned && occupant) {
+    showAdminToast(`💡 ${targetSeatStr}번은 ${occupant.name} 학생이 사용 중입니다`);
+    return;
+  }
+
+  let confirmMsg = isFromUnassigned
+    ? `${studentName} 학생(미배정)을\n${targetSeatStr}번 자리에 배정할까요?`
+    : `${studentName} 학생을\n${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경할까요?`;
+  if (occupant && !isFromUnassigned) confirmMsg += `\n\n⚠️ ${targetSeatStr}번의 "${occupant.name}" 학생과 자리가 교환됩니다.`;
   if (!confirm(confirmMsg)) return;
 
-  await _executeSeatChange(studentName, fromSeat, targetSeatStr, occupant);
+  // 미배정 배정은 교환이 아니므로 occupant를 넘기지 않음
+  await _executeSeatChange(studentName, fromSeat, targetSeatStr, isFromUnassigned ? null : occupant);
 }
 
 async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
@@ -2642,6 +2661,8 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     showAdminToast('⏳ 좌석 변경 중...');
     const student = STUDENTS.find(s => s.name === studentName);
     if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
+    const draggedSid = student.sid;          // 미배정(u_...) 문서 정리용
+    const wasUnassigned = !oldSeat;          // 빈 좌석에서 배정하는 경우
 
     window._seatChanging = true; // onSnapshot 중복 방지 플래그
 
@@ -2649,10 +2670,10 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
       // 두 학생 교환: occupant → oldSeat
       await _saveSeatDoc({...occupant, seat: oldSeat}, newSeat);
       const oi = STUDENTS.findIndex(s => s.name === occupant.name);
-      if (oi !== -1) STUDENTS[oi].seat = oldSeat;
+      if (oi !== -1) { STUDENTS[oi].seat = oldSeat; STUDENTS[oi].sid = oldSeat; }
       todayRecords.forEach(r => { if (r.studentName === occupant.name) r.seat = oldSeat; });
-    } else {
-      // 기존 문서 삭제
+    } else if (oldSeat) {
+      // 기존 좌석 문서 삭제 (미배정 배정 시엔 좌석 문서가 없으므로 건너뜀)
       try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', oldSeat)); } catch(e){}
       try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'schedules', oldSeat)); } catch(e){}
     }
@@ -2660,16 +2681,25 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     // 드래그한 학생 → newSeat
     await _saveSeatDoc({...student, seat: newSeat}, oldSeat);
     const si = STUDENTS.findIndex(s => s.name === studentName);
-    if (si !== -1) STUDENTS[si].seat = newSeat;
+    if (si !== -1) { STUDENTS[si].seat = newSeat; STUDENTS[si].sid = newSeat; }
     todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
+
+    // 미배정(u_...) 상태에서 배정된 경우: 남아있는 보관용 문서 정리 (교환이 아닐 때만)
+    if (!occupant && draggedSid && draggedSid !== newSeat) {
+      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', draggedSid)); } catch(e){}
+    }
 
     STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
     buildFloorplan();
     buildStudentList(document.getElementById('student-search')?.value || '');
     buildDashboard();
 
-    const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
-    showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
+    if (wasUnassigned) {
+      showAdminToast(`✅ ${studentName}: ${newSeat}번 자리에 배정됨`);
+    } else {
+      const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
+      showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
+    }
 
     // 1초 후 플래그 해제
     setTimeout(() => { window._seatChanging = false; }, 1000);
