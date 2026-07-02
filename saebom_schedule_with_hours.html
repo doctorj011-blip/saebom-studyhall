@@ -92,6 +92,16 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .view-btn{padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary)}
 .view-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
 
+.range-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px 14px}
+.range-label{font-size:12px;font-weight:600;color:var(--color-text-primary);display:flex;align-items:center;gap:4px}
+.range-input{padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit}
+.range-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary)}
+.range-btn:hover{background:var(--color-background-secondary)}
+.range-btn-primary{background:#A87008;color:#fff;border-color:#A87008;font-weight:600}
+.range-btn-primary:hover{background:#8F5E06}
+.range-preset{padding:4px 9px;border:0.5px solid var(--color-border-secondary);border-radius:20px;cursor:pointer;font-size:11px;background:var(--color-background-primary);color:var(--color-text-secondary)}
+.range-preset:hover{background:#FFF8DC;color:#7A5008;border-color:#E0B020}
+
 .hours-table{width:100%;border-collapse:collapse;background:var(--color-background-primary);border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
 .hours-table th{background:#A87008;color:#fff;padding:8px 10px;font-size:11px;font-weight:500;text-align:center}
 .hours-table th:first-child{text-align:left;padding-left:14px}
@@ -536,6 +546,22 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
       <button class="view-btn active" id="view-table-btn" onclick="setView('table',this)"><i class="ti ti-list" aria-hidden="true"></i> 목록</button>
       <button class="view-btn" id="view-chart-btn" onclick="setView('chart',this)"><i class="ti ti-chart-bar" aria-hidden="true"></i> 차트</button>
     </div>
+  </div>
+
+  <div class="range-bar" id="hours-range-bar">
+    <span class="range-label"><i class="ti ti-calendar-search" aria-hidden="true"></i> 기간 조회</span>
+    <input type="date" id="hours-range-start" class="range-input">
+    <span style="color:var(--color-text-tertiary)">~</span>
+    <input type="date" id="hours-range-end" class="range-input">
+    <button class="range-btn range-btn-primary" onclick="queryHoursRange()">조회</button>
+    <button class="range-btn" id="hours-range-reset" onclick="resetHoursRange()" style="display:none">✕ 월별 보기로</button>
+    <span style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="range-preset" onclick="setHoursRangePreset(7)">최근 7일</button>
+      <button class="range-preset" onclick="setHoursRangePreset(14)">최근 14일</button>
+      <button class="range-preset" onclick="setHoursRangePreset(30)">최근 30일</button>
+      <button class="range-preset" onclick="setHoursRangePreset('month')">이번 달</button>
+    </span>
+    <span id="hours-range-status" style="font-size:11px;color:var(--color-text-tertiary)"></span>
   </div>
 
   <div id="hours-table-view">
@@ -1780,6 +1806,8 @@ window.saveSettingsFromTab = function() {
 };
 
 window.setView = function(v,btn){
+  // 차트는 월별 데이터 기준 → 기간 조회 모드였다면 해제하고 월별로 복귀
+  if (v==='chart' && window._hoursRangeMode) window.resetHoursRange();
   currentView=v;
   document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -1789,6 +1817,7 @@ window.setView = function(v,btn){
 }
 
 window.selectMonth = function(m,el){
+  if (window._hoursRangeMode) window.resetHoursRange(true); // 월 탭 클릭 시 기간 모드 해제
   currentMonth=m;
   document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
@@ -1813,6 +1842,8 @@ function getTrend(s,m){
 }
 
 function buildHoursTable(){
+  // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
+  if (window._hoursRangeMode) return;
   const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   if (!sorted.length) return;
   const vals=sorted.map(s=>_readHour(s.hours,currentMonth));
@@ -1887,6 +1918,204 @@ setInterval(() => {
     try { buildHoursTable(); } catch(e){}
   }
 }, 60000);
+
+// ── 기간 설정 사용시간 조회 ──
+// checkin_logs의 in/out 이벤트를 기간(최대 92일)으로 조회해 학생별 사용시간을 합산한다.
+// 저장된 date 필드는 무패딩 'YYYY-M-D' 형식(toLocaleDateString 변환 결과)이라
+// Firestore 범위 쿼리(>=,<=)가 불가능 → 날짜 목록을 만들어 'in' 쿼리(30개씩 분할)로 조회한다.
+window._hoursRangeMode = false;
+
+function _fmtRangeMin(min){
+  const h = Math.floor(min / 60), m = min % 60;
+  if (min <= 0) return '—';
+  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+}
+
+// ISO(YYYY-MM-DD) 문자열 → checkin_logs date 형식(무패딩 Y-M-D) 목록 생성
+function _rangeDateStrings(startISO, endISO){
+  const out = [];
+  const d = new Date(startISO + 'T00:00:00');
+  const end = new Date(endISO + 'T00:00:00');
+  while (d <= end) {
+    out.push(`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`);
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+window.setHoursRangePreset = function(preset){
+  const startEl = document.getElementById('hours-range-start');
+  const endEl = document.getElementById('hours-range-end');
+  const now = new Date();
+  const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  if (preset === 'month') {
+    startEl.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  } else {
+    startEl.value = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (preset - 1)));
+  }
+  endEl.value = iso(now);
+  window.queryHoursRange();
+};
+
+let _rangeQueryLock = false;
+window.queryHoursRange = async function(){
+  const startISO = document.getElementById('hours-range-start').value;
+  const endISO = document.getElementById('hours-range-end').value;
+  const statusEl = document.getElementById('hours-range-status');
+  if (!startISO || !endISO) { statusEl.textContent = '시작일과 종료일을 모두 선택하세요'; return; }
+  if (startISO > endISO) { statusEl.textContent = '시작일이 종료일보다 늦습니다'; return; }
+  const dates = _rangeDateStrings(startISO, endISO);
+  if (dates.length > 92) { statusEl.textContent = '최대 92일(약 3개월)까지 조회할 수 있습니다'; return; }
+  if (_rangeQueryLock) return;
+  _rangeQueryLock = true;
+  statusEl.textContent = '조회 중...';
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+
+    // 'in' 쿼리는 최대 30개 값 → 30일씩 나눠 병렬 조회
+    const chunks = [];
+    for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i + 30));
+    const snaps = await Promise.all(chunks.map(c =>
+      getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', c)))
+    ));
+
+    // 날짜별로 묶어 in/out 짝을 지어 분 단위 합산
+    const byDate = {};
+    snaps.forEach(snap => snap.forEach(doc => {
+      const d = doc.data();
+      if (!d.studentName || !d.type || !d.date) return;
+      (byDate[d.date] = byDate[d.date] || []).push(d);
+    }));
+
+    const totalMin = {};   // 이름 → 총 사용시간(분)
+    const daysSet = {};    // 이름 → 출석한 날짜 Set
+    const seatOf = {};     // 이름 → 기록상 좌석 (퇴원생 대비)
+    const addMin = (name, date, min) => {
+      if (min <= 0) return;
+      totalMin[name] = (totalMin[name] || 0) + min;
+      (daysSet[name] = daysSet[name] || new Set()).add(date);
+    };
+    const todayStr = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
+
+    Object.entries(byDate).forEach(([date, events]) => {
+      // loadTodayCheckinFromFirebase와 동일 규칙: ts 우선 정렬, 동시각이면 입실 먼저
+      events.sort((a, b) => {
+        const diff = eventSortKey(a) - eventSortKey(b);
+        if (diff !== 0) return diff;
+        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
+      });
+      const open = {}; // 이름 → 입실 시각(분)
+      events.forEach(ev => {
+        const name = ev.studentName;
+        if (ev.seat) seatOf[name] = ev.seat;
+        if (ev.type === 'in') {
+          const inMin = timeToMin(ev.time);
+          if (open[name] == null && inMin != null) open[name] = inMin;
+        } else if (ev.type === 'out') {
+          const inMin = open[name];
+          if (inMin != null) {
+            let outMin = timeToMin(ev.time);
+            if (outMin != null) {
+              if (outMin < inMin) outMin += 1440; // 자정 넘김 (미퇴실 이월 퇴실 등)
+              addMin(name, date, outMin - inMin);
+            }
+            delete open[name];
+          }
+        }
+      });
+      // 미퇴실 세션: 오늘 날짜면 현재 시각까지 집계, 과거 날짜는 집계 제외
+      if (date === todayStr) {
+        const nowMin = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+        if (nowMin != null) Object.entries(open).forEach(([name, inMin]) => addMin(name, date, nowMin - inMin));
+      }
+    });
+
+    window._hoursRangeMode = true;
+    document.getElementById('hours-range-reset').style.display = '';
+    document.querySelectorAll('.month-tab').forEach(t => t.classList.remove('active'));
+    if (currentView !== 'table') window.setView('table', document.getElementById('view-table-btn'));
+    statusEl.textContent = '';
+    renderHoursRangeTable({ totalMin, daysSet, seatOf }, startISO, endISO, dates.length);
+  } catch(e) {
+    console.error('기간 사용시간 조회 실패:', e);
+    statusEl.textContent = '❌ 조회 실패: ' + (e.message || e);
+  } finally { _rangeQueryLock = false; }
+};
+
+function renderHoursRangeTable(result, startISO, endISO, dayCount){
+  const { totalMin, daysSet, seatOf } = result;
+  // 현재 학생 전원 + 기간 내 기록이 있는 퇴원생을 합쳐 목록 구성
+  const rows = STUDENTS.map(s => ({ name: s.name, seat: s.seat, min: totalMin[s.name] || 0, days: daysSet[s.name] ? daysSet[s.name].size : 0 }));
+  const known = new Set(STUDENTS.map(s => s.name));
+  Object.keys(totalMin).forEach(name => {
+    if (!known.has(name)) rows.push({ name, seat: seatOf[name] || '—', min: totalMin[name], days: daysSet[name] ? daysSet[name].size : 0, former: true });
+  });
+  rows.sort((a, b) => b.min - a.min);
+
+  const maxMin = Math.max(...rows.map(r => r.min), 1);
+  const active = rows.filter(r => r.min > 0);
+  const avgMin = active.length ? Math.round(active.reduce((a, r) => a + r.min, 0) / active.length) : 0;
+  const label = `${startISO.replace(/-/g,'.')} ~ ${endISO.replace(/-/g,'.')}`;
+
+  document.getElementById('hours-summary').innerHTML = `
+    <div class="summary-chip">📅 <span>${label}</span> (${dayCount}일)</div>
+    <div class="summary-chip">이용 학생 <span>${active.length}명</span></div>
+    <div class="summary-chip">평균 <span>${_fmtRangeMin(avgMin)}</span></div>
+    <div class="summary-chip">최고 <span>${_fmtRangeMin(rows[0]?.min || 0)}</span> (${rows[0]?.min > 0 ? rows[0].name : '-'})</div>
+  `;
+
+  let html = `<thead><tr>
+    <th style="width:32px">순위</th>
+    <th>이름</th><th>좌석</th>
+    <th>총 사용시간</th>
+    <th style="width:100px">그래프</th>
+    <th>출석일수</th>
+    <th>일평균</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const pct = Math.round(r.min / maxMin * 100);
+    const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+    const dayAvg = r.days > 0 ? Math.round(r.min / r.days) : 0;
+    const totalH = Math.round(r.min / 60 * 10) / 10;
+    html += `<tr>
+      <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
+      <td style="font-weight:500">${r.name}${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
+      <td><span class="seat-badge">${r.seat}</span></td>
+      <td style="font-weight:600">${_fmtRangeMin(r.min)}${r.min > 0 ? ` <span style="font-size:10px;color:var(--color-text-tertiary)">(${totalH}h)</span>` : ''}</td>
+      <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
+      <td>${r.days > 0 ? r.days + '일' : '—'}</td>
+      <td style="color:var(--color-text-secondary)">${_fmtRangeMin(dayAvg)}</td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('hours-table').innerHTML = html;
+}
+
+window.resetHoursRange = function(skipRebuild){
+  window._hoursRangeMode = false;
+  document.getElementById('hours-range-reset').style.display = 'none';
+  document.getElementById('hours-range-status').textContent = '';
+  if (!skipRebuild) {
+    buildMonthTabs();
+    buildHoursTable();
+  }
+};
+
+// 기간 입력 기본값: 이번 달 1일 ~ 오늘
+(function(){
+  const s = document.getElementById('hours-range-start');
+  const e = document.getElementById('hours-range-end');
+  if (!s || !e) return;
+  const now = new Date();
+  const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  s.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  e.value = iso(now);
+})();
 
 function buildHoursChart(){
   const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
