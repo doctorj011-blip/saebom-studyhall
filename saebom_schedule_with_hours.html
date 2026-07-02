@@ -1764,8 +1764,9 @@ window.checkinConfirm = function() {
   buildDashboard();
   if (document.getElementById('fp-room')) buildFloorplan();
 
-  // 🚪 자동문 열기 (3초 후 자동 닫힘)
-  if (window.doorOpenTimed) window.doorOpenTimed(3);
+  // 🚪 자동문 열기 (3초 후 자동 닫힘) — 릴레이가 다른 기기(키오스크)에 있어도 원격으로 개방
+  if (window.requestDoorOpen) window.requestDoorOpen(3);
+  else if (window.doorOpenTimed) window.doorOpenTimed(3);
 
   setTimeout(() => {
     checkinReset();
@@ -5114,6 +5115,41 @@ setInterval(checkBreakDoor, 10 * 1000);
   const _chk = document.getElementById('break-auto-door-chk');
   if (_chk) _chk.checked = _breakAutoEnabled;
 }
+
+// ── 원격 문 열기 (다른 기기에서 입실 → 릴레이 연결된 키오스크가 문 개방) ──
+// 기기 고유 ID (자기가 보낸 명령을 자기가 다시 실행하지 않도록 구분용)
+const DOOR_DEVICE_ID = (() => {
+  let id = localStorage.getItem('doorDeviceId');
+  if (!id) { id = 'dev_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('doorDeviceId', id); }
+  return id;
+})();
+
+// 입퇴실 시 호출: 이 기기 릴레이로 열고 + Firestore로 다른 기기(키오스크)에도 명령 발행
+window.requestDoorOpen = async function(seconds = 3) {
+  if (_serialWriter) window.doorOpenTimed(seconds); // 이 기기에 릴레이가 있으면 즉시 개방
+  try {
+    await setDoc(doc(db, 'door_commands', 'current'), {
+      action: 'open',
+      seconds: seconds,
+      ts: Date.now(),
+      by: DOOR_DEVICE_ID,
+      at: serverTimestamp()
+    });
+  } catch(e) { console.warn('🚪 원격 문 열기 명령 발행 실패:', e); }
+};
+
+// 키오스크 측: 다른 기기가 보낸 문 열기 명령 수신
+let _doorCmdReady = false; // 구독 시작 시 기존 문서(과거 명령)는 무시
+onSnapshot(doc(db, 'door_commands', 'current'), (snap) => {
+  if (!_doorCmdReady) { _doorCmdReady = true; return; }
+  const d = snap.data();
+  if (!d || d.action !== 'open') return;
+  if (d.by === DOOR_DEVICE_ID) return;        // 내가 보낸 명령 (이미 로컬에서 열었음)
+  if (Date.now() - d.ts > 60 * 1000) return;  // 60초 지난 명령은 무시 (오프라인 복구 시 재생 방지)
+  if (!_serialWriter) return;                 // 릴레이 미연결 기기는 무시
+  window.doorOpenTimed(d.seconds || 3);
+  showAdminToast('🚪 다른 기기에서 입퇴실 — 문 자동 개방');
+}, (err) => console.warn('🚪 door_commands 구독 에러:', err));
 
 function showAdminToast(msg) {
   const t = document.createElement('div');
