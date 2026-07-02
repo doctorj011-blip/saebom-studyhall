@@ -358,6 +358,10 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
           style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
           🚪 수동 열기
         </button>
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#8B6010;cursor:pointer;user-select:none">
+          <input type="checkbox" id="break-auto-door-chk" checked onchange="window.toggleBreakAutoDoor(this.checked)">
+          쉬는시간 자동개방
+        </label>
       </div>
       <div class="checkin-header">
         <i class="ti ti-door-enter" style="font-size:28px;color:#C8900A"></i>
@@ -5008,6 +5012,7 @@ window.connectSerial = async function() {
     showAdminToast('✅ 릴레이 포트 연결됨');
     const btn = document.getElementById('relay-connect-btn');
     if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; btn.style.color = '#fff'; }
+    checkBreakDoor(); // 연결 시점이 쉬는시간이면 즉시 개방
     return true;
   } catch(e) {
     showAdminToast('⚠️ 포트 연결 실패: ' + e.message);
@@ -5042,10 +5047,73 @@ window.doorClose = async function() {
 };
 
 window.doorOpenTimed = async function(seconds = 3) {
+  if (_breakDoorHeld) return true; // 쉬는시간 개방 중 — 이미 열려 있으므로 닫힘 예약 안 함
   const ok = await window.doorOpen();
-  if (ok) setTimeout(window.doorClose, seconds * 1000);
+  if (ok) setTimeout(() => { if (!_breakDoorHeld) window.doorClose(); }, seconds * 1000);
   return ok;
 };
+
+// ── 쉬는시간 자동 개방 (쉬는시간 시작 시 열고, 끝나면 닫음) ──
+let _breakDoorHeld = false; // 쉬는시간 개방 유지 중 플래그
+let _breakAutoEnabled = localStorage.getItem('breakAutoDoor') !== '0';
+
+// 쉬는시간 목록: [시작(분), 끝(분), 라벨]
+const BREAKS_EVENING = [ // 평일·토요일 공통 (7~11교시 사이)
+  [18*60+50, 19*60,    '7~8교시'],
+  [20*60+20, 20*60+30, '8~9교시'],
+  [22*60,    22*60+30, '9~10교시'],
+  [23*60+50, 24*60,    '10~11교시'],
+];
+const BREAKS_SAT_DAY = [ // 토요일 낮 (1~6교시 사이, 점심 12:30~1:30·저녁 5:00~6:00 제외)
+  [10*60,    10*60+10, '1~2교시'],
+  [11*60+10, 11*60+20, '2~3교시'],
+  [14*60+30, 14*60+40, '4~5교시'],
+  [15*60+40, 15*60+50, '5~6교시'],
+];
+
+function getCurrentBreak() {
+  const now = new Date();
+  const day = now.getDay();
+  if (day === 0) return null; // 일요일은 교시 없음
+  const t = now.getHours()*60 + now.getMinutes();
+  const list = day === 6 ? [...BREAKS_SAT_DAY, ...BREAKS_EVENING] : BREAKS_EVENING;
+  for (const [start, end, label] of list) {
+    if (t >= start && t < end) return { start, end, label };
+  }
+  return null;
+}
+
+window.toggleBreakAutoDoor = function(on) {
+  _breakAutoEnabled = on;
+  localStorage.setItem('breakAutoDoor', on ? '1' : '0');
+  showAdminToast(on ? '🚪 쉬는시간 자동개방 켜짐' : '🚪 쉬는시간 자동개방 꺼짐');
+  if (on) checkBreakDoor();
+  else if (_breakDoorHeld) { _breakDoorHeld = false; window.doorClose(); }
+};
+
+async function checkBreakDoor() {
+  if (!_breakAutoEnabled) return;
+  if (!_serialWriter) return; // 포트 미연결 시 자동 시도 안 함 (연결은 버튼 클릭 필요)
+  const br = getCurrentBreak();
+  if (br && !_breakDoorHeld) {
+    const ok = await window.doorOpen();
+    if (ok) {
+      _breakDoorHeld = true;
+      showAdminToast(`🚪 ${br.label} 쉬는시간 — 문 자동 개방`);
+    }
+  } else if (!br && _breakDoorHeld) {
+    _breakDoorHeld = false;
+    const ok = await window.doorClose();
+    showAdminToast(ok ? '🚪 쉬는시간 종료 — 문 자동 닫힘' : '⚠️ 문 닫힘 신호 실패 — 릴레이 포트를 확인하세요');
+  }
+}
+setInterval(checkBreakDoor, 10 * 1000);
+
+// 토글 체크박스 초기 상태 반영
+{
+  const _chk = document.getElementById('break-auto-door-chk');
+  if (_chk) _chk.checked = _breakAutoEnabled;
+}
 
 function showAdminToast(msg) {
   const t = document.createElement('div');
