@@ -237,6 +237,14 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .summary-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .summary-chip{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:6px 10px;font-size:11px}
 .summary-chip span{font-weight:500;color:var(--color-text-primary)}
+
+/* 키오스크 전체화면 모드 (입실·퇴실 화면만 표시) */
+body.kiosk-mode .topbar{display:none}
+body.kiosk-mode #checkin-door-controls{display:none}
+body.kiosk-mode .checkin-wrap{margin-top:24px}
+#kiosk-exit-btn{display:none}
+body.kiosk-mode #kiosk-exit-btn{display:block;position:fixed;top:10px;right:10px;z-index:999;padding:6px 12px;background:rgba(0,0,0,0.35);color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;opacity:0.4;transition:opacity 0.15s}
+body.kiosk-mode #kiosk-exit-btn:hover{opacity:1}
 </style>
 
 
@@ -345,10 +353,11 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 
 <!-- 입실·퇴실 -->
 <div id="sec-checkin" class="section">
+  <button id="kiosk-exit-btn" onclick="window.exitKioskMode()">✕ 전체화면 종료</button>
   <div class="checkin-wrap">
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
-      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px">
+      <div id="checkin-door-controls" style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">
         <span style="font-size:11px;color:#8B6010">자동문 릴레이:</span>
         <button id="relay-connect-btn" onclick="connectSerial()"
           style="padding:5px 12px;background:#E0B020;color:#5C3D08;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
@@ -362,6 +371,10 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
           <input type="checkbox" id="break-auto-door-chk" checked onchange="window.toggleBreakAutoDoor(this.checked)">
           쉬는시간 자동개방
         </label>
+        <button onclick="window.enterKioskMode()"
+          style="padding:5px 12px;background:#5C3D08;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
+          ⛶ 전체화면
+        </button>
       </div>
       <div class="checkin-header">
         <i class="ti ti-door-enter" style="font-size:28px;color:#C8900A"></i>
@@ -908,6 +921,23 @@ window.showSection = function(id,btn){
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
+
+// ── 키오스크 전체화면 모드 (입실·퇴실 화면만 표시) ──
+window.enterKioskMode = function() {
+  const btn = document.querySelector('.checkin-shortcut-btn');
+  if (btn) window.showSection('checkin', btn);
+  document.body.classList.add('kiosk-mode');
+  const el = document.documentElement;
+  if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+};
+window.exitKioskMode = function() {
+  document.body.classList.remove('kiosk-mode');
+  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+};
+// ESC 등으로 브라우저 전체화면이 해제되면 키오스크 모드도 함께 해제
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) document.body.classList.remove('kiosk-mode');
+});
 // ── 자리선택 허용 관리 ──
 window.saveSeatSelection = async function() {
   const start = document.getElementById('seat-sel-start').value;
