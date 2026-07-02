@@ -68,8 +68,17 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .student-name{font-size:13px;font-weight:500}
 .student-meta{font-size:11px;color:var(--color-text-secondary)}
 .student-schedule{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.search-bar{display:flex;gap:8px;margin-bottom:12px}
-.search-bar input{flex:1;padding:7px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary)}
+.search-bar{display:flex;gap:10px;margin-bottom:12px;align-items:center}
+.student-search-box{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;background:var(--color-background-primary);border:1.5px solid #E8C840;border-radius:12px;padding:9px 12px;transition:border-color 0.15s,box-shadow 0.15s}
+.student-search-box:focus-within{border-color:#C8900A;box-shadow:0 0 0 3px rgba(200,144,10,0.12)}
+.student-search-box .ti-search{font-size:16px;color:#C8900A;flex-shrink:0}
+.student-search-box input{flex:1;border:none;outline:none;background:transparent;font-size:14px;color:var(--color-text-primary);min-width:0}
+.student-search-box input::placeholder{color:#C0A860}
+#student-search-clear{display:none;flex-shrink:0;width:20px;height:20px;border:none;border-radius:50%;background:#F0E4C0;color:#8B6010;font-size:11px;line-height:1;cursor:pointer}
+#student-search-clear:hover{background:#E0B020;color:#fff}
+.student-search-box.has-text #student-search-clear{display:block}
+#student-search-count{font-size:12px;font-weight:600;color:#8B6010;white-space:nowrap}
+.student-list-empty{grid-column:1/-1;text-align:center;padding:40px 0;color:var(--color-text-tertiary);font-size:13px}
 .add-btn{padding:7px 14px;background:#C8900A;color:#fff;border:none;border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
 .today-chip{display:inline-flex;align-items:center;gap:4px;background:#FFF8DC;color:#27500A;border-radius:20px;padding:2px 8px;font-size:11px;margin-left:8px}
 .period-header{font-size:10px;line-height:1.3}
@@ -303,11 +312,11 @@ body.kiosk-mode #kiosk-exit-btn{display:block;position:fixed;top:0;right:0;z-ind
 #kiosk-enter-btn{position:fixed;bottom:14px;right:14px;z-index:999;width:40px;height:40px;border:none;border-radius:10px;background:rgba(92,61,8,0.2);color:#fff;font-size:18px;line-height:1;cursor:pointer;transition:background 0.15s}
 #kiosk-enter-btn:hover{background:rgba(92,61,8,0.6)}
 body.kiosk-mode #kiosk-enter-btn{display:none}
-/* 키오스크 하단 디지털 시계 (12시간제 · 초 표시) */
+/* 키오스크 하단 디지털 시계 (12시간제 · 초 표시) — 패널 아래 여백의 세로 중앙에 배치 */
 #kiosk-clock{display:none}
-body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;bottom:3.5vh;z-index:500;justify-content:center;align-items:baseline;gap:1.4vw;pointer-events:none;user-select:none}
-#kiosk-clock .kc-ampm{font-size:clamp(18px,2.8vw,44px);font-weight:600;color:#B08A2E;letter-spacing:0.12em}
-#kiosk-clock .kc-time{font-size:clamp(52px,9vw,160px);font-weight:700;line-height:1;color:#5C3D08;font-variant-numeric:tabular-nums;letter-spacing:0.03em;text-shadow:0 2px 14px rgba(200,144,10,0.22)}
+body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(--kiosk-clock-top,80vh);transform:translateY(-50%);z-index:500;justify-content:center;align-items:baseline;gap:1.6vw;pointer-events:none;user-select:none}
+#kiosk-clock .kc-ampm{font-size:clamp(24px,4vw,64px);font-weight:600;color:#B08A2E;letter-spacing:0.12em}
+#kiosk-clock .kc-time{font-size:clamp(68px,13vw,240px);font-weight:700;line-height:1;color:#5C3D08;font-variant-numeric:tabular-nums;letter-spacing:0.03em;text-shadow:0 2px 18px rgba(200,144,10,0.22)}
 #kiosk-clock .kc-sec{color:#C8900A;font-size:0.62em;font-weight:600}
 </style>
 
@@ -531,8 +540,12 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;bottom:3
 <!-- 학생관리 -->
 <div id="sec-students" class="section">
   <div class="search-bar">
-    <input type="text" id="student-search" placeholder="이름 또는 좌석 검색..." oninput="filterStudents()">
-
+    <div class="student-search-box">
+      <i class="ti ti-search" aria-hidden="true"></i>
+      <input type="text" id="student-search" placeholder="이름 · 좌석번호 · 전화번호로 검색..." oninput="filterStudents()">
+      <button id="student-search-clear" onclick="clearStudentSearch()" aria-label="검색어 지우기">✕</button>
+    </div>
+    <span id="student-search-count"></span>
   </div>
   <div class="student-list" id="student-list"></div>
 </div>
@@ -1240,11 +1253,22 @@ function updateKioskZoom() {
   document.body.style.setProperty('--kiosk-zoom', z.toFixed(2));
   document.body.style.setProperty('--kiosk-today-zoom', Math.max(1, Math.min(z * 0.72, 2)).toFixed(2));
 }
-window.addEventListener('resize', updateKioskZoom);
+window.addEventListener('resize', () => { updateKioskZoom(); if (typeof positionKioskClock === 'function') positionKioskClock(); });
 
 // ── 키오스크 하단 디지털 시계 (12시간제, 초 표시) ──
 let _kioskClockTimer = null;
+// 입력 패널 아래 남는 여백의 세로 중앙에 시계 배치
+// (패널 높이가 화면·확대율·표시 패널에 따라 달라지므로 매초 재계산)
+function positionKioskClock() {
+  if (!document.body.classList.contains('kiosk-mode')) return;
+  const wrap = document.querySelector('#sec-checkin .checkin-wrap');
+  if (!wrap) return;
+  const panelBottom = wrap.getBoundingClientRect().bottom;
+  const mid = (panelBottom + window.innerHeight) / 2;
+  document.body.style.setProperty('--kiosk-clock-top', Math.round(mid) + 'px');
+}
 function updateKioskClock() {
+  positionKioskClock();
   const now = new Date();
   let h = now.getHours();
   const ampm = h < 12 ? '오전' : '오후';
@@ -1895,10 +1919,18 @@ function buildDashboard(){
 }
 
 function buildStudentList(filter=''){
-  document.getElementById('student-list').innerHTML=[...STUDENTS]
-    .filter(s=>s.name.includes(filter)||s.seat.includes(filter)||(s.phone&&s.phone.replace(/\D/g,'').includes(filter.replace(/\D/g,''))))
-    .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat))
-    .map(s=>{
+  filter=(filter||'').trim();
+  // 전화번호는 검색어에 숫자가 있을 때만 매칭 (''.includes('')는 항상 true라 전체 학생이 매칭됨)
+  const fDigits=filter.replace(/\D/g,'');
+  const matched=[...STUDENTS]
+    .filter(s=>!filter||s.name.includes(filter)||s.seat.includes(filter)||(fDigits&&s.phone&&s.phone.replace(/\D/g,'').includes(fDigits)))
+    .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
+  const box=document.querySelector('.student-search-box');
+  if(box) box.classList.toggle('has-text',!!filter);
+  const countEl=document.getElementById('student-search-count');
+  if(countEl) countEl.textContent=filter?`${matched.length}명 검색됨`:'';
+  document.getElementById('student-list').innerHTML=matched.length
+    ? matched.map(s=>{
       const h=_readHour(s.hours,currentMonth);
       const idx=STUDENTS.indexOf(s);
       const isAdmin = parseInt(s.seat) >= 54;
@@ -1933,7 +1965,8 @@ function buildStudentList(filter=''){
           <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
         </div>
       </div>`;
-    }).join('');
+    }).join('')
+    : `<div class="student-list-empty">${filter?`🔍 "${filter.replace(/</g,'&lt;')}" 검색 결과가 없습니다`:'등록된 학생이 없습니다'}</div>`;
 }
 
 window.toggleGender = function(idx, e) {
@@ -1947,6 +1980,13 @@ window.toggleGender = function(idx, e) {
 
 function filterStudents(){
   buildStudentList(document.getElementById('student-search').value);
+}
+
+function clearStudentSearch(){
+  const inp=document.getElementById('student-search');
+  inp.value='';
+  buildStudentList('');
+  inp.focus();
 }
 
 // ===== 입실·퇴실 =====
