@@ -324,12 +324,19 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
 #butterfly-layer{position:fixed;inset:0;pointer-events:none;z-index:600;overflow:hidden}
 .pbfly{position:absolute;left:0;top:0;pointer-events:none;will-change:transform;perspective:500px}
 .pbfly .hf{position:absolute;top:0;width:50%;height:100%;overflow:hidden;transform-style:preserve-3d}
-.pbfly .hf img{position:absolute;top:0;left:0;width:200%;height:100%;filter:drop-shadow(0 6px 5px rgba(0,0,0,0.28))}
+.pbfly .hf img{position:absolute;top:0;left:0;width:200%;height:100%;filter:drop-shadow(0 2px 2px rgba(0,0,0,0.12))}
 .pbfly .hl{left:0;transform-origin:right center;animation:bflyFlapL var(--fd,0.4s) ease-in-out infinite alternate}
 .pbfly .hr{left:50%;transform-origin:left center;animation:bflyFlapR var(--fd,0.4s) ease-in-out infinite alternate}
 .pbfly .hr img{left:-100%}
 @keyframes bflyFlapL{from{transform:rotateY(62deg)}to{transform:rotateY(-14deg)}}
 @keyframes bflyFlapR{from{transform:rotateY(-62deg)}to{transform:rotateY(14deg)}}
+/* 바닥에 드리우는 그림자: 날 때는 멀고 옅게, 앉으면 발밑에 진하게 */
+.bfly-shadow{position:absolute;left:0;top:0;pointer-events:none;border-radius:50%;background:radial-gradient(ellipse at center,rgba(35,28,10,0.32) 0%,rgba(35,28,10,0.14) 45%,rgba(35,28,10,0) 72%);filter:blur(3px);will-change:transform,opacity}
+/* 앉아서 쉴 때: 날개를 접은 채 이따금 천천히 폈다 접음 */
+.pbfly.perched .hl{animation:bflyPerchL 3.2s ease-in-out infinite}
+.pbfly.perched .hr{animation:bflyPerchR 3.2s ease-in-out infinite}
+@keyframes bflyPerchL{0%,48%{transform:rotateY(73deg)}60%{transform:rotateY(24deg)}72%,80%{transform:rotateY(70deg)}90%{transform:rotateY(44deg)}100%{transform:rotateY(73deg)}}
+@keyframes bflyPerchR{0%,48%{transform:rotateY(-73deg)}60%{transform:rotateY(-24deg)}72%,80%{transform:rotateY(-70deg)}90%{transform:rotateY(-44deg)}100%{transform:rotateY(-73deg)}}
 </style>
 
 
@@ -1413,31 +1420,82 @@ document.addEventListener('visibilitychange', () => {
     f.h = Math.round(f.w / f.ratio);
     f.el.style.width = f.w + 'px';
     f.el.style.height = f.h + 'px';
+    f.sh.style.width = f.w + 'px';
+    f.sh.style.height = Math.round(f.w * 0.26) + 'px';
+  }
+
+  // 나비가 앉을 수 있는 UI 요소들의 윗변에서 착지 지점을 고른다
+  function pickPerchSpot(){
+    const sels = ['.checkin-wrap', '.checkin-display', '.checkin-today-wrap', '#kiosk-clock .kc-time'];
+    const cands = [];
+    for (const s of sels){
+      document.querySelectorAll(s).forEach(function(el){
+        const r = el.getBoundingClientRect();
+        if (r.width < 60 || r.height < 20) return; // 숨겨졌거나 너무 작은 요소 제외
+        if (r.top < 70 || r.top > window.innerHeight - 60) return;
+        cands.push(r);
+      });
+    }
+    if (!cands.length) return null;
+    const r = cands[(Math.random() * cands.length) | 0];
+    return { x: r.left + r.width * (0.12 + Math.random() * 0.76), y: r.top };
   }
 
   function spawn(src, ratio, opts){
     const el = document.createElement('div');
     el.className = 'pbfly';
     el.innerHTML = '<div class="hf hl"><img src="' + src + '" alt=""></div><div class="hf hr"><img src="' + src + '" alt=""></div>';
+    const sh = document.createElement('div');
+    sh.className = 'bfly-shadow';
+    layer.appendChild(sh);
     layer.appendChild(el);
     const f = {
-      el: el, ratio: ratio, opts: opts,
+      el: el, sh: sh, ratio: ratio, opts: opts,
       x: Math.random() * window.innerWidth,
       y: 60 + Math.random() * Math.max(120, window.innerHeight - 260),
       tx: 0, ty: 0, vx: 0, vy: 0, t: Math.random() * 10,
-      sc: opts.sc, scT: opts.sc, restUntil: 0, w: 120, h: 80
+      sc: opts.sc, scT: opts.sc, restUntil: 0,
+      state: 'fly', spot: null, perchUntil: 0, tiltCur: 0, w: 120, h: 80
     };
     f.newTarget = function(){
-      f.tx = 30 + Math.random() * Math.max(60, window.innerWidth - 60 - f.w);
-      f.ty = 20 + Math.random() * Math.max(60, window.innerHeight - 140);
-      f.scT = opts.sc * (0.72 + Math.random() * 0.5);
-      if (Math.random() < 0.25) f.restUntil = performance.now() + 900 + Math.random() * 1200; // 가끔 활공하며 멈칫
+      const spot = (Math.random() < 0.35) ? pickPerchSpot() : null;
+      if (spot){
+        f.state = 'approach';
+        f.spot = spot;
+        f.scT = opts.sc * 0.8;
+      } else {
+        f.state = 'fly';
+        f.spot = null;
+        f.tx = 30 + Math.random() * Math.max(60, window.innerWidth - 60 - f.w);
+        f.ty = 20 + Math.random() * Math.max(60, window.innerHeight - 140);
+        f.scT = opts.sc * (0.72 + Math.random() * 0.5);
+        if (Math.random() < 0.2) f.restUntil = performance.now() + 900 + Math.random() * 1200; // 가끔 활공하며 멈칫
+      }
     };
     f.newTarget();
     sizeFly(f);
     flies.push(f);
   }
-  window.addEventListener('resize', function(){ flies.forEach(sizeFly); });
+  // 화면 크기가 바뀌면 착지 지점이 어긋나므로 앉아 있던 나비는 날아오름
+  window.addEventListener('resize', function(){
+    flies.forEach(function(f){
+      sizeFly(f);
+      if (f.state !== 'fly'){ f.el.classList.remove('perched'); f.state = 'fly'; f.newTarget(); }
+    });
+  });
+
+  // 나비 본체와 바닥 그림자 그리기
+  function drawFly(f, bob){
+    const perched = f.state === 'perch';
+    f.el.style.transform = 'translate(' + (f.x - f.w/2) + 'px,' + (f.y - f.h/2 + bob) + 'px) rotate(' + f.tiltCur.toFixed(2) + 'deg) scale(' + f.sc.toFixed(3) + ')';
+    // 그림자: 앉으면 발밑에 바짝(작고 진하게), 날면 아래로 떨어져(크고 옅게) 위아래 요동에 따라 흔들림
+    const gy = perched ? f.y + f.h * f.sc * 0.32 : f.y + f.h * f.sc * 0.55 + 26 - bob * 1.5;
+    const k = f.sc * (perched ? 0.55 : 0.9 - bob * 0.03);
+    let op = perched ? 0.55 : (0.34 - bob * 0.04) * (0.4 + 0.6 * f.sc);
+    op = Math.max(0.1, Math.min(0.6, op));
+    f.sh.style.transform = 'translate(' + (f.x - f.w/2) + 'px,' + gy.toFixed(1) + 'px) scale(' + k.toFixed(3) + ',' + (k * 0.85).toFixed(3) + ')';
+    f.sh.style.opacity = op.toFixed(3);
+  }
 
   function step(now){
     if (!isCheckinVisible()){
@@ -1448,23 +1506,59 @@ document.addEventListener('visibilitychange', () => {
     layer.style.display = '';
     for (const f of flies){
       f.t += 0.016;
+
+      // 앉아서 쉬는 중: 제자리 유지, 시간이 되면 위로 날아오름
+      if (f.state === 'perch'){
+        if (now > f.perchUntil){
+          f.el.classList.remove('perched');
+          f.state = 'fly';
+          f.vy = -1.8; f.vx = (Math.random() - 0.5) * 2.4;
+          f.newTarget();
+        } else {
+          f.tiltCur += (0 - f.tiltCur) * 0.12;
+          drawFly(f, 0);
+          continue;
+        }
+      }
+
+      // 착지 접근 중: 목표를 착지 지점으로 고정 (발이 요소 윗변에 닿는 높이)
+      if (f.state === 'approach' && f.spot){
+        f.tx = f.spot.x;
+        f.ty = f.spot.y - f.h * f.sc * 0.32;
+      }
+
       const resting = now < f.restUntil;
       const dx = f.tx - f.x, dy = f.ty - f.y, dist = Math.hypot(dx, dy) || 1;
-      if (dist < 28) f.newTarget();
+
+      if (f.state === 'approach'){
+        if (dist < 12 && Math.hypot(f.vx, f.vy) < 1.3){
+          // 착지 완료
+          f.state = 'perch';
+          f.perchUntil = now + 3000 + Math.random() * 5000;
+          f.x = f.tx; f.y = f.ty; f.vx = 0; f.vy = 0;
+          f.el.classList.add('perched');
+          drawFly(f, 0);
+          continue;
+        }
+      } else if (dist < 28) f.newTarget();
+
       if (!resting){
         f.vx += (dx/dist) * f.opts.sp * 0.055;
         f.vy += (dy/dist) * f.opts.sp * 0.055;
       }
-      f.vx *= 0.955; f.vy *= 0.955;
+      // 착지 직전에는 속도를 줄이며 살포시 내려앉음
+      const damp = (f.state === 'approach' && dist < 90) ? 0.9 : 0.955;
+      f.vx *= damp; f.vy *= damp;
       const bob = Math.sin(f.t*8 + f.opts.ph) * 3;
       f.x += f.vx; f.y += f.vy + bob*0.22;
       const spd = Math.hypot(f.vx, f.vy);
       let ang = Math.atan2(f.vy, f.vx) * 180/Math.PI + 90;
       if (ang > 180) ang -= 360;
       const tilt = Math.max(-35, Math.min(35, ang)) * Math.min(1, spd/1.2) * 0.55;
+      f.tiltCur += (tilt - f.tiltCur) * 0.15;
       f.sc += (f.scT - f.sc) * 0.012;
-      f.el.style.transform = 'translate(' + (f.x - f.w/2) + 'px,' + (f.y - f.h/2 + bob) + 'px) rotate(' + tilt + 'deg) scale(' + f.sc + ')';
       f.el.style.setProperty('--fd', (spd < 0.7 ? f.opts.flap*1.9 : f.opts.flap) + 's'); // 활공 시 천천히 날갯짓
+      drawFly(f, bob);
     }
     requestAnimationFrame(step);
   }
