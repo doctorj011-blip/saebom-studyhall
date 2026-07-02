@@ -948,6 +948,84 @@ let currentView='table';
 let ALERTS = []; // 동적으로 계산됨
 const PRESENT=[];
 
+// ── 미입실 문자 발송완료 상태 (오늘 날짜·교시별, 기기 간 공유) ──
+// 키: "YYYY-M-D_이름_N교시" — 날짜가 포함되어 다음날 자동 초기화되고,
+// 같은 학생이 다음 교시에도 미입실이면 그 교시의 발송 버튼은 다시 활성화된다.
+// 기기 간 공유는 students/_meta_absent_sms 메타 문서(스케줄 알림과 동일 패턴) 사용.
+function _todayKeyStr() { return new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.',''); }
+window._absentSmsKey = function(name, period) { return `${_todayKeyStr()}_${name}_${period}`; }
+window._absentSmsSent = (() => {
+  try {
+    const arr = JSON.parse(localStorage.getItem('saebom_absentSmsSent') || '[]');
+    return new Set(arr.filter(k => k.startsWith(_todayKeyStr() + '_'))); // 오늘 키만 유지
+  } catch(e) { return new Set(); }
+})();
+function _saveAbsentSmsSent() {
+  try { localStorage.setItem('saebom_absentSmsSent', JSON.stringify([...window._absentSmsSent])); } catch(e) {}
+}
+
+async function _syncAbsentSmsToFirebase(keysMap) {
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    await setDoc(doc(db, 'students', '_meta_absent_sms'),
+      { name: '', keys: keysMap, updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('미입실 발송상태 동기화 실패:', e); }
+}
+
+// 발송 성공 시 호출: 로컬 기록 + 다른 기기 전파 + 화면 갱신
+window._markAbsentSmsSent = function(name, period) {
+  const key = window._absentSmsKey(name, period);
+  window._absentSmsSent.add(key);
+  _saveAbsentSmsSent();
+  _syncAbsentSmsToFirebase({ [key]: true });
+  buildDashboard();
+};
+
+// 다른 기기(또는 시작 시 Firebase)에서 받은 발송상태 반영 — 오늘 키만
+window._applyRemoteAbsentSms = function(keysMap) {
+  if (!keysMap) return;
+  let changed = false;
+  const prefix = _todayKeyStr() + '_';
+  Object.keys(keysMap).forEach(k => {
+    if (keysMap[k] && k.startsWith(prefix) && !window._absentSmsSent.has(k)) {
+      window._absentSmsSent.add(k);
+      changed = true;
+    }
+  });
+  if (changed) { _saveAbsentSmsSent(); buildDashboard(); }
+};
+
+// 시작 시 저장된 발송상태 1회 로드 + 지난 날짜 키 정리
+(async function _loadAbsentSmsOnce() {
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const snap = await getDoc(doc(db, 'students', '_meta_absent_sms'));
+    if (!snap.exists()) return;
+    const keys = snap.data().keys || {};
+    window._applyRemoteAbsentSms(keys);
+    // 지난 날짜 키가 쌓여 있으면 오늘 키만 남기고 문서 정리
+    const prefix = _todayKeyStr() + '_';
+    const stale = Object.keys(keys).some(k => !k.startsWith(prefix));
+    if (stale) {
+      const todayOnly = {};
+      Object.keys(keys).forEach(k => { if (k.startsWith(prefix) && keys[k]) todayOnly[k] = true; });
+      await setDoc(doc(db, 'students', '_meta_absent_sms'), { name: '', keys: todayOnly, updatedAt: Date.now() });
+    }
+  } catch(e) { console.error('미입실 발송상태 로드 실패:', e); }
+})();
+
 // 시각 문자열("오후 02:05", "14:05", "오전 08:00" 등)을 하루 기준 분으로 변환.
 // 12시간제(오전/오후)와 24시간제를 모두 처리해 시간순 정렬·계산을 정확히 한다.
 function timeToMin(t) {
@@ -1711,9 +1789,12 @@ function buildDashboard(){
       `<div style="flex:1;display:flex;flex-direction:column;gap:5px">` +
       col.map((a,i) => {
         const gi = ALERTS.indexOf(a);
+        const sent = window._absentSmsSent && window._absentSmsSent.has(window._absentSmsKey(a.name, a.period));
         return `<div class="alert-item">
           <div><span class="alert-name">${a.name}</span> <span class="alert-info">(${a.seat}) ${a.period} ${a.time}</span></div>
-          <button class="send-btn" onclick="sendAbsentAlert(${gi})"><i class="ti ti-send" aria-hidden="true"></i> 발송</button>
+          ${sent
+            ? `<button class="send-btn" style="background:#d4edda;color:#2D7A4F;box-shadow:none;cursor:default" disabled>✅ 발송완료</button>`
+            : `<button class="send-btn" onclick="sendAbsentAlert(${gi})"><i class="ti ti-send" aria-hidden="true"></i> 발송</button>`}
         </div>`;
       }).join('') +
       `</div>`
@@ -4353,6 +4434,13 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
+      // 미입실 문자 발송완료 메타 문서 — 다른 기기의 발송 상태 반영
+      if (change.doc.id === '_meta_absent_sms') {
+        if (change.type !== 'removed' && window._applyRemoteAbsentSms) {
+          window._applyRemoteAbsentSms(change.doc.data().keys || {});
+        }
+        return;
+      }
       // added는 getDocs에서 이미 처리했으므로 완전히 무시
       if (change.type === 'added') return;
 
@@ -5048,8 +5136,13 @@ ${a.name} 학생이 ${a.period}(${a.time}) 미입실 상태입니다.
     const result = await solapiSend(parentPhone, text);
     const success = result === true;
     saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success, error: success ? null : JSON.stringify(result), time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
-    if (success) showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
-    else showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
+    if (success) {
+      showAdminToast(`✅ ${a.name} 학부모님께 문자를 발송했습니다`);
+      // 발송완료 표시 + 다른 기기에도 전파 (재발송 방지)
+      if (window._markAbsentSmsSent) window._markAbsentSmsSent(a.name, a.period);
+    } else {
+      showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
+    }
   } catch(e) {
     saveSmsLog({ student: a.name, seat: a.seat, phone: parentPhone, type: 'absent', typeLabel: '미입실알림', text, success: false, error: e.message, time: new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) });
     showAdminToast('⚠️ 문자 발송 중 오류가 발생했습니다');
