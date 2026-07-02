@@ -2089,8 +2089,11 @@ window.checkinConfirm = function() {
   let _checkoutTotalMin = 0;
   if (isCheckout) {
     existing.outTime = timeStr;
-    // 외출 중이던 학생이 바로 퇴실하는 경우 외출 상태 해제
-    if (window._awayStudents) delete window._awayStudents[student.name];
+    // 외출 중이던 학생이 바로 퇴실하는 경우 외출 상태 해제 (Firebase 포함)
+    if (window._awayStudents && window._awayStudents[student.name]) {
+      delete window._awayStudents[student.name];
+      saveAwayToFirebase(student, true, timeStr);
+    }
     // 이월(어제 미퇴실) 기록을 퇴실하는 경우: 원래 날짜에도 퇴실 로그를 남겨
     // 다음 새로고침/탭 복귀 시 다시 입실로 이월되지 않도록 마감한다.
     if (existing.carriedOver && existing.carryFromDate) {
@@ -2235,6 +2238,7 @@ window.checkinAway = function() {
     window._checkinProcessing = true;
     const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     window._awayStudents[student.name] = timeStr;
+    student.awayAt = timeStr;
     _showAwayDone(student, '🚶', '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
     saveAwayToFirebase(student, false, timeStr);
     buildCheckinTodayList();
@@ -2256,6 +2260,7 @@ window.checkinAwayReturn = function() {
     window._checkinProcessing = true;
     const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     delete window._awayStudents[student.name];
+    student.awayAt = '';
     _showAwayDone(student, '✅', '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
     saveAwayToFirebase(student, true, timeStr);
     buildCheckinTodayList();
@@ -2270,30 +2275,21 @@ window.checkinAwayReturn = function() {
   }
 };
 
-// 외출/복귀 이벤트를 checkin_logs에 기록 (type: 'away' | 'back')
-// 입퇴실 재구성 로직은 'in'/'out'만 처리하므로 이용시간·이월 계산에 영향 없음.
+// 외출 상태를 students/{seat} 문서의 awayAt 필드에 저장 (외출 중: 시각, 복귀: '')
+// ※ checkin_logs는 보안 규칙이 type 'in'/'out'만 허용해 별도 문서를 쓸 수 없음.
+//   students 문서 변경은 기존 실시간 리스너가 모든 기기에 전파하므로 동기화도 함께 해결된다.
 async function saveAwayToFirebase(student, isBack, timeStr) {
   try {
-    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    const type = isBack ? 'back' : 'away';
-    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(/[:\s]/g,'')}_${Date.now()}`;
     const waitDb = () => new Promise(res => {
       if (window._adminDb) return res(window._adminDb);
       const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
     });
     const db = await waitDb();
     if (!db) return;
-    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
-    await setDoc(doc(db, 'checkin_logs', logId), {
-      studentName: student.name,
-      seat: student.seat,
-      type,
-      time: timeStr,
-      date: today,
-      ts: Date.now(),
-      createdAt: serverTimestamp()
-    });
-  } catch(e) { console.error('외출 기록 저장 실패:', e); }
+    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const cleanSeat = String(student.seat).replace('번','');
+    await updateDoc(doc(db, 'students', cleanSeat), { awayAt: isBack ? '' : timeStr });
+  } catch(e) { console.error('외출 상태 저장 실패:', e); }
 }
 
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
@@ -4143,6 +4139,7 @@ async function saveStudentToFirebase(student) {
     금: student.schedule['금'] || '-',
     토: student.schedule['토'] || '-',
     hours: student.hours || {},
+    awayAt: (window._awayStudents && window._awayStudents[student.name]) || '', // 외출 상태 보존
     updatedAt: serverTimestamp()
   });
 }
@@ -4328,7 +4325,8 @@ async function loadStudentsFromFirebase() {
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-          hours: _normalizeHours(v.hours)
+          hours: _normalizeHours(v.hours),
+          awayAt: v.awayAt || ''
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -4368,8 +4366,17 @@ async function loadStudentsFromFirebase() {
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-        hours: _normalizeHours(v.hours)
+        hours: _normalizeHours(v.hours),
+        awayAt: v.awayAt || ''
       };
+      // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영
+      if (!window._awayStudents) window._awayStudents = {};
+      if (v.awayAt) {
+        if (window._awayStudents[v.name] !== v.awayAt) { window._awayStudents[v.name] = v.awayAt; changed = true; }
+      } else if (window._awayStudents[v.name]) {
+        delete window._awayStudents[v.name];
+        changed = true;
+      }
       const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       if (idx !== -1) { STUDENTS[idx] = updated; }
       else {
@@ -4385,6 +4392,7 @@ async function loadStudentsFromFirebase() {
       if (document.getElementById('fp-room')) buildFloorplan();
       buildStudentList(document.getElementById('student-search')?.value || '');
       buildDashboard();
+      buildCheckinTodayList(); // 외출 배지 갱신
     }
   });
 }
@@ -4447,11 +4455,6 @@ async function loadTodayCheckinFromFirebase() {
           const idx = PRESENT.indexOf(name);
           if (idx !== -1) PRESENT.splice(idx, 1);
         }
-        delete window._awayStudents[name];
-      } else if (d.type === 'away') {
-        window._awayStudents[name] = time;
-      } else if (d.type === 'back') {
-        delete window._awayStudents[name];
       }
     });
 
@@ -4474,6 +4477,15 @@ async function loadTodayCheckinFromFirebase() {
           todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, carriedOver: true, carryFromDate: yesterday });
           if (!PRESENT.includes(name)) PRESENT.push(name);
         }
+      }
+    });
+
+    // 외출 상태 재구성: students 문서의 awayAt 기준, 현재 입실 중인 학생만 유지
+    // (퇴실·퇴원 후 남은 낡은 awayAt은 무시되어 자연 소멸)
+    window._awayStudents = {};
+    STUDENTS.forEach(s => {
+      if (s.awayAt && s.name && todayRecords.some(r => r.studentName === s.name && !r.outTime)) {
+        window._awayStudents[s.name] = s.awayAt;
       }
     });
 
@@ -4547,11 +4559,7 @@ function subscribeCheckinLogs() {
             changed = true;
           }
         }
-        if (window._awayStudents && window._awayStudents[name]) { delete window._awayStudents[name]; changed = true; }
-      } else if (type === 'away') {
-        if (!window._awayStudents) window._awayStudents = {};
-        if (window._awayStudents[name] !== time) { window._awayStudents[name] = time; changed = true; }
-      } else if (type === 'back') {
+        // 다른 기기에서 퇴실 처리된 학생은 외출 상태도 함께 해제
         if (window._awayStudents && window._awayStudents[name]) { delete window._awayStudents[name]; changed = true; }
       }
     });
