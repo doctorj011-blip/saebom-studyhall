@@ -132,6 +132,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .confirm-cancel{background:var(--color-background-secondary);color:var(--color-text-secondary)}
 .confirm-ok{background:#C8900A;color:#fff}
 .confirm-ok.checkout-mode{background:#7A5008}
+.confirm-btn.away-mode{background:#FFF3E0;color:#7A5008;border:1.5px solid #E0B020}
 
 /* 완료 패널 */
 .checkin-done-panel{padding:16px 0}
@@ -2022,13 +2023,26 @@ function showCheckinConfirmFor(student) {
         '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
       + '<button class="confirm-btn confirm-ok checkout-mode" id="confirm-ok-btn" onclick="checkinConfirm()">퇴실 처리</button>'
       + '<button class="confirm-btn confirm-ok" onclick="checkinFreshCheckin()">새로 입실</button>';
+  } else if (isCheckout && window._awayStudents && window._awayStudents[student.name]) {
+    // 외출 중인 학생 → 복귀 (문자 발송 없음)
+    btnWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
+    statusEl.textContent = '외출 복귀';
+    statusEl.className = 'confirm-status status-checkin';
+    document.getElementById('confirm-time').textContent = `외출 시각: ${window._awayStudents[student.name]} → 복귀: ${timeStr}`;
+    btnWrap.innerHTML =
+        '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
+      + '<button class="confirm-btn confirm-ok" onclick="checkinAwayReturn()">복귀 확인</button>'
+      + '<button class="confirm-btn confirm-ok checkout-mode" id="confirm-ok-btn" onclick="checkinConfirm()">퇴실</button>';
   } else if (isCheckout) {
-    btnWrap.style.gridTemplateColumns = '1fr 1fr';
+    // 입실 중 → 외출(문자 없음) 또는 퇴실 선택
+    btnWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
     statusEl.textContent = '퇴실 처리';
     statusEl.className = 'confirm-status status-checkout';
     document.getElementById('confirm-time').textContent = `입실 시각: ${existing.inTime} → 퇴실: ${timeStr}`;
-    document.getElementById('confirm-ok-btn').textContent = '퇴실 확인';
-    document.getElementById('confirm-ok-btn').className = 'confirm-btn confirm-ok checkout-mode';
+    btnWrap.innerHTML =
+        '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
+      + '<button class="confirm-btn away-mode" onclick="checkinAway()">🚶 외출</button>'
+      + '<button class="confirm-btn confirm-ok checkout-mode" id="confirm-ok-btn" onclick="checkinConfirm()">퇴실 확인</button>';
   } else {
     btnWrap.style.gridTemplateColumns = '1fr 1fr';
     statusEl.textContent = '입실 처리';
@@ -2075,6 +2089,8 @@ window.checkinConfirm = function() {
   let _checkoutTotalMin = 0;
   if (isCheckout) {
     existing.outTime = timeStr;
+    // 외출 중이던 학생이 바로 퇴실하는 경우 외출 상태 해제
+    if (window._awayStudents) delete window._awayStudents[student.name];
     // 이월(어제 미퇴실) 기록을 퇴실하는 경우: 원래 날짜에도 퇴실 로그를 남겨
     // 다음 새로고침/탭 복귀 시 다시 입실로 이월되지 않도록 마감한다.
     if (existing.carriedOver && existing.carryFromDate) {
@@ -2194,6 +2210,90 @@ window.checkinConfirm = function() {
     showAdminToast('⚠️ 처리 중 오류가 발생했습니다: ' + (e && e.message ? e.message : e));
     checkinReset();
   }
+}
+
+// ── 외출/복귀: 문자·알림톡 발송 없이 잠시 나갔다 오는 기능 ──
+// 입실 기록은 그대로 유지되고(이용시간 계속 집계), 외출 상태만 표시·기록한다.
+window._awayStudents = window._awayStudents || {}; // 이름 → 외출 시작 시각
+
+function _showAwayDone(student, icon, msg, timeStr) {
+  document.getElementById('checkin-confirm-panel').style.display = 'none';
+  const donePanel = document.getElementById('checkin-done-panel');
+  donePanel.style.display = 'block';
+  document.getElementById('done-icon').textContent = icon;
+  document.getElementById('done-name').textContent = maskName(student.name);
+  document.getElementById('done-msg').textContent = msg;
+  document.getElementById('done-time').textContent = timeStr;
+}
+
+window.checkinAway = function() {
+  try {
+    if (window._checkinProcessing) return;
+    const student = document.getElementById('confirm-ok-btn')._student;
+    const openRec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+    if (!openRec) { showAdminToast(`ℹ️ ${student.name} 학생은 입실 중이 아닙니다`); checkinReset(); return; }
+    window._checkinProcessing = true;
+    const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    window._awayStudents[student.name] = timeStr;
+    _showAwayDone(student, '🚶', '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
+    saveAwayToFirebase(student, false, timeStr);
+    buildCheckinTodayList();
+    // 🚪 자동문 열기
+    if (window.requestDoorOpen) window.requestDoorOpen(3);
+    else if (window.doorOpenTimed) window.doorOpenTimed(3);
+    setTimeout(() => { checkinReset(); }, 2200);
+  } catch(e) {
+    console.error('외출 처리 오류:', e);
+    showAdminToast('⚠️ 외출 처리 중 오류: ' + (e && e.message ? e.message : e));
+    checkinReset();
+  }
+};
+
+window.checkinAwayReturn = function() {
+  try {
+    if (window._checkinProcessing) return;
+    const student = document.getElementById('confirm-ok-btn')._student;
+    window._checkinProcessing = true;
+    const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    delete window._awayStudents[student.name];
+    _showAwayDone(student, '✅', '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
+    saveAwayToFirebase(student, true, timeStr);
+    buildCheckinTodayList();
+    // 🚪 자동문 열기
+    if (window.requestDoorOpen) window.requestDoorOpen(3);
+    else if (window.doorOpenTimed) window.doorOpenTimed(3);
+    setTimeout(() => { checkinReset(); }, 2200);
+  } catch(e) {
+    console.error('복귀 처리 오류:', e);
+    showAdminToast('⚠️ 복귀 처리 중 오류: ' + (e && e.message ? e.message : e));
+    checkinReset();
+  }
+};
+
+// 외출/복귀 이벤트를 checkin_logs에 기록 (type: 'away' | 'back')
+// 입퇴실 재구성 로직은 'in'/'out'만 처리하므로 이용시간·이월 계산에 영향 없음.
+async function saveAwayToFirebase(student, isBack, timeStr) {
+  try {
+    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const type = isBack ? 'back' : 'away';
+    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(/[:\s]/g,'')}_${Date.now()}`;
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    await setDoc(doc(db, 'checkin_logs', logId), {
+      studentName: student.name,
+      seat: student.seat,
+      type,
+      time: timeStr,
+      date: today,
+      ts: Date.now(),
+      createdAt: serverTimestamp()
+    });
+  } catch(e) { console.error('외출 기록 저장 실패:', e); }
 }
 
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
@@ -2389,7 +2489,9 @@ window.checkinReset = function() {
 function buildCheckinTodayList() {
   const listEl = document.getElementById('checkin-today-list');
   const inCount = todayRecords.filter(r => !r.outTime).length;
-  document.getElementById('checkin-today-count').textContent = `현재 ${inCount}명 입실 중`;
+  const awayCount = todayRecords.filter(r => !r.outTime && window._awayStudents && window._awayStudents[r.studentName]).length;
+  document.getElementById('checkin-today-count').textContent =
+    `현재 ${inCount}명 입실 중` + (awayCount > 0 ? ` · 외출 ${awayCount}명` : '');
 
   if (todayRecords.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;color:var(--color-text-tertiary);font-size:12px;padding:12px">아직 입실 기록이 없습니다</div>';
@@ -2398,14 +2500,17 @@ function buildCheckinTodayList() {
 
   listEl.innerHTML = [...todayRecords].reverse().map(r => {
     const isIn = !r.outTime;
+    const isAway = isIn && window._awayStudents && window._awayStudents[r.studentName];
     return `<div class="checkin-today-item">
       <div class="ci-dot ${isIn ? 'ci-in' : 'ci-out'}"></div>
       <span style="font-weight:500">${maskName(r.studentName)}</span>
       <span style="color:var(--color-text-secondary)">${r.seat}</span>
-      ${isIn
+      ${isAway
+        ? `<span style="font-size:11px;background:#FFF3E0;color:#7A5008;border-radius:10px;padding:1px 7px">외출 중</span>`
+        : isIn
         ? `<span style="font-size:11px;background:#FFF8DC;color:#27500A;border-radius:10px;padding:1px 7px">입실 중</span>`
         : `<span style="font-size:11px;color:var(--color-text-tertiary)">퇴실</span>`}
-      <span class="ci-time">${r.inTime}${r.outTime ? ' → ' + r.outTime : ''}</span>
+      <span class="ci-time">${isAway ? r.inTime + ' · 외출 ' + window._awayStudents[r.studentName] : r.inTime + (r.outTime ? ' → ' + r.outTime : '')}</span>
     </div>`;
   }).join('');
 }
@@ -4309,9 +4414,10 @@ async function loadTodayCheckinFromFirebase() {
       else if (data.date === yesterday) yesterdayDocs.push(data);
     });
 
-    // todayRecords, PRESENT 초기화 후 재구성
+    // todayRecords, PRESENT, 외출 상태 초기화 후 재구성
     todayRecords.length = 0;
     PRESENT.length = 0;
+    window._awayStudents = {};
 
     // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
     // ts(epoch ms)로 정렬하되, 같은 시각이면 입실(in)을 먼저 처리해
@@ -4341,6 +4447,11 @@ async function loadTodayCheckinFromFirebase() {
           const idx = PRESENT.indexOf(name);
           if (idx !== -1) PRESENT.splice(idx, 1);
         }
+        delete window._awayStudents[name];
+      } else if (d.type === 'away') {
+        window._awayStudents[name] = time;
+      } else if (d.type === 'back') {
+        delete window._awayStudents[name];
       }
     });
 
@@ -4436,6 +4547,12 @@ function subscribeCheckinLogs() {
             changed = true;
           }
         }
+        if (window._awayStudents && window._awayStudents[name]) { delete window._awayStudents[name]; changed = true; }
+      } else if (type === 'away') {
+        if (!window._awayStudents) window._awayStudents = {};
+        if (window._awayStudents[name] !== time) { window._awayStudents[name] = time; changed = true; }
+      } else if (type === 'back') {
+        if (window._awayStudents && window._awayStudents[name]) { delete window._awayStudents[name]; changed = true; }
       }
     });
 
