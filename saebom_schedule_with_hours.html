@@ -4748,6 +4748,60 @@ window.adminForceCheckout = function(name) {
   if (window._todayModalRender) window._todayModalRender();
 };
 
+// 관리자 강제 입실 처리 — 학생이 번호를 눌러 입실한 것과 동일한 효과
+// (출석 기록, Firebase 저장, 학부모 알림, 18시 이후 스터디룸 자동배정 포함)
+window.adminForceCheckin = function(name) {
+  const student = STUDENTS.find(s => s.name === name);
+  if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
+  if (todayRecords.some(r => r.studentName === name && !r.outTime)) {
+    showAdminToast(`ℹ️ ${name} 학생은 이미 입실 중입니다`); return;
+  }
+  // 만료일 확인 — 학생 직접 입실은 차단되지만 관리자는 확인 후 진행 가능
+  if (student.expiry) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    const expDate = new Date(student.expiry); expDate.setHours(0,0,0,0);
+    if (expDate < today && !confirm(`⛔ ${name} 학생은 사용기간이 만료되었습니다 (${student.expiry}).\n그래도 입실 처리할까요?`)) return;
+  }
+  if (!confirm(`${name} 학생을 입실 처리할까요?\n(학생이 직접 번호를 눌러 입실한 것과 동일하게 처리됩니다)`)) return;
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  todayRecords.push({ studentName: name, seat: student.seat, inTime: timeStr, outTime: null });
+  if (!PRESENT.includes(name)) PRESENT.push(name);
+
+  // 18시 이후 교시 중 입실이면 스터디룸 자동 배정 (학생 직접 입실과 동일)
+  let assignedRoom = null;
+  const curPeriod = getCurrentPeriod();
+  const curMin = now.getHours() * 60 + now.getMinutes();
+  if (curPeriod && curMin >= 18 * 60) {
+    const total = studyRoomStudents[1].length + studyRoomStudents[2].length + studyRoomStudents[3].length;
+    if (!Object.values(studyRoomStudents).flat().includes(name)) {
+      if (total < 12) {
+        const counts = [studyRoomStudents[1].length, studyRoomStudents[2].length, studyRoomStudents[3].length];
+        const minCount = Math.min(...counts);
+        for (let r = 1; r <= 3; r++) {
+          if (studyRoomStudents[r].length === minCount && studyRoomStudents[r].length < 4) {
+            studyRoomStudents[r].push(name);
+            assignedRoom = r;
+            saveAutoStudyroomAssignment(student, r, curPeriod);
+            break;
+          }
+        }
+      } else {
+        showStudyroomOverflowAlert(name, student.seat);
+      }
+    }
+  }
+
+  saveCheckinToFirebase(student, false, timeStr);
+  sendCheckinSMS(student, false, timeStr, 0);
+  buildDashboard();
+  buildCheckinTodayList();
+  if (document.getElementById('fp-room')) buildFloorplan();
+  showAdminToast(`✅ ${name} 입실 처리 완료 (${timeStr})${assignedRoom ? ` · 스터디룸 ${assignedRoom}번 배정` : ''}`);
+  if (window._todayModalRender) window._todayModalRender();
+};
+
 // ── 배치도 우클릭 컨텍스트 메뉴 ──
 window.fpSeatContextMenu = function(e, seatNum, key) {
   e.preventDefault();
@@ -4778,6 +4832,12 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
       👤 학생 정보 보기
     </div>
+    ${!isIn ? `
+    <div onclick="adminForceCheckin('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#2D7A4F;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#E8F5E9'" onmouseout="this.style.background=''">
+      ✅ 입실 처리
+    </div>` : ''}
     ${isIn ? `
     <div onclick="adminForceCheckout('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#C8900A;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
