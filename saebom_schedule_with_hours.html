@@ -303,6 +303,12 @@ body.kiosk-mode #kiosk-exit-btn{display:block;position:fixed;top:0;right:0;z-ind
 #kiosk-enter-btn{position:fixed;bottom:14px;right:14px;z-index:999;width:40px;height:40px;border:none;border-radius:10px;background:rgba(92,61,8,0.2);color:#fff;font-size:18px;line-height:1;cursor:pointer;transition:background 0.15s}
 #kiosk-enter-btn:hover{background:rgba(92,61,8,0.6)}
 body.kiosk-mode #kiosk-enter-btn{display:none}
+/* 키오스크 하단 디지털 시계 (12시간제 · 초 표시) */
+#kiosk-clock{display:none}
+body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;bottom:3.5vh;z-index:500;justify-content:center;align-items:baseline;gap:1.4vw;pointer-events:none;user-select:none}
+#kiosk-clock .kc-ampm{font-size:clamp(18px,2.8vw,44px);font-weight:600;color:#B08A2E;letter-spacing:0.12em}
+#kiosk-clock .kc-time{font-size:clamp(52px,9vw,160px);font-weight:700;line-height:1;color:#5C3D08;font-variant-numeric:tabular-nums;letter-spacing:0.03em;text-shadow:0 2px 14px rgba(200,144,10,0.22)}
+#kiosk-clock .kc-sec{color:#C8900A;font-size:0.62em;font-weight:600}
 </style>
 
 
@@ -413,6 +419,7 @@ body.kiosk-mode #kiosk-enter-btn{display:none}
 <div id="sec-checkin" class="section">
   <button id="kiosk-exit-btn" onclick="window.exitKioskMode()" aria-label="전체화면 종료"></button>
   <button id="kiosk-enter-btn" onclick="window.enterKioskMode()" title="전체화면" aria-label="전체화면">⛶</button>
+  <div id="kiosk-clock" aria-hidden="true"><span class="kc-ampm" id="kc-ampm">오전</span><span class="kc-time" id="kc-time">12:00<span class="kc-sec">:00</span></span></div>
   <div class="checkin-wrap">
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
@@ -1235,17 +1242,42 @@ function updateKioskZoom() {
 }
 window.addEventListener('resize', updateKioskZoom);
 
+// ── 키오스크 하단 디지털 시계 (12시간제, 초 표시) ──
+let _kioskClockTimer = null;
+function updateKioskClock() {
+  const now = new Date();
+  let h = now.getHours();
+  const ampm = h < 12 ? '오전' : '오후';
+  h = h % 12; if (h === 0) h = 12;
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  const timeEl = document.getElementById('kc-time');
+  const ampmEl = document.getElementById('kc-ampm');
+  if (timeEl) timeEl.innerHTML = `${h}:${mm}<span class="kc-sec">:${ss}</span>`;
+  if (ampmEl) ampmEl.textContent = ampm;
+}
+function startKioskClock() {
+  if (_kioskClockTimer) return;
+  updateKioskClock();
+  _kioskClockTimer = setInterval(updateKioskClock, 1000);
+}
+function stopKioskClock() {
+  if (_kioskClockTimer) { clearInterval(_kioskClockTimer); _kioskClockTimer = null; }
+}
+
 window.enterKioskMode = function() {
   const btn = document.querySelector('.checkin-shortcut-btn');
   if (btn) window.showSection('checkin', btn);
   document.body.classList.add('kiosk-mode');
   updateKioskZoom();
+  startKioskClock();
   const el = document.documentElement;
   if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
   acquireWakeLock(); // 화면 절전 방지 시작
 };
 window.exitKioskMode = function() {
   document.body.classList.remove('kiosk-mode');
+  stopKioskClock();
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   releaseWakeLock();
 };
@@ -1253,6 +1285,7 @@ window.exitKioskMode = function() {
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
     document.body.classList.remove('kiosk-mode');
+    stopKioskClock();
     releaseWakeLock();
   }
 });
@@ -1270,6 +1303,7 @@ if (window._kioskAuto) {
         if (!document.fullscreenElement) {
           document.body.classList.add('kiosk-mode');
           updateKioskZoom();
+          startKioskClock();
           if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
           acquireWakeLock();
         }
