@@ -4066,6 +4066,10 @@ window.applyStudentSchedule = function(seat, idx) {
   buildStudentList(document.getElementById('student-search')?.value || '');
   a.applied = true;
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+  // 적용됨 상태를 다른 기기에도 전파
+  if (window._syncScheduleAlertStates && typeof _getScheduleAlertId === 'function') {
+    window._syncScheduleAlertStates({ [_getScheduleAlertId(a)]: { a: true } });
+  }
   showAdminToast(`✅ ${student.name} 스케줄 적용 완료`);
 };
 
@@ -4342,6 +4346,13 @@ async function loadStudentsFromFirebase() {
     if (window._seatChanging) return;
     let changed = false;
     snap.docChanges().forEach(change => {
+      // 스케줄 알림 처리상태 메타 문서 — 학생이 아니므로 상태 반영 후 종료
+      if (change.doc.id === '_meta_schedule_alerts') {
+        if (change.type !== 'removed' && window._applyRemoteAlertStates) {
+          window._applyRemoteAlertStates(change.doc.data().states || {});
+        }
+        return;
+      }
       // added는 getDocs에서 이미 처리했으므로 완전히 무시
       if (change.type === 'added') return;
 
@@ -4744,6 +4755,68 @@ function _getScheduleAlertId(a) {
   return a.seat + '_' + ts;
 }
 
+// ── 스케줄 알림 처리상태(적용·문자발송·닫기) 기기 간 동기화 ──
+// students/_meta_schedule_alerts 문서에 알림ID별 상태를 저장한다.
+// (name이 없는 문서라 학생 목록 로드·리스너에서 학생으로 취급되지 않고,
+//  students 컬렉션은 쓰기 규칙이 허용되어 있어 별도 규칙 변경 없이 동작)
+// 상태 필드: d=닫힘(dismissed), a=적용됨(applied), s=문자발송됨(smsSent)
+window._remoteAlertStates = {}; // 최근 수신한 원격 상태 캐시 (신규 알림 생성 시 참조)
+
+window._syncScheduleAlertStates = async function(statesMap) {
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    await setDoc(doc(db, 'students', '_meta_schedule_alerts'),
+      { name: '', states: statesMap, updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('스케줄 알림 상태 동기화 실패:', e); }
+};
+
+// 다른 기기(또는 시작 시 Firebase)에서 받은 상태를 로컬 알림 목록에 반영
+window._applyRemoteAlertStates = function(states) {
+  if (!states) return;
+  Object.assign(window._remoteAlertStates, states);
+  let changed = false;
+  Object.entries(states).forEach(([id, st]) => {
+    if (!st) return;
+    if (st.d && !_dismissedScheduleAlertIds.has(id)) {
+      _dismissedScheduleAlertIds.add(id);
+      const i = scheduleAlerts.findIndex(a => _getScheduleAlertId(a) === id);
+      if (i !== -1) scheduleAlerts.splice(i, 1);
+      changed = true;
+    }
+    const a = scheduleAlerts.find(x => _getScheduleAlertId(x) === id);
+    if (a) {
+      if (st.a && !a.applied) { a.applied = true; changed = true; }
+      if (st.s && !a.smsSent) { a.smsSent = true; changed = true; }
+    }
+  });
+  if (changed) {
+    _saveDismissedScheduleAlertIds();
+    _saveScheduleAlerts();
+    renderScheduleAlerts();
+  }
+};
+
+// 시작 시 저장된 처리상태 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
+(async function _loadAlertStatesOnce() {
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    if (!db) return;
+    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const snap = await getDoc(doc(db, 'students', '_meta_schedule_alerts'));
+    if (snap.exists()) window._applyRemoteAlertStates(snap.data().states || {});
+  } catch(e) { console.error('스케줄 알림 상태 로드 실패:', e); }
+})();
+
 window.dismissScheduleAlert = function(alertId) {
   _dismissedScheduleAlertIds.add(alertId);
   _saveDismissedScheduleAlertIds();
@@ -4751,14 +4824,21 @@ window.dismissScheduleAlert = function(alertId) {
   if (idx !== -1) scheduleAlerts.splice(idx, 1);
   _saveScheduleAlerts();
   renderScheduleAlerts();
+  window._syncScheduleAlertStates({ [alertId]: { d: true } });
 };
 
 window.clearAllScheduleAlerts = function() {
-  scheduleAlerts.forEach(a => _dismissedScheduleAlertIds.add(_getScheduleAlertId(a)));
+  const states = {};
+  scheduleAlerts.forEach(a => {
+    const id = _getScheduleAlertId(a);
+    _dismissedScheduleAlertIds.add(id);
+    states[id] = { d: true };
+  });
   _saveDismissedScheduleAlertIds();
   scheduleAlerts.length = 0;
   _saveScheduleAlerts();
   renderScheduleAlerts();
+  if (Object.keys(states).length) window._syncScheduleAlertStates(states);
 };
 // knownSchedules는 onSnapshot 첫 'added' 이벤트에서 Firebase 실제값으로 초기화
 // (STUDENTS 배열로 초기화하면 schedules 컬렉션 실제값과 달라서 오탐/무감지 발생)
@@ -4817,7 +4897,16 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     if (dayChanges.length === 0) return;
 
     const alertObj = { seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt };
-    if (_dismissedScheduleAlertIds.has(_getScheduleAlertId(alertObj))) return;
+    const alertId = _getScheduleAlertId(alertObj);
+    if (_dismissedScheduleAlertIds.has(alertId)) return;
+
+    // 다른 기기에서 이미 처리(닫기/적용/문자)한 알림이면 그 상태를 반영해서 생성
+    const rs = window._remoteAlertStates && window._remoteAlertStates[alertId];
+    if (rs) {
+      if (rs.d) { _dismissedScheduleAlertIds.add(alertId); _saveDismissedScheduleAlertIds(); return; }
+      if (rs.a) alertObj.applied = true;
+      if (rs.s) alertObj.smsSent = true;
+    }
 
     const existIdx = scheduleAlerts.findIndex(a => a.seat === seat);
     if (existIdx !== -1) scheduleAlerts[existIdx] = alertObj;
@@ -5310,6 +5399,8 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
       if (alertObj) {
         alertObj.smsSent = true;
         renderScheduleAlerts();
+        // 문자발송됨 상태를 다른 기기에도 전파
+        window._syncScheduleAlertStates({ [_getScheduleAlertId(alertObj)]: { s: true } });
       }
     } else {
       showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
