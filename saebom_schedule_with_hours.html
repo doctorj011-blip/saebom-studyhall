@@ -1551,6 +1551,14 @@ function buildHoursTable(){
   document.getElementById('hours-table').innerHTML=html;
 }
 
+// 사용시간 탭이 열려 있는 동안 1분마다 자동 갱신 — 입실 중인 학생의 1일 사용시간이 실시간으로 올라간다
+setInterval(() => {
+  const sec = document.getElementById('sec-hours');
+  if (sec && sec.classList.contains('active')) {
+    try { buildHoursTable(); } catch(e){}
+  }
+}, 60000);
+
 function buildHoursChart(){
   const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   const maxH=Math.max(...sorted.map(s=>_readHour(s.hours,currentMonth)), 1);
@@ -2203,7 +2211,7 @@ window.checkinConfirm = function() {
     if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
     buildHoursTable();
   } else {
-    todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null });
+    todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null, inTs: Date.now() });
   }
 
   // 완료 패널
@@ -4544,7 +4552,7 @@ async function loadTodayCheckinFromFirebase() {
       if (d.type === 'in') {
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (!alreadyIn) {
-          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null });
+          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null, inTs: (typeof d.ts === 'number' ? d.ts : null) });
           if (!PRESENT.includes(name)) PRESENT.push(name);
         }
       } else if (d.type === 'out') {
@@ -4573,7 +4581,7 @@ async function loadTodayCheckinFromFirebase() {
         const hasTodayRecord = todayRecords.some(r => r.studentName === name);
         if (!hasTodayRecord) {
           const lastIn = rec.ins[rec.ins.length - 1];
-          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, carriedOver: true, carryFromDate: yesterday });
+          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, inTs: (typeof lastIn.ts === 'number' ? lastIn.ts : null), carriedOver: true, carryFromDate: yesterday });
           if (!PRESENT.includes(name)) PRESENT.push(name);
         }
       }
@@ -4592,6 +4600,7 @@ async function loadTodayCheckinFromFirebase() {
     buildCheckinTodayList();
     if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
     else if (document.getElementById('fp-room')) buildFloorplan();
+    try { buildHoursTable(); } catch(e){} // 입퇴실 기록 로드 완료 후 1일 사용시간 표 갱신
     _checkinSnapshotReady = true; // 이제부터 onSnapshot 이벤트 처리
   } catch(e) { console.error('입퇴실 로드 실패:', e); }
   finally { _loadCheckinLock = false; }
@@ -4635,23 +4644,27 @@ function subscribeCheckinLogs() {
         // 이미 로컬에 있으면 중복 추가 안 함
         const exists = todayRecords.find(r => r.studentName === name && r.inTime === time);
         if (!exists) {
-          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null });
+          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null, inTs: (typeof d.ts === 'number' ? d.ts : null) });
           if (!PRESENT.includes(name)) PRESENT.push(name);
           changed = true;
         }
       } else if (type === 'out') {
-        const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
-        if (rec) {
-          if (rec.outTime !== time) {
+        // 재구독/스냅샷 재전달로 같은 퇴실 이벤트가 다시 와도 중복 반영 금지
+        // (예전엔 이미 닫힌 세션의 퇴실이 '다음 입실 기록'에 덮어써져
+        //  퇴실 < 입실 역전 기록과 24시간 오류가 발생했음)
+        const alreadyApplied = todayRecords.some(r => r.studentName === name && r.outTime === time);
+        if (!alreadyApplied) {
+          const outTs = (typeof d.ts === 'number') ? d.ts : null;
+          // 이 퇴실 이벤트보다 먼저 입실한(inTs <= outTs) 열린 기록만 닫는다
+          const rec = todayRecords.find(r => r.studentName === name && !r.outTime
+            && (outTs === null || r.inTs == null || r.inTs <= outTs));
+          if (rec) {
             rec.outTime = time;
             const idx = PRESENT.indexOf(name);
             if (idx !== -1) PRESENT.splice(idx, 1);
             changed = true;
-          }
-        } else {
-          // 입실 기록 없이 퇴실만 온 경우 - 입실 기록 생성 후 퇴실 처리
-          const alreadyOut = todayRecords.find(r => r.studentName === name && r.outTime === time);
-          if (!alreadyOut) {
+          } else if (!todayRecords.some(r => r.studentName === name && !r.outTime)) {
+            // 입실 기록 없이 퇴실만 온 경우 - 입실 기록 생성 후 퇴실 처리
             todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
             const idx = PRESENT.indexOf(name);
             if (idx !== -1) PRESENT.splice(idx, 1);
@@ -4668,6 +4681,7 @@ function subscribeCheckinLogs() {
       buildCheckinTodayList();
       if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
       else if (document.getElementById('fp-room')) buildFloorplan();
+      try { buildHoursTable(); } catch(e){} // 입퇴실 변경 시 1일 사용시간 표도 갱신
     }
   }
 );
@@ -5195,8 +5209,8 @@ window.loadSmsLog = async function() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
 
-  // localStorage 먼저 즉시 표시 (삭제된 항목 제외)
-  let logs = _smsLogs.filter(l => !_deletedSmsIds.has(l.id));
+  // localStorage 먼저 즉시 표시 (삭제된 항목 제외 — id는 문자열로 통일해 비교)
+  let logs = _smsLogs.filter(l => !_deletedSmsIds.has(String(l.id)));
   _smsLogData = logs;
   renderSmsLog(logs);
 
@@ -5207,15 +5221,15 @@ window.loadSmsLog = async function() {
       const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
       const fbLogs = [];
       snap.forEach(d => {
-        if (!_deletedSmsIds.has(d.id) && !_deletedSmsIds.has(d.data().id)) {
-          fbLogs.push({ _fbId: d.id, id: d.id, ...d.data() });
+        if (!_deletedSmsIds.has(String(d.id)) && !_deletedSmsIds.has(String(d.data().id))) {
+          fbLogs.push({ _fbId: d.id, ...d.data(), id: d.id });
         }
       });
 
       if (fbLogs.length > 0) {
         const merged = [...fbLogs];
         const fbIds = new Set(fbLogs.map(l => l.id));
-        _smsLogs.forEach(l => { if (!fbIds.has(l.id) && !_deletedSmsIds.has(l.id)) merged.push(l); });
+        _smsLogs.forEach(l => { if (!fbIds.has(l.id) && !fbIds.has(String(l.id)) && !_deletedSmsIds.has(String(l.id))) merged.push(l); });
         merged.sort((a, b) => (b.id || 0) - (a.id || 0));
         logs = merged.slice(0, 300);
         _smsLogData = logs;
@@ -5306,17 +5320,19 @@ window.deleteSmsLog = async function(logId, idx) {
   if (!confirm('이 발송 내역을 삭제할까요?')) return;
 
   // 삭제 ID 추적
+  // ※ 구버전 로그는 id가 숫자였는데 onclick으로 넘어올 땐 문자열이 되어
+  //   엄격 비교(!==)가 절대 일치하지 않아 삭제가 안 됐다 → 모두 문자열로 통일해 비교
   if (logId) {
-    _deletedSmsIds.add(logId);
+    _deletedSmsIds.add(String(logId));
     localStorage.setItem('saebom_sms_deleted', JSON.stringify([..._deletedSmsIds]));
   }
 
   // localStorage에서 삭제
-  _smsLogs = _smsLogs.filter(l => l.id !== logId);
+  _smsLogs = _smsLogs.filter(l => String(l.id) !== String(logId));
   localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
 
   // _smsLogData에서 즉시 제거
-  _smsLogData = _smsLogData.filter(l => l.id !== logId);
+  _smsLogData = _smsLogData.filter(l => String(l.id) !== String(logId));
 
   // Firebase에서도 삭제 (id 또는 _fbId 사용)
   const fbId = logId;
