@@ -1518,7 +1518,7 @@ function buildStudentList(filter=''){
       }
 
       return `<div class="student-card" onclick="openScheduleModal(${idx})">
-        <div class="student-avatar" style="font-size:12px;font-weight:800">${s.seat}</div>
+        <div class="student-avatar" style="font-size:12px;font-weight:800${s.seat?'':';background:linear-gradient(135deg,#B08968,#7A5008)'}">${s.seat||'미'}</div>
         <div class="student-info" style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
             <span class="student-name" style="font-size:13px;font-weight:700">${s.name}</span>
@@ -3637,10 +3637,19 @@ window._fsDeleteDoc = deleteDoc;
 
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
-  const cleanSeat = String(student.seat).replace('번','');
-  const docRef = doc(db, 'students', cleanSeat);
+  const cleanSeat = String(student.seat ?? '').replace('번','').trim();
+  // 문서 ID: 배정 학생은 좌석번호, 미배정 학생은 안정적인 sid(u_...) 사용.
+  // 좌석-키만으로는 미배정(좌석='') 학생을 보관할 수 없고, 좌석 재사용 시 덮어써지기 때문.
+  const newId = cleanSeat || student.sid || ('u_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
+  // 배정↔해제로 문서 위치가 바뀌면 이전 위치의 문서를 정리해 중복(고아 문서)을 방지
+  if (student.sid && student.sid !== newId) {
+    try { await deleteDoc(doc(db, 'students', student.sid)); } catch(e) {}
+  }
+  student.sid = newId;
+  const docRef = doc(db, 'students', newId);
   await setDoc(docRef, {
     seat: cleanSeat,
+    sid: newId,
     name: student.name,
     phone: student.phone || '',
     parent: student.parent || '',
@@ -3702,9 +3711,10 @@ window.purgeStudentData = async function(seat, name, execute) {
   const dry = execute !== true;
   const targets = [];  // {col, id}
 
-  // 1) students / schedules : 문서 ID = 좌석번호 (없으면 삭제는 무시됨)
-  targets.push({ col:'students',  id: seat });
-  targets.push({ col:'schedules', id: seat });
+  // 1) students / schedules / schedule_base : 문서 ID = 좌석번호 (없으면 삭제는 무시됨)
+  targets.push({ col:'students',      id: seat });
+  targets.push({ col:'schedules',     id: seat });
+  targets.push({ col:'schedule_base', id: seat });
 
   // 2) checkin_logs : seat 또는 studentName 필드로 매칭
   (await getDocs(collection(db,'checkin_logs'))).forEach(d => {
@@ -3781,7 +3791,7 @@ async function loadStudentsFromFirebase() {
         const seatNum = parseInt(String(v.seat).replace('번',''));
         if (seatNum >= 54 && seatNum <= 63) return;
         STUDENTS.push({
-          seat: String(v.seat).replace('번',''), name: v.name,
+          seat: String(v.seat).replace('번',''), sid: v.sid || d.id, name: v.name,
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
@@ -3807,7 +3817,7 @@ async function loadStudentsFromFirebase() {
       const v = change.doc.data();
       if (change.type === 'removed') {
         const docId = change.doc.id.replace('번','');
-        const idx = STUDENTS.findIndex(s => s.seat === docId);
+        const idx = STUDENTS.findIndex(s => (s.sid && s.sid === change.doc.id) || (docId && s.seat === docId));
         if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
         return;
       }
@@ -3820,14 +3830,17 @@ async function loadStudentsFromFirebase() {
       const vSeat = String(v.seat).replace('번','');
       const seatNum = parseInt(vSeat);
       if (seatNum >= 54 && seatNum <= 63) return;
+      const sid = v.sid || change.doc.id;
       const updated = {
-        seat: vSeat, name: v.name,
+        seat: vSeat, sid: sid, name: v.name,
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: _normalizeHours(v.hours)
       };
-      const idx = STUDENTS.findIndex(s => s.seat === vSeat);
+      // sid 우선 매칭 → 미배정(좌석='') 학생끼리 섞이지 않게 함. 좌석 매칭은 빈 좌석 제외.
+      let idx = STUDENTS.findIndex(s => s.sid && s.sid === sid);
+      if (idx === -1 && vSeat) idx = STUDENTS.findIndex(s => s.seat === vSeat);
       if (idx !== -1) { STUDENTS[idx] = updated; }
       else {
         const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
@@ -4212,17 +4225,19 @@ window.clearAllScheduleAlerts = function() {
 async function saveScheduleToFirebase(student) {
   try {
     await window.saveStudentToFirebase(student);
-    // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
-    const seatKey = student.seat.replace(/[^0-9]/g, '') || student.seat;
-    const schedRef = doc(db, 'schedules', seatKey);
-    const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
-    ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
-    await setDoc(schedRef, payload);
-    // 원칙1: 관리자 입력/수정·적용은 '원본(base)'도 갱신 → 다음 수정기간까지 유지
-    const baseRef = doc(db, 'schedule_base', seatKey);
-    const basePayload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
-    ['월','화','수','목','금','토'].forEach(d => { basePayload[d] = student.schedule[d] || '-'; });
-    await setDoc(baseRef, basePayload);
+    // schedules 컬렉션도 동기화 (학생앱 실시간 감지용) — 좌석이 있을 때만(미배정 학생은 스킵)
+    const seatKey = String(student.seat ?? '').replace(/[^0-9]/g, '');
+    if (seatKey) {
+      const schedRef = doc(db, 'schedules', seatKey);
+      const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
+      ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
+      await setDoc(schedRef, payload);
+      // 원칙1: 관리자 입력/수정·적용은 '원본(base)'도 갱신 → 다음 수정기간까지 유지
+      const baseRef = doc(db, 'schedule_base', seatKey);
+      const basePayload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
+      ['월','화','수','목','금','토'].forEach(d => { basePayload[d] = student.schedule[d] || '-'; });
+      await setDoc(baseRef, basePayload);
+    }
   } catch(e) { console.error('Firebase 저장 실패:', e); }
 }
 onSnapshot(collection(db, 'schedules'), (snapshot) => {
@@ -4995,6 +5010,10 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
       👤 학생 정보 보기
     </div>
+    <div onclick="fpWithdrawStudent(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#fff;background:#B91C1C;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#991B1B'" onmouseout="this.style.background='#B91C1C'">
+      🗑️ 퇴원처리 (완전 삭제)
+    </div>
   `;
   document.body.appendChild(menu);
 
@@ -5018,19 +5037,25 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   }, 50);
 };
 
-window.fpUnassignSeat = function(seatNum) {
+window.fpUnassignSeat = async function(seatNum) {
   document.getElementById('fp-ctx-menu')?.remove();
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
-  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
+  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n자리만 비워지고 학생은 '미배정' 상태로 명단에 유지됩니다.\n(출석·이용시간·스터디룸 기록도 보존됩니다)`)) return;
 
   const idx = STUDENTS.findIndex(s => parseInt(s.seat) === seatNum);
   if (idx !== -1) {
-    const oldSeat = STUDENTS[idx].seat;
-    STUDENTS[idx].seat = '';
-    if (oldSeat && window.deleteStudentFromFirebase) {
-      window.deleteStudentFromFirebase(String(seatNum)).catch(console.error);
-    }
+    const stu = STUDENTS[idx];
+    const oldSeat = String(stu.seat).replace('번','');
+    // 미배정 보관용 안정 ID 부여 → 좌석 재사용 시 학생 문서가 덮어써지는 것을 방지
+    stu.seat = '';
+    stu.sid = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+    try {
+      // 1) 학생 본체를 미배정 문서(u_...)로 영속화 (기록은 그대로 보존)
+      if (window.saveStudentToFirebase) await window.saveStudentToFirebase(stu);
+      // 2) 좌석에 묶인 옛 문서(students/schedules/schedule_base) 제거 → 자리 실제로 비움
+      if (oldSeat && window.deleteStudentFromFirebase) await window.deleteStudentFromFirebase(oldSeat);
+    } catch(e) { console.error('배석 해제 저장 실패:', e); }
   }
 
   // 관리자석인 경우 ADMIN_FIXED name도 비우기
@@ -5042,7 +5067,43 @@ window.fpUnassignSeat = function(seatNum) {
   buildFloorplan();
   buildStudentList(document.getElementById('student-search')?.value || '');
   buildDashboard();
-  showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
+  showAdminToast(`🪑 ${student.name} 배석 해제 · 미배정으로 보관됨`);
+};
+
+// ── 퇴원처리: 학생의 모든 데이터를 완전 삭제 (되돌릴 수 없음) ──
+window.fpWithdrawStudent = async function(seatNum) {
+  document.getElementById('fp-ctx-menu')?.remove();
+  const student = getFpStudentBySeat(seatNum);
+  if (!student) return;
+  const seat = String(student.seat).replace('번','').trim();
+  const name = student.name;
+
+  // 1단계: 경고 확인
+  if (!confirm(
+    `⚠️ ${name}(${seatNum}번) 퇴원처리\n\n` +
+    `이 학생의 모든 데이터를 완전히 삭제합니다:\n` +
+    `· 학생 정보 / 시간표\n· 출석·입퇴실 기록\n· 이용시간 통계\n· 스터디룸 신청·이용 이력\n· 플래너 코멘트\n\n` +
+    `❌ 되돌릴 수 없습니다. 계속할까요?`
+  )) return;
+
+  // 2단계: 이름 확인 입력 (오삭제 방지)
+  const typed = prompt(`정말 삭제하려면 학생 이름을 정확히 입력하세요:\n"${name}"`);
+  if (typed === null) return;
+  if (typed.trim() !== name) { alert('이름이 일치하지 않아 취소되었습니다.'); return; }
+
+  try {
+    if (!window.purgeStudentData) { alert('삭제 도구를 찾을 수 없습니다.'); return; }
+    const result = await window.purgeStudentData(seat, name, true);
+    // purgeStudentData 내부에서 로컬 상태 정리 + 화면 갱신 + 토스트까지 처리함
+    // 미배정 상태로 보관돼 있던 문서(u_...)가 있으면 함께 정리
+    if (student.sid && student.sid !== seat) {
+      try { await deleteDoc(doc(db, 'students', student.sid)); } catch(e) {}
+    }
+    console.log(`[퇴원처리] ${name}(${seat}번) 완료`, result);
+  } catch(e) {
+    console.error('퇴원처리 실패:', e);
+    alert('퇴원처리 중 오류: ' + e.message);
+  }
 };
 
 // ── 스터디룸 초과 경고 ──
