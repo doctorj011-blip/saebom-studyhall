@@ -1,12 +1,4 @@
 
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>새봄 면학관 관리자</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
-</head>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
@@ -191,6 +183,30 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-drag-wrap.dragging{cursor:grabbing;}
 .fp-room{display:grid;gap:6px;width:fit-content;transition:none;}
 
+/* 배치도 영역 레이아웃 */
+.fp-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px}
+.fp-area-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:5px}
+.fp-grid{display:grid;gap:5px}
+
+/* 좌석 카드 */
+.fp-seat{border-radius:8px;padding:6px 7px;min-height:56px;cursor:pointer;transition:all 0.12s;border:0.5px solid transparent;position:relative;display:flex;flex-direction:column;justify-content:space-between}
+.fp-seat:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
+.fp-seat.fp-in{background:#FFF8DC;border-color:#E0B020}
+.fp-seat.fp-vacant{background:var(--color-background-secondary);border-color:var(--color-border-tertiary)}
+.fp-seat.fp-out-today{background:#F3F4F6;border-color:#D1D5DB}
+.fp-seat-num{font-size:9px;color:var(--color-text-tertiary);font-weight:500;line-height:1}
+.fp-seat-name{font-size:12px;font-weight:600;color:var(--color-text-primary);margin-top:2px;line-height:1.2}
+.fp-seat-status{font-size:9px;margin-top:3px;display:flex;align-items:center;gap:3px}
+.fp-status-in{color:#C8900A}
+.fp-status-out{color:#9CA3AF}
+.fp-status-empty{color:var(--color-text-tertiary)}
+.fp-in-dot{width:6px;height:6px;border-radius:50%;background:#C8900A;flex-shrink:0;animation:fp-pulse 2s infinite}
+
+/* 위치수정 버튼 */
+.fp-edit-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s}
+.fp-edit-btn:hover{background:var(--color-background-secondary)}
+.fp-edit-btn.active{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
+.fp-drag-over{outline:2px solid #C8900A!important;outline-offset:-2px;background:rgba(200,144,10,0.08)!important;}
 /* ── 학생카드 드래그&드롭 좌석변경 ── */
 .fp-side-card-drag{cursor:grab;transition:box-shadow 0.12s,transform 0.12s;user-select:none}
 .fp-side-card-drag.dragging-card{opacity:0.5;transform:scale(0.96)}
@@ -198,7 +214,18 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-cell-drop-hover{outline:3px solid #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.18) !important;transform:scale(1.05);z-index:10;transition:all 0.1s;}
 .fp-side-drag-hint{font-size:10px;color:#9CA3AF;text-align:center;padding:5px 4px;border-top:1px solid #F3F4F6;margin-top:4px;display:none}
 .fp-side-drag-hint.visible{display:block}
+.fp-edit-btn.saving{background:#A87008;color:#fff;border-color:#A87008}
 
+/* 위치수정 모드: 좌석을 absolute로 자유 배치 */
+.fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
+.fp-seat.draggable{cursor:move!important;box-shadow:0 0 0 2px #C8900A40;}
+.fp-seat.draggable:hover{box-shadow:0 0 0 2px #C8900A,0 4px 12px rgba(0,0,0,0.15);z-index:100;}
+.fp-studio.draggable{cursor:move!important;box-shadow:0 0 0 2px #C8900A40;}
+.fp-studio.draggable:hover{box-shadow:0 0 0 2px #C8900A,0 4px 12px rgba(0,0,0,0.15);z-index:100;}
+.fp-seat.seat-dragging{box-shadow:0 8px 24px rgba(0,0,0,0.2)!important;z-index:999!important;opacity:0.92;transform:scale(1.03);}
+.fp-studio.seat-dragging{box-shadow:0 8px 24px rgba(0,0,0,0.2)!important;z-index:999!important;opacity:0.92;transform:scale(1.03);}
+
+@keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 .admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
 .admin-toast.show{opacity:1}
@@ -236,6 +263,15 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .sched-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
 .sched-legend-dot{width:12px;height:12px;border-radius:3px}
 
+/* 스터디룸 박스 */
+.fp-studio{background:var(--color-background-secondary);border:0.5px dashed var(--color-border-secondary);border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:center;min-height:56px}
+.fp-studio-label{font-size:12px;color:var(--color-text-tertiary);font-weight:500}
+
+/* 관리자석 */
+.fp-seat.fp-admin{background:#FFF8E1;border-color:#FFD54F}
+.fp-seat.fp-admin .fp-seat-num{color:#7A5008}
+.fp-seat.fp-admin .fp-seat-name{color:#7A5008}
+
 .chart-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px;margin-bottom:14px}
 .bar-chart{display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:8px}
 .bar-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
@@ -245,18 +281,6 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .summary-chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
 .summary-chip{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:6px 10px;font-size:11px}
 .summary-chip span{font-weight:500;color:var(--color-text-primary)}
-
-/* 키오스크 전체화면 모드 (입실·퇴실 화면만 표시) */
-body.kiosk-mode .topbar{display:none}
-body.kiosk-mode #checkin-door-controls{display:none !important}
-body.kiosk-mode .checkin-wrap{margin-top:24px}
-/* 종료 버튼: 우측 상단에 존재하지만 보이지 않음 (관리자만 위치를 앎) */
-#kiosk-exit-btn{display:none}
-body.kiosk-mode #kiosk-exit-btn{display:block;position:fixed;top:0;right:0;z-index:999;width:70px;height:50px;background:transparent;border:none;opacity:0;cursor:default}
-/* 전체화면 진입 버튼: 우측 하단 아이콘만 */
-#kiosk-enter-btn{position:fixed;bottom:14px;right:14px;z-index:999;width:40px;height:40px;border:none;border-radius:10px;background:rgba(92,61,8,0.2);color:#fff;font-size:18px;line-height:1;cursor:pointer;transition:background 0.15s}
-#kiosk-enter-btn:hover{background:rgba(92,61,8,0.6)}
-body.kiosk-mode #kiosk-enter-btn{display:none}
 </style>
 
 
@@ -365,12 +389,10 @@ body.kiosk-mode #kiosk-enter-btn{display:none}
 
 <!-- 입실·퇴실 -->
 <div id="sec-checkin" class="section">
-  <button id="kiosk-exit-btn" onclick="window.exitKioskMode()" aria-label="전체화면 종료"></button>
-  <button id="kiosk-enter-btn" onclick="window.enterKioskMode()" title="전체화면" aria-label="전체화면">⛶</button>
   <div class="checkin-wrap">
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
-      <div id="checkin-door-controls" style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px">
         <span style="font-size:11px;color:#8B6010">자동문 릴레이:</span>
         <button id="relay-connect-btn" onclick="connectSerial()"
           style="padding:5px 12px;background:#E0B020;color:#5C3D08;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
@@ -380,10 +402,6 @@ body.kiosk-mode #kiosk-enter-btn{display:none}
           style="padding:5px 12px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
           🚪 수동 열기
         </button>
-        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#8B6010;cursor:pointer;user-select:none">
-          <input type="checkbox" id="break-auto-door-chk" checked onchange="window.toggleBreakAutoDoor(this.checked)">
-          쉬는시간 자동개방
-        </label>
       </div>
       <div class="checkin-header">
         <i class="ti ti-door-enter" style="font-size:28px;color:#C8900A"></i>
@@ -674,6 +692,20 @@ body.kiosk-mode #kiosk-enter-btn{display:none}
       </div>
     </div>
 
+    <!-- 관리자 PIN -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-lock" style="font-size:15px;color:#C8900A"></i> 관리자설정 PIN
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:12px">
+        관리자설정 탭 진입 시 필요한 PIN입니다. 기본값은 <b>0000</b>이니 반드시 변경해주세요.
+      </div>
+      <button onclick="openPinModal('set')"
+        style="padding:10px 24px;background:#C8900A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(200,144,10,0.3)">
+        PIN 변경
+      </button>
+    </div>
+
     <!-- Firebase -->
     <div class="card">
       <div class="card-title" style="margin-bottom:4px">
@@ -693,24 +725,6 @@ body.kiosk-mode #kiosk-enter-btn{display:none}
       </div>
     </div>
 
-
-    <!-- 데이터 관리 -->
-    <div class="card">
-      <div class="card-title" style="margin-bottom:4px">
-        <i class="ti ti-trash" style="font-size:15px;color:#C8900A"></i> 데이터 관리
-      </div>
-      <div style="font-size:12px;color:#8B6010;margin-bottom:12px">
-        오래된 입퇴실·문자 발송 기록을 정리해 로딩 속도와 Firebase 사용량을 줄입니다.
-        누적 이용시간 통계는 학생 정보에 저장되어 있어 영향받지 않습니다.
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button onclick="purgeOldLogsWithConfirm(60)"
-          style="padding:7px 16px;background:#FCEBEB;border:1.5px solid #F09595;color:#C62828;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
-          🗑️ 60일 이전 기록 정리
-        </button>
-        <span id="log-purge-status" style="font-size:12px;color:#8B6010"></span>
-      </div>
-    </div>
 
     <!-- 자리선택 허용 -->
     <div class="card">
@@ -907,13 +921,6 @@ function eventSortKey(x) {
   if (x && typeof x.ts === 'number') return x.ts;
   return (timeToMin(x && x.time) ?? 0) * 60000;
 }
-// '실제 오늘'의 요일명 ('월'~'토'). 새벽 3시 이전은 전날 밤(11교시 연장)으로 취급.
-// currentDay는 관리자가 스케줄 탭에서 다른 요일을 눌러도 바뀌므로,
-// 미입실 알림·교시별 출석현황 등 '오늘' 기준 계산에는 반드시 이 함수를 쓴다.
-function getTodayDayName() {
-  const d = new Date(Date.now() - 3 * 3600 * 1000);
-  return DAYS[Math.min(Math.max(d.getDay() - 1, 0), 5)];
-}
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 
@@ -935,7 +942,6 @@ document.addEventListener('keydown', function(e) {
 
 // 페이지 로드 시 마지막 탭 복원
 window.addEventListener('load', function() {
-  if (window._kioskAuto) return; // 키오스크 모드에서는 항상 입실·퇴실 화면 고정
   try {
     const saved = sessionStorage.getItem('saebom_active_tab');
     if (saved && saved !== 'dashboard') {
@@ -945,7 +951,136 @@ window.addEventListener('load', function() {
   } catch(e) {}
 });
 
+// ── 관리자설정 PIN 잠금 (기본 PIN: 0000 — 설정 탭에서 변경) ──
+const PIN_UNLOCK_MS = 5 * 60 * 1000; // 해제 후 재입력 없이 유지되는 시간
+let _pinUnlockedAt = 0;
+let _pinFailCount = 0;
+let _pinLockUntil = 0;
+
+function getSettingsPin() {
+  return localStorage.getItem('saebom_settings_pin') || '0000';
+}
+function isSettingsUnlocked() {
+  return Date.now() - _pinUnlockedAt < PIN_UNLOCK_MS;
+}
+
+// mode: 'unlock'(잠금 해제) | 'set'(새 PIN 등록 — 2회 입력 확인)
+window.openPinModal = function(mode, onSuccess) {
+  const old = document.getElementById('pin-modal');
+  if (old) old.remove();
+
+  const isSet = mode === 'set';
+  let entered = '';
+  let firstPin = null;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'pin-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <style>@keyframes pinshake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}</style>
+    <div id="pin-box" style="background:#fff;border-radius:20px;padding:26px 30px;width:280px;box-shadow:0 10px 40px rgba(0,0,0,0.25);text-align:center">
+      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">🔒 관리자 PIN</div>
+      <div id="pin-msg" style="font-size:12px;color:#8B6010;margin-bottom:14px;min-height:16px">${isSet ? '새 PIN 4자리를 입력하세요' : 'PIN 4자리를 입력하세요'}</div>
+      <div id="pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:18px">
+        ${[0,1,2,3].map(()=>'<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;background:#F0E0A0;display:inline-block;transition:background 0.1s"></span>').join('')}
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-pin="${n}" style="padding:13px 0;border:none;border-radius:12px;background:#FFF8DC;color:#5C3D08;font-size:18px;font-weight:700;cursor:pointer">${n}</button>`).join('')}
+        <button data-pin="del" style="padding:13px 0;border:none;border-radius:12px;background:#F5F5F5;color:#888;font-size:16px;cursor:pointer">←</button>
+        <button data-pin="0" style="padding:13px 0;border:none;border-radius:12px;background:#FFF8DC;color:#5C3D08;font-size:18px;font-weight:700;cursor:pointer">0</button>
+        <button data-pin="cancel" style="padding:13px 0;border:none;border-radius:12px;background:#F5F5F5;color:#888;font-size:13px;cursor:pointer">취소</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const msgEl = overlay.querySelector('#pin-msg');
+  const boxEl = overlay.querySelector('#pin-box');
+  const dots = overlay.querySelectorAll('.pin-dot');
+
+  function close() {
+    document.removeEventListener('keydown', onKey);
+    overlay.remove();
+  }
+  function updateDots() {
+    dots.forEach((d, i) => { d.style.background = i < entered.length ? '#C8900A' : '#F0E0A0'; });
+  }
+  function shake(msg) {
+    msgEl.textContent = msg;
+    msgEl.style.color = '#C62828';
+    boxEl.style.animation = 'none';
+    void boxEl.offsetWidth; // 애니메이션 재시작
+    boxEl.style.animation = 'pinshake 0.35s';
+    entered = '';
+    updateDots();
+  }
+  function evaluate() {
+    if (isSet) {
+      if (firstPin === null) {
+        firstPin = entered;
+        entered = '';
+        updateDots();
+        msgEl.textContent = '확인을 위해 한 번 더 입력하세요';
+        msgEl.style.color = '#8B6010';
+      } else if (entered === firstPin) {
+        localStorage.setItem('saebom_settings_pin', entered);
+        close();
+        window.showAdminToast && showAdminToast('✅ 관리자 PIN이 변경되었습니다');
+        if (onSuccess) onSuccess();
+      } else {
+        firstPin = null;
+        shake('일치하지 않습니다. 새 PIN을 다시 입력하세요');
+      }
+      return;
+    }
+    // unlock 모드
+    if (Date.now() < _pinLockUntil) {
+      shake(`잠시 후 다시 시도하세요 (${Math.ceil((_pinLockUntil - Date.now())/1000)}초)`);
+      return;
+    }
+    if (entered === getSettingsPin()) {
+      _pinUnlockedAt = Date.now();
+      _pinFailCount = 0;
+      close();
+      if (onSuccess) onSuccess();
+    } else {
+      _pinFailCount++;
+      if (_pinFailCount >= 5) {
+        _pinLockUntil = Date.now() + 30 * 1000;
+        _pinFailCount = 0;
+        shake('5회 틀렸습니다. 30초 후 다시 시도하세요');
+      } else {
+        shake(`PIN이 틀렸습니다 (${_pinFailCount}/5)`);
+      }
+    }
+  }
+  function input(d) {
+    if (entered.length >= 4) return;
+    entered += d;
+    updateDots();
+    if (entered.length === 4) setTimeout(evaluate, 150); // 마지막 점 표시 후 판정
+  }
+  function onKey(e) {
+    if (/^[0-9]$/.test(e.key)) { input(e.key); e.preventDefault(); }
+    else if (e.key === 'Backspace') { entered = entered.slice(0, -1); updateDots(); e.preventDefault(); }
+    else if (e.key === 'Escape') { close(); }
+  }
+
+  overlay.addEventListener('click', function(e) {
+    const btn = e.target.closest('button[data-pin]');
+    if (!btn) { if (e.target === overlay) close(); return; }
+    const v = btn.dataset.pin;
+    if (v === 'cancel') close();
+    else if (v === 'del') { entered = entered.slice(0, -1); updateDots(); }
+    else input(v);
+  });
+  document.addEventListener('keydown', onKey);
+};
+
 window.showSection = function(id,btn){
+  if (id === 'settings' && !isSettingsUnlocked()) {
+    openPinModal('unlock', function() { showSection(id, btn); });
+    return;
+  }
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
@@ -956,71 +1091,6 @@ window.showSection = function(id,btn){
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
-
-// ── 키오스크 전체화면 모드 (입실·퇴실 화면만 표시) ──
-window.enterKioskMode = function() {
-  const btn = document.querySelector('.checkin-shortcut-btn');
-  if (btn) window.showSection('checkin', btn);
-  document.body.classList.add('kiosk-mode');
-  const el = document.documentElement;
-  if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
-  acquireWakeLock(); // 화면 절전 방지 시작
-};
-window.exitKioskMode = function() {
-  document.body.classList.remove('kiosk-mode');
-  if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-  releaseWakeLock();
-};
-// ESC 등으로 브라우저 전체화면이 해제되면 키오스크 모드도 함께 해제
-document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) {
-    document.body.classList.remove('kiosk-mode');
-    releaseWakeLock();
-  }
-});
-
-// ── URL에 #kiosk(또는 ?kiosk)가 있으면 자동으로 키오스크 모드 시작 ──
-// 정전·재부팅 후 브라우저가 자동 실행될 때 사람이 버튼을 누르지 않아도 입실 화면으로 복귀.
-// 예: 바로가기 대상에  ...saebom_schedule_with_hours.html#kiosk
-window._kioskAuto = /[?#&]kiosk/.test(location.search + location.hash);
-if (window._kioskAuto) {
-  window.addEventListener('load', () => {
-    setTimeout(() => {
-      window.enterKioskMode();
-      // 전체화면은 사용자 제스처 없이는 거부될 수 있으므로 첫 터치에서 한 번 더 시도
-      document.addEventListener('pointerdown', function retryFs() {
-        if (!document.fullscreenElement) {
-          document.body.classList.add('kiosk-mode');
-          if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
-          acquireWakeLock();
-        }
-      }, { once: true });
-    }, 600);
-  });
-}
-
-// ── 화면 절전 방지 (Screen Wake Lock API) ──
-// 키오스크 모드 동안 OS가 화면을 끄거나 절전 모드로 들어가지 않도록 요청
-let _wakeLock = null;
-async function acquireWakeLock() {
-  if (!('wakeLock' in navigator)) { console.warn('🔆 이 브라우저는 Wake Lock을 지원하지 않습니다'); return; }
-  try {
-    _wakeLock = await navigator.wakeLock.request('screen');
-    _wakeLock.addEventListener('release', () => { _wakeLock = null; });
-    console.log('🔆 화면 절전 방지 활성화');
-  } catch(e) { console.warn('🔆 Wake Lock 요청 실패:', e); }
-}
-function releaseWakeLock() {
-  if (_wakeLock) { _wakeLock.release().catch(()=>{}); _wakeLock = null; }
-}
-// 탭이 잠시 가려졌다 돌아오면 Wake Lock이 자동 해제되므로 다시 요청
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible'
-      && document.body.classList.contains('kiosk-mode')
-      && !_wakeLock) {
-    acquireWakeLock();
-  }
-});
 // ── 자리선택 허용 관리 ──
 window.saveSeatSelection = async function() {
   const start = document.getElementById('seat-sel-start').value;
@@ -1373,14 +1443,11 @@ function buildMonthTabs(){
 // 현재 시간 기준 교시 번호 계산
 function getCurrentPeriod() {
   const now = new Date();
-  const h = now.getHours();
-  // 자정~새벽 3시는 전날 밤의 연장(11교시)으로 취급 (00:20은 t=20이라 11교시[1440~1500]에 안 걸리던 버그 수정)
-  const effDay = h < 3 ? (now.getDay() + 6) % 7 : now.getDay();
   // 일요일은 교시 없음
-  if (effDay === 0) return null;
+  if (now.getDay() === 0) return null;
+  const h = now.getHours();
   const m = now.getMinutes();
-  let t = h * 60 + m;
-  if (h < 3) t += 1440;
+  const t = h * 60 + m;
   // 교시 시간 (시작~종료)
   const PERIOD_TIMES = [
     null,            // 0 (dummy)
@@ -1403,7 +1470,34 @@ function getCurrentPeriod() {
   return null; // 교시 외 시간
 }
 
-// 오늘 입실 현황 팝업은 하단 모듈 스크립트의 window.showTodayAttendees 사용
+// 오늘 입실 현황 팝업
+function showTodayAttendees() {
+  const old = document.getElementById('today-popup-overlay');
+  if (old) { old.remove(); return; }
+  const inStudents = PRESENT.map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
+  const overlay = document.createElement('div');
+  overlay.id = 'today-popup-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(94vw,480px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FFF8DC">
+        <div style="font-size:15px;font-weight:700;color:#5C3D08">현재 입실 중 · <span style="color:#C8900A">${inStudents.length}명</span></div>
+        <button onclick="document.getElementById('today-popup-overlay').remove()"
+          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+      </div>
+      <div style="overflow-y:auto;padding:14px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+        ${inStudents.length === 0
+          ? '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#aaa;font-size:14px">현재 입실 중인 학생이 없습니다</div>'
+          : inStudents.map(s=>`
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:12px">
+              <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${s.name[0]}</div>
+              <div><div style="font-size:13px;font-weight:600">${s.name}</div><div style="font-size:11px;color:#8B6010">${s.seat}</div></div>
+            </div>`).join('')}
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+}
 
 // ALERTS 동적 계산: 현재 교시에 출석해야 하는데 PRESENT에 없는 학생
 function calcAlerts() {
@@ -1417,7 +1511,7 @@ function calcAlerts() {
   ];
 
   const alerts = [];
-  const day = getTodayDayName(); // 화면에서 보고 있는 요일 탭(currentDay)이 아닌 '실제 오늘' 기준
+  const day = currentDay;
 
   STUDENTS.forEach(s => {
     // 이미 입실 중이면 제외
@@ -1516,17 +1610,15 @@ function buildDashboard(){
   // 현재 입실 중인 학생 이름 목록
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
 
-  const todayName = getTodayDayName();
   const periodStudents = todayPeriods.map((p, i) => {
-    const pNum = parseInt(p.n); // '7교시' → 7
+    const periodNum = p.n;
     return STUDENTS.filter(s => {
       // 실제 입실 중인 학생만
       if (!presentNames.has(s.name)) return false;
-      const sched = s.schedule[todayName] || '';
+      const sched = s.schedule[currentDay] || '';
       if (!sched || sched === '-') return false;
       const parsed = parseScheduleStr(sched);
-      // parseScheduleStr는 Set을 반환 — 기존 parsed[periodNum]==='attend' 비교는 항상 false였음
-      return parsed.periods.has(pNum) && !parsed.absentPeriods.has(pNum);
+      return parsed[periodNum] === 'attend';
     });
   });
 
@@ -1569,7 +1661,7 @@ function buildStudentList(filter=''){
       }
 
       return `<div class="student-card" onclick="openScheduleModal(${idx})">
-        <div class="student-avatar" style="font-size:12px;font-weight:800${s.seat?'':';background:linear-gradient(135deg,#B08968,#7A5008)'}">${s.seat||'미'}</div>
+        <div class="student-avatar" style="font-size:12px;font-weight:800">${s.seat}</div>
         <div class="student-info" style="flex:1;min-width:0">
           <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px">
             <span class="student-name" style="font-size:13px;font-weight:700">${s.name}</span>
@@ -1606,25 +1698,8 @@ function maskName(name) {
 }
 const todayRecords = [];
 
-// ── 키오스크 방치 자동 초기화 ──
-// 확인 화면을 띄운 채 자리를 뜨거나 번호를 치다 만 상태가 30초 이상 지속되면
-// 다음 학생을 위해 자동으로 첫 화면(번호 입력)으로 되돌린다.
-let _checkinPanelShownAt = 0;
-let _numpadLastInput = 0;
-setInterval(() => {
-  const confirmVisible = document.getElementById('checkin-confirm-panel')?.style.display === 'block';
-  if (confirmVisible && _checkinPanelShownAt && Date.now() - _checkinPanelShownAt > 30000) {
-    window.checkinReset();
-    return;
-  }
-  if (!confirmVisible && numpadBuffer && _numpadLastInput && Date.now() - _numpadLastInput > 30000) {
-    window.numpadClear();
-  }
-}, 5000);
-
 window.numpadInput = function(d) {
   if (numpadBuffer.length >= 4) return;
-  _numpadLastInput = Date.now();
   numpadBuffer += d;
   updateCheckinDisplay();
   if (numpadBuffer.length === 4) {
@@ -1665,10 +1740,6 @@ async function processCheckin() {
 
   // 로컬에 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._adminDb) {
-    // 네트워크 검색 동안 화면이 멈춘 것처럼 보이지 않도록 안내
-    const _searchingEl = document.getElementById('checkin-error');
-    _searchingEl.textContent = '⏳ 확인 중...';
-    _searchingEl.style.display = 'block';
     try {
       const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
       const snap = await getDocs(collection(window._adminDb, 'students'));
@@ -1691,57 +1762,15 @@ async function processCheckin() {
   }
 
   if (matched.length === 0) {
-    // 이전에 표시된 다른 메시지(만료 안내, 확인 중 등)가 남지 않도록 기본 문구로 복원
-    const errEl = document.getElementById('checkin-error');
-    errEl.textContent = '일치하는 학생을 찾을 수 없습니다';
-    errEl.style.display = 'block';
+    document.getElementById('checkin-error').style.display = 'block';
     numpadBuffer = '';
     updateCheckinDisplay();
     return;
   }
 
+  const student = matched[0];
   hideCheckinError();
 
-  // 전화번호 뒷 4자리가 같은 학생이 여러 명이면 본인 선택 화면을 먼저 보여준다
-  // (기존엔 무조건 첫 번째 학생으로 처리돼 엉뚱한 학생 입실 + 엉뚱한 학부모 알림톡 위험)
-  if (matched.length > 1) { showCheckinChooser(matched); return; }
-  showCheckinConfirmFor(matched[0]);
-}
-
-// ── 동일 뒷4자리 다중 매칭 시 본인 선택 ──
-let _checkinCandidates = [];
-function showCheckinChooser(list) {
-  _checkinCandidates = list;
-  document.getElementById('checkin-input-panel').style.display = 'none';
-  const panel = document.getElementById('checkin-confirm-panel');
-  panel.style.display = 'block';
-  _checkinPanelShownAt = Date.now();
-  document.getElementById('confirm-avatar').textContent = '?';
-  document.getElementById('confirm-name').textContent = '본인을 선택하세요';
-  document.getElementById('confirm-seat').textContent = '같은 뒷자리 번호의 학생이 여러 명입니다';
-  const statusEl = document.getElementById('confirm-status');
-  statusEl.textContent = '학생 선택';
-  statusEl.className = 'confirm-status status-checkin';
-  document.getElementById('confirm-time').textContent = '';
-  const btnWrap = document.getElementById('confirm-btns');
-  btnWrap.style.gridTemplateColumns = '1fr';
-  btnWrap.innerHTML = list.map((s, i) =>
-    `<button class="confirm-btn confirm-ok" onclick="checkinPickCandidate(${i})">${maskName(s.name)} · ${s.seat}번</button>`
-  ).join('') + '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>';
-}
-window.checkinPickCandidate = function(i) {
-  const s = _checkinCandidates[i];
-  if (s) showCheckinConfirmFor(s);
-};
-
-// 전화번호 가운데 자리 마스킹 (키오스크 화면 개인정보 보호)
-function maskPhone(p) {
-  const d = String(p || '').replace(/\D/g, '');
-  if (d.length < 8) return p || '';
-  return d.slice(0, 3) + '-****-' + d.slice(-4);
-}
-
-function showCheckinConfirmFor(student) {
   // 현재 상태 확인 (입실 중인지 퇴실 상태인지)
   const existing = todayRecords.find(r => r.studentName === student.name && !r.outTime);
   const isCheckout = !!existing;
@@ -1751,11 +1780,12 @@ function showCheckinConfirmFor(student) {
     const today = new Date(); today.setHours(0,0,0,0);
     const expDate = new Date(student.expiry); expDate.setHours(0,0,0,0);
     if (expDate < today) {
-      // 만료된 경우: 입력 화면으로 되돌린 뒤 에러 메시지 표시 (선택 화면에서 넘어온 경우 대비)
-      checkinReset();
+      // 만료된 경우 에러 메시지 표시
       const errEl = document.getElementById('checkin-error');
       errEl.innerHTML = `⛔ 사용기간이 만료되었습니다.<br>관리자에게 문의해주세요.`;
       errEl.style.display = 'block';
+      numpadBuffer = '';
+      updateCheckinDisplay();
       return;
     }
   }
@@ -1764,17 +1794,10 @@ function showCheckinConfirmFor(student) {
   document.getElementById('checkin-input-panel').style.display = 'none';
   const confirmPanel = document.getElementById('checkin-confirm-panel');
   confirmPanel.style.display = 'block';
-  _checkinPanelShownAt = Date.now();
-
-  // 버튼 영역을 기본(취소/확인)으로 복구 — 학생 선택 화면에서 넘어온 경우 confirm-ok-btn이 없기 때문
-  const _bw = document.getElementById('confirm-btns');
-  _bw.style.gridTemplateColumns = '1fr 1fr';
-  _bw.innerHTML = '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
-    + '<button class="confirm-btn confirm-ok" id="confirm-ok-btn" onclick="checkinConfirm()">확인</button>';
 
   document.getElementById('confirm-avatar').textContent = student.name[0];
   document.getElementById('confirm-name').textContent = maskName(student.name);
-  document.getElementById('confirm-seat').textContent = `${student.seat} · ${maskPhone(student.phone)}`;
+  document.getElementById('confirm-seat').textContent = `${student.seat} · ${student.phone}`;
 
   const statusEl = document.getElementById('confirm-status');
   const now = new Date();
@@ -1818,7 +1841,6 @@ function showCheckinConfirmFor(student) {
 }
 
 window.checkinConfirm = function() {
-  try {
   const btn = document.getElementById('confirm-ok-btn');
   const student = btn._student;
   const isCheckout = btn._isCheckout;
@@ -1891,8 +1913,7 @@ window.checkinConfirm = function() {
     const curPeriod = getCurrentPeriod();
     // 7교시(18:00) 이후에만 스터디룸 안내 적용
     const now = new Date();
-    let curMin = now.getHours() * 60 + now.getMinutes();
-    if (now.getHours() < 3) curMin += 1440; // 자정 넘김(11교시)도 전날 밤으로 취급
+    const curMin = now.getHours() * 60 + now.getMinutes();
     const is7thOrLater = curMin >= 18 * 60; // 18:00 이후
 
     if (curPeriod && is7thOrLater) {
@@ -1953,20 +1974,12 @@ window.checkinConfirm = function() {
   buildDashboard();
   if (document.getElementById('fp-room')) buildFloorplan();
 
-  // 🚪 자동문 열기 (3초 후 자동 닫힘) — 릴레이가 다른 기기(키오스크)에 있어도 원격으로 개방
-  if (window.requestDoorOpen) window.requestDoorOpen(3);
-  else if (window.doorOpenTimed) window.doorOpenTimed(3);
+  // 🚪 자동문 열기 (3초 후 자동 닫힘)
+  if (window.doorOpenTimed) window.doorOpenTimed(3);
 
   setTimeout(() => {
     checkinReset();
   }, isDuringPeriod && assignedRoom ? 6000 : 2200);
-  } catch(e) {
-    // 처리 중 예외가 나도 잠금(_checkinProcessing)이 풀리고 첫 화면으로 복귀하도록 보장
-    // (기존엔 예외 시 잠금이 걸린 채 확인 화면에 멈춰 키오스크가 먹통이 됐음)
-    console.error('입퇴실 처리 오류:', e);
-    showAdminToast('⚠️ 처리 중 오류가 발생했습니다: ' + (e && e.message ? e.message : e));
-    checkinReset();
-  }
 }
 
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
@@ -2074,9 +2087,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
     // 같은 학생의 같은 날짜 '마지막' 이벤트가 지금 쓰려는 것과 동일 type이면 기록하지 않는다.
     // (다른 기기가 이미 같은 입실/퇴실을 기록한 경우 in-in / out-out 중복 문서 방지)
     try {
-      // 오늘 날짜로 한정해 조회 — 전체 이력을 매번 읽지 않도록
-      const snap = await getDocs(query(collection(db, 'checkin_logs'),
-        where('studentName','==', student.name), where('date','==', today)));
+      const snap = await getDocs(query(collection(db, 'checkin_logs'), where('studentName','==', student.name)));
       let last = null;
       snap.forEach(d => {
         const x = d.data();
@@ -2142,7 +2153,6 @@ async function saveAutoStudyroomAssignment(student, room, period) {
 
 window.checkinReset = function() {
   window._checkinProcessing = false; // 처리 잠금 해제
-  _checkinPanelShownAt = 0;
   numpadBuffer = '';
   updateCheckinDisplay();
   hideCheckinError();
@@ -2184,6 +2194,7 @@ function buildCheckinTodayList() {
 }
 
 // ===== 배치도 =====
+let _fpDragDist = 0;
 //
 // 그리드 10행 × 9열:
 //  C1: 관리자석 63→54 (r1~r10)
@@ -2214,6 +2225,89 @@ function calcDday(expiry) {
   const today = new Date(); today.setHours(0,0,0,0);
   const exp = new Date(expiry); exp.setHours(0,0,0,0);
   return Math.ceil((exp - today) / 86400000);
+}
+
+function buildSeatCard(seatNum) {
+  const student = getFpStudentBySeat(seatNum);
+  const status = getFpStatus(student);
+
+  if (!student) {
+    // 공석
+    const onclick = `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
+    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px">
+      <div style="font-size:10px;color:#bbb;font-weight:500">${seatNum}번</div>
+      <div style="font-size:10px;color:#ccc">공석</div>
+    </div>`;
+  }
+
+  // 만료일 D-day
+  const dday = calcDday(student.expiry);
+  const expiryStr = student.expiry ? student.expiry.replace(/^\d{2}(\d{2})-(\d{2})-(\d{2})$/, '$1/$2/$3') : '';
+  let badgeBg, badgeColor;
+  if (status === 'in') { badgeBg = '#2D7A4F'; badgeColor = '#fff'; }
+  else if (dday !== null && dday <= 7) { badgeBg = '#E07000'; badgeColor = '#fff'; }
+  else { badgeBg = '#9CA3AF'; badgeColor = '#fff'; }
+
+  const ddayLabel = dday !== null ? ` D${dday >= 0 ? '-' : '+'}${Math.abs(dday)}` : '';
+  const genderIcon = student.gender === 'm' ? '<span style="color:#4A90D9;font-size:10px">♂</span>' : '<span style="color:#E05C8A;font-size:10px">♀</span>';
+
+  // 스터디룸 대기 여부
+  const inStudyRoom = studyRoomStudents && Object.values(studyRoomStudents).some(arr => arr.includes(student.name));
+
+  const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
+
+  let cardBorder, cardBg;
+  if (status === 'in') { cardBorder = '#2D7A4F'; cardBg = '#F0FFF4'; }
+  else if (inStudyRoom) { cardBorder = '#C8900A'; cardBg = '#FFF8DC'; }
+  else { cardBorder = '#D1D5DB'; cardBg = '#fff'; }
+
+  const onclick = `onclick="if(!fpEditMode)fpSeatClick(${seatNum})"`;
+
+  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0;height:100%;box-sizing:border-box">
+    <!-- 상단 배지 -->
+    <div style="background:${badgeBg};padding:2px 5px;display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:9px;color:${badgeColor};font-weight:600">고정석${expiryStr ? ' '+expiryStr : ''}</span>
+      <span style="font-size:9px;color:${badgeColor};font-weight:700">${ddayLabel}</span>
+    </div>
+    <!-- 이름/번호 -->
+    <div style="padding:4px 6px 3px;flex:1;display:flex;flex-direction:column;justify-content:center">
+      <div style="font-size:9px;color:#9CA3AF;margin-bottom:1px">${seatNum}번</div>
+      <div style="display:flex;align-items:center;gap:3px">
+        <span style="font-size:12px;font-weight:700;color:#1F2937">${student.name}</span>
+        ${genderIcon}
+      </div>
+      <div style="font-size:9px;margin-top:2px;color:${status==='in'?'#2D7A4F':inStudyRoom?'#C8900A':'#9CA3AF'}">
+        ${status==='in' ? `● 입실 ${rec?.inTime||''}` : inStudyRoom ? '📚 ST-R 대기' : '미입실'}
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildAdminCard(num, name) {
+  return `<div class="fp-seat fp-admin">
+    <div class="fp-seat-num">${num}번 관리</div>
+    <div class="fp-seat-name" style="font-size:11px;color:#7A5008">${name||''}</div>
+  </div>`;
+}
+
+function G(r, c, html) {
+  return `<div style="grid-row:${r};grid-column:${c}">${html}</div>`;
+}
+function GS(r, c, rs, cs, html) {
+  return `<div style="grid-row:${r}/span ${rs};grid-column:${c}/span ${cs}">${html}</div>`;
+}
+function studio(label) {
+  const m = label.match(/(\d+)/);
+  const roomNum = m ? parseInt(m[1]) : 0;
+  const students = (studyRoomStudents && studyRoomStudents[roomNum]) || [];
+  const studentHtml = students.length > 0
+    ? students.map(n => `<div style="font-size:9px;background:#FFF8DC;color:#7A5008;border-radius:4px;padding:1px 5px;margin-top:2px;font-weight:600">${n}</div>`).join('')
+    : `<div style="font-size:9px;color:#ccc;margin-top:2px">비어있음</div>`;
+  return `<div class="fp-studio" style="height:100%;min-height:0;flex-direction:column;align-items:flex-start;padding:6px 8px">
+    <div class="fp-studio-label" style="font-size:11px">🚪 ${label}</div>
+    ${studentHtml}
+  </div>`;
 }
 
 // ── 관리자석 전역 정의 (배석 해제 시 수정 가능) ──
@@ -2309,8 +2403,7 @@ function buildFloorplan() {
   const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
   let html = `<style>
     #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
-    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; cursor:default; }
-    .fp-drag-wrap.dragging .fp-cell { cursor:grabbing; }
+    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
     .fp-cell-admin { background:#FFF8DC; border:1px solid #E0B020; }
     .fp-cell-studio { background:#F5F0FF; border:1px dashed #C4A4E0; align-items:center; justify-content:center; }
     .fp-cell-in { background:#DCFCE7; border:1.5px solid #4ADE80; }
@@ -2318,6 +2411,9 @@ function buildFloorplan() {
     .fp-cell-absent { background:#F9FAFB; border:1px solid #D1D5DB; }
     .fp-cell-vacant { background:transparent; border:none; }
     .fp-cell-vacant-seat { background:#F9FAFB; border:1px solid #E5E7EB; }
+    .fp-cell-empty-edit { background:#FAFAFA; border:1.5px dashed #E0E0E0; cursor:pointer; }
+    .fp-cell-edit { cursor:pointer; }
+    .fp-cell-selected { outline:3px solid #C8900A !important; outline-offset:-2px; }
     .fp-num { font-size:9px; color:#9CA3AF; line-height:1; }
     .fp-name { font-size:12px; font-weight:700; color:#1F2937; line-height:1.3; margin-top:1px; }
     .fp-badge { font-size:9px; font-weight:600; padding:1px 4px; border-radius:3px; margin-top:2px; display:inline-block; }
@@ -2337,6 +2433,8 @@ function buildFloorplan() {
       if (studioSpan[key]) continue;
 
       const fixed = FIXED[key];
+      const isSelected = fpSelectedSlot && fpSelectedSlot.key === key;
+      const selClass = isSelected ? ' fp-cell-selected' : '';
 
       if (fixed) {
         if (fixed.type === 'admin') {
@@ -2348,7 +2446,7 @@ function buildFloorplan() {
           // 관리자석: 학생 있으면 우클릭으로 배석해제만 가능, 빈자리 클릭 불가
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
           const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : '';
-          html += `<div class="fp-cell fp-cell-admin" style="grid-row:${r};grid-column:${c}" ${clickAttr} ${ctxAttr}>
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'pointer':'default'}" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
             <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : ''}</div>
             ${ddayHtml}
@@ -2367,9 +2465,10 @@ function buildFloorplan() {
           const waitHtml = waiting.length
             ? waiting.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
             : `<div style="font-size:10px;color:#C4A4E0;margin-top:4px">비어있음</div>`;
-          html += `<div class="fp-cell fp-cell-studio"
+          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : '';
+          html += `<div class="fp-cell fp-cell-studio${fpEditMode?' fp-cell-edit':''}${selClass}"
             style="grid-row:${r}/span 2;grid-column:${c};flex-direction:column;align-items:flex-start;padding:8px 10px"
-            data-slot-key="${key}">
+            data-slot-key="${key}" ${editAttr}>
             <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${roomNum}</div>
             ${waitHtml}
           </div>`;
@@ -2402,10 +2501,10 @@ function buildFloorplan() {
             ? `<span class="fp-badge" style="background:#7C3AED;color:#fff">ST-R ${studyRoomNum}</span>`
             : '';
 
-          const clickAttr = student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`;
-          const ctxAttr = student ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
+          const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
+          const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${clickAttr} ${ctxAttr}>
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -2419,7 +2518,13 @@ function buildFloorplan() {
           </div>`;
         } else {
           // 빈 칸
-          html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
+          if (fpEditMode) {
+            html += `<div class="fp-cell fp-cell-empty-edit${selClass}" style="grid-row:${r};grid-column:${c}" data-slot-key="${key}" onclick="fpSlotClick('${key}',0)">
+              <div style="color:#E0E0E0;font-size:10px;text-align:center;width:100%">＋</div>
+            </div>`;
+          } else {
+            html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
+          }
         }
       }
     }
@@ -2430,14 +2535,86 @@ function buildFloorplan() {
   buildFpSidePanel();
 }
 
+// ===== 위치수정 모드// ===== 위치수정 모드 (그리드 칸 교환 방식) =====
+const fpEditMode = false; // 위치수정 모드 비활성화
+
+// 좌석 배치 순서 저장: { slot_key: seatNum } 예) "r1_c4": 9
+// slot_key = "r{row}_c{col}"
+const fpGridLayout = {}; // 배치 확정 — 저장값 미사용
+
+function saveFpGridLayout() {
+  try { localStorage.setItem('saebom_fp_grid_layout', JSON.stringify(fpGridLayout)); } catch(e) {}
+}
+
+let fpSelectedSlot = null;
+
+window.toggleFpEditMode = function() {
+  fpEditMode = !fpEditMode;
+  fpSelectedSlot = null;
+  const btn = document.getElementById('fp-edit-btn');
+  if (fpEditMode) {
+    btn.className = 'fp-edit-btn active';
+    btn.innerHTML = '<i class="ti ti-check" style="font-size:13px"></i> 저장';
+    showAdminToast('💡 이동할 좌석 클릭 → 목적지 클릭으로 위치를 바꿔주세요');
+  } else {
+    saveFpGridLayout();
+    btn.className = 'fp-edit-btn';
+    btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정';
+    showFpSaveToast();
+  }
+  buildFloorplan();
+};
+
+window.fpSlotClick = function(key, seatNum) {
+  if (!fpEditMode) return;
+  // seatNum: 양수=좌석, 0=빈칸
+  if (fpSelectedSlot === null) {
+    fpSelectedSlot = { key, seatNum };
+    buildFloorplan(); // 선택 강조 반영
+  } else {
+    if (fpSelectedSlot.key === key) {
+      // 같은 칸 다시 클릭 → 취소
+      fpSelectedSlot = null;
+      buildFloorplan();
+      return;
+    }
+    // 두 칸 교환 (빈칸=0, 스터디룸=음수도 교환 가능)
+    fpGridLayout[fpSelectedSlot.key] = seatNum;
+    fpGridLayout[key] = fpSelectedSlot.seatNum;
+    fpSelectedSlot = null;
+    buildFloorplan();
+  }
+};
+
+window.resetFpPositions = function() {
+  if (!confirm('배치도 위치를 초기 상태로 되돌릴까요?')) return;
+  fpGridLayout = {};
+  localStorage.removeItem('saebom_fp_grid_layout');
+  localStorage.removeItem('saebom_fp_positions');
+  fpEditMode = false;
+  const btn = document.getElementById('fp-edit-btn');
+  if (btn) { btn.className = 'fp-edit-btn'; btn.innerHTML = '<i class="ti ti-pencil" style="font-size:13px"></i> 위치수정'; }
+  buildFloorplan();
+  showAdminToast('✅ 배치도가 초기 위치로 돌아왔습니다');
+};
+
+
+function showFpSaveToast() {
+  const toast = document.createElement('div');
+  toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#C8900A;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);animation:toastIn 0.2s ease';
+  toast.textContent = '✅ 배치도 위치가 저장됐습니다 (새로고침 후에도 유지)';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 2200);
+}
+
 // ── 배치도 사이드패널 ──
 function buildFpSidePanel() {
   const listEl = document.getElementById('fp-side-list');
   const countEl = document.getElementById('fp-side-count');
   if (!listEl) return;
 
-  // 전체 학생 (입실중 → 미입실 순), 미배정 학생은 맨 아래로
-  const assigned = [...STUDENTS]
+  // 전체 학생 (입실중 → 미입실 순)
+  const sorted = [...STUDENTS]
     .filter(s => s.seat && parseInt(s.seat) > 0)
     .sort((a, b) => {
       const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
@@ -2446,10 +2623,6 @@ function buildFpSidePanel() {
       if (!aIn && bIn) return 1;
       return parseInt(a.seat) - parseInt(b.seat);
     });
-  const unassignedList = [...STUDENTS]
-    .filter(s => !s.seat || parseInt(s.seat) <= 0)
-    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
-  const sorted = [...assigned, ...unassignedList];
 
   const inCount = sorted.filter(s => todayRecords.some(r => r.studentName === s.name && !r.outTime)).length;
   if (countEl) countEl.textContent = `${inCount}명 입실중`;
@@ -2465,14 +2638,9 @@ function buildFpSidePanel() {
     const strRoom = Object.entries(studyRoomStudents).find(([r, arr]) => arr.includes(s.name));
     const strNum = strRoom ? strRoom[0] : null;
 
-    const isUnassigned = !s.seat || parseInt(s.seat) <= 0;
-
     // 배지 및 배경 결정
     let badgeText, badgeBg, cardBg, cardBorder;
-    if (isUnassigned) {
-      badgeText = '미배정';
-      badgeBg = '#7A5008'; cardBg = '#FFF7ED'; cardBorder = '#E0B020';
-    } else if (isIn && strNum) {
+    if (isIn && strNum) {
       badgeText = `이용 · ST-R ${strNum}`;
       badgeBg = '#7C3AED'; cardBg = '#FAF5FF'; cardBorder = '#C084FC';
     } else if (isIn) {
@@ -2502,7 +2670,7 @@ function buildFpSidePanel() {
       data-student-name="${s.name}"
       data-student-seat="${s.seat}"
       draggable="true"
-      onclick="${isUnassigned ? `openScheduleModal(${STUDENTS.indexOf(s)})` : `fpSeatClick(${parseInt(s.seat)})`}"
+      onclick="fpSeatClick(${parseInt(s.seat)})"
       onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
       style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative">
       <div style="position:absolute;top:7px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
@@ -2510,7 +2678,7 @@ function buildFpSidePanel() {
         <div style="display:flex;align-items:center;gap:5px">
           <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${badgeBg};color:#fff">${badgeText}</span>
         </div>
-        <span style="font-size:10px;color:#6B7280;margin-right:14px">${isUnassigned ? '드래그해 자리 지정' : s.seat + '번'}</span>
+        <span style="font-size:10px;color:#6B7280;margin-right:14px">${s.seat}번</span>
       </div>
       <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
         <span style="font-size:13px;font-weight:700;color:#1F2937">${s.name}</span>
@@ -2593,33 +2761,23 @@ async function _onCellDrop(e) {
   this.classList.remove('fp-cell-drop-hover');
   deactivateSeatDropTargets();
 
-  if (!_dragStudentName) return; // 미배정 학생은 _dragFromSeat가 '' 이므로 이름만으로 판별
+  if (!_dragStudentName || !_dragFromSeat) return;
 
   const targetSeat = this.dataset.seatNum;
   if (!targetSeat || parseInt(targetSeat) <= 0) { showAdminToast('💡 유효하지 않은 좌석입니다'); return; }
 
   const targetSeatStr = String(targetSeat);
   const studentName   = _dragStudentName;
-  const fromSeat      = _dragFromSeat || ''; // '' = 미배정 학생 배정
-  const isFromUnassigned = !fromSeat;
+  const fromSeat      = _dragFromSeat;
 
   if (targetSeatStr === fromSeat) { showAdminToast('💡 같은 좌석입니다'); return; }
 
   const occupant = STUDENTS.find(s => s.seat === targetSeatStr);
-  // 미배정 학생을 이미 사용 중인 좌석에 놓으면 상대가 미배정돼버리므로 차단
-  if (isFromUnassigned && occupant) {
-    showAdminToast(`💡 ${targetSeatStr}번은 ${occupant.name} 학생이 사용 중입니다`);
-    return;
-  }
-
-  let confirmMsg = isFromUnassigned
-    ? `${studentName} 학생(미배정)을\n${targetSeatStr}번 자리에 배정할까요?`
-    : `${studentName} 학생을\n${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경할까요?`;
-  if (occupant && !isFromUnassigned) confirmMsg += `\n\n⚠️ ${targetSeatStr}번의 "${occupant.name}" 학생과 자리가 교환됩니다.`;
+  let confirmMsg = `${studentName} 학생을\n${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경할까요?`;
+  if (occupant) confirmMsg += `\n\n⚠️ ${targetSeatStr}번의 "${occupant.name}" 학생과 자리가 교환됩니다.`;
   if (!confirm(confirmMsg)) return;
 
-  // 미배정 배정은 교환이 아니므로 occupant를 넘기지 않음
-  await _executeSeatChange(studentName, fromSeat, targetSeatStr, isFromUnassigned ? null : occupant);
+  await _executeSeatChange(studentName, fromSeat, targetSeatStr, occupant);
 }
 
 async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
@@ -2627,8 +2785,6 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     showAdminToast('⏳ 좌석 변경 중...');
     const student = STUDENTS.find(s => s.name === studentName);
     if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
-    const draggedSid = student.sid;          // 미배정(u_...) 문서 정리용
-    const wasUnassigned = !oldSeat;          // 빈 좌석에서 배정하는 경우
 
     window._seatChanging = true; // onSnapshot 중복 방지 플래그
 
@@ -2636,10 +2792,10 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
       // 두 학생 교환: occupant → oldSeat
       await _saveSeatDoc({...occupant, seat: oldSeat}, newSeat);
       const oi = STUDENTS.findIndex(s => s.name === occupant.name);
-      if (oi !== -1) { STUDENTS[oi].seat = oldSeat; STUDENTS[oi].sid = oldSeat; }
+      if (oi !== -1) STUDENTS[oi].seat = oldSeat;
       todayRecords.forEach(r => { if (r.studentName === occupant.name) r.seat = oldSeat; });
-    } else if (oldSeat) {
-      // 기존 좌석 문서 삭제 (미배정 배정 시엔 좌석 문서가 없으므로 건너뜀)
+    } else {
+      // 기존 문서 삭제
       try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', oldSeat)); } catch(e){}
       try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'schedules', oldSeat)); } catch(e){}
     }
@@ -2647,25 +2803,16 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     // 드래그한 학생 → newSeat
     await _saveSeatDoc({...student, seat: newSeat}, oldSeat);
     const si = STUDENTS.findIndex(s => s.name === studentName);
-    if (si !== -1) { STUDENTS[si].seat = newSeat; STUDENTS[si].sid = newSeat; }
+    if (si !== -1) STUDENTS[si].seat = newSeat;
     todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
-
-    // 미배정(u_...) 상태에서 배정된 경우: 남아있는 보관용 문서 정리 (교환이 아닐 때만)
-    if (!occupant && draggedSid && draggedSid !== newSeat) {
-      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', draggedSid)); } catch(e){}
-    }
 
     STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
     buildFloorplan();
     buildStudentList(document.getElementById('student-search')?.value || '');
     buildDashboard();
 
-    if (wasUnassigned) {
-      showAdminToast(`✅ ${studentName}: ${newSeat}번 자리에 배정됨`);
-    } else {
-      const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
-      showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
-    }
+    const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
+    showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
 
     // 1초 후 플래그 해제
     setTimeout(() => { window._seatChanging = false; }, 1000);
@@ -2721,6 +2868,7 @@ async function _saveSeatDoc(student, oldDocId) {
 
 // ──────────────────────────────────────────────────────
 function fpSeatClick(seatNum) {
+  if (fpEditMode) return; // 수정 모드 중엔 정보창 안 띄움
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
   // 학생 정보 간단 팝업 (alert 대신 대시보드 정보로)
@@ -2812,6 +2960,7 @@ function initFpDrag() {
     const dx = e.clientX - startX;
     const dy = e.clientY - startY;
     dragDist = Math.sqrt(dx*dx + dy*dy);
+    _fpDragDist = dragDist;
     applyPos(scrollLeft + dx, scrollTop + dy);
   });
 
@@ -2819,6 +2968,11 @@ function initFpDrag() {
     if (!isDragging) return;
     isDragging = false;
     wrap.classList.remove('dragging');
+    if (dragDist > 5) {
+      window._fpLastDragged = true;
+      setTimeout(() => {  }, 500);
+    }
+    setTimeout(() => { _fpDragDist = 0; }, 50);
   });
 
   // 터치 지원
@@ -2843,6 +2997,10 @@ function initFpDrag() {
   }, {passive: false});
 
   wrap.addEventListener('touchend', () => {
+    if (dragDist > 8) {
+      window._fpLastDragged = true;
+      setTimeout(() => { window._fpLastDragged = false; }, 700);
+    }
     isDragging = false;
   });
 
@@ -3195,18 +3353,17 @@ function showPeriodStudents(periodIdx) {
   const old = document.getElementById('period-popup-overlay');
   if (old) old.remove();
 
+  const periodNum = PERIODS_WEEKDAY[periodIdx]?.n || (periodIdx + 7);
   const p = PERIODS_WEEKDAY[periodIdx];
-  const pNum = periodIdx + 7; // 평일 교시는 7교시부터
 
   // 실제 입실 중인 학생 중 해당 교시 출석 예정인 학생
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
-  const todayName = getTodayDayName();
   const students = STUDENTS.filter(s => {
     if (!presentNames.has(s.name)) return false;
-    const sched = s.schedule[todayName] || '';
+    const sched = s.schedule[currentDay] || '';
     if (!sched || sched === '-') return false;
     const parsed = parseScheduleStr(sched);
-    return parsed.periods.has(pNum) && !parsed.absentPeriods.has(pNum);
+    return parsed[periodNum] === 'attend';
   });
 
   // 오버레이 없이 팝업만 화면 중앙에 고정
@@ -3272,22 +3429,6 @@ setInterval(() => {
     _lastResetDate = todayStr;
     todayRecords.length = 0;
     PRESENT.length = 0;
-    // 요일·월 관련 상태도 함께 갱신 — 밤새 켜둔 키오스크가 전날 요일 기준으로
-    // 미입실 알림을 계산하거나 스케줄 표가 고착되는 것을 방지
-    currentDay = getTodayDayName();
-    currentMonth = _curYm();
-    MONTHS.splice(0, MONTHS.length, ..._recentMonths(5));
-    const _dn = ['일','월','화','수','목','금','토'];
-    const _lbl = document.getElementById('today-label');
-    if (_lbl) _lbl.textContent = `${now.getMonth()+1}월 ${now.getDate()}일 (${_dn[now.getDay()]})`;
-    try {
-      buildDayTabs();
-      buildScheduleTable(currentDay);
-      buildMonthTabs();
-      buildHoursTable();
-    } catch(e) { console.warn('날짜 전환 화면 갱신 실패:', e); }
-    // 새 날짜 조건으로 실시간 구독 재설정 후 오늘 기록 재로드
-    if (window._resubscribeCheckinLogs) window._resubscribeCheckinLogs();
     if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
   }
@@ -3547,9 +3688,8 @@ window.initApp = function(){
   buildCheckinTodayList();
   buildFloorplan();
   initFpDrag();
-  // 새로고침 후 탭 복원 (키오스크 모드는 입실·퇴실 화면 고정이므로 제외)
+  // 새로고침 후 탭 복원
   try {
-    if (window._kioskAuto) return;
     const saved = sessionStorage.getItem('saebom_active_tab');
     if (saved && saved !== 'dashboard') {
       const btn = document.querySelector('.tab-btn[onclick*="' + saved + '"]');
@@ -3588,12 +3728,23 @@ window.applyStudentSchedule = function(seat, idx) {
   else if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
   buildScheduleTable(currentDay);
   buildStudentList(document.getElementById('student-search')?.value || '');
-  // 적용 즉시 미입실 알림 대상 재계산 (불참 교시 배제 등 반영) — 1분 자동갱신을 기다리지 않도록
-  // buildScheduleTable/buildStudentList와 동일 스코프의 함수라 직접 호출 (window에 미등록)
-  buildDashboard();
   a.applied = true;
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
   showAdminToast(`✅ ${student.name} 스케줄 적용 완료`);
+};
+
+window.dismissAlert = function(idx) {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  alerts.splice(idx, 1);
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
+};
+
+window.clearAllScheduleAlerts = function() {
+  const alerts = window._scheduleAlerts;
+  if (!alerts) return;
+  alerts.length = 0;
+  if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
 </script>
@@ -3601,7 +3752,7 @@ window.applyStudentSchedule = function(seat, idx) {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where }
+import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -3614,16 +3765,7 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// 오프라인 캐시(IndexedDB) 활성화: 인터넷이 잠시 끊겨도 입퇴실 기록이 로컬에 남고
-// 재연결 시 자동으로 서버에 동기화된다. (미지원 환경이면 기존 메모리 캐시로 폴백)
-let db;
-try {
-  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-  console.log('🔥 Firestore 오프라인 캐시 활성화');
-} catch (e) {
-  console.warn('오프라인 캐시 활성화 실패 — 기본 모드 사용:', e);
-  db = getFirestore(app);
-}
+const db  = getFirestore(app);
 window._adminDb = db;
 window._adminApp = app;
 window._fsSetDoc = setDoc;
@@ -3635,19 +3777,10 @@ window._fsDeleteDoc = deleteDoc;
 
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
-  const cleanSeat = String(student.seat ?? '').replace('번','').trim();
-  // 문서 ID: 배정 학생은 좌석번호, 미배정 학생은 안정적인 sid(u_...) 사용.
-  // 좌석-키만으로는 미배정(좌석='') 학생을 보관할 수 없고, 좌석 재사용 시 덮어써지기 때문.
-  const newId = cleanSeat || student.sid || ('u_' + Date.now() + '_' + Math.random().toString(36).slice(2,7));
-  // 배정↔해제로 문서 위치가 바뀌면 이전 위치의 문서를 정리해 중복(고아 문서)을 방지
-  if (student.sid && student.sid !== newId) {
-    try { await deleteDoc(doc(db, 'students', student.sid)); } catch(e) {}
-  }
-  student.sid = newId;
-  const docRef = doc(db, 'students', newId);
+  const cleanSeat = String(student.seat).replace('번','');
+  const docRef = doc(db, 'students', cleanSeat);
   await setDoc(docRef, {
     seat: cleanSeat,
-    sid: newId,
     name: student.name,
     phone: student.phone || '',
     parent: student.parent || '',
@@ -3709,10 +3842,9 @@ window.purgeStudentData = async function(seat, name, execute) {
   const dry = execute !== true;
   const targets = [];  // {col, id}
 
-  // 1) students / schedules / schedule_base : 문서 ID = 좌석번호 (없으면 삭제는 무시됨)
-  targets.push({ col:'students',      id: seat });
-  targets.push({ col:'schedules',     id: seat });
-  targets.push({ col:'schedule_base', id: seat });
+  // 1) students / schedules : 문서 ID = 좌석번호 (없으면 삭제는 무시됨)
+  targets.push({ col:'students',  id: seat });
+  targets.push({ col:'schedules', id: seat });
 
   // 2) checkin_logs : seat 또는 studentName 필드로 매칭
   (await getDocs(collection(db,'checkin_logs'))).forEach(d => {
@@ -3764,60 +3896,6 @@ window.purgeStudentData = async function(seat, name, execute) {
   return { ok, fail };
 };
 
-// ── 오래된 로그 정리 도구 (checkin_logs · sms_logs) ──
-// 누적시간은 퇴실 시점에 students.hours 로 합산되므로, 오래된 로그를 지워도 통계는 유지된다.
-// 설정 탭 버튼 또는 콘솔에서 purgeOldLogs(60, true) 로 실행.
-window.purgeOldLogs = async function(days = 60, execute = false) {
-  const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - days);
-  // "2026-7-2" / "2026. 7. 2." 등 포맷 무관하게 날짜 파싱
-  const parseDate = s => {
-    const m = String(s || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
-    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
-  };
-  const targets = [];
-  for (const col of ['checkin_logs', 'sms_logs']) {
-    const snap = await getDocs(collection(db, col));
-    snap.forEach(d => {
-      const dt = parseDate(d.data().date);
-      if (dt && dt < cutoff) targets.push({ col, id: d.id });
-    });
-  }
-  console.log(`[로그정리] ${days}일 이전 대상: ${targets.length}건`);
-  if (!execute) return targets.length;
-  let ok = 0, fail = 0;
-  for (const t of targets) {
-    try { await deleteDoc(doc(db, t.col, t.id)); ok++; }
-    catch (e) { fail++; console.warn('삭제 실패:', t.col, t.id, e); }
-  }
-  console.log(`[로그정리] 완료: 성공 ${ok}건, 실패 ${fail}건`);
-  return { ok, fail };
-};
-
-// 설정 탭 버튼용: 건수 확인 → 확인 후 삭제
-window.purgeOldLogsWithConfirm = async function(days = 60) {
-  const st = document.getElementById('log-purge-status');
-  if (st) st.textContent = '⏳ 대상 확인 중...';
-  try {
-    const count = await window.purgeOldLogs(days, false);
-    if (count === 0) {
-      if (st) st.textContent = `${days}일 이전 기록이 없습니다`;
-      showAdminToast(`✅ ${days}일 이전 기록이 없습니다`);
-      return;
-    }
-    if (!confirm(`${days}일 이전 입퇴실·문자 기록 ${count}건을 삭제할까요?\n(누적 이용시간 통계는 유지됩니다. 되돌릴 수 없습니다.)`)) {
-      if (st) st.textContent = '';
-      return;
-    }
-    if (st) st.textContent = `⏳ ${count}건 삭제 중...`;
-    const r = await window.purgeOldLogs(days, true);
-    if (st) st.textContent = `✅ ${r.ok}건 삭제 완료${r.fail ? ` · 실패 ${r.fail}건` : ''}`;
-    showAdminToast(`🗑️ 오래된 기록 ${r.ok}건 삭제 완료`);
-  } catch (e) {
-    if (st) st.textContent = '❌ 실패: ' + e.message;
-  }
-};
-
 // ── 학생 데이터 파싱 헬퍼 ──
 function _parseStudentDoc(v) {
   return {
@@ -3843,7 +3921,7 @@ async function loadStudentsFromFirebase() {
         const seatNum = parseInt(String(v.seat).replace('번',''));
         if (seatNum >= 54 && seatNum <= 63) return;
         STUDENTS.push({
-          seat: String(v.seat).replace('번',''), sid: v.sid || d.id, name: v.name,
+          seat: String(v.seat).replace('번',''), name: v.name,
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
@@ -3869,7 +3947,7 @@ async function loadStudentsFromFirebase() {
       const v = change.doc.data();
       if (change.type === 'removed') {
         const docId = change.doc.id.replace('번','');
-        const idx = STUDENTS.findIndex(s => (s.sid && s.sid === change.doc.id) || (docId && s.seat === docId));
+        const idx = STUDENTS.findIndex(s => s.seat === docId);
         if (idx !== -1) { STUDENTS.splice(idx, 1); changed = true; }
         return;
       }
@@ -3882,17 +3960,14 @@ async function loadStudentsFromFirebase() {
       const vSeat = String(v.seat).replace('번','');
       const seatNum = parseInt(vSeat);
       if (seatNum >= 54 && seatNum <= 63) return;
-      const sid = v.sid || change.doc.id;
       const updated = {
-        seat: vSeat, sid: sid, name: v.name,
+        seat: vSeat, name: v.name,
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: _normalizeHours(v.hours)
       };
-      // sid 우선 매칭 → 미배정(좌석='') 학생끼리 섞이지 않게 함. 좌석 매칭은 빈 좌석 제외.
-      let idx = STUDENTS.findIndex(s => s.sid && s.sid === sid);
-      if (idx === -1 && vSeat) idx = STUDENTS.findIndex(s => s.seat === vSeat);
+      const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       if (idx !== -1) { STUDENTS[idx] = updated; }
       else {
         const nameIdx = STUDENTS.findIndex(s => s.name === v.name);
@@ -3926,8 +4001,7 @@ async function loadTodayCheckinFromFirebase() {
     const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const yd = new Date(Date.now() - 86400000);
     const yesterday = yd.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    // 오늘·어제 기록만 조회 — 기록이 몇 달치 쌓여도 읽기량이 늘지 않도록 (비용·속도)
-    const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', [today, yesterday])));
+    const snap = await getDocs(collection(db, 'checkin_logs'));
     const todayDocs = [];
     const yesterdayDocs = [];
     snap.forEach(d => {
@@ -3939,29 +4013,6 @@ async function loadTodayCheckinFromFirebase() {
     // todayRecords, PRESENT 초기화 후 재구성
     todayRecords.length = 0;
     PRESENT.length = 0;
-
-    // ── 어제 '미퇴실 입실'의 열린 입실시각을 먼저 계산 (자정 넘김 대비) ──
-    // 자정을 넘겨 오늘 새벽에 퇴실하면 out은 '오늘' 날짜, 짝이 되는 in은 '어제' 날짜라
-    // 오늘 문서만으로는 짝을 못 찾아 입실시각이 '?'로 표시됐다. 어제 열린 입실시각을 미리 확보해
-    //  (1) 오늘 새벽 퇴실과 짝지어 '닫힌 기록'으로 만들고
-    //  (2) 아직 퇴실 안 한 학생은 오늘 입실 중으로 이월한다.
-    const ydByStudent = {};
-    yesterdayDocs.forEach(d => {
-      if (!d.studentName) return;
-      if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
-      if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
-      else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
-    });
-    // name → 어제의 마지막(미퇴실) 입실 { time, seat }
-    const carryIn = {};
-    Object.entries(ydByStudent).forEach(([name, rec]) => {
-      if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
-        const lastIn = rec.ins[rec.ins.length - 1];
-        carryIn[name] = { time: lastIn.time || '?', seat: lastIn.seat || '' };
-      }
-    });
-    // 실시간 onSnapshot 핸들러도 같은 정보를 써서 '?' 대신 어제 입실시각을 넣도록 공유
-    window._carryIn = carryIn;
 
     // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
     // ts(epoch ms)로 정렬하되, 같은 시각이면 입실(in)을 먼저 처리해
@@ -3990,22 +4041,29 @@ async function loadTodayCheckinFromFirebase() {
           rec.outTime = time;
           const idx = PRESENT.indexOf(name);
           if (idx !== -1) PRESENT.splice(idx, 1);
-        } else if (carryIn[name]) {
-          // 어제 입실 → 오늘 새벽 퇴실: 어제 입실시각과 짝지어 닫힌 기록으로 저장 ('?' 방지)
-          todayRecords.push({ studentName: name, seat: seat || carryIn[name].seat, inTime: carryIn[name].time, outTime: time, carriedOver: true, carryFromDate: yesterday });
-          delete carryIn[name]; // 소비됨 → 아래 이월(입실 중)에서 되살아나지 않도록
         }
-        // 그 외(어제 입실 기록도 없는 진짜 고아 퇴실)은 표시하지 않는다.
       }
     });
 
-    // 어제 입실 후 아직 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
-    // 위에서 오늘 새벽 퇴실과 짝지어 소비된 학생은 carryIn에서 제거되어 제외된다.
-    Object.entries(carryIn).forEach(([name, info]) => {
-      const hasTodayRecord = todayRecords.some(r => r.studentName === name);
-      if (!hasTodayRecord) {
-        todayRecords.push({ studentName: name, seat: info.seat, inTime: info.time, outTime: null, carriedOver: true, carryFromDate: yesterday });
-        if (!PRESENT.includes(name)) PRESENT.push(name);
+    // 어제 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
+    const ydByStudent = {};
+    yesterdayDocs.forEach(d => {
+      if (!d.studentName) return;
+      if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
+      if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
+      else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
+    });
+    Object.entries(ydByStudent).forEach(([name, rec]) => {
+      if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
+        // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
+        // ※ 예전에는 '아직 입실 중(!outTime)'인 기록만 검사해서, 오늘 퇴실 처리한 학생이
+        //   어제 미퇴실 기록으로부터 다시 입실로 되살아나는 버그가 있었다.
+        const hasTodayRecord = todayRecords.some(r => r.studentName === name);
+        if (!hasTodayRecord) {
+          const lastIn = rec.ins[rec.ins.length - 1];
+          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, carriedOver: true, carryFromDate: yesterday });
+          if (!PRESENT.includes(name)) PRESENT.push(name);
+        }
       }
     });
 
@@ -4027,15 +4085,8 @@ loadTodayCheckinFromFirebase();
 const _todayStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
 let _checkinSnapshotReady = false; // loadTodayCheckinFromFirebase 완료 후 true
 
-// 오늘·어제 날짜로 필터해 구독 — 기록이 쌓여도 초기 스냅샷 읽기량이 늘지 않는다.
-// 날짜가 바뀌면 새벽 리셋 로직이 window._resubscribeCheckinLogs 로 재구독한다.
-let _checkinLogsUnsub = null;
-function subscribeCheckinLogs() {
-  if (_checkinLogsUnsub) { try { _checkinLogsUnsub(); } catch(e) {} _checkinLogsUnsub = null; }
-  const _subToday = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-  const _subYd = new Date(Date.now() - 86400000).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-  _checkinLogsUnsub = onSnapshot(
-  query(collection(db, 'checkin_logs'), where('date', 'in', [_subToday, _subYd])),
+onSnapshot(
+  collection(db, 'checkin_logs'),
   (snapshot) => {
     if (!_checkinSnapshotReady) return; // 초기 로드 전 이벤트 무시
     let changed = false;
@@ -4073,10 +4124,7 @@ function subscribeCheckinLogs() {
           // 입실 기록 없이 퇴실만 온 경우 - 입실 기록 생성 후 퇴실 처리
           const alreadyOut = todayRecords.find(r => r.studentName === name && r.outTime === time);
           if (!alreadyOut) {
-            // 자정 넘김: 어제 열린 입실이 있으면 그 시각을 입실시각으로 사용 ('?' 방지)
-            const ci = window._carryIn && window._carryIn[name];
-            todayRecords.push({ studentName: name, seat: seat || (ci ? ci.seat : ''), inTime: ci ? ci.time : '?', outTime: time, carriedOver: !!ci });
-            if (ci) delete window._carryIn[name];
+            todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
             const idx = PRESENT.indexOf(name);
             if (idx !== -1) PRESENT.splice(idx, 1);
             changed = true;
@@ -4093,9 +4141,6 @@ function subscribeCheckinLogs() {
     }
   }
 );
-}
-subscribeCheckinLogs();
-window._resubscribeCheckinLogs = subscribeCheckinLogs;
 
 // ── 스터디룸 신청 실시간 감시 ──
 const _studyroomReqAlerts = [];
@@ -4288,19 +4333,17 @@ window.clearAllScheduleAlerts = function() {
 async function saveScheduleToFirebase(student) {
   try {
     await window.saveStudentToFirebase(student);
-    // schedules 컬렉션도 동기화 (학생앱 실시간 감지용) — 좌석이 있을 때만(미배정 학생은 스킵)
-    const seatKey = String(student.seat ?? '').replace(/[^0-9]/g, '');
-    if (seatKey) {
-      const schedRef = doc(db, 'schedules', seatKey);
-      const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
-      ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
-      await setDoc(schedRef, payload);
-      // 원칙1: 관리자 입력/수정·적용은 '원본(base)'도 갱신 → 다음 수정기간까지 유지
-      const baseRef = doc(db, 'schedule_base', seatKey);
-      const basePayload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
-      ['월','화','수','목','금','토'].forEach(d => { basePayload[d] = student.schedule[d] || '-'; });
-      await setDoc(baseRef, basePayload);
-    }
+    // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
+    const seatKey = student.seat.replace(/[^0-9]/g, '') || student.seat;
+    const schedRef = doc(db, 'schedules', seatKey);
+    const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
+    ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
+    await setDoc(schedRef, payload);
+    // 원칙1: 관리자 입력/수정·적용은 '원본(base)'도 갱신 → 다음 수정기간까지 유지
+    const baseRef = doc(db, 'schedule_base', seatKey);
+    const basePayload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
+    ['월','화','수','목','금','토'].forEach(d => { basePayload[d] = student.schedule[d] || '-'; });
+    await setDoc(baseRef, basePayload);
   } catch(e) { console.error('Firebase 저장 실패:', e); }
 }
 onSnapshot(collection(db, 'schedules'), (snapshot) => {
@@ -5044,60 +5087,6 @@ window.adminForceCheckout = function(name) {
   if (window._todayModalRender) window._todayModalRender();
 };
 
-// 관리자 강제 입실 처리 — 학생이 번호를 눌러 입실한 것과 동일한 효과
-// (출석 기록, Firebase 저장, 학부모 알림, 18시 이후 스터디룸 자동배정 포함)
-window.adminForceCheckin = function(name) {
-  const student = STUDENTS.find(s => s.name === name);
-  if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
-  if (todayRecords.some(r => r.studentName === name && !r.outTime)) {
-    showAdminToast(`ℹ️ ${name} 학생은 이미 입실 중입니다`); return;
-  }
-  // 만료일 확인 — 학생 직접 입실은 차단되지만 관리자는 확인 후 진행 가능
-  if (student.expiry) {
-    const today = new Date(); today.setHours(0,0,0,0);
-    const expDate = new Date(student.expiry); expDate.setHours(0,0,0,0);
-    if (expDate < today && !confirm(`⛔ ${name} 학생은 사용기간이 만료되었습니다 (${student.expiry}).\n그래도 입실 처리할까요?`)) return;
-  }
-  if (!confirm(`${name} 학생을 입실 처리할까요?\n(학생이 직접 번호를 눌러 입실한 것과 동일하게 처리됩니다)`)) return;
-
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
-  todayRecords.push({ studentName: name, seat: student.seat, inTime: timeStr, outTime: null });
-  if (!PRESENT.includes(name)) PRESENT.push(name);
-
-  // 18시 이후 교시 중 입실이면 스터디룸 자동 배정 (학생 직접 입실과 동일)
-  let assignedRoom = null;
-  const curPeriod = getCurrentPeriod();
-  const curMin = now.getHours() * 60 + now.getMinutes();
-  if (curPeriod && curMin >= 18 * 60) {
-    const total = studyRoomStudents[1].length + studyRoomStudents[2].length + studyRoomStudents[3].length;
-    if (!Object.values(studyRoomStudents).flat().includes(name)) {
-      if (total < 12) {
-        const counts = [studyRoomStudents[1].length, studyRoomStudents[2].length, studyRoomStudents[3].length];
-        const minCount = Math.min(...counts);
-        for (let r = 1; r <= 3; r++) {
-          if (studyRoomStudents[r].length === minCount && studyRoomStudents[r].length < 4) {
-            studyRoomStudents[r].push(name);
-            assignedRoom = r;
-            saveAutoStudyroomAssignment(student, r, curPeriod);
-            break;
-          }
-        }
-      } else {
-        showStudyroomOverflowAlert(name, student.seat);
-      }
-    }
-  }
-
-  saveCheckinToFirebase(student, false, timeStr);
-  sendCheckinSMS(student, false, timeStr, 0);
-  buildDashboard();
-  buildCheckinTodayList();
-  if (document.getElementById('fp-room')) buildFloorplan();
-  showAdminToast(`✅ ${name} 입실 처리 완료 (${timeStr})${assignedRoom ? ` · 스터디룸 ${assignedRoom}번 배정` : ''}`);
-  if (window._todayModalRender) window._todayModalRender();
-};
-
 // ── 배치도 우클릭 컨텍스트 메뉴 ──
 window.fpSeatContextMenu = function(e, seatNum, key) {
   e.preventDefault();
@@ -5108,7 +5097,6 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
 
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
-  const isIn = todayRecords.some(r => r.studentName === student.name && !r.outTime);
 
   const menu = document.createElement('div');
   menu.id = 'fp-ctx-menu';
@@ -5123,26 +5111,10 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       onmouseover="this.style.background='#FFF0F0'" onmouseout="this.style.background=''">
       🪑 배석 해제
     </div>
-    <div onclick="openScheduleModal(${STUDENTS.indexOf(student)});document.getElementById('fp-ctx-menu')?.remove()"
+    <div onclick="fpSeatClick(${seatNum});document.getElementById('fp-ctx-menu')?.remove()"
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#1F2937;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
       onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
       👤 학생 정보 보기
-    </div>
-    ${!isIn ? `
-    <div onclick="adminForceCheckin('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
-      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#2D7A4F;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
-      onmouseover="this.style.background='#E8F5E9'" onmouseout="this.style.background=''">
-      ✅ 입실 처리
-    </div>` : ''}
-    ${isIn ? `
-    <div onclick="adminForceCheckout('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
-      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#C8900A;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
-      onmouseover="this.style.background='#FFF8DC'" onmouseout="this.style.background=''">
-      👋 퇴실 처리
-    </div>` : ''}
-    <div onclick="fpWithdrawStudent(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#fff;background:#B91C1C;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
-      onmouseover="this.style.background='#991B1B'" onmouseout="this.style.background='#B91C1C'">
-      🗑️ 퇴원처리 (완전 삭제)
     </div>
   `;
   document.body.appendChild(menu);
@@ -5167,25 +5139,19 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   }, 50);
 };
 
-window.fpUnassignSeat = async function(seatNum) {
+window.fpUnassignSeat = function(seatNum) {
   document.getElementById('fp-ctx-menu')?.remove();
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
-  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n자리만 비워지고 학생은 '미배정' 상태로 명단에 유지됩니다.\n(출석·이용시간·스터디룸 기록도 보존됩니다)`)) return;
+  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
 
   const idx = STUDENTS.findIndex(s => parseInt(s.seat) === seatNum);
   if (idx !== -1) {
-    const stu = STUDENTS[idx];
-    const oldSeat = String(stu.seat).replace('번','');
-    // 미배정 보관용 안정 ID 부여 → 좌석 재사용 시 학생 문서가 덮어써지는 것을 방지
-    stu.seat = '';
-    stu.sid = 'u_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
-    try {
-      // 1) 학생 본체를 미배정 문서(u_...)로 영속화 (기록은 그대로 보존)
-      if (window.saveStudentToFirebase) await window.saveStudentToFirebase(stu);
-      // 2) 좌석에 묶인 옛 문서(students/schedules/schedule_base) 제거 → 자리 실제로 비움
-      if (oldSeat && window.deleteStudentFromFirebase) await window.deleteStudentFromFirebase(oldSeat);
-    } catch(e) { console.error('배석 해제 저장 실패:', e); }
+    const oldSeat = STUDENTS[idx].seat;
+    STUDENTS[idx].seat = '';
+    if (oldSeat && window.deleteStudentFromFirebase) {
+      window.deleteStudentFromFirebase(String(seatNum)).catch(console.error);
+    }
   }
 
   // 관리자석인 경우 ADMIN_FIXED name도 비우기
@@ -5197,43 +5163,7 @@ window.fpUnassignSeat = async function(seatNum) {
   buildFloorplan();
   buildStudentList(document.getElementById('student-search')?.value || '');
   buildDashboard();
-  showAdminToast(`🪑 ${student.name} 배석 해제 · 미배정으로 보관됨`);
-};
-
-// ── 퇴원처리: 학생의 모든 데이터를 완전 삭제 (되돌릴 수 없음) ──
-window.fpWithdrawStudent = async function(seatNum) {
-  document.getElementById('fp-ctx-menu')?.remove();
-  const student = getFpStudentBySeat(seatNum);
-  if (!student) return;
-  const seat = String(student.seat).replace('번','').trim();
-  const name = student.name;
-
-  // 1단계: 경고 확인
-  if (!confirm(
-    `⚠️ ${name}(${seatNum}번) 퇴원처리\n\n` +
-    `이 학생의 모든 데이터를 완전히 삭제합니다:\n` +
-    `· 학생 정보 / 시간표\n· 출석·입퇴실 기록\n· 이용시간 통계\n· 스터디룸 신청·이용 이력\n· 플래너 코멘트\n\n` +
-    `❌ 되돌릴 수 없습니다. 계속할까요?`
-  )) return;
-
-  // 2단계: 이름 확인 입력 (오삭제 방지)
-  const typed = prompt(`정말 삭제하려면 학생 이름을 정확히 입력하세요:\n"${name}"`);
-  if (typed === null) return;
-  if (typed.trim() !== name) { alert('이름이 일치하지 않아 취소되었습니다.'); return; }
-
-  try {
-    if (!window.purgeStudentData) { alert('삭제 도구를 찾을 수 없습니다.'); return; }
-    const result = await window.purgeStudentData(seat, name, true);
-    // purgeStudentData 내부에서 로컬 상태 정리 + 화면 갱신 + 토스트까지 처리함
-    // 미배정 상태로 보관돼 있던 문서(u_...)가 있으면 함께 정리
-    if (student.sid && student.sid !== seat) {
-      try { await deleteDoc(doc(db, 'students', student.sid)); } catch(e) {}
-    }
-    console.log(`[퇴원처리] ${name}(${seat}번) 완료`, result);
-  } catch(e) {
-    console.error('퇴원처리 실패:', e);
-    alert('퇴원처리 중 오류: ' + e.message);
-  }
+  showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
 };
 
 // ── 스터디룸 초과 경고 ──
@@ -5304,7 +5234,6 @@ window.connectSerial = async function() {
     showAdminToast('✅ 릴레이 포트 연결됨');
     const btn = document.getElementById('relay-connect-btn');
     if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; btn.style.color = '#fff'; }
-    checkBreakDoor(); // 연결 시점이 쉬는시간이면 즉시 개방
     return true;
   } catch(e) {
     showAdminToast('⚠️ 포트 연결 실패: ' + e.message);
@@ -5312,51 +5241,10 @@ window.connectSerial = async function() {
   }
 };
 
-// ── 이전에 허용한 포트로 자동 재연결 ──
-// requestPort()는 사용자 클릭이 필요하지만, 한 번 허용된 포트는 getPorts()로
-// 새로고침·재부팅 뒤에도 클릭 없이 다시 열 수 있다. (키오스크 무인 복구용)
-async function autoReconnectSerial() {
-  try {
-    if (!('serial' in navigator)) return false;
-    if (_serialWriter) return true;
-    const ports = await navigator.serial.getPorts();
-    if (!ports.length) return false;
-    _serialPort = ports[0];
-    await _serialPort.open({ baudRate: 9600 });
-    _serialWriter = _serialPort.writable.getWriter();
-    const btn = document.getElementById('relay-connect-btn');
-    if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; btn.style.color = '#fff'; }
-    console.log('🚪 릴레이 자동 재연결 완료');
-    checkBreakDoor();
-    return true;
-  } catch (e) {
-    console.warn('🚪 릴레이 자동 재연결 실패:', e && e.message);
-    try { if (_serialWriter) _serialWriter.releaseLock(); } catch (e2) {}
-    _serialWriter = null; _serialPort = null;
-    return false;
-  }
-}
-if (document.readyState === 'complete') setTimeout(autoReconnectSerial, 800);
-else window.addEventListener('load', () => setTimeout(autoReconnectSerial, 800));
-if ('serial' in navigator) {
-  // 케이블이 빠졌다 다시 꽂히는 경우도 자동 복구
-  navigator.serial.addEventListener('disconnect', () => {
-    _serialWriter = null; _serialPort = null;
-    const btn = document.getElementById('relay-connect-btn');
-    if (btn) { btn.textContent = '🔌 포트 연결'; btn.style.background = '#E0B020'; btn.style.color = '#5C3D08'; }
-    setTimeout(autoReconnectSerial, 3000);
-  });
-  navigator.serial.addEventListener('connect', () => setTimeout(autoReconnectSerial, 500));
-}
-
 async function sendRelay(bytes) {
   if (!_serialWriter) {
-    // 허용된 포트가 있으면 클릭 없이 자동 재연결 먼저 시도
-    const auto = await autoReconnectSerial();
-    if (!auto) {
-      const ok = await window.connectSerial();
-      if (!ok) return false;
-    }
+    const ok = await window.connectSerial();
+    if (!ok) return false;
   }
   try {
     await _serialWriter.write(new Uint8Array(bytes));
@@ -5380,108 +5268,10 @@ window.doorClose = async function() {
 };
 
 window.doorOpenTimed = async function(seconds = 3) {
-  if (_breakDoorHeld) return true; // 쉬는시간 개방 중 — 이미 열려 있으므로 닫힘 예약 안 함
   const ok = await window.doorOpen();
-  if (ok) setTimeout(() => { if (!_breakDoorHeld) window.doorClose(); }, seconds * 1000);
+  if (ok) setTimeout(window.doorClose, seconds * 1000);
   return ok;
 };
-
-// ── 쉬는시간 자동 개방 (쉬는시간 시작 시 열고, 끝나면 닫음) ──
-let _breakDoorHeld = false; // 쉬는시간 개방 유지 중 플래그
-let _breakAutoEnabled = localStorage.getItem('breakAutoDoor') !== '0';
-
-// 쉬는시간 목록: [시작(분), 끝(분), 라벨]
-const BREAKS_EVENING = [ // 평일·토요일 공통 (7~11교시 사이)
-  [18*60+50, 19*60,    '7~8교시'],
-  [20*60+20, 20*60+30, '8~9교시'],
-  [22*60,    22*60+30, '9~10교시'],
-  [23*60+50, 24*60,    '10~11교시'],
-];
-const BREAKS_SAT_DAY = [ // 토요일 낮 (1~6교시 사이, 점심 12:30~1:30·저녁 5:00~6:00 제외)
-  [10*60,    10*60+10, '1~2교시'],
-  [11*60+10, 11*60+20, '2~3교시'],
-  [14*60+30, 14*60+40, '4~5교시'],
-  [15*60+40, 15*60+50, '5~6교시'],
-];
-
-function getCurrentBreak() {
-  const now = new Date();
-  const day = now.getDay();
-  if (day === 0) return null; // 일요일은 교시 없음
-  const t = now.getHours()*60 + now.getMinutes();
-  const list = day === 6 ? [...BREAKS_SAT_DAY, ...BREAKS_EVENING] : BREAKS_EVENING;
-  for (const [start, end, label] of list) {
-    if (t >= start && t < end) return { start, end, label };
-  }
-  return null;
-}
-
-window.toggleBreakAutoDoor = function(on) {
-  _breakAutoEnabled = on;
-  localStorage.setItem('breakAutoDoor', on ? '1' : '0');
-  showAdminToast(on ? '🚪 쉬는시간 자동개방 켜짐' : '🚪 쉬는시간 자동개방 꺼짐');
-  if (on) checkBreakDoor();
-  else if (_breakDoorHeld) { _breakDoorHeld = false; window.doorClose(); }
-};
-
-async function checkBreakDoor() {
-  if (!_breakAutoEnabled) return;
-  if (!_serialWriter) return; // 포트 미연결 시 자동 시도 안 함 (연결은 버튼 클릭 필요)
-  const br = getCurrentBreak();
-  if (br && !_breakDoorHeld) {
-    const ok = await window.doorOpen();
-    if (ok) {
-      _breakDoorHeld = true;
-      showAdminToast(`🚪 ${br.label} 쉬는시간 — 문 자동 개방`);
-    }
-  } else if (!br && _breakDoorHeld) {
-    _breakDoorHeld = false;
-    const ok = await window.doorClose();
-    showAdminToast(ok ? '🚪 쉬는시간 종료 — 문 자동 닫힘' : '⚠️ 문 닫힘 신호 실패 — 릴레이 포트를 확인하세요');
-  }
-}
-setInterval(checkBreakDoor, 10 * 1000);
-
-// 토글 체크박스 초기 상태 반영
-{
-  const _chk = document.getElementById('break-auto-door-chk');
-  if (_chk) _chk.checked = _breakAutoEnabled;
-}
-
-// ── 원격 문 열기 (다른 기기에서 입실 → 릴레이 연결된 키오스크가 문 개방) ──
-// 기기 고유 ID (자기가 보낸 명령을 자기가 다시 실행하지 않도록 구분용)
-const DOOR_DEVICE_ID = (() => {
-  let id = localStorage.getItem('doorDeviceId');
-  if (!id) { id = 'dev_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('doorDeviceId', id); }
-  return id;
-})();
-
-// 입퇴실 시 호출: 이 기기 릴레이로 열고 + Firestore로 다른 기기(키오스크)에도 명령 발행
-window.requestDoorOpen = async function(seconds = 3) {
-  if (_serialWriter) window.doorOpenTimed(seconds); // 이 기기에 릴레이가 있으면 즉시 개방
-  try {
-    await setDoc(doc(db, 'door_commands', 'current'), {
-      action: 'open',
-      seconds: seconds,
-      ts: Date.now(),
-      by: DOOR_DEVICE_ID,
-      at: serverTimestamp()
-    });
-  } catch(e) { console.warn('🚪 원격 문 열기 명령 발행 실패:', e); }
-};
-
-// 키오스크 측: 다른 기기가 보낸 문 열기 명령 수신
-let _doorCmdReady = false; // 구독 시작 시 기존 문서(과거 명령)는 무시
-onSnapshot(doc(db, 'door_commands', 'current'), (snap) => {
-  if (!_doorCmdReady) { _doorCmdReady = true; return; }
-  const d = snap.data();
-  if (!d || d.action !== 'open') return;
-  if (d.by === DOOR_DEVICE_ID) return;        // 내가 보낸 명령 (이미 로컬에서 열었음)
-  if (Date.now() - d.ts > 60 * 1000) return;  // 60초 지난 명령은 무시 (오프라인 복구 시 재생 방지)
-  if (!_serialWriter) return;                 // 릴레이 미연결 기기는 무시
-  window.doorOpenTimed(d.seconds || 3);
-  showAdminToast('🚪 다른 기기에서 입퇴실 — 문 자동 개방');
-}, (err) => console.warn('🚪 door_commands 구독 에러:', err));
 
 function showAdminToast(msg) {
   const t = document.createElement('div');
