@@ -1,4 +1,12 @@
 
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>새봄 면학관 관리자</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+</head>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
@@ -686,6 +694,24 @@ body.kiosk-mode #kiosk-enter-btn{display:none}
     </div>
 
 
+    <!-- 데이터 관리 -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-trash" style="font-size:15px;color:#C8900A"></i> 데이터 관리
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:12px">
+        오래된 입퇴실·문자 발송 기록을 정리해 로딩 속도와 Firebase 사용량을 줄입니다.
+        누적 이용시간 통계는 학생 정보에 저장되어 있어 영향받지 않습니다.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button onclick="purgeOldLogsWithConfirm(60)"
+          style="padding:7px 16px;background:#FCEBEB;border:1.5px solid #F09595;color:#C62828;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+          🗑️ 60일 이전 기록 정리
+        </button>
+        <span id="log-purge-status" style="font-size:12px;color:#8B6010"></span>
+      </div>
+    </div>
+
     <!-- 자리선택 허용 -->
     <div class="card">
       <div class="card-title" style="margin-bottom:8px">
@@ -881,6 +907,13 @@ function eventSortKey(x) {
   if (x && typeof x.ts === 'number') return x.ts;
   return (timeToMin(x && x.time) ?? 0) * 60000;
 }
+// '실제 오늘'의 요일명 ('월'~'토'). 새벽 3시 이전은 전날 밤(11교시 연장)으로 취급.
+// currentDay는 관리자가 스케줄 탭에서 다른 요일을 눌러도 바뀌므로,
+// 미입실 알림·교시별 출석현황 등 '오늘' 기준 계산에는 반드시 이 함수를 쓴다.
+function getTodayDayName() {
+  const d = new Date(Date.now() - 3 * 3600 * 1000);
+  return DAYS[Math.min(Math.max(d.getDay() - 1, 0), 5)];
+}
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 
@@ -902,6 +935,7 @@ document.addEventListener('keydown', function(e) {
 
 // 페이지 로드 시 마지막 탭 복원
 window.addEventListener('load', function() {
+  if (window._kioskAuto) return; // 키오스크 모드에서는 항상 입실·퇴실 화면 고정
   try {
     const saved = sessionStorage.getItem('saebom_active_tab');
     if (saved && saved !== 'dashboard') {
@@ -944,6 +978,26 @@ document.addEventListener('fullscreenchange', () => {
     releaseWakeLock();
   }
 });
+
+// ── URL에 #kiosk(또는 ?kiosk)가 있으면 자동으로 키오스크 모드 시작 ──
+// 정전·재부팅 후 브라우저가 자동 실행될 때 사람이 버튼을 누르지 않아도 입실 화면으로 복귀.
+// 예: 바로가기 대상에  ...saebom_schedule_with_hours.html#kiosk
+window._kioskAuto = /[?#&]kiosk/.test(location.search + location.hash);
+if (window._kioskAuto) {
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      window.enterKioskMode();
+      // 전체화면은 사용자 제스처 없이는 거부될 수 있으므로 첫 터치에서 한 번 더 시도
+      document.addEventListener('pointerdown', function retryFs() {
+        if (!document.fullscreenElement) {
+          document.body.classList.add('kiosk-mode');
+          if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+          acquireWakeLock();
+        }
+      }, { once: true });
+    }, 600);
+  });
+}
 
 // ── 화면 절전 방지 (Screen Wake Lock API) ──
 // 키오스크 모드 동안 OS가 화면을 끄거나 절전 모드로 들어가지 않도록 요청
@@ -1319,11 +1373,14 @@ function buildMonthTabs(){
 // 현재 시간 기준 교시 번호 계산
 function getCurrentPeriod() {
   const now = new Date();
-  // 일요일은 교시 없음
-  if (now.getDay() === 0) return null;
   const h = now.getHours();
+  // 자정~새벽 3시는 전날 밤의 연장(11교시)으로 취급 (00:20은 t=20이라 11교시[1440~1500]에 안 걸리던 버그 수정)
+  const effDay = h < 3 ? (now.getDay() + 6) % 7 : now.getDay();
+  // 일요일은 교시 없음
+  if (effDay === 0) return null;
   const m = now.getMinutes();
-  const t = h * 60 + m;
+  let t = h * 60 + m;
+  if (h < 3) t += 1440;
   // 교시 시간 (시작~종료)
   const PERIOD_TIMES = [
     null,            // 0 (dummy)
@@ -1360,7 +1417,7 @@ function calcAlerts() {
   ];
 
   const alerts = [];
-  const day = currentDay;
+  const day = getTodayDayName(); // 화면에서 보고 있는 요일 탭(currentDay)이 아닌 '실제 오늘' 기준
 
   STUDENTS.forEach(s => {
     // 이미 입실 중이면 제외
@@ -1459,15 +1516,17 @@ function buildDashboard(){
   // 현재 입실 중인 학생 이름 목록
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
 
+  const todayName = getTodayDayName();
   const periodStudents = todayPeriods.map((p, i) => {
-    const periodNum = p.n;
+    const pNum = parseInt(p.n); // '7교시' → 7
     return STUDENTS.filter(s => {
       // 실제 입실 중인 학생만
       if (!presentNames.has(s.name)) return false;
-      const sched = s.schedule[currentDay] || '';
+      const sched = s.schedule[todayName] || '';
       if (!sched || sched === '-') return false;
       const parsed = parseScheduleStr(sched);
-      return parsed[periodNum] === 'attend';
+      // parseScheduleStr는 Set을 반환 — 기존 parsed[periodNum]==='attend' 비교는 항상 false였음
+      return parsed.periods.has(pNum) && !parsed.absentPeriods.has(pNum);
     });
   });
 
@@ -1547,8 +1606,25 @@ function maskName(name) {
 }
 const todayRecords = [];
 
+// ── 키오스크 방치 자동 초기화 ──
+// 확인 화면을 띄운 채 자리를 뜨거나 번호를 치다 만 상태가 30초 이상 지속되면
+// 다음 학생을 위해 자동으로 첫 화면(번호 입력)으로 되돌린다.
+let _checkinPanelShownAt = 0;
+let _numpadLastInput = 0;
+setInterval(() => {
+  const confirmVisible = document.getElementById('checkin-confirm-panel')?.style.display === 'block';
+  if (confirmVisible && _checkinPanelShownAt && Date.now() - _checkinPanelShownAt > 30000) {
+    window.checkinReset();
+    return;
+  }
+  if (!confirmVisible && numpadBuffer && _numpadLastInput && Date.now() - _numpadLastInput > 30000) {
+    window.numpadClear();
+  }
+}, 5000);
+
 window.numpadInput = function(d) {
   if (numpadBuffer.length >= 4) return;
+  _numpadLastInput = Date.now();
   numpadBuffer += d;
   updateCheckinDisplay();
   if (numpadBuffer.length === 4) {
@@ -1589,6 +1665,10 @@ async function processCheckin() {
 
   // 로컬에 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._adminDb) {
+    // 네트워크 검색 동안 화면이 멈춘 것처럼 보이지 않도록 안내
+    const _searchingEl = document.getElementById('checkin-error');
+    _searchingEl.textContent = '⏳ 확인 중...';
+    _searchingEl.style.display = 'block';
     try {
       const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
       const snap = await getDocs(collection(window._adminDb, 'students'));
@@ -1611,15 +1691,57 @@ async function processCheckin() {
   }
 
   if (matched.length === 0) {
-    document.getElementById('checkin-error').style.display = 'block';
+    // 이전에 표시된 다른 메시지(만료 안내, 확인 중 등)가 남지 않도록 기본 문구로 복원
+    const errEl = document.getElementById('checkin-error');
+    errEl.textContent = '일치하는 학생을 찾을 수 없습니다';
+    errEl.style.display = 'block';
     numpadBuffer = '';
     updateCheckinDisplay();
     return;
   }
 
-  const student = matched[0];
   hideCheckinError();
 
+  // 전화번호 뒷 4자리가 같은 학생이 여러 명이면 본인 선택 화면을 먼저 보여준다
+  // (기존엔 무조건 첫 번째 학생으로 처리돼 엉뚱한 학생 입실 + 엉뚱한 학부모 알림톡 위험)
+  if (matched.length > 1) { showCheckinChooser(matched); return; }
+  showCheckinConfirmFor(matched[0]);
+}
+
+// ── 동일 뒷4자리 다중 매칭 시 본인 선택 ──
+let _checkinCandidates = [];
+function showCheckinChooser(list) {
+  _checkinCandidates = list;
+  document.getElementById('checkin-input-panel').style.display = 'none';
+  const panel = document.getElementById('checkin-confirm-panel');
+  panel.style.display = 'block';
+  _checkinPanelShownAt = Date.now();
+  document.getElementById('confirm-avatar').textContent = '?';
+  document.getElementById('confirm-name').textContent = '본인을 선택하세요';
+  document.getElementById('confirm-seat').textContent = '같은 뒷자리 번호의 학생이 여러 명입니다';
+  const statusEl = document.getElementById('confirm-status');
+  statusEl.textContent = '학생 선택';
+  statusEl.className = 'confirm-status status-checkin';
+  document.getElementById('confirm-time').textContent = '';
+  const btnWrap = document.getElementById('confirm-btns');
+  btnWrap.style.gridTemplateColumns = '1fr';
+  btnWrap.innerHTML = list.map((s, i) =>
+    `<button class="confirm-btn confirm-ok" onclick="checkinPickCandidate(${i})">${maskName(s.name)} · ${s.seat}번</button>`
+  ).join('') + '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>';
+}
+window.checkinPickCandidate = function(i) {
+  const s = _checkinCandidates[i];
+  if (s) showCheckinConfirmFor(s);
+};
+
+// 전화번호 가운데 자리 마스킹 (키오스크 화면 개인정보 보호)
+function maskPhone(p) {
+  const d = String(p || '').replace(/\D/g, '');
+  if (d.length < 8) return p || '';
+  return d.slice(0, 3) + '-****-' + d.slice(-4);
+}
+
+function showCheckinConfirmFor(student) {
   // 현재 상태 확인 (입실 중인지 퇴실 상태인지)
   const existing = todayRecords.find(r => r.studentName === student.name && !r.outTime);
   const isCheckout = !!existing;
@@ -1629,12 +1751,11 @@ async function processCheckin() {
     const today = new Date(); today.setHours(0,0,0,0);
     const expDate = new Date(student.expiry); expDate.setHours(0,0,0,0);
     if (expDate < today) {
-      // 만료된 경우 에러 메시지 표시
+      // 만료된 경우: 입력 화면으로 되돌린 뒤 에러 메시지 표시 (선택 화면에서 넘어온 경우 대비)
+      checkinReset();
       const errEl = document.getElementById('checkin-error');
       errEl.innerHTML = `⛔ 사용기간이 만료되었습니다.<br>관리자에게 문의해주세요.`;
       errEl.style.display = 'block';
-      numpadBuffer = '';
-      updateCheckinDisplay();
       return;
     }
   }
@@ -1643,10 +1764,17 @@ async function processCheckin() {
   document.getElementById('checkin-input-panel').style.display = 'none';
   const confirmPanel = document.getElementById('checkin-confirm-panel');
   confirmPanel.style.display = 'block';
+  _checkinPanelShownAt = Date.now();
+
+  // 버튼 영역을 기본(취소/확인)으로 복구 — 학생 선택 화면에서 넘어온 경우 confirm-ok-btn이 없기 때문
+  const _bw = document.getElementById('confirm-btns');
+  _bw.style.gridTemplateColumns = '1fr 1fr';
+  _bw.innerHTML = '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
+    + '<button class="confirm-btn confirm-ok" id="confirm-ok-btn" onclick="checkinConfirm()">확인</button>';
 
   document.getElementById('confirm-avatar').textContent = student.name[0];
   document.getElementById('confirm-name').textContent = maskName(student.name);
-  document.getElementById('confirm-seat').textContent = `${student.seat} · ${student.phone}`;
+  document.getElementById('confirm-seat').textContent = `${student.seat} · ${maskPhone(student.phone)}`;
 
   const statusEl = document.getElementById('confirm-status');
   const now = new Date();
@@ -1690,6 +1818,7 @@ async function processCheckin() {
 }
 
 window.checkinConfirm = function() {
+  try {
   const btn = document.getElementById('confirm-ok-btn');
   const student = btn._student;
   const isCheckout = btn._isCheckout;
@@ -1762,7 +1891,8 @@ window.checkinConfirm = function() {
     const curPeriod = getCurrentPeriod();
     // 7교시(18:00) 이후에만 스터디룸 안내 적용
     const now = new Date();
-    const curMin = now.getHours() * 60 + now.getMinutes();
+    let curMin = now.getHours() * 60 + now.getMinutes();
+    if (now.getHours() < 3) curMin += 1440; // 자정 넘김(11교시)도 전날 밤으로 취급
     const is7thOrLater = curMin >= 18 * 60; // 18:00 이후
 
     if (curPeriod && is7thOrLater) {
@@ -1830,6 +1960,13 @@ window.checkinConfirm = function() {
   setTimeout(() => {
     checkinReset();
   }, isDuringPeriod && assignedRoom ? 6000 : 2200);
+  } catch(e) {
+    // 처리 중 예외가 나도 잠금(_checkinProcessing)이 풀리고 첫 화면으로 복귀하도록 보장
+    // (기존엔 예외 시 잠금이 걸린 채 확인 화면에 멈춰 키오스크가 먹통이 됐음)
+    console.error('입퇴실 처리 오류:', e);
+    showAdminToast('⚠️ 처리 중 오류가 발생했습니다: ' + (e && e.message ? e.message : e));
+    checkinReset();
+  }
 }
 
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
@@ -1937,7 +2074,9 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
     // 같은 학생의 같은 날짜 '마지막' 이벤트가 지금 쓰려는 것과 동일 type이면 기록하지 않는다.
     // (다른 기기가 이미 같은 입실/퇴실을 기록한 경우 in-in / out-out 중복 문서 방지)
     try {
-      const snap = await getDocs(query(collection(db, 'checkin_logs'), where('studentName','==', student.name)));
+      // 오늘 날짜로 한정해 조회 — 전체 이력을 매번 읽지 않도록
+      const snap = await getDocs(query(collection(db, 'checkin_logs'),
+        where('studentName','==', student.name), where('date','==', today)));
       let last = null;
       snap.forEach(d => {
         const x = d.data();
@@ -2003,6 +2142,7 @@ async function saveAutoStudyroomAssignment(student, room, period) {
 
 window.checkinReset = function() {
   window._checkinProcessing = false; // 처리 잠금 해제
+  _checkinPanelShownAt = 0;
   numpadBuffer = '';
   updateCheckinDisplay();
   hideCheckinError();
@@ -3055,17 +3195,18 @@ function showPeriodStudents(periodIdx) {
   const old = document.getElementById('period-popup-overlay');
   if (old) old.remove();
 
-  const periodNum = PERIODS_WEEKDAY[periodIdx]?.n || (periodIdx + 7);
   const p = PERIODS_WEEKDAY[periodIdx];
+  const pNum = periodIdx + 7; // 평일 교시는 7교시부터
 
   // 실제 입실 중인 학생 중 해당 교시 출석 예정인 학생
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
+  const todayName = getTodayDayName();
   const students = STUDENTS.filter(s => {
     if (!presentNames.has(s.name)) return false;
-    const sched = s.schedule[currentDay] || '';
+    const sched = s.schedule[todayName] || '';
     if (!sched || sched === '-') return false;
     const parsed = parseScheduleStr(sched);
-    return parsed[periodNum] === 'attend';
+    return parsed.periods.has(pNum) && !parsed.absentPeriods.has(pNum);
   });
 
   // 오버레이 없이 팝업만 화면 중앙에 고정
@@ -3131,6 +3272,22 @@ setInterval(() => {
     _lastResetDate = todayStr;
     todayRecords.length = 0;
     PRESENT.length = 0;
+    // 요일·월 관련 상태도 함께 갱신 — 밤새 켜둔 키오스크가 전날 요일 기준으로
+    // 미입실 알림을 계산하거나 스케줄 표가 고착되는 것을 방지
+    currentDay = getTodayDayName();
+    currentMonth = _curYm();
+    MONTHS.splice(0, MONTHS.length, ..._recentMonths(5));
+    const _dn = ['일','월','화','수','목','금','토'];
+    const _lbl = document.getElementById('today-label');
+    if (_lbl) _lbl.textContent = `${now.getMonth()+1}월 ${now.getDate()}일 (${_dn[now.getDay()]})`;
+    try {
+      buildDayTabs();
+      buildScheduleTable(currentDay);
+      buildMonthTabs();
+      buildHoursTable();
+    } catch(e) { console.warn('날짜 전환 화면 갱신 실패:', e); }
+    // 새 날짜 조건으로 실시간 구독 재설정 후 오늘 기록 재로드
+    if (window._resubscribeCheckinLogs) window._resubscribeCheckinLogs();
     if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
   }
@@ -3390,8 +3547,9 @@ window.initApp = function(){
   buildCheckinTodayList();
   buildFloorplan();
   initFpDrag();
-  // 새로고침 후 탭 복원
+  // 새로고침 후 탭 복원 (키오스크 모드는 입실·퇴실 화면 고정이므로 제외)
   try {
+    if (window._kioskAuto) return;
     const saved = sessionStorage.getItem('saebom_active_tab');
     if (saved && saved !== 'dashboard') {
       const btn = document.querySelector('.tab-btn[onclick*="' + saved + '"]');
@@ -3443,7 +3601,7 @@ window.applyStudentSchedule = function(seat, idx) {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -3456,7 +3614,16 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
+// 오프라인 캐시(IndexedDB) 활성화: 인터넷이 잠시 끊겨도 입퇴실 기록이 로컬에 남고
+// 재연결 시 자동으로 서버에 동기화된다. (미지원 환경이면 기존 메모리 캐시로 폴백)
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  console.log('🔥 Firestore 오프라인 캐시 활성화');
+} catch (e) {
+  console.warn('오프라인 캐시 활성화 실패 — 기본 모드 사용:', e);
+  db = getFirestore(app);
+}
 window._adminDb = db;
 window._adminApp = app;
 window._fsSetDoc = setDoc;
@@ -3597,6 +3764,60 @@ window.purgeStudentData = async function(seat, name, execute) {
   return { ok, fail };
 };
 
+// ── 오래된 로그 정리 도구 (checkin_logs · sms_logs) ──
+// 누적시간은 퇴실 시점에 students.hours 로 합산되므로, 오래된 로그를 지워도 통계는 유지된다.
+// 설정 탭 버튼 또는 콘솔에서 purgeOldLogs(60, true) 로 실행.
+window.purgeOldLogs = async function(days = 60, execute = false) {
+  const cutoff = new Date(); cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - days);
+  // "2026-7-2" / "2026. 7. 2." 등 포맷 무관하게 날짜 파싱
+  const parseDate = s => {
+    const m = String(s || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+    return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+  };
+  const targets = [];
+  for (const col of ['checkin_logs', 'sms_logs']) {
+    const snap = await getDocs(collection(db, col));
+    snap.forEach(d => {
+      const dt = parseDate(d.data().date);
+      if (dt && dt < cutoff) targets.push({ col, id: d.id });
+    });
+  }
+  console.log(`[로그정리] ${days}일 이전 대상: ${targets.length}건`);
+  if (!execute) return targets.length;
+  let ok = 0, fail = 0;
+  for (const t of targets) {
+    try { await deleteDoc(doc(db, t.col, t.id)); ok++; }
+    catch (e) { fail++; console.warn('삭제 실패:', t.col, t.id, e); }
+  }
+  console.log(`[로그정리] 완료: 성공 ${ok}건, 실패 ${fail}건`);
+  return { ok, fail };
+};
+
+// 설정 탭 버튼용: 건수 확인 → 확인 후 삭제
+window.purgeOldLogsWithConfirm = async function(days = 60) {
+  const st = document.getElementById('log-purge-status');
+  if (st) st.textContent = '⏳ 대상 확인 중...';
+  try {
+    const count = await window.purgeOldLogs(days, false);
+    if (count === 0) {
+      if (st) st.textContent = `${days}일 이전 기록이 없습니다`;
+      showAdminToast(`✅ ${days}일 이전 기록이 없습니다`);
+      return;
+    }
+    if (!confirm(`${days}일 이전 입퇴실·문자 기록 ${count}건을 삭제할까요?\n(누적 이용시간 통계는 유지됩니다. 되돌릴 수 없습니다.)`)) {
+      if (st) st.textContent = '';
+      return;
+    }
+    if (st) st.textContent = `⏳ ${count}건 삭제 중...`;
+    const r = await window.purgeOldLogs(days, true);
+    if (st) st.textContent = `✅ ${r.ok}건 삭제 완료${r.fail ? ` · 실패 ${r.fail}건` : ''}`;
+    showAdminToast(`🗑️ 오래된 기록 ${r.ok}건 삭제 완료`);
+  } catch (e) {
+    if (st) st.textContent = '❌ 실패: ' + e.message;
+  }
+};
+
 // ── 학생 데이터 파싱 헬퍼 ──
 function _parseStudentDoc(v) {
   return {
@@ -3705,7 +3926,8 @@ async function loadTodayCheckinFromFirebase() {
     const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const yd = new Date(Date.now() - 86400000);
     const yesterday = yd.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    const snap = await getDocs(collection(db, 'checkin_logs'));
+    // 오늘·어제 기록만 조회 — 기록이 몇 달치 쌓여도 읽기량이 늘지 않도록 (비용·속도)
+    const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', [today, yesterday])));
     const todayDocs = [];
     const yesterdayDocs = [];
     snap.forEach(d => {
@@ -3805,8 +4027,15 @@ loadTodayCheckinFromFirebase();
 const _todayStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
 let _checkinSnapshotReady = false; // loadTodayCheckinFromFirebase 완료 후 true
 
-onSnapshot(
-  collection(db, 'checkin_logs'),
+// 오늘·어제 날짜로 필터해 구독 — 기록이 쌓여도 초기 스냅샷 읽기량이 늘지 않는다.
+// 날짜가 바뀌면 새벽 리셋 로직이 window._resubscribeCheckinLogs 로 재구독한다.
+let _checkinLogsUnsub = null;
+function subscribeCheckinLogs() {
+  if (_checkinLogsUnsub) { try { _checkinLogsUnsub(); } catch(e) {} _checkinLogsUnsub = null; }
+  const _subToday = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+  const _subYd = new Date(Date.now() - 86400000).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+  _checkinLogsUnsub = onSnapshot(
+  query(collection(db, 'checkin_logs'), where('date', 'in', [_subToday, _subYd])),
   (snapshot) => {
     if (!_checkinSnapshotReady) return; // 초기 로드 전 이벤트 무시
     let changed = false;
@@ -3864,6 +4093,9 @@ onSnapshot(
     }
   }
 );
+}
+subscribeCheckinLogs();
+window._resubscribeCheckinLogs = subscribeCheckinLogs;
 
 // ── 스터디룸 신청 실시간 감시 ──
 const _studyroomReqAlerts = [];
@@ -5080,10 +5312,51 @@ window.connectSerial = async function() {
   }
 };
 
+// ── 이전에 허용한 포트로 자동 재연결 ──
+// requestPort()는 사용자 클릭이 필요하지만, 한 번 허용된 포트는 getPorts()로
+// 새로고침·재부팅 뒤에도 클릭 없이 다시 열 수 있다. (키오스크 무인 복구용)
+async function autoReconnectSerial() {
+  try {
+    if (!('serial' in navigator)) return false;
+    if (_serialWriter) return true;
+    const ports = await navigator.serial.getPorts();
+    if (!ports.length) return false;
+    _serialPort = ports[0];
+    await _serialPort.open({ baudRate: 9600 });
+    _serialWriter = _serialPort.writable.getWriter();
+    const btn = document.getElementById('relay-connect-btn');
+    if (btn) { btn.textContent = '🔌 연결됨'; btn.style.background = '#2D7A4F'; btn.style.color = '#fff'; }
+    console.log('🚪 릴레이 자동 재연결 완료');
+    checkBreakDoor();
+    return true;
+  } catch (e) {
+    console.warn('🚪 릴레이 자동 재연결 실패:', e && e.message);
+    try { if (_serialWriter) _serialWriter.releaseLock(); } catch (e2) {}
+    _serialWriter = null; _serialPort = null;
+    return false;
+  }
+}
+if (document.readyState === 'complete') setTimeout(autoReconnectSerial, 800);
+else window.addEventListener('load', () => setTimeout(autoReconnectSerial, 800));
+if ('serial' in navigator) {
+  // 케이블이 빠졌다 다시 꽂히는 경우도 자동 복구
+  navigator.serial.addEventListener('disconnect', () => {
+    _serialWriter = null; _serialPort = null;
+    const btn = document.getElementById('relay-connect-btn');
+    if (btn) { btn.textContent = '🔌 포트 연결'; btn.style.background = '#E0B020'; btn.style.color = '#5C3D08'; }
+    setTimeout(autoReconnectSerial, 3000);
+  });
+  navigator.serial.addEventListener('connect', () => setTimeout(autoReconnectSerial, 500));
+}
+
 async function sendRelay(bytes) {
   if (!_serialWriter) {
-    const ok = await window.connectSerial();
-    if (!ok) return false;
+    // 허용된 포트가 있으면 클릭 없이 자동 재연결 먼저 시도
+    const auto = await autoReconnectSerial();
+    if (!auto) {
+      const ok = await window.connectSerial();
+      if (!ok) return false;
+    }
   }
   try {
     await _serialWriter.write(new Uint8Array(bytes));

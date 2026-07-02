@@ -505,10 +505,16 @@ async function startStatusRealtime() {
   try {
     // 관리자앱이 기록하는 'checkin_logs' 컬렉션을 구독한다.
     // (이벤트 단위 문서: { studentName, seat, type:'in'|'out', time, date })
+    // 오늘·어제 날짜로 한정 — 기록이 몇 달치 쌓여도 읽기량이 늘지 않도록.
+    // 앱을 켠 채 날짜가 바뀌면 콜백에서 감지해 새 날짜로 재구독한다.
+    const _subDates = [getTodayAdminDate(), getAdminDate(-1)];
     _statusUnsub = window._onSnapshot(
-      window._query(window._collection(window._db, 'checkin_logs'), window._where('studentName','==', currentStudent.name)),
+      window._query(window._collection(window._db, 'checkin_logs'),
+        window._where('studentName','==', currentStudent.name),
+        window._where('date','in', _subDates)),
       snap => {
         const today = getTodayAdminDate(); // 관리자앱과 동일한 날짜 포맷 (콜백마다 갱신)
+        if (!_subDates.includes(today)) { startStatusRealtime(); return; } // 날짜 변경 → 재구독
         // 오늘 이벤트만 시간순 정렬 후 입실/퇴실 기록으로 재구성
         // 날짜는 포맷/0패딩/시간대 차이에 영향받지 않도록 정규화 후 비교한다.
         const events = [];
@@ -1080,7 +1086,7 @@ document.addEventListener('visibilitychange', function() {
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, getDocs, collection, getDoc, doc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getDocs, collection, getDoc, doc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -1093,7 +1099,13 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+// 오프라인 캐시(IndexedDB): 인터넷이 잠시 끊겨도 마지막 데이터가 표시되고 재연결 시 자동 동기화
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) {
+  db = getFirestore(app);
+}
 const storage = getStorage(app);
 window._db = db;
 window._storage = storage;

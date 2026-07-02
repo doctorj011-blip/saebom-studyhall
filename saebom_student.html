@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp, runTransaction }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp, runTransaction }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -20,7 +20,13 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
+// 오프라인 캐시(IndexedDB): 인터넷이 잠시 끊겨도 저장이 로컬에 남고 재연결 시 자동 동기화
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+} catch (e) {
+  db = getFirestore(app);
+}
 
 // 전역 노출
 window._db = db;
@@ -2077,6 +2083,17 @@ window.cancelStudyroom = async function(reqId) {
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
   if (!currentStudent) return;
+  // 앱을 켜둔 채 날짜가 바뀐 경우: '오늘 요일'을 다시 계산하고 화면 재구성
+  // (안 하면 어제 요일이 계속 '수정 가능한 오늘'로 남는다)
+  const nowDay = DAY_NAMES[new Date().getDay()];
+  if (todayDay && nowDay !== todayDay) {
+    todayDay = nowDay;
+    currentDayTab = todayDay === '일' ? '월' : todayDay;
+    buildDayTabs();
+    buildDailyPeriods();
+    buildWeeklyTable();
+    loadStudentScheduleFromFirebase();
+  }
   refreshStudentData();
   // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
