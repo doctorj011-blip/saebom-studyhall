@@ -245,6 +245,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 
 @keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+@keyframes ctxIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
 .admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
 .admin-toast.show{opacity:1}
 
@@ -5882,7 +5883,7 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   menu.id = 'fp-ctx-menu';
   menu.style.cssText = `position:fixed;left:${e.clientX}px;top:${e.clientY}px;background:#fff;
     border:1px solid #E0B020;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15);
-    z-index:9999;min-width:160px;overflow:hidden;animation:toastIn 0.1s ease`;
+    z-index:9999;min-width:160px;overflow:hidden;transform-origin:top left;animation:ctxIn 0.1s ease`;
   menu.innerHTML = `
     <div style="padding:8px 14px;font-size:11px;color:#888;border-bottom:1px solid #f0f0f0">
       ${seatNum}번 · ${student.name}
