@@ -4758,6 +4758,7 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
 
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
+  const isIn = todayRecords.some(r => r.studentName === student.name && !r.outTime);
 
   const menu = document.createElement('div');
   menu.id = 'fp-ctx-menu';
@@ -4772,11 +4773,17 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       onmouseover="this.style.background='#FFF0F0'" onmouseout="this.style.background=''">
       🪑 배석 해제
     </div>
-    <div onclick="fpSeatClick(${seatNum});document.getElementById('fp-ctx-menu')?.remove()"
+    <div onclick="openScheduleModal(${STUDENTS.indexOf(student)});document.getElementById('fp-ctx-menu')?.remove()"
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#1F2937;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
       onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
       👤 학생 정보 보기
     </div>
+    ${isIn ? `
+    <div onclick="adminForceCheckout('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#C8900A;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#FFF8DC'" onmouseout="this.style.background=''">
+      👋 퇴실 처리
+    </div>` : ''}
     <div onclick="fpWithdrawStudent(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#fff;background:#B91C1C;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
       onmouseover="this.style.background='#991B1B'" onmouseout="this.style.background='#B91C1C'">
       🗑️ 퇴원처리 (완전 삭제)
