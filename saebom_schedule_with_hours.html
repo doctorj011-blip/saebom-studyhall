@@ -4938,7 +4938,9 @@ async function saveScheduleToFirebase(student) {
     // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
     const seatKey = student.seat.replace(/[^0-9]/g, '') || student.seat;
     const schedRef = doc(db, 'schedules', seatKey);
-    const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp() };
+    // changedBy: 'admin' — 관리자 수정 표시. 알림 리스너가 이 표시를 보고 알림 생성을 건너뛴다.
+    // (학생앱은 이 필드 없이 전체 덮어쓰기 저장하므로 학생발 변경 알림은 그대로 유지됨)
+    const payload = { name: student.name, seat: student.seat, updatedAt: serverTimestamp(), changedBy: 'admin' };
     ['월','화','수','목','금','토'].forEach(d => { payload[d] = student.schedule[d] || '-'; });
     await setDoc(schedRef, payload);
     // 원칙1: 관리자 입력/수정·적용은 '원본(base)'도 갱신 → 다음 수정기간까지 유지
@@ -4960,6 +4962,13 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
 
     // 최초 로딩(앱 시작 시 added이고 아직 기준값 없는 경우)은 알림 생략
     if (!_schedulesInitDone && change.type === 'added' && !prev) {
+      knownSchedules[seat] = data;
+      return;
+    }
+
+    // 관리자가 직접 수정·저장한 변경은 알림 대상이 아님 — 기준값만 갱신하고 종료
+    // (다음 학생발 변경은 이 값과 비교되므로 정상 감지됨)
+    if (data.changedBy === 'admin') {
       knownSchedules[seat] = data;
       return;
     }
