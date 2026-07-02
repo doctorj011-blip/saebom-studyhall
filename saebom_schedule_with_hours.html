@@ -58,7 +58,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .period-label{font-size:11px;font-weight:600;color:#8B6010;width:42px;flex-shrink:0}
 .period-bar{flex:1;height:8px;background:#F0E0A0;border-radius:4px;overflow:hidden}
 .period-fill{height:100%;background:linear-gradient(90deg,#E0B020,#C8900A);border-radius:4px}
-.period-count{font-size:12px;font-weight:700;color:#C8900A;width:24px;text-align:right}
+.period-count{font-size:12px;font-weight:700;color:#C8900A;min-width:42px;text-align:right;white-space:nowrap}
 .period-count-btn{cursor:pointer;font-weight:600;color:#C8900A;text-decoration:underline dotted;text-underline-offset:2px}
 .student-list{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;align-items:start}
 .student-card{background:linear-gradient(135deg,#FFFDF0 0%,#FFF8DC 100%);border:1.5px solid #E8C840;border-radius:16px;padding:14px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:all 0.15s;box-shadow:0 2px 8px rgba(200,144,10,0.08)}
@@ -1834,28 +1834,30 @@ function buildDashboard(){
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
 
   const todayName = getTodayDayName();
-  const periodStudents = todayPeriods.map((p, i) => {
+  // 교시별: 스케줄상 출석 예정 학생 전체 + 그중 실제 입실 중인 학생
+  const periodData = todayPeriods.map((p) => {
     const pNum = parseInt(p.n); // '7교시' → 7
-    return STUDENTS.filter(s => {
-      // 실제 입실 중인 학생만
-      if (!presentNames.has(s.name)) return false;
+    const scheduled = STUDENTS.filter(s => {
       const sched = s.schedule[todayName] || '';
       if (!sched || sched === '-') return false;
       const parsed = parseScheduleStr(sched);
       // parseScheduleStr는 Set을 반환 — 기존 parsed[periodNum]==='attend' 비교는 항상 false였음
       return parsed.periods.has(pNum) && !parsed.absentPeriods.has(pNum);
     });
+    const present = scheduled.filter(s => presentNames.has(s.name));
+    return { scheduled, present };
   });
 
-  const counts = periodStudents.map(arr => arr.length);
-  const max = Math.max(...counts, 1);
-  document.getElementById('period-chart').innerHTML = todayPeriods.map((p, i) =>
-    `<div class="period-row">
+  document.getElementById('period-chart').innerHTML = todayPeriods.map((p, i) => {
+    const { scheduled, present } = periodData[i];
+    // 막대: 예정 인원을 100%로 잡고 실제 등원 비율만큼 채움
+    const pct = scheduled.length ? Math.round(present.length / scheduled.length * 100) : 0;
+    return `<div class="period-row">
       <span class="period-label">${p.n}</span>
-      <div class="period-bar"><div class="period-fill" style="width:${Math.round(counts[i]/max*100)}%"></div></div>
-      <span class="period-count period-count-btn" onclick="showPeriodStudents(${i})" title="클릭해서 학생 보기">${counts[i]}</span>
-    </div>`
-  ).join('');
+      <div class="period-bar"><div class="period-fill" style="width:${pct}%"></div></div>
+      <span class="period-count period-count-btn" onclick="showPeriodStudents(${i})" title="클릭해서 학생 보기">${present.length}/${scheduled.length}</span>
+    </div>`;
+  }).join('');
 }
 
 function buildStudentList(filter=''){
@@ -3763,16 +3765,18 @@ function showPeriodStudents(periodIdx) {
   const p = PERIODS_WEEKDAY[periodIdx];
   const pNum = periodIdx + 7; // 평일 교시는 7교시부터
 
-  // 실제 입실 중인 학생 중 해당 교시 출석 예정인 학생
+  // 해당 교시 출석 예정 학생 전체 + 그중 실제 입실 중인 학생 구분
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
   const todayName = getTodayDayName();
   const students = STUDENTS.filter(s => {
-    if (!presentNames.has(s.name)) return false;
     const sched = s.schedule[todayName] || '';
     if (!sched || sched === '-') return false;
     const parsed = parseScheduleStr(sched);
     return parsed.periods.has(pNum) && !parsed.absentPeriods.has(pNum);
   });
+  // 등원한 학생을 앞으로 정렬
+  students.sort((a, b) => (presentNames.has(b.name) ? 1 : 0) - (presentNames.has(a.name) ? 1 : 0));
+  const presentCount = students.filter(s => presentNames.has(s.name)).length;
 
   // 오버레이 없이 팝업만 화면 중앙에 고정
   const overlay = document.createElement('div');
@@ -3780,15 +3784,19 @@ function showPeriodStudents(periodIdx) {
   overlay.style.cssText = 'position:fixed;inset:0;background:transparent;z-index:9998;pointer-events:none;display:flex;align-items:center;justify-content:center';
 
   const rows = students.length === 0
-    ? `<div style="grid-column:1/-1;padding:32px;text-align:center;color:var(--color-text-tertiary);font-size:14px">해당 교시 출석 학생 없음</div>`
-    : students.map(s => `
-        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-background-secondary);border-radius:10px">
-          <div style="width:34px;height:34px;border-radius:50%;background:#FFF8DC;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:#C8900A;flex-shrink:0">${s.name[0]}</div>
+    ? `<div style="grid-column:1/-1;padding:32px;text-align:center;color:var(--color-text-tertiary);font-size:14px">해당 교시 출석 예정 학생 없음</div>`
+    : students.map(s => {
+        const isIn = presentNames.has(s.name);
+        // 등원: 진한 검정 / 미등원: 회색
+        return `
+        <div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--color-background-secondary);border-radius:10px;${isIn ? '' : 'opacity:0.75'}">
+          <div style="width:34px;height:34px;border-radius:50%;background:${isIn ? '#FFF8DC' : '#EEEEEE'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;color:${isIn ? '#C8900A' : '#AAAAAA'};flex-shrink:0">${s.name[0]}</div>
           <div style="min-width:0">
-            <div style="font-size:13px;font-weight:600;white-space:nowrap">${s.name}</div>
-            <div style="font-size:11px;color:var(--color-text-secondary)">${s.seat}</div>
+            <div style="font-size:13px;font-weight:${isIn ? '700' : '600'};color:${isIn ? '#111111' : '#B0B0B0'};white-space:nowrap">${s.name}</div>
+            <div style="font-size:11px;color:${isIn ? 'var(--color-text-secondary)' : '#C0C0C0'}">${s.seat}${isIn ? '' : ' · 미등원'}</div>
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
 
   overlay.innerHTML = `
     <div style="
@@ -3805,7 +3813,7 @@ function showPeriodStudents(periodIdx) {
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid var(--color-border-tertiary);flex-shrink:0">
         <div>
           <div style="font-size:15px;font-weight:700">${p.n} 출석 학생</div>
-          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${p.t} · 총 <b style="color:#C8900A">${students.length}명</b></div>
+          <div style="font-size:12px;color:var(--color-text-secondary);margin-top:2px">${p.t} · 등원 <b style="color:#C8900A">${presentCount}명</b> / 예정 ${students.length}명</div>
         </div>
         <button onclick="document.getElementById('period-popup-overlay').remove()"
           style="background:var(--color-background-secondary);border:none;width:32px;height:32px;border-radius:50%;font-size:16px;cursor:pointer;color:var(--color-text-secondary);display:flex;align-items:center;justify-content:center">✕</button>
