@@ -929,14 +929,42 @@ window.enterKioskMode = function() {
   document.body.classList.add('kiosk-mode');
   const el = document.documentElement;
   if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
+  acquireWakeLock(); // 화면 절전 방지 시작
 };
 window.exitKioskMode = function() {
   document.body.classList.remove('kiosk-mode');
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+  releaseWakeLock();
 };
 // ESC 등으로 브라우저 전체화면이 해제되면 키오스크 모드도 함께 해제
 document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement) document.body.classList.remove('kiosk-mode');
+  if (!document.fullscreenElement) {
+    document.body.classList.remove('kiosk-mode');
+    releaseWakeLock();
+  }
+});
+
+// ── 화면 절전 방지 (Screen Wake Lock API) ──
+// 키오스크 모드 동안 OS가 화면을 끄거나 절전 모드로 들어가지 않도록 요청
+let _wakeLock = null;
+async function acquireWakeLock() {
+  if (!('wakeLock' in navigator)) { console.warn('🔆 이 브라우저는 Wake Lock을 지원하지 않습니다'); return; }
+  try {
+    _wakeLock = await navigator.wakeLock.request('screen');
+    _wakeLock.addEventListener('release', () => { _wakeLock = null; });
+    console.log('🔆 화면 절전 방지 활성화');
+  } catch(e) { console.warn('🔆 Wake Lock 요청 실패:', e); }
+}
+function releaseWakeLock() {
+  if (_wakeLock) { _wakeLock.release().catch(()=>{}); _wakeLock = null; }
+}
+// 탭이 잠시 가려졌다 돌아오면 Wake Lock이 자동 해제되므로 다시 요청
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible'
+      && document.body.classList.contains('kiosk-mode')
+      && !_wakeLock) {
+    acquireWakeLock();
+  }
 });
 // ── 자리선택 허용 관리 ──
 window.saveSeatSelection = async function() {
