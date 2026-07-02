@@ -186,7 +186,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 /* 드래그 스크롤 컨테이너 */
 .fp-drag-wrap{
   overflow:hidden;
-  cursor:grab;
+  cursor:default;
   border-radius:var(--border-radius-lg);
   background:var(--color-background-secondary);
   padding:12px;
@@ -207,7 +207,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-grid{display:grid;gap:5px}
 
 /* 좌석 카드 */
-.fp-seat{border-radius:8px;padding:6px 7px;min-height:56px;cursor:pointer;transition:all 0.12s;border:0.5px solid transparent;position:relative;display:flex;flex-direction:column;justify-content:space-between}
+.fp-seat{border-radius:8px;padding:6px 7px;min-height:56px;cursor:default;transition:all 0.12s;border:0.5px solid transparent;position:relative;display:flex;flex-direction:column;justify-content:space-between}
 .fp-seat:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(0,0,0,0.12)}
 .fp-seat.fp-in{background:#FFF8DC;border-color:#E0B020}
 .fp-seat.fp-vacant{background:var(--color-background-secondary);border-color:var(--color-border-tertiary)}
@@ -226,7 +226,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .fp-edit-btn.active{background:#FFF8DC;color:#C8900A;border-color:#E0B020}
 .fp-drag-over{outline:2px solid #C8900A!important;outline-offset:-2px;background:rgba(200,144,10,0.08)!important;}
 /* ── 학생카드 드래그&드롭 좌석변경 ── */
-.fp-side-card-drag{cursor:grab;transition:box-shadow 0.12s,transform 0.12s;user-select:none}
+.fp-side-card-drag{cursor:pointer;transition:box-shadow 0.12s,transform 0.12s;user-select:none}
 .fp-side-card-drag.dragging-card{opacity:0.5;transform:scale(0.96)}
 .fp-cell-drop-ready{outline:2px dashed #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.05) !important;}
 .fp-cell-drop-hover{outline:3px solid #C8900A !important;outline-offset:-2px;background:rgba(200,144,10,0.18) !important;transform:scale(1.05);z-index:10;transition:all 0.1s;}
@@ -413,7 +413,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     </div>
 
     <!-- 입실 현황 사이드패널 -->
-    <div id="fp-side-panel" style="width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;max-height:80vh;overflow-y:auto">
+    <div id="fp-side-panel" style="width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;max-height:80vh;overflow-y:auto;cursor:pointer">
       <div style="font-size:12px;font-weight:700;color:#5C3D08;padding:4px 2px;display:flex;align-items:center;justify-content:space-between">
         <span>📋 입실 현황</span>
         <span id="fp-side-count" style="font-size:11px;color:#888"></span>
@@ -2717,7 +2717,7 @@ function buildSeatCard(seatNum) {
   if (!student) {
     // 공석
     const onclick = `onclick="if(!fpEditMode&&!_fpLastDragged&&!(_fpDragDist>5))openAddStudentModal(${seatNum})"`;
-    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px">
+    return `<div class="fp-seat fp-vacant" ${onclick} style="cursor:default;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;height:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px">
       <div style="font-size:10px;color:#bbb;font-weight:500">${seatNum}번</div>
       <div style="font-size:10px;color:#ccc">공석</div>
     </div>`;
@@ -2747,7 +2747,7 @@ function buildSeatCard(seatNum) {
 
   const onclick = `onclick="if(!fpEditMode)fpSeatClick(${seatNum})"`;
 
-  return `<div class="fp-seat" ${onclick} style="cursor:pointer;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0;height:100%;box-sizing:border-box">
+  return `<div class="fp-seat" ${onclick} style="cursor:default;border:1.5px solid ${cardBorder};background:${cardBg};border-radius:10px;overflow:hidden;display:flex;flex-direction:column;padding:0;height:100%;box-sizing:border-box">
     <!-- 상단 배지 -->
     <div style="background:${badgeBg};padding:2px 5px;display:flex;align-items:center;justify-content:space-between">
       <span style="font-size:9px;color:${badgeColor};font-weight:600">고정석${expiryStr ? ' '+expiryStr : ''}</span>
@@ -2929,7 +2929,7 @@ function buildFloorplan() {
           // 관리자석: 학생 있으면 우클릭으로 배석해제만 가능, 빈자리 클릭 불가
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
           const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : '';
-          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'pointer':'default'}" ${clickAttr} ${ctxAttr}>
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:default" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
             <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : ''}</div>
             ${ddayHtml}
@@ -3155,7 +3155,7 @@ function buildFpSidePanel() {
       draggable="true"
       onclick="fpSeatClick(${parseInt(s.seat)})"
       onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
-      style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:8px 10px;cursor:grab;transition:box-shadow 0.1s;position:relative">
+      style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:8px 10px;cursor:pointer;transition:box-shadow 0.1s;position:relative">
       <div style="position:absolute;top:7px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
         <div style="display:flex;align-items:center;gap:5px">
