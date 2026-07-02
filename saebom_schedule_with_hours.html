@@ -4482,10 +4482,24 @@ const DEFAULT_ADMIN_EVENTS = [{
 async function loadEventsAdmin() {
   if (!window._adminDb) return;
   try {
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     // 보안규칙상 쓰기 가능한 문서가 notices/list뿐이므로 events 필드에 함께 저장
     const snap = await getDoc(doc(window._adminDb, 'notices', 'list'));
-    const items = snap.exists() && Array.isArray(snap.data().events) ? snap.data().events : [];
+    let items = snap.exists() && Array.isArray(snap.data().events) ? snap.data().events : [];
+    // Firebase에 남은 구버전(연속출석형) 끝.끝.아 데이터는 새 공부시간형 정의로 1회 자동 이관.
+    // 이관 후에는 관리자앱에서 수정한 내용이 그대로 학생앱에 동기화된다.
+    let migrated = false;
+    items = items.map(ev => {
+      const isLegacy = (ev.id === 'kkeutkkeuta' || /끝\.?끝\.?아|끝나도/.test(ev.name || '')) && ev.type !== 'studytime';
+      if (!isLegacy) return ev;
+      migrated = true;
+      return Object.assign({}, DEFAULT_ADMIN_EVENTS[0], { active: ev.active !== false });
+    });
+    if (migrated) {
+      if (!items.some(e => e.type === 'streak')) items.push(DEFAULT_ADMIN_EVENTS[1]);
+      await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+      showAdminToast('🔄 끝.끝.아 이벤트가 새 정의(공부시간형)로 이관됐습니다');
+    }
     window._adminEvents = items;
     const el = document.getElementById('event-list-admin');
     if (!el) return;

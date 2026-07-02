@@ -1752,15 +1752,19 @@ const DEFAULT_EVENTS = [{
 let EVENTS_CACHE = null;
 let _eventsLoading = false;
 
-// Firebase에 저장된 구버전(연속출석형 끝.끝.아) 데이터는 새 정의로 교체하고,
-// 연속 출석 퀘스트가 목록에 없으면 별도 이벤트로 추가한다.
+// Firebase에 구버전(연속출석형 끝.끝.아) 데이터가 남아 있으면 새 정의로 교체한다.
+// 관리자앱이 같은 규칙으로 1회 이관·저장하므로, 이관 후에는 관리자앱 수정 내용이 그대로 반영된다.
 function _normalizeEvents(list) {
   if (!Array.isArray(list) || list.length === 0) return DEFAULT_EVENTS;
+  let legacy = false;
   const out = list.map(ev => {
     const isLegacyKk = (ev.id === 'kkeutkkeuta' || /끝\.?끝\.?아|끝나도/.test(ev.name || '')) && ev.type !== 'studytime';
-    return isLegacyKk ? Object.assign({}, DEFAULT_EVENTS[0], { active: ev.active !== false }) : ev;
+    if (!isLegacyKk) return ev;
+    legacy = true;
+    return Object.assign({}, DEFAULT_EVENTS[0], { active: ev.active !== false });
   });
-  if (!out.some(e => e.type === 'streak')) out.push(DEFAULT_EVENTS[1]);
+  // 구버전 데이터를 교체한 경우에만 연속 출석 퀘스트를 보충 (관리자가 삭제한 경우는 존중)
+  if (legacy && !out.some(e => e.type === 'streak')) out.push(DEFAULT_EVENTS[1]);
   return out;
 }
 
