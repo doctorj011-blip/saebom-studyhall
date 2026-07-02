@@ -3749,10 +3749,23 @@ window.clearAllScheduleAlerts = function() {
 
 </script>
 
+<!-- Firebase SDK를 로컬 파일(saebom_libs/)로 매핑 — 인터넷 없이도 앱 로드 가능.
+     코드 내 모든 gstatic import(동적 import 포함)에 적용된다.
+     주의: file:// 로 직접 열면 로컬 모듈이 차단되므로 로컬 서버(시작 스크립트)로 실행할 것. -->
+<script type="importmap">
+{
+  "imports": {
+    "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js": "./saebom_libs/firebase-app.js",
+    "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js": "./saebom_libs/firebase-firestore.js",
+    "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js": "./saebom_libs/firebase-storage.js"
+  }
+}
+</script>
+
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
+import { getFirestore, initializeFirestore, persistentLocalCache, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -3765,7 +3778,15 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const db  = getFirestore(app);
+// 오프라인 캐시(IndexedDB) 활성화: 인터넷이 끊겨도 읽기는 캐시에서,
+// 쓰기는 로컬 큐에 쌓였다가 연결 복구 시 자동 동기화된다.
+let db;
+try {
+  db = initializeFirestore(app, { localCache: persistentLocalCache() });
+} catch(e) {
+  console.warn('오프라인 캐시 초기화 실패 — 온라인 전용 모드로 동작:', e);
+  db = getFirestore(app);
+}
 window._adminDb = db;
 window._adminApp = app;
 window._fsSetDoc = setDoc;
