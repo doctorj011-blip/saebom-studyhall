@@ -970,7 +970,8 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <div class="sched-modal-header">
       <div style="flex:1">
         <div style="display:flex;align-items:baseline;gap:8px">
-          <div class="sched-modal-title" id="sched-modal-name"></div>
+          <input id="edit-name" class="sched-modal-title" placeholder="이름" maxlength="20" title="학생 이름 — 잘못 입력했으면 수정하세요"
+            style="border:none;border-bottom:1px dashed var(--color-border-secondary);background:transparent;color:var(--color-text-primary);outline:none;width:100px;padding:0 2px 2px">
           <div id="sched-modal-seat" style="font-size:16px;font-weight:700;color:#C8900A"></div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
@@ -4116,7 +4117,7 @@ function openScheduleModal(idx) {
     _schedDraft[day] = parseScheduleStr(s.schedule[day] || '');
   });
 
-  document.getElementById('sched-modal-name').textContent = s.name;
+  document.getElementById('edit-name').value = s.name || '';
   document.getElementById('sched-modal-seat').textContent = s.seat;
   // 010- 제거하고 뒷자리만 표시
   const stripPhone = p => (p||'').replace(/^010-?/,'');
@@ -4483,6 +4484,27 @@ function updateAbsentReason(day, val) {
 function saveSchedule() {
   if (_schedEditIdx < 0) return;
   const s = STUDENTS[_schedEditIdx];
+
+  // 이름 저장 (잘못 입력한 이름 수정 가능) — 빈값이면 저장 막고 안내
+  const newName = (document.getElementById('edit-name').value || '').trim();
+  if (!newName) {
+    alert('이름을 입력해 주세요.');
+    document.getElementById('edit-name').focus();
+    return;
+  }
+  const oldName = s.name;
+  if (newName !== oldName) {
+    // 외출 상태는 이름을 key로 관리하므로 이름 변경 시 함께 이관 (안 하면 외출 배지가 어긋남)
+    if (window._awayStudents && window._awayStudents[oldName]) {
+      window._awayStudents[newName] = window._awayStudents[oldName];
+      delete window._awayStudents[oldName];
+    }
+    // 오늘 입퇴실 기록의 이름도 갱신 (화면 표시·마스킹 일관성)
+    if (Array.isArray(todayRecords)) {
+      todayRecords.forEach(r => { if (r.studentName === oldName) r.studentName = newName; });
+    }
+    s.name = newName;
+  }
 
   // 전화번호 저장
   // 010- 앞에 붙여서 저장
@@ -6176,6 +6198,17 @@ async function saveSmsLogToFirebase(entry, logId) {
 let _smsLogData = []; // 현재 표시 중인 데이터
 let _deletedSmsIds = new Set(JSON.parse(localStorage.getItem('saebom_sms_deleted') || '[]'));
 
+// 문자 로그 정렬 기준: id가 "1720000000000_이름_type" 형태이므로 앞의 타임스탬프 숫자를 추출.
+// (기존엔 문자열 id끼리 빼서 NaN → 정렬이 안 되고 순서가 뒤죽박죽이었음)
+function _smsTs(log) {
+  if (!log) return 0;
+  const n = parseInt(log.id, 10);          // id 앞부분 = Date.now()
+  if (!isNaN(n)) return n;
+  // id에 숫자가 없으면 date+time으로 보조 정렬
+  const d = new Date(`${(log.date||'').replace(/\./g,'-').replace(/\s/g,'').replace(/-$/,'')} ${log.time||''}`);
+  return isNaN(d.getTime()) ? 0 : d.getTime();
+}
+
 window.loadSmsLog = async function() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
@@ -6201,7 +6234,7 @@ window.loadSmsLog = async function() {
         const merged = [...fbLogs];
         const fbIds = new Set(fbLogs.map(l => l.id));
         _smsLogs.forEach(l => { if (!fbIds.has(l.id) && !fbIds.has(String(l.id)) && !_deletedSmsIds.has(String(l.id))) merged.push(l); });
-        merged.sort((a, b) => (b.id || 0) - (a.id || 0));
+        merged.sort((a, b) => _smsTs(b) - _smsTs(a));
         logs = merged.slice(0, 300);
         _smsLogData = logs;
         renderSmsLog(logs);
@@ -6213,8 +6246,8 @@ window.loadSmsLog = async function() {
 }
 
 window.renderSmsLog = function(logs) {
-  // 최신순 정렬
-  const sorted = [...logs].sort((a, b) => (b.id || 0) - (a.id || 0));
+  // 최신순 정렬 (최근 발송이 위로)
+  const sorted = [...logs].sort((a, b) => _smsTs(b) - _smsTs(a));
 
   const today = new Date().toLocaleDateString('ko-KR');
   const todayLogs = sorted.filter(l => l.date === today);
