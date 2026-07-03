@@ -589,7 +589,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
   <div class="search-bar">
     <div class="student-search-box">
       <i class="ti ti-search" aria-hidden="true"></i>
-      <input type="text" id="student-search" placeholder="이름(초성 가능) · 좌석번호 · 전화번호로 검색..." oninput="filterStudents()">
+      <input type="text" id="student-search" name="student-search-q" autocomplete="off" placeholder="이름(초성 가능) · 좌석번호 · 전화번호로 검색..." oninput="filterStudents()">
       <button id="student-search-clear" onclick="clearStudentSearch()" aria-label="검색어 지우기">✕</button>
     </div>
     <span id="student-search-count"></span>
@@ -2508,6 +2508,20 @@ function clearStudentSearch(){
   buildStudentList('');
   inp.focus();
 }
+
+// 크롬 자동완성이 새로고침 시 검색창에 저장된 값을 채워넣는 것 방지
+window.addEventListener('load', function(){
+  const clearAutofill = () => {
+    const el = document.getElementById('student-search');
+    if (el && el.value && document.activeElement !== el) {
+      el.value = '';
+      buildStudentList('');
+    }
+  };
+  clearAutofill();
+  setTimeout(clearAutofill, 300);
+  setTimeout(clearAutofill, 1000);
+});
 
 // ===== 입실·퇴실 =====
 let numpadBuffer = '';
