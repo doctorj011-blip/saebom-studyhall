@@ -3999,6 +3999,8 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
   const checkoutBtn = isIn
     ? `<button onclick="adminForceCheckout('${name}');document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:10px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">퇴실 처리</button>`
     : '';
+  // 정보 수정 버튼 — 관리석·학생 모두 팝업에서 바로 상세 수정 모달을 열 수 있게
+  const editBtn = `<button onclick="fpEditFromPopup('${name}')" style="width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">✏️ 정보 수정</button>`;
   popup.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">${name[0]}</div>
@@ -4012,6 +4014,7 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
       <div style="font-size:12px;color:#374151">학부모: <b>${parent}</b></div>
     </div>
     <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#FFF8DC':'#F3F4F6'};border-radius:8px">${status}</div>
+    ${editBtn}
     ${checkoutBtn}
     <button onclick="document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer">닫기</button>
   `;
@@ -4019,6 +4022,13 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
   document.body.appendChild(overlay);
   overlay.addEventListener('click', e => { if (!popup.contains(e.target)) overlay.remove(); });
 }
+
+// 팝업의 '정보 수정' → 상세 수정 모달 열기 (관리석 배치자 포함)
+window.fpEditFromPopup = function(name) {
+  const idx = STUDENTS.findIndex(s => s.name === name);
+  document.getElementById('fp-popup-overlay')?.remove();
+  if (idx >= 0) openScheduleModal(idx);
+};
 
 function initFpDrag() {
   const wrap = document.getElementById('fp-drag-wrap');
@@ -5154,6 +5164,96 @@ function showAdminToast(msg) {
   const t = document.getElementById('admin-toast');
   if (t) { t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
 }
+
+// ══════════════════════════════════════
+// 🔔 관리 동선 점검 리마인더
+//   - 교시가 시작되면 10~15분 정도의 랜덤 간격으로, 교시가 끝날 때까지 반복해서 띄운다.
+//   - 교시가 끝나면 멈추고, 다음 교시가 시작되면 다시 반복한다. (쉬는 시간·교시 외 시간엔 안 뜸)
+//   - 어느 탭/화면을 보고 있든 화면 상단 중앙에 고정 표시된다.
+// ══════════════════════════════════════
+(function(){
+  const REMINDER_MSG = '알림창을 닫고 관리 동선을 따라 학생들을 관리해 주세요~<br>조는 학생, 딴짓하는 학생 기록해 주세요';
+  let _curPeriod = null;   // 현재 반복 중인 교시 번호
+  let _nextFireAt = 0;     // 다음 알림 예정 시각(ms)
+
+  // 10~15분 사이 랜덤 간격(밀리초)
+  function _pickDelay() {
+    return (10 * 60 * 1000) + Math.floor(Math.random() * (5 * 60 * 1000 + 1));
+  }
+
+  function showRoundReminder() {
+    // 이미 떠 있으면 중복 생성 방지
+    const old = document.getElementById('round-reminder');
+    if (old) old.remove();
+
+    const box = document.createElement('div');
+    box.id = 'round-reminder';
+    box.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-12px);' +
+      'max-width:min(92vw,460px);background:#5C3D08;color:#fff;padding:16px 20px;border-radius:16px;' +
+      'box-shadow:0 8px 32px rgba(0,0,0,0.28);z-index:100000;display:flex;align-items:flex-start;gap:12px;' +
+      'font-size:15px;line-height:1.5;font-weight:600;opacity:0;transition:opacity .3s,transform .3s';
+    box.innerHTML =
+      '<span style="font-size:22px;flex-shrink:0;line-height:1.2">🚶</span>' +
+      '<span style="flex:1">' + REMINDER_MSG + '</span>' +
+      '<button aria-label="닫기" style="background:rgba(255,255,255,0.18);border:none;color:#fff;' +
+        'width:26px;height:26px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0;line-height:1">✕</button>';
+    document.body.appendChild(box);
+    // 등장 애니메이션
+    requestAnimationFrame(() => { box.style.opacity = '1'; box.style.transform = 'translateX(-50%) translateY(0)'; });
+
+    const remove = () => {
+      box.style.opacity = '0';
+      box.style.transform = 'translateX(-50%) translateY(-12px)';
+      setTimeout(() => box.remove(), 300);
+    };
+    // 관리자가 ✕(닫기)를 누르기 전까지 계속 화면에 떠 있는다. (자동 사라짐 없음)
+    box.querySelector('button').addEventListener('click', remove);
+  }
+
+  // 교시별 실제 시작 시각(오늘 자정 기준 분). getCurrentPeriod()의 PERIOD_TIMES와 동일.
+  // 11교시는 자정(00:00) 시작이라 실제 시계 기준 0분으로 둔다.
+  const _PERIOD_START_MIN = {1:540,2:610,3:680,4:810,5:880,6:950,7:1080,8:1140,9:1230,10:1350,11:0};
+  function _periodStartMs(p) {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);           // 오늘 자정
+    d.setMinutes(_PERIOD_START_MIN[p]); // + 교시 시작(분)
+    return d.getTime();
+  }
+
+  // 20초마다 확인: 교시 상태에 따라 반복 알림을 관리한다.
+  function _tick() {
+    let p = null;
+    try { if (typeof getCurrentPeriod === 'function') p = getCurrentPeriod(); } catch (e) { p = null; }
+
+    if (p === null) {
+      // 교시 외 시간(쉬는 시간 포함) → 초기화하고 대기
+      _curPeriod = null;
+      _nextFireAt = 0;
+    } else if (p !== _curPeriod) {
+      // 새 교시로 진입(앱을 교시 중간에 열어도 마찬가지) →
+      // 교시 "실제 시작 시각"부터 10~15분 간격을 누적해, 지금 이후의 첫 예정 시각을 찾는다.
+      // (앱을 연 시간과 무관하게 교시 시작 시점에 앵커링된다.)
+      _curPeriod = p;
+      const now = Date.now();
+      let t = _periodStartMs(p) + _pickDelay();
+      while (t <= now) t += _pickDelay();
+      _nextFireAt = t;
+    } else if (Date.now() >= _nextFireAt) {
+      // 같은 교시 진행 중이고 예정 시각 도달 → 알림 띄우고 다음 간격 예약
+      showRoundReminder();
+      // 교시 시작 기준 스케줄을 유지하면서 다음 예정 시각으로 넘어간다(밀린 시각 건너뛰기).
+      do { _nextFireAt += _pickDelay(); } while (_nextFireAt <= Date.now());
+    }
+
+    setTimeout(_tick, 20000);
+  }
+
+  // 앱 로드 후 리마인더 시작 (중복 방지)
+  if (!window._roundReminderStarted) {
+    window._roundReminderStarted = true;
+    _tick();
+  }
+})();
 
 window.initApp = function(){
   window.STUDENTS = STUDENTS;
