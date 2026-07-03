@@ -92,6 +92,16 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .view-btn{padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary)}
 .view-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
 
+.range-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px;background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px 14px}
+.range-label{font-size:12px;font-weight:600;color:var(--color-text-primary);display:flex;align-items:center;gap:4px}
+.range-input{padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);font-family:inherit}
+.range-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary)}
+.range-btn:hover{background:var(--color-background-secondary)}
+.range-btn-primary{background:#A87008;color:#fff;border-color:#A87008;font-weight:600}
+.range-btn-primary:hover{background:#8F5E06}
+.range-preset{padding:4px 9px;border:0.5px solid var(--color-border-secondary);border-radius:20px;cursor:pointer;font-size:11px;background:var(--color-background-primary);color:var(--color-text-secondary)}
+.range-preset:hover{background:#FFF8DC;color:#7A5008;border-color:#E0B020}
+
 .hours-table{width:100%;border-collapse:collapse;background:var(--color-background-primary);border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid var(--color-border-tertiary)}
 .hours-table th{background:#A87008;color:#fff;padding:8px 10px;font-size:11px;font-weight:500;text-align:center}
 .hours-table th:first-child{text-align:left;padding-left:14px}
@@ -357,6 +367,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
+    <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
@@ -537,6 +548,22 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     </div>
   </div>
 
+  <div class="range-bar" id="hours-range-bar">
+    <span class="range-label"><i class="ti ti-calendar-search" aria-hidden="true"></i> 기간 조회</span>
+    <input type="date" id="hours-range-start" class="range-input">
+    <span style="color:var(--color-text-tertiary)">~</span>
+    <input type="date" id="hours-range-end" class="range-input">
+    <button class="range-btn range-btn-primary" onclick="queryHoursRange()">조회</button>
+    <button class="range-btn" id="hours-range-reset" onclick="resetHoursRange()" style="display:none">✕ 월별 보기로</button>
+    <span style="display:flex;gap:4px;flex-wrap:wrap">
+      <button class="range-preset" onclick="setHoursRangePreset(7)">최근 7일</button>
+      <button class="range-preset" onclick="setHoursRangePreset(14)">최근 14일</button>
+      <button class="range-preset" onclick="setHoursRangePreset(30)">최근 30일</button>
+      <button class="range-preset" onclick="setHoursRangePreset('month')">이번 달</button>
+    </span>
+    <span id="hours-range-status" style="font-size:11px;color:var(--color-text-tertiary)"></span>
+  </div>
+
   <div id="hours-table-view">
     <div class="summary-chips" id="hours-summary"></div>
     <div style="height:10px"></div>
@@ -715,6 +742,49 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <div class="card">
       <div style="font-size:13px;font-weight:700;color:#5C3D08;margin-bottom:12px">📋 등록된 공지</div>
       <div id="notice-list-admin" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── 이벤트 관리 ── -->
+<div id="sec-events" class="section">
+  <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+
+    <!-- 이벤트 등록 / 수정 폼 -->
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div id="event-form-title" style="font-size:15px;font-weight:700;color:#5C3D08">🎉 새 이벤트 등록</div>
+        <button id="event-cancel-edit-btn" onclick="eventResetForm()" style="display:none;padding:5px 12px;background:#F3F4F6;border:none;border-radius:8px;font-size:12px;color:#555;cursor:pointer">✕ 취소</button>
+      </div>
+      <input id="event-name-inp" type="text" autocomplete="off" placeholder="이벤트 이름 (예: 끝.끝.아 이벤트)" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
+      <textarea id="event-desc-inp" autocomplete="off" placeholder="이벤트 설명 (줄바꿈 가능) — 학생앱에 그대로 표시됩니다" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;flex-wrap:wrap">
+        <label style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          유형
+          <select id="event-type-sel" onchange="eventTypeChanged()" style="padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff">
+            <option value="studytime">공부시간형 (게이지바)</option>
+            <option value="streak">연속 출석형 (게이지바)</option>
+            <option value="general">일반 이벤트</option>
+          </select>
+        </label>
+        <label style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          목표 <input id="event-goal-inp" type="number" value="42" min="1" style="width:60px;padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff"><span id="event-goal-unit">시간</span>
+        </label>
+        <label id="event-period-label" style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          기간 <input id="event-start-inp" type="date" value="2026-07-06" style="padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff"> ~ <input id="event-end-inp" type="date" value="2026-07-19" style="padding:6px 8px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#fff">
+        </label>
+        <label style="font-size:12px;color:#8B6010;font-weight:600;display:flex;align-items:center;gap:6px">
+          <input id="event-active-inp" type="checkbox" checked> 진행 중 (학생앱 노출)
+        </label>
+      </div>
+      <button id="event-submit-btn" onclick="publishEvent()" style="width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">이벤트 등록</button>
+    </div>
+
+    <!-- 등록된 이벤트 목록 -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;color:#5C3D08;margin-bottom:12px">📋 등록된 이벤트</div>
+      <div id="event-list-admin" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
   </div>
@@ -1085,13 +1155,6 @@ function eventSortKey(x) {
   if (x && typeof x.ts === 'number') return x.ts;
   return (timeToMin(x && x.time) ?? 0) * 60000;
 }
-// 입퇴실 기록용 '영업일' 날짜 문자열. 새벽 2시 이전은 전날 밤(11교시는 새벽 1시 종료)으로
-// 취급해, 자정~새벽 2시 사이의 퇴실이 다음날 날짜로 저장되어 전날 입실과 짝이 안 맞고
-// 다음날 아침 '미퇴실 이월'로 입실 중이 되살아나는 문제를 막는다. (새벽 2시 리셋과 동일 기준)
-function checkinBizDate(offsetDays = 0) {
-  const d = new Date(Date.now() - 2 * 3600 * 1000 - offsetDays * 86400000);
-  return d.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-}
 // '실제 오늘'의 요일명 ('월'~'토'). 새벽 3시 이전은 전날 밤(11교시 연장)으로 취급.
 // currentDay는 관리자가 스케줄 탭에서 다른 요일을 눌러도 바뀌므로,
 // 미입실 알림·교시별 출석현황 등 '오늘' 기준 계산에는 반드시 이 함수를 쓴다.
@@ -1266,6 +1329,7 @@ window.showSection = function(id,btn){
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); }
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
+  if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
@@ -1742,6 +1806,8 @@ window.saveSettingsFromTab = function() {
 };
 
 window.setView = function(v,btn){
+  // 차트는 월별 데이터 기준 → 기간 조회 모드였다면 해제하고 월별로 복귀
+  if (v==='chart' && window._hoursRangeMode) window.resetHoursRange();
   currentView=v;
   document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
   btn.classList.add('active');
@@ -1751,6 +1817,7 @@ window.setView = function(v,btn){
 }
 
 window.selectMonth = function(m,el){
+  if (window._hoursRangeMode) window.resetHoursRange(true); // 월 탭 클릭 시 기간 모드 해제
   currentMonth=m;
   document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
@@ -1775,6 +1842,8 @@ function getTrend(s,m){
 }
 
 function buildHoursTable(){
+  // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
+  if (window._hoursRangeMode) return;
   const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   if (!sorted.length) return;
   const vals=sorted.map(s=>_readHour(s.hours,currentMonth));
@@ -1849,6 +1918,204 @@ setInterval(() => {
     try { buildHoursTable(); } catch(e){}
   }
 }, 60000);
+
+// ── 기간 설정 사용시간 조회 ──
+// checkin_logs의 in/out 이벤트를 기간(최대 92일)으로 조회해 학생별 사용시간을 합산한다.
+// 저장된 date 필드는 무패딩 'YYYY-M-D' 형식(toLocaleDateString 변환 결과)이라
+// Firestore 범위 쿼리(>=,<=)가 불가능 → 날짜 목록을 만들어 'in' 쿼리(30개씩 분할)로 조회한다.
+window._hoursRangeMode = false;
+
+function _fmtRangeMin(min){
+  const h = Math.floor(min / 60), m = min % 60;
+  if (min <= 0) return '—';
+  return h > 0 ? `${h}시간 ${m}분` : `${m}분`;
+}
+
+// ISO(YYYY-MM-DD) 문자열 → checkin_logs date 형식(무패딩 Y-M-D) 목록 생성
+function _rangeDateStrings(startISO, endISO){
+  const out = [];
+  const d = new Date(startISO + 'T00:00:00');
+  const end = new Date(endISO + 'T00:00:00');
+  while (d <= end) {
+    out.push(`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`);
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+window.setHoursRangePreset = function(preset){
+  const startEl = document.getElementById('hours-range-start');
+  const endEl = document.getElementById('hours-range-end');
+  const now = new Date();
+  const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  if (preset === 'month') {
+    startEl.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  } else {
+    startEl.value = iso(new Date(now.getFullYear(), now.getMonth(), now.getDate() - (preset - 1)));
+  }
+  endEl.value = iso(now);
+  window.queryHoursRange();
+};
+
+let _rangeQueryLock = false;
+window.queryHoursRange = async function(){
+  const startISO = document.getElementById('hours-range-start').value;
+  const endISO = document.getElementById('hours-range-end').value;
+  const statusEl = document.getElementById('hours-range-status');
+  if (!startISO || !endISO) { statusEl.textContent = '시작일과 종료일을 모두 선택하세요'; return; }
+  if (startISO > endISO) { statusEl.textContent = '시작일이 종료일보다 늦습니다'; return; }
+  const dates = _rangeDateStrings(startISO, endISO);
+  if (dates.length > 92) { statusEl.textContent = '최대 92일(약 3개월)까지 조회할 수 있습니다'; return; }
+  if (_rangeQueryLock) return;
+  _rangeQueryLock = true;
+  statusEl.textContent = '조회 중...';
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+
+    // 'in' 쿼리는 최대 30개 값 → 30일씩 나눠 병렬 조회
+    const chunks = [];
+    for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i + 30));
+    const snaps = await Promise.all(chunks.map(c =>
+      getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', c)))
+    ));
+
+    // 날짜별로 묶어 in/out 짝을 지어 분 단위 합산
+    const byDate = {};
+    snaps.forEach(snap => snap.forEach(doc => {
+      const d = doc.data();
+      if (!d.studentName || !d.type || !d.date) return;
+      (byDate[d.date] = byDate[d.date] || []).push(d);
+    }));
+
+    const totalMin = {};   // 이름 → 총 사용시간(분)
+    const daysSet = {};    // 이름 → 출석한 날짜 Set
+    const seatOf = {};     // 이름 → 기록상 좌석 (퇴원생 대비)
+    const addMin = (name, date, min) => {
+      if (min <= 0) return;
+      totalMin[name] = (totalMin[name] || 0) + min;
+      (daysSet[name] = daysSet[name] || new Set()).add(date);
+    };
+    const todayStr = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
+
+    Object.entries(byDate).forEach(([date, events]) => {
+      // loadTodayCheckinFromFirebase와 동일 규칙: ts 우선 정렬, 동시각이면 입실 먼저
+      events.sort((a, b) => {
+        const diff = eventSortKey(a) - eventSortKey(b);
+        if (diff !== 0) return diff;
+        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
+      });
+      const open = {}; // 이름 → 입실 시각(분)
+      events.forEach(ev => {
+        const name = ev.studentName;
+        if (ev.seat) seatOf[name] = ev.seat;
+        if (ev.type === 'in') {
+          const inMin = timeToMin(ev.time);
+          if (open[name] == null && inMin != null) open[name] = inMin;
+        } else if (ev.type === 'out') {
+          const inMin = open[name];
+          if (inMin != null) {
+            let outMin = timeToMin(ev.time);
+            if (outMin != null) {
+              if (outMin < inMin) outMin += 1440; // 자정 넘김 (미퇴실 이월 퇴실 등)
+              addMin(name, date, outMin - inMin);
+            }
+            delete open[name];
+          }
+        }
+      });
+      // 미퇴실 세션: 오늘 날짜면 현재 시각까지 집계, 과거 날짜는 집계 제외
+      if (date === todayStr) {
+        const nowMin = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+        if (nowMin != null) Object.entries(open).forEach(([name, inMin]) => addMin(name, date, nowMin - inMin));
+      }
+    });
+
+    window._hoursRangeMode = true;
+    document.getElementById('hours-range-reset').style.display = '';
+    document.querySelectorAll('.month-tab').forEach(t => t.classList.remove('active'));
+    if (currentView !== 'table') window.setView('table', document.getElementById('view-table-btn'));
+    statusEl.textContent = '';
+    renderHoursRangeTable({ totalMin, daysSet, seatOf }, startISO, endISO, dates.length);
+  } catch(e) {
+    console.error('기간 사용시간 조회 실패:', e);
+    statusEl.textContent = '❌ 조회 실패: ' + (e.message || e);
+  } finally { _rangeQueryLock = false; }
+};
+
+function renderHoursRangeTable(result, startISO, endISO, dayCount){
+  const { totalMin, daysSet, seatOf } = result;
+  // 현재 학생 전원 + 기간 내 기록이 있는 퇴원생을 합쳐 목록 구성
+  const rows = STUDENTS.map(s => ({ name: s.name, seat: s.seat, min: totalMin[s.name] || 0, days: daysSet[s.name] ? daysSet[s.name].size : 0 }));
+  const known = new Set(STUDENTS.map(s => s.name));
+  Object.keys(totalMin).forEach(name => {
+    if (!known.has(name)) rows.push({ name, seat: seatOf[name] || '—', min: totalMin[name], days: daysSet[name] ? daysSet[name].size : 0, former: true });
+  });
+  rows.sort((a, b) => b.min - a.min);
+
+  const maxMin = Math.max(...rows.map(r => r.min), 1);
+  const active = rows.filter(r => r.min > 0);
+  const avgMin = active.length ? Math.round(active.reduce((a, r) => a + r.min, 0) / active.length) : 0;
+  const label = `${startISO.replace(/-/g,'.')} ~ ${endISO.replace(/-/g,'.')}`;
+
+  document.getElementById('hours-summary').innerHTML = `
+    <div class="summary-chip">📅 <span>${label}</span> (${dayCount}일)</div>
+    <div class="summary-chip">이용 학생 <span>${active.length}명</span></div>
+    <div class="summary-chip">평균 <span>${_fmtRangeMin(avgMin)}</span></div>
+    <div class="summary-chip">최고 <span>${_fmtRangeMin(rows[0]?.min || 0)}</span> (${rows[0]?.min > 0 ? rows[0].name : '-'})</div>
+  `;
+
+  let html = `<thead><tr>
+    <th style="width:32px">순위</th>
+    <th>이름</th><th>좌석</th>
+    <th>총 사용시간</th>
+    <th style="width:100px">그래프</th>
+    <th>출석일수</th>
+    <th>일평균</th>
+  </tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const pct = Math.round(r.min / maxMin * 100);
+    const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
+    const dayAvg = r.days > 0 ? Math.round(r.min / r.days) : 0;
+    const totalH = Math.round(r.min / 60 * 10) / 10;
+    html += `<tr>
+      <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
+      <td style="font-weight:500">${r.name}${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
+      <td><span class="seat-badge">${r.seat}</span></td>
+      <td style="font-weight:600">${_fmtRangeMin(r.min)}${r.min > 0 ? ` <span style="font-size:10px;color:var(--color-text-tertiary)">(${totalH}h)</span>` : ''}</td>
+      <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
+      <td>${r.days > 0 ? r.days + '일' : '—'}</td>
+      <td style="color:var(--color-text-secondary)">${_fmtRangeMin(dayAvg)}</td>
+    </tr>`;
+  });
+  html += '</tbody>';
+  document.getElementById('hours-table').innerHTML = html;
+}
+
+window.resetHoursRange = function(skipRebuild){
+  window._hoursRangeMode = false;
+  document.getElementById('hours-range-reset').style.display = 'none';
+  document.getElementById('hours-range-status').textContent = '';
+  if (!skipRebuild) {
+    buildMonthTabs();
+    buildHoursTable();
+  }
+};
+
+// 기간 입력 기본값: 이번 달 1일 ~ 오늘
+(function(){
+  const s = document.getElementById('hours-range-start');
+  const e = document.getElementById('hours-range-end');
+  if (!s || !e) return;
+  const now = new Date();
+  const iso = dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  s.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+  e.value = iso(now);
+})();
 
 function buildHoursChart(){
   const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
@@ -2796,7 +3063,7 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
 // Firebase에 입퇴실 기록 저장
 async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride) {
   try {
-    const today = dateOverride || checkinBizDate();
+    const today = dateOverride || new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const type = isCheckout ? 'out' : 'in';
     // 같은 '분' 안에 같은 종류(입실/입실)가 들어와도 서로 다른 문서가 되도록
     // epoch ms를 ID 끝에 붙여 고유성을 보장한다. (기존엔 분 단위라 setDoc이 덮어써 유실됐음)
@@ -4387,7 +4654,8 @@ window.publishNotice = async function() {
     } else {
       items.push(noticeObj);
     }
-    await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
+    // merge: 같은 문서의 events 필드(이벤트 목록)를 보존
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { items }, { merge: true });
 
     noticeResetForm();
     showAdminToast(isEdit ? '✅ 공지가 수정됐습니다' : '✅ 공지사항이 발행됐습니다');
@@ -4415,12 +4683,209 @@ window.deleteNotice = async function(i) {
   try {
     const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
     const items = (window._adminNotices || []).filter((_,idx) => idx !== i);
-    await setDoc(doc(window._adminDb, 'notices', 'list'), { items });
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { items }, { merge: true });
     window._adminNotices = items;
     if (window._noticeEditIdx === i) noticeResetForm();
     showAdminToast('✅ 공지가 삭제됐습니다');
     loadNoticesAdmin();
   } catch(e) { console.error('공지 삭제 실패:', e); }
+};
+
+// ── 이벤트 관리 (학생앱 이벤트 탭과 Firebase events/list로 연동) ──
+window._adminEvents = null;
+window._eventEditIdx = null;
+
+// 학생앱 DEFAULT_EVENTS와 동일한 기본 정의
+const DEFAULT_ADMIN_EVENTS = [{
+  id: 'kkeutkkeuta', type: 'studytime', active: true,
+  name: '끝.끝.아 이벤트',
+  desc: '"끝나도 끝난게 아니야" 이벤트\n기간 : 7/6(월) ~ 7/19(일)\n대상 : 새봄면학관 썸머 신청 학생\n내용 : 14일간 공부시간 42시간 달성\n보상 : 시간 달성 시 썸머 비용에서 5만원 장학금 지원',
+  goal: 42, start: '2026-07-06', end: '2026-07-19'
+}, {
+  id: 'streakquest', type: 'streak', active: true,
+  name: '연속 출석 퀘스트',
+  desc: '내용 : 연속 20일 출석\n시작일 : 퀘스트 수락 다음 날부터 시작\n보상 : 이용권 기간 연장(1일) (+5일 / 시간권 : +15시간)',
+  goal: 20
+}];
+
+async function loadEventsAdmin() {
+  if (!window._adminDb) return;
+  try {
+    const { doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    // 보안규칙상 쓰기 가능한 문서가 notices/list뿐이므로 events 필드에 함께 저장
+    const snap = await getDoc(doc(window._adminDb, 'notices', 'list'));
+    let items = snap.exists() && Array.isArray(snap.data().events) ? snap.data().events : [];
+    // Firebase에 남은 구버전(연속출석형) 끝.끝.아 데이터는 새 공부시간형 정의로 1회 자동 이관.
+    // 이관 후에는 관리자앱에서 수정한 내용이 그대로 학생앱에 동기화된다.
+    let migrated = false;
+    items = items.map(ev => {
+      const isLegacy = (ev.id === 'kkeutkkeuta' || /끝\.?끝\.?아|끝나도/.test(ev.name || '')) && ev.type !== 'studytime';
+      if (!isLegacy) return ev;
+      migrated = true;
+      return Object.assign({}, DEFAULT_ADMIN_EVENTS[0], { active: ev.active !== false });
+    });
+    if (migrated) {
+      if (!items.some(e => e.type === 'streak')) items.push(DEFAULT_ADMIN_EVENTS[1]);
+      await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+      showAdminToast('🔄 끝.끝.아 이벤트가 새 정의(공부시간형)로 이관됐습니다');
+    }
+    window._adminEvents = items;
+    const el = document.getElementById('event-list-admin');
+    if (!el) return;
+    if (items.length === 0) {
+      el.innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:16px">등록된 이벤트 없음 — 위 폼으로 끝.끝.아 이벤트를 등록하세요</div>';
+      // 첫 사용 시 끝.끝.아 이벤트 기본값을 폼에 채워 한 번에 등록 가능하게
+      if (window._eventEditIdx === null && !document.getElementById('event-name-inp').value) {
+        const def = DEFAULT_ADMIN_EVENTS[0];
+        document.getElementById('event-name-inp').value = def.name;
+        document.getElementById('event-desc-inp').value = def.desc;
+        document.getElementById('event-goal-inp').value = def.goal;
+        document.getElementById('event-type-sel').value = def.type;
+        document.getElementById('event-start-inp').value = def.start;
+        document.getElementById('event-end-inp').value = def.end;
+        eventTypeChanged();
+      }
+      return;
+    }
+    el.innerHTML = items.map((ev, i) => {
+      const active = ev.active !== false;
+      const icon = ev.type === 'streak' ? '🔥' : '🎉';
+      let goalLine = '';
+      if (ev.type === 'streak') goalLine = `목표 ${ev.goal || 20}일 연속 출석`;
+      else if (ev.type === 'studytime') goalLine = `목표 ${ev.goal || 42}시간 공부 (${ev.start || ''} ~ ${ev.end || ''})`;
+      return `
+      <div style="background:${active ? '#FFFDF5' : '#F7F7F7'};border:1px solid ${active ? '#E0B020' : '#ddd'};border-radius:10px;padding:10px 12px${active ? '' : ';opacity:0.75'}">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
+          <div style="min-width:0;flex:1">
+            <span style="font-size:10px;font-weight:700;color:${active ? '#2E9E6B' : '#aaa'};margin-right:6px">${active ? '진행 중' : '중지'}</span>
+            <span style="font-size:12px;font-weight:600">${icon} ${ev.name || '이벤트'}</span>
+            <div style="font-size:11px;color:#aaa;margin-top:2px;white-space:pre-line">${(ev.desc || '').slice(0, 80)}${(ev.desc || '').length > 80 ? '…' : ''}</div>
+            ${goalLine ? `<div style="font-size:11px;color:#8B6010;margin-top:2px">${goalLine}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:5px;flex-shrink:0">
+            <button onclick="toggleEventActive(${i})" style="background:${active ? '#EEF7F1' : '#E8F3EC'};color:${active ? '#777' : '#2E9E6B'};border:1px solid ${active ? '#ccc' : '#2E9E6B'};border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">${active ? '비활성화' : '활성화'}</button>
+            <button onclick="editEvent(${i})" style="background:#FFF8DC;color:#8B6010;border:1px solid #E0B020;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">수정</button>
+            <button onclick="deleteEvent(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">삭제</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { console.error('이벤트 로드 실패:', e); }
+}
+
+// 날짜 문자열('2026-07-06' 등) → input[type=date] 값('YYYY-MM-DD')으로 0패딩
+function _evDateInp(s, fallback) {
+  const p = String(s || fallback).split('-').map(Number);
+  if (p.length !== 3 || p.some(isNaN)) return fallback;
+  return p[0] + '-' + String(p[1]).padStart(2, '0') + '-' + String(p[2]).padStart(2, '0');
+}
+
+window.eventTypeChanged = function() {
+  const t = document.getElementById('event-type-sel').value;
+  document.getElementById('event-goal-unit').textContent = t === 'studytime' ? '시간' : '일';
+  document.getElementById('event-period-label').style.display = t === 'studytime' ? 'flex' : 'none';
+};
+
+window.eventResetForm = function() {
+  window._eventEditIdx = null;
+  document.getElementById('event-form-title').textContent = '🎉 새 이벤트 등록';
+  document.getElementById('event-submit-btn').textContent = '이벤트 등록';
+  document.getElementById('event-cancel-edit-btn').style.display = 'none';
+  document.getElementById('event-name-inp').value = '';
+  document.getElementById('event-desc-inp').value = '';
+  document.getElementById('event-goal-inp').value = 42;
+  document.getElementById('event-type-sel').value = 'studytime';
+  document.getElementById('event-start-inp').value = '2026-07-06';
+  document.getElementById('event-end-inp').value = '2026-07-19';
+  document.getElementById('event-active-inp').checked = true;
+  eventTypeChanged();
+};
+
+window.editEvent = function(i) {
+  const ev = (window._adminEvents || [])[i];
+  if (!ev) return;
+  window._eventEditIdx = i;
+  document.getElementById('event-form-title').textContent = '✏️ 이벤트 수정';
+  document.getElementById('event-submit-btn').textContent = '수정 완료';
+  document.getElementById('event-cancel-edit-btn').style.display = 'inline-block';
+  document.getElementById('event-name-inp').value = ev.name || '';
+  document.getElementById('event-desc-inp').value = ev.desc || '';
+  document.getElementById('event-goal-inp').value = ev.goal || (ev.type === 'studytime' ? 42 : 20);
+  document.getElementById('event-type-sel').value = ev.type === 'streak' ? 'streak' : ev.type === 'studytime' ? 'studytime' : 'general';
+  document.getElementById('event-start-inp').value = _evDateInp(ev.start, '2026-07-06');
+  document.getElementById('event-end-inp').value = _evDateInp(ev.end, '2026-07-19');
+  document.getElementById('event-active-inp').checked = ev.active !== false;
+  eventTypeChanged();
+  document.getElementById('sec-events').scrollIntoView({ behavior: 'smooth', block: 'start' });
+};
+
+// 활성화/비활성화 토글 — active만 뒤집어 저장 (비활성 이벤트는 학생앱에서 숨김)
+window.toggleEventActive = async function(i) {
+  if (!window._adminDb) { showAdminToast('⚠️ Firebase 연결 필요'); return; }
+  const items = [...(window._adminEvents || [])];
+  if (!items[i]) return;
+  const nowActive = items[i].active !== false;
+  items[i] = Object.assign({}, items[i], { active: !nowActive });
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+    window._adminEvents = items;
+    showAdminToast(nowActive ? '⏸️ 이벤트가 비활성화됐습니다 (학생앱에서 숨김)' : '✅ 이벤트가 활성화됐습니다');
+    loadEventsAdmin();
+  } catch(e) {
+    console.error('이벤트 상태 변경 실패:', e);
+    showAdminToast('❌ 변경 실패: ' + e.message);
+  }
+};
+
+window.publishEvent = async function() {
+  const name = document.getElementById('event-name-inp').value.trim();
+  const desc = document.getElementById('event-desc-inp').value.trim();
+  const type = document.getElementById('event-type-sel').value;
+  const goal = Math.max(1, parseInt(document.getElementById('event-goal-inp').value, 10) || 20);
+  const active = document.getElementById('event-active-inp').checked;
+  if (!name) { showAdminToast('⚠️ 이벤트 이름을 입력하세요'); return; }
+  if (!window._adminDb) { showAdminToast('⚠️ Firebase 연결 필요'); return; }
+  const btn = document.getElementById('event-submit-btn');
+  btn.disabled = true;
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const isEdit = window._eventEditIdx !== null;
+    const prev = isEdit ? window._adminEvents[window._eventEditIdx] : null;
+    const evObj = {
+      id: prev ? prev.id : (type === 'studytime' ? 'kkeutkkeuta' : type === 'streak' ? 'streakquest' : Date.now()),
+      type, name, desc, goal, active,
+      date: prev && prev.date ? prev.date : new Date().toLocaleDateString('ko-KR')
+    };
+    if (type === 'studytime') {
+      evObj.start = document.getElementById('event-start-inp').value || '2026-07-06';
+      evObj.end = document.getElementById('event-end-inp').value || '2026-07-19';
+    }
+    let items = [...(window._adminEvents || [])];
+    if (isEdit) items[window._eventEditIdx] = evObj; else items.push(evObj);
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+    window._adminEvents = items;
+    eventResetForm();
+    showAdminToast(isEdit ? '✅ 이벤트가 수정됐습니다' : '✅ 이벤트가 등록됐습니다');
+    loadEventsAdmin();
+  } catch(e) {
+    console.error('이벤트 저장 실패:', e);
+    showAdminToast('❌ 저장 실패: ' + e.message);
+  } finally { btn.disabled = false; }
+};
+
+window.deleteEvent = async function(i) {
+  if (!window._adminDb) return;
+  if (!confirm('이 이벤트를 삭제할까요?')) return;
+  try {
+    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const items = (window._adminEvents || []).filter((_, idx) => idx !== i);
+    await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
+    window._adminEvents = items;
+    if (window._eventEditIdx === i) eventResetForm();
+    showAdminToast('✅ 이벤트가 삭제됐습니다');
+    loadEventsAdmin();
+  } catch(e) { console.error('이벤트 삭제 실패:', e); }
 };
 
 function showAdminToast(msg) {
@@ -4851,8 +5316,9 @@ async function loadTodayCheckinFromFirebase() {
   if (_loadCheckinLock) return;
   _loadCheckinLock = true;
   try {
-    const today = checkinBizDate();
-    const yesterday = checkinBizDate(1);
+    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const yd = new Date(Date.now() - 86400000);
+    const yesterday = yd.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     // 오늘·어제 기록만 조회 — 기록이 몇 달치 쌓여도 읽기량이 늘지 않도록 (비용·속도)
     const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', [today, yesterday])));
     const todayDocs = [];
@@ -4900,9 +5366,6 @@ async function loadTodayCheckinFromFirebase() {
     });
 
     // 어제 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
-    // 단, 오늘 날짜에 '퇴실' 문서가 있는 학생은 짝 없는 퇴실(자정 이후 퇴실이 다음날
-    // 날짜로 저장된 구기록 등)이라도 퇴실 의사로 인정해 이월하지 않는다.
-    const todayOutNames = new Set(todayDocs.filter(d => d.type === 'out' && d.studentName).map(d => d.studentName));
     const ydByStudent = {};
     yesterdayDocs.forEach(d => {
       if (!d.studentName) return;
@@ -4915,7 +5378,7 @@ async function loadTodayCheckinFromFirebase() {
         // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
         // ※ 예전에는 '아직 입실 중(!outTime)'인 기록만 검사해서, 오늘 퇴실 처리한 학생이
         //   어제 미퇴실 기록으로부터 다시 입실로 되살아나는 버그가 있었다.
-        const hasTodayRecord = todayRecords.some(r => r.studentName === name) || todayOutNames.has(name);
+        const hasTodayRecord = todayRecords.some(r => r.studentName === name);
         if (!hasTodayRecord) {
           const lastIn = rec.ins[rec.ins.length - 1];
           todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, inTs: (typeof lastIn.ts === 'number' ? lastIn.ts : null), carriedOver: true, carryFromDate: yesterday });
@@ -4957,8 +5420,8 @@ let _checkinSnapshotReady = false; // loadTodayCheckinFromFirebase 완료 후 tr
 let _checkinLogsUnsub = null;
 function subscribeCheckinLogs() {
   if (_checkinLogsUnsub) { try { _checkinLogsUnsub(); } catch(e) {} _checkinLogsUnsub = null; }
-  const _subToday = checkinBizDate();
-  const _subYd = checkinBizDate(1);
+  const _subToday = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+  const _subYd = new Date(Date.now() - 86400000).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
   _checkinLogsUnsub = onSnapshot(
   query(collection(db, 'checkin_logs'), where('date', 'in', [_subToday, _subYd])),
   (snapshot) => {
@@ -4968,7 +5431,7 @@ function subscribeCheckinLogs() {
       if (change.type === 'removed') return;
       const d = change.doc.data();
       // 오늘 날짜 기록만 처리
-      const _curDay = checkinBizDate();
+      const _curDay = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
       if (!d.date || d.date !== _curDay) return;
 
       const name = d.studentName;
@@ -5424,7 +5887,8 @@ function renderScheduleAlerts() {
 
 // 공지사항 저장 함수
 window.saveNoticesToFirebase = async function(notices) {
-  await setDoc(doc(db, 'notices', 'list'), { items: notices });
+  // merge: 같은 문서의 events 필드(이벤트 목록)를 보존
+  await setDoc(doc(db, 'notices', 'list'), { items: notices }, { merge: true });
 };
 
 // ── 솔라피 문자 발송 ──
@@ -6059,11 +6523,6 @@ window.adminForceCheckout = function(name) {
   // STUDENTS에 없어도 (관리자 등) todayRecords에서 seat 찾아서 Firebase 저장
   const seat = student?.seat || rec?.seat || '';
   const studentObj = student || { name, seat };
-  // 이월(어제 미퇴실) 기록이면 원래 날짜에도 퇴실 로그를 남겨 재이월 방지 (checkinConfirm과 동일)
-  if (rec && rec.carriedOver && rec.carryFromDate) {
-    const closeTime = (rec.inTime && /\d/.test(rec.inTime)) ? rec.inTime : timeStr;
-    saveCheckinToFirebase(studentObj, true, closeTime, rec.carryFromDate);
-  }
   saveCheckinToFirebase(studentObj, true, timeStr);
   buildDashboard();
   buildCheckinTodayList();
