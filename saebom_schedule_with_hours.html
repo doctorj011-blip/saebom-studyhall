@@ -1385,6 +1385,9 @@ window.enterKioskMode = function() {
   const btn = document.querySelector('.checkin-shortcut-btn');
   if (btn) window.showSection('checkin', btn);
   document.body.classList.add('kiosk-mode');
+  // 키오스크 진입 시 이미 떠 있는 관리 리마인더가 있으면 제거
+  const _rr = document.getElementById('round-reminder');
+  if (_rr) _rr.remove();
   updateKioskZoom();
   startKioskClock();
   const el = document.documentElement;
@@ -5182,6 +5185,8 @@ function showAdminToast(msg) {
   }
 
   function showRoundReminder() {
+    // 입실·퇴실 키오스크(전체화면) 모드에서는 알림을 띄우지 않는다.
+    if (document.body.classList.contains('kiosk-mode')) return;
     // 이미 떠 있으면 중복 생성 방지
     const old = document.getElementById('round-reminder');
     if (old) old.remove();
