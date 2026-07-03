@@ -4434,7 +4434,8 @@ window.showPartialTimePopup = function(day, p, e) {
   popup.style.cssText = 'position:fixed;z-index:99999;background:#fff;border:1.5px solid #FFCC80;border-radius:12px;padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,0.18);min-width:210px;top:' + y + 'px;left:' + x + 'px';
   const cur = (_schedDraft[day].partialTimes && _schedDraft[day].partialTimes[p]) || '';
   popup.innerHTML = `<div style="font-size:11px;font-weight:600;color:#7A5008;margin-bottom:6px">${p}교시 중간입실 시간</div>
-    <input id="partial-time-input" type="text" placeholder="예: 7:30" value="${cur}"
+    <input id="partial-time-input" type="text" inputmode="numeric" placeholder="숫자만 입력 (예: 730 → 7:30)" value="${cur}"
+      oninput="formatPartialTimeInput(this)"
       style="width:100%;padding:7px 10px;border:1.5px solid #FFCC80;border-radius:8px;font-size:12px;outline:none;box-sizing:border-box">
     <div style="display:flex;gap:6px;margin-top:8px">
       <button onclick="document.getElementById('partial-time-popup').remove()" style="flex:1;padding:6px;background:#f5f5f5;border:none;border-radius:7px;font-size:12px;cursor:pointer">건너뛰기</button>
@@ -4448,10 +4449,24 @@ window.showPartialTimePopup = function(day, p, e) {
   });
 };
 
+// 중간입실 시간 입력을 숫자만 받아 항상 "시:분" 형식으로 정규화
+// 예: "730"→"7:30", "1130"→"11:30", "900"→"9:00". 분(뒤 2자리) 60 이상이면 59로 보정
+function _normalizePartialTime(raw) {
+  let d = String(raw || '').replace(/[^0-9]/g, '').slice(0, 4);
+  if (d.length < 3) return d; // 입력 도중(1~2자리)엔 콜론 넣지 않음
+  let hh = d.slice(0, d.length - 2);
+  let mm = d.slice(d.length - 2);
+  if (Number(mm) > 59) mm = '59';
+  return hh + ':' + mm;
+}
+window.formatPartialTimeInput = function(el) {
+  el.value = _normalizePartialTime(el.value);
+};
+
 window.savePartialTime = function(day, p) {
   const inp = document.getElementById('partial-time-input');
-  // 저장 형식 m8(7:30)의 괄호·쉼표와 충돌하는 문자는 제거
-  const val = inp ? inp.value.trim().replace(/[(),]/g, '') : '';
+  // 숫자만 받아 "시:분" 형식으로 정규화 (형식 일관성 보장)
+  const val = inp ? _normalizePartialTime(inp.value) : '';
   if (!_schedDraft[day].partialTimes) _schedDraft[day].partialTimes = {};
   if (val) _schedDraft[day].partialTimes[p] = val;
   else delete _schedDraft[day].partialTimes[p];
