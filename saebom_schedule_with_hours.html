@@ -3100,7 +3100,9 @@ const KAKAO_TPL_SCHEDULE = 'KA01TP260629080354196BK3rZ4aVQLD';
 
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   const parentPhone = (student.parent || '').replace(/-/g, '');
-  if (!parentPhone) return;
+  // 유효한 휴대폰 번호(010+8자리)만 발송. 미등록('010'만 있거나 미완성)이면 조용히 생략
+  // → 학부모 번호가 없는 관리자 등도 알림톡 실패 토스트 없이 입퇴실 처리된다.
+  if (parentPhone.length < 10) return;
 
   const type      = isCheckout ? 'out' : 'in';
   const typeLabel = isCheckout ? '퇴실' : '입실';
@@ -3526,12 +3528,12 @@ function buildFloorplan() {
           const rec = adminSt ? todayRecords.find(r2 => r2.studentName === adminSt.name && !r2.outTime) : null;
           const dday = adminSt?.expiry ? calcDday(adminSt.expiry) : null;
           const ddayHtml = dday !== null ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '';
-          // 관리자석: 학생 있으면 우클릭으로 배석해제만 가능, 빈자리 클릭 불가
+          // 관리자석: 학생 있으면 클릭 상세·우클릭 배석해제, 빈자리는 클릭 시 관리자 등록
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
-          const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : '';
-          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:default" ${clickAttr} ${ctxAttr}>
+          const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : `onclick="if(!fpEditMode)openAddStudentModal(${fixed.n})"`;
+          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'default':'pointer'}" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
-            <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : ''}</div>
+            <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : '<span style="color:#C0A860;font-weight:600">＋ 등록</span>'}</div>
             ${ddayHtml}
             ${rec ? `<div style="font-size:9px;color:#2D7A4F;margin-top:2px">● 입실 ${rec.inTime||''}</div>` : ''}
           </div>`;
@@ -5380,8 +5382,6 @@ async function loadStudentsFromFirebase() {
       snap.forEach(d => {
         const v = d.data();
         if (!v.name) return;
-        const seatNum = parseInt(String(v.seat).replace('번',''));
-        if (seatNum >= 54 && seatNum <= 63) return;
         STUDENTS.push({
           seat: String(v.seat).replace('번',''), name: v.name,
           phone: v.phone || '', parent: v.parent || '',
@@ -5435,8 +5435,6 @@ async function loadStudentsFromFirebase() {
         return;
       }
       const vSeat = String(v.seat).replace('번','');
-      const seatNum = parseInt(vSeat);
-      if (seatNum >= 54 && seatNum <= 63) return;
       const updated = {
         seat: vSeat, name: v.name,
         phone: v.phone || '', parent: v.parent || '',
