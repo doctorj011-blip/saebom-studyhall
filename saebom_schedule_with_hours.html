@@ -259,6 +259,23 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
 .admin-toast.show{opacity:1}
 
+/* 관리 리마인더 사람 SVG — 좌우로 걷기(방향 전환 시 뒤집힘) + 팔다리 스윙 */
+@keyframes roundWalk{
+  0%,100%{transform:translateX(-14px) scaleX(1)}
+  45%{transform:translateX(14px) scaleX(1)}
+  50%{transform:translateX(14px) scaleX(-1)}
+  95%{transform:translateX(-14px) scaleX(-1)}
+}
+@keyframes rwLegA{0%,100%{transform:rotate(24deg)}50%{transform:rotate(-24deg)}}
+@keyframes rwLegB{0%,100%{transform:rotate(-24deg)}50%{transform:rotate(24deg)}}
+@keyframes rwArmA{0%,100%{transform:rotate(-20deg)}50%{transform:rotate(20deg)}}
+@keyframes rwArmB{0%,100%{transform:rotate(20deg)}50%{transform:rotate(-20deg)}}
+.round-walker{animation:roundWalk 2.8s ease-in-out infinite}
+.round-walker .rw-legA{transform-box:view-box;transform-origin:30px 54px;animation:rwLegA .62s ease-in-out infinite}
+.round-walker .rw-legB{transform-box:view-box;transform-origin:30px 54px;animation:rwLegB .62s ease-in-out infinite}
+.round-walker .rw-armA{transform-box:view-box;transform-origin:30px 27px;animation:rwArmA .62s ease-in-out infinite}
+.round-walker .rw-armB{transform-box:view-box;transform-origin:30px 27px;animation:rwArmB .62s ease-in-out infinite}
+
 /* 스케줄 편집 모달 */
 .sched-modal{background:#ffffff;border-radius:16px;width:min(96vw,640px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden}
 .sched-modal-header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;border-bottom:0.5px solid var(--color-border-tertiary)}
@@ -5175,7 +5192,7 @@ function showAdminToast(msg) {
 //   - 어느 탭/화면을 보고 있든 화면 상단 중앙에 고정 표시된다.
 // ══════════════════════════════════════
 (function(){
-  const REMINDER_MSG = '알림창을 닫고 관리 동선을 따라 학생들을 관리해 주세요~<br>조는 학생, 딴짓하는 학생 기록해 주세요';
+  const REMINDER_MSG = '알림창을 닫고 관리 동선을 따라<br>학생들을 관리해 주세요~<br>조는 학생, 딴짓하는 학생 기록해 주세요';
   let _curPeriod = null;   // 현재 반복 중인 교시 번호
   let _nextFireAt = 0;     // 다음 알림 예정 시각(ms)
 
@@ -5195,13 +5212,21 @@ function showAdminToast(msg) {
     box.id = 'round-reminder';
     box.style.cssText = 'position:fixed;top:24px;left:50%;transform:translateX(-50%) translateY(-12px);' +
       'max-width:min(92vw,460px);background:#5C3D08;color:#fff;padding:16px 20px;border-radius:16px;' +
-      'box-shadow:0 8px 32px rgba(0,0,0,0.28);z-index:100000;display:flex;align-items:flex-start;gap:12px;' +
+      'box-shadow:0 8px 32px rgba(0,0,0,0.28);z-index:100000;display:flex;align-items:center;gap:14px;' +
       'font-size:15px;line-height:1.5;font-weight:600;opacity:0;transition:opacity .3s,transform .3s';
     box.innerHTML =
-      '<span style="font-size:22px;flex-shrink:0;line-height:1.2">🚶</span>' +
-      '<span style="flex:1">' + REMINDER_MSG + '</span>' +
+      '<span style="flex-shrink:0;width:96px;display:flex;justify-content:center;overflow:visible">' +
+        '<svg class="round-walker" width="72" height="82" viewBox="0 0 60 96" fill="none" stroke="#fff" stroke-width="5" stroke-linecap="round">' +
+          '<g class="rw-armB"><line x1="30" y1="27" x2="30" y2="47"/></g>' +
+          '<g class="rw-legB"><line x1="30" y1="54" x2="30" y2="84"/></g>' +
+          '<line x1="30" y1="21" x2="30" y2="54"/>' +
+          '<circle cx="30" cy="12" r="8" fill="#fff" stroke="none"/>' +
+          '<g class="rw-legA"><line x1="30" y1="54" x2="30" y2="84"/></g>' +
+          '<g class="rw-armA"><line x1="30" y1="27" x2="30" y2="47"/></g>' +
+        '</svg></span>' +
+      '<span style="flex:1;text-align:right">' + REMINDER_MSG + '</span>' +
       '<button aria-label="닫기" style="background:rgba(255,255,255,0.18);border:none;color:#fff;' +
-        'width:26px;height:26px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0;line-height:1">✕</button>';
+        'width:26px;height:26px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0;line-height:1;align-self:flex-start">✕</button>';
     document.body.appendChild(box);
     // 등장 애니메이션
     requestAnimationFrame(() => { box.style.opacity = '1'; box.style.transform = 'translateX(-50%) translateY(0)'; });
