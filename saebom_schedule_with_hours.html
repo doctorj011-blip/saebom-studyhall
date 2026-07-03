@@ -2170,7 +2170,10 @@ function getCellContent(sched, pidx) {
     return r ? `<span class="cell-absent">x(${r})</span>` : `<span class="cell-absent">x</span>`;
   }
   if (draft.periods.has(p)) {
-    if (draft.partials && draft.partials.has(p)) return `<span class="cell-partial">중간입실</span>`;
+    if (draft.partials && draft.partials.has(p)) {
+      const t = draft.partialTimes && draft.partialTimes[p];
+      return `<span class="cell-partial" title="교시 중간 입실">${t ? t + '~' : '중간입실'}</span>`;
+    }
     return `<span class="cell-attend">o</span>`;
   }
   return '<span class="cell-empty">—</span>';
@@ -2277,6 +2280,29 @@ function showTodayAttendees() {
   document.body.appendChild(overlay);
 }
 
+// 교시별 시작·종료(분) — getCurrentPeriod의 times 배열과 동일하게 유지할 것
+const PERIOD_BOUNDS = [null,
+  [540,600],[610,670],[680,750],[810,870],[880,940],[950,1020],
+  [1080,1130],[1140,1220],[1230,1320],[1350,1430],[1440,1500]];
+
+// 중간입실 시간 문자열("7:30" 등 12시간 표기)을 해당 교시 구간에 맞는 분(min)으로 변환.
+// 해석 불가하면 null (→ 호출부에서 해당 교시 알림 제외로 처리)
+function _partialTimeToMin(str, p) {
+  if (!str) return null;
+  const m = String(str).match(/(\d{1,2})\s*[:시.]\s*(\d{1,2})/) || String(str).match(/^(\d{1,2})\s*시?$/);
+  if (!m) return null;
+  const h = Number(m[1]), mm = Number(m[2] || 0);
+  if (isNaN(h) || isNaN(mm) || mm >= 60) return null;
+  const bounds = PERIOD_BOUNDS[p];
+  if (!bounds) return null;
+  const base = h * 60 + mm;
+  // 12시간 표기 보정: 그대로/+12시간/+24시간 중 교시 구간에 들어오는 값 선택 (시작 60분 전까지 허용)
+  for (const cand of [base, base + 720, base + 1440]) {
+    if (cand >= bounds[0] - 60 && cand <= bounds[1]) return cand;
+  }
+  return null;
+}
+
 // ALERTS 동적 계산: 현재 교시에 출석해야 하는데 PRESENT에 없는 학생
 function calcAlerts() {
   const p = getCurrentPeriod();
@@ -2302,6 +2328,15 @@ function calcAlerts() {
     // parseScheduleStr로 교시 상태 파악
     const draft = parseScheduleStr(sched);
     if (draft.periods.has(p) && !draft.absentPeriods.has(p)) {
+      // 중간입실 교시: 예정 입실시간 전까지는 미입실 알림에서 제외
+      if (draft.partials && draft.partials.has(p)) {
+        const t = _partialTimeToMin(draft.partialTimes && draft.partialTimes[p], p);
+        if (t === null) return; // 시간 미지정·해석불가 → 이 교시는 알림 제외
+        const now = new Date();
+        let cur = now.getHours() * 60 + now.getMinutes();
+        if (now.getHours() < 3) cur += 1440; // 자정 넘김(11교시)은 전날 밤 기준
+        if (cur < t) return; // 아직 입실 예정 시간 전
+      }
       // 출석 예정인데 미입실
       alerts.push({
         name: s.name,
@@ -4112,15 +4147,17 @@ window.closeScheduleModal = function() {
 }
 
 // 스케줄 문자열 → draft 객체
-// 저장 형식: "7,8,x(영어),10,11" — 교시순서로 출석/결석 혼합
+// 저장 형식: "7,m8(7:30),x9(영어),10,11" — 교시순서로 출석/중간입실/결석 혼합
+//   m8(7:30) = 8교시 중간입실(7:30 입실 예정), m8 = 시간 미지정 중간입실
 // 구버전 형식: "x(수학학원),7~9,10" — x(사유)가 전체 결석 prefix
 window.parseScheduleStr =
 function parseScheduleStr(str) {
-  const empty = { absent: false, absentReason: '', periods: new Set(), partials: new Set(), absentPeriods: new Set(), absentReasons: {} };
+  const empty = { absent: false, absentReason: '', periods: new Set(), partials: new Set(), partialTimes: {}, absentPeriods: new Set(), absentReasons: {} };
   if (!str || str === '-') return empty;
 
   const periods = new Set();
   const partials = new Set();
+  const partialTimes = {};
   const absentPeriods = new Set();
   const absentReasons = {};
 
@@ -4157,12 +4194,22 @@ function parseScheduleStr(str) {
   } else {
     // 새 형식: draftToStr가 validPeriods 순서대로 저장
     // "7,x(사유),9,x(사유2),11" → 토큰 i번째 = validPeriods[i]번째 교시
-    // 토요일 여부: 첫 숫자 토큰이 1~6이면 토요일
-    const firstNum = tokens.find(t => /^\d+$/.test(t));
+    // 토요일 여부: 첫 교시 번호(m/x 접두 포함)가 1~6이면 토요일
+    let firstNum = null;
+    for (const t of tokens) { const nm = t.match(/^[mx]?(\d+)/i); if (nm) { firstNum = nm[1]; break; } }
     const hasSatPeriod = firstNum && Number(firstNum) >= 1 && Number(firstNum) <= 6;
     const validList = hasSatPeriod ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
 
     tokens.forEach((token, i) => {
+      // 0) 중간입실: m8 또는 m8(7:30) — 출석이면서 교시 중간 입실
+      const midM = token.match(/^m(\d+)(?:\(([^)]*)\))?$/i);
+      if (midM) {
+        const mp = Number(midM[1]);
+        periods.add(mp);
+        partials.add(mp);
+        if (midM[2]) partialTimes[mp] = midM[2];
+        return;
+      }
       // 1) 명시적 결석 (교시 번호 포함): x10 또는 x10(사유)
       const absNumM = token.match(/^x(\d+)(?:\(([^)]*)\))?$/i);
       if (absNumM) {
@@ -4194,7 +4241,7 @@ function parseScheduleStr(str) {
   }
 
   const absent = absentPeriods.size > 0;
-  return { absent, absentReason: '', periods, partials, absentPeriods, absentReasons };
+  return { absent, absentReason: '', periods, partials, partialTimes, absentPeriods, absentReasons };
 }
 
 // draft → 스케줄 문자열
@@ -4202,6 +4249,8 @@ function draftToStr(draft, isSat) {
   if (!draft) return '-';
   if (!draft.absentPeriods) draft.absentPeriods = new Set();
   if (!draft.absentReasons) draft.absentReasons = {};
+  if (!draft.partials) draft.partials = new Set();
+  if (!draft.partialTimes) draft.partialTimes = {};
   if (draft.periods.size === 0 && draft.absentPeriods.size === 0) return '-';
 
   // 토요일은 1~11, 평일은 7~11만 출력
@@ -4212,7 +4261,12 @@ function draftToStr(draft, isSat) {
       const reason = draft.absentReasons[p] || '';
       parts.push(reason ? 'x' + p + '(' + reason + ')' : 'x' + p);
     } else if (draft.periods.has(p)) {
-      parts.push(String(p));
+      if (draft.partials.has(p)) {
+        const t = draft.partialTimes[p] || '';
+        parts.push(t ? 'm' + p + '(' + t + ')' : 'm' + p);
+      } else {
+        parts.push(String(p));
+      }
     }
   }
   return parts.length ? parts.join(',') : '-';
@@ -4223,8 +4277,9 @@ function renderScheduleModal() {
 
   let html = `<div class="sched-legend">
     <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FFF8DC;border:0.5px solid #A5D6A7"></div>출석</div>
+    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FFF3E0;border:0.5px solid #FFCC80"></div>중간입실</div>
     <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FCEBEB;border:0.5px solid #F09595"></div>결석</div>
-    <div class="sched-legend-item" style="font-size:11px;color:var(--color-text-tertiary)">교시 클릭: 출석↔결석 토글 / 우클릭: 공란</div>
+    <div class="sched-legend-item" style="font-size:11px;color:var(--color-text-tertiary)">클릭: 공란→출석→중간입실 / 우클릭: 결석→공란</div>
   </div>`;
 
   DAYS.forEach(day => {
@@ -4246,7 +4301,7 @@ function renderScheduleModal() {
         cls += draft.partials && draft.partials.has(p) ? ' partial' : ' on';
       }
       html += `<button class="${cls}"
-        onclick="togglePeriod('${day}',${p})"
+        onclick="togglePeriod('${day}',${p},event)"
         oncontextmenu="clearPeriod('${day}',${p},event)"
         ontouchstart="startLongPress('${day}',${p},event)"
         ontouchend="cancelLongPress()"
@@ -4265,22 +4320,40 @@ function renderScheduleModal() {
       html += `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${reasons}</div>`;
     }
 
+    // 중간입실 교시 칩 (시간 표시, 클릭하면 시간 수정)
+    if (draft.partials && draft.partials.size > 0) {
+      const mids = [...draft.partials].sort((a,b)=>a-b).map(p => {
+        const t = draft.partialTimes && draft.partialTimes[p];
+        return `<span onclick="showPartialTimePopup('${day}',${p},event)" style="font-size:10px;color:#7A5008;background:#FFF3E0;padding:2px 6px;border-radius:4px;cursor:pointer" title="클릭해서 입실시간 수정">${p}교시 ${t ? t + '~ 입실' : '중간입실'}</span>`;
+      }).join(' ');
+      html += `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${mids}</div>`;
+    }
+
     html += `</div></div>`;
   });
 
   body.innerHTML = html;
 }
 
-function togglePeriod(day, p) {
-  // 클릭: 공란 ↔ 출석 토글
+function togglePeriod(day, p, e) {
+  // 클릭 순환: 공란 → 출석 → 중간입실 → 공란 (결석은 우클릭)
   const draft = _schedDraft[day];
   if (!draft.absentPeriods) draft.absentPeriods = new Set();
   if (!draft.absentReasons) draft.absentReasons = {};
+  if (!draft.partials) draft.partials = new Set();
+  if (!draft.partialTimes) draft.partialTimes = {};
 
-  if (draft.periods.has(p)) {
-    // 출석 → 공란
+  if (draft.partials.has(p)) {
+    // 중간입실 → 공란
     draft.periods.delete(p);
-    if (draft.partials) draft.partials.delete(p);
+    draft.partials.delete(p);
+    delete draft.partialTimes[p];
+  } else if (draft.periods.has(p)) {
+    // 출석 → 중간입실 (입실시간 팝업)
+    draft.partials.add(p);
+    renderScheduleModal();
+    if (e) showPartialTimePopup(day, p, e);
+    return;
   } else if (draft.absentPeriods.has(p)) {
     // 결석 → 공란
     draft.absentPeriods.delete(p);
@@ -4304,6 +4377,7 @@ function clearPeriod(day, p, e) {
     // 출석 또는 공란 → 결석 (사유팝업)
     draft.periods.delete(p);
     if (draft.partials) draft.partials.delete(p);
+    if (draft.partialTimes) delete draft.partialTimes[p];
     draft.absentPeriods.add(p);
     draft.absent = true;
     renderScheduleModal();
@@ -4347,6 +4421,41 @@ window.saveAbsentReason = function(day, p) {
   if (!_schedDraft[day].absentReasons) _schedDraft[day].absentReasons = {};
   _schedDraft[day].absentReasons[p] = reason;
   document.getElementById('absent-reason-popup')?.remove();
+  renderScheduleModal();
+};
+
+window.showPartialTimePopup = function(day, p, e) {
+  const old = document.getElementById('partial-time-popup');
+  if (old) old.remove();
+  const popup = document.createElement('div');
+  popup.id = 'partial-time-popup';
+  const x = Math.min(e.clientX, window.innerWidth - 230);
+  const y = Math.min(e.clientY, window.innerHeight - 130);
+  popup.style.cssText = 'position:fixed;z-index:99999;background:#fff;border:1.5px solid #FFCC80;border-radius:12px;padding:12px 14px;box-shadow:0 4px 20px rgba(0,0,0,0.18);min-width:210px;top:' + y + 'px;left:' + x + 'px';
+  const cur = (_schedDraft[day].partialTimes && _schedDraft[day].partialTimes[p]) || '';
+  popup.innerHTML = `<div style="font-size:11px;font-weight:600;color:#7A5008;margin-bottom:6px">${p}교시 중간입실 시간</div>
+    <input id="partial-time-input" type="text" placeholder="예: 7:30" value="${cur}"
+      style="width:100%;padding:7px 10px;border:1.5px solid #FFCC80;border-radius:8px;font-size:12px;outline:none;box-sizing:border-box">
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button onclick="document.getElementById('partial-time-popup').remove()" style="flex:1;padding:6px;background:#f5f5f5;border:none;border-radius:7px;font-size:12px;cursor:pointer">건너뛰기</button>
+      <button onclick="savePartialTime('${day}',${p})" style="flex:1;padding:6px;background:#E67E22;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer">확인</button>
+    </div>`;
+  document.body.appendChild(popup);
+  setTimeout(() => { const inp = document.getElementById('partial-time-input'); if(inp){inp.focus();inp.select();} }, 50);
+  popup.addEventListener('keydown', ev => {
+    if (ev.key === 'Enter') savePartialTime(day, p);
+    if (ev.key === 'Escape') popup.remove();
+  });
+};
+
+window.savePartialTime = function(day, p) {
+  const inp = document.getElementById('partial-time-input');
+  // 저장 형식 m8(7:30)의 괄호·쉼표와 충돌하는 문자는 제거
+  const val = inp ? inp.value.trim().replace(/[(),]/g, '') : '';
+  if (!_schedDraft[day].partialTimes) _schedDraft[day].partialTimes = {};
+  if (val) _schedDraft[day].partialTimes[p] = val;
+  else delete _schedDraft[day].partialTimes[p];
+  document.getElementById('partial-time-popup')?.remove();
   renderScheduleModal();
 };
 
@@ -5843,7 +5952,10 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
         const oldP = window.parseScheduleStr(oldStr);
         const newP = window.parseScheduleStr(newStr);
         const eq = (a, b) => a.size === b.size && [...a].every(v => b.has(v));
-        if (eq(oldP.periods, newP.periods) && eq(oldP.absentPeriods, newP.absentPeriods)) return false;
+        const eqTimes = [...(newP.partials || [])].every(v =>
+          ((oldP.partialTimes || {})[v] || '') === ((newP.partialTimes || {})[v] || ''));
+        if (eq(oldP.periods, newP.periods) && eq(oldP.absentPeriods, newP.absentPeriods)
+            && eq(oldP.partials || new Set(), newP.partials || new Set()) && eqTimes) return false;
       }
       return true;
     }).map(d => ({ day: d, oldVal: prevData[d] || '-', newVal: data[d] || '-' }));
@@ -6338,8 +6450,10 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
       // 참여/불참으로 지정된 교시만 표시 (미등록 교시는 생략)
       if (!isAttend && !isAbsent) return;
       const time = periodTimes[p] || '';
+      const isPartial = parsed.partials && parsed.partials.has(p);
+      const pTime = isPartial && parsed.partialTimes ? parsed.partialTimes[p] : '';
       const status = isAttend
-        ? '참여'
+        ? (isPartial ? `참여(${pTime ? pTime + ' 중간입실' : '중간입실'})` : '참여')
         : `불참${parsed.absentReasons[p] ? `(${parsed.absentReasons[p]})` : ''}`;
       changeLines.push(`${p}교시(${time}) : ${status}`);
     });

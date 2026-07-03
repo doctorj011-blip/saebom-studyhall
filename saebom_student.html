@@ -898,7 +898,8 @@ function initDraft() {
   draftSchedule = {};
   DAYS.forEach(day => {
     const sched = currentStudent.schedule[day] || '';
-    draftSchedule[day] = { reason: '', reasons: {}, periods: {} };
+    // partials: 관리자가 지정한 중간입실 교시({교시: 시간}) — 저장 시 그대로 보존
+    draftSchedule[day] = { reason: '', reasons: {}, periods: {}, partials: parsePartials(sched) };
 
     const reasonMatch = sched.match(/x\(([^)]+)\)/);
     if (reasonMatch) draftSchedule[day].reason = reasonMatch[1];
@@ -911,6 +912,16 @@ function initDraft() {
       if (r) draftSchedule[day].reasons[n] = r;
     });
   });
+}
+
+// 스케줄 문자열에서 중간입실 교시 → 입실시간('' 가능) 맵 추출
+function parsePartials(sched) {
+  const out = {};
+  if (!sched || sched === '-') return out;
+  for (const m of sched.matchAll(/(?:^|,)\s*m(\d+)(?:\(([^)]*)\))?/gi)) {
+    out[Number(m[1])] = m[2] || '';
+  }
+  return out;
 }
 
 // 특정 교시의 불참 사유 추출 (교시별 x{n}(사유) 우선, 없으면 구버전 요일 단일 사유)
@@ -931,6 +942,11 @@ function parsePeriodStatus(sched, pNum) {
   if (!sched || sched === '-') return 'none';
   const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
 
+  // 0) 중간입실: m8 또는 m8(7:30) — 출석이면서 교시 중간 입실
+  for (const t of tokens) {
+    const m = t.match(/^m(\d+)(?:\(([^)]*)\))?$/i);
+    if (m && Number(m[1]) === pNum) return 'attend';
+  }
   // 1) 명시적 결석: x10 또는 x10(사유)
   for (const t of tokens) {
     const m = t.match(/^x(\d+)(?:\(([^)]*)\))?$/i);
@@ -1176,7 +1192,9 @@ function buildWeeklyTable() {
     DAYS.forEach(day => {
       const status = draftSchedule[day]?.periods[pNum] || 'none';
       let cell = '';
-      if (status === 'attend') cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
+      const pt = status === 'attend' ? draftSchedule[day]?.partials?.[pNum] : undefined;
+      if (pt !== undefined) cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})" title="교시 중간 입실">O</span><div style="font-size:8px;color:#E67E22;line-height:1.2">${pt ? pt+'~' : '중간'}</div>`;
+      else if (status === 'attend') cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
       else if (status === 'absent') cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`;
       else cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       html += `<td>${cell}</td>`;
@@ -1215,7 +1233,13 @@ async function saveSchedule() {
     periods.forEach(p => {
       const state = dd.periods[p.n];
       if (state === 'attend') {
-        tokens.push(String(p.n));
+        // 관리자가 지정한 중간입실(m교시)은 그대로 보존해서 저장
+        if (dd.partials && dd.partials[p.n] !== undefined) {
+          const t = dd.partials[p.n];
+          tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
+        } else {
+          tokens.push(String(p.n));
+        }
         hasAny = true;
       } else if (state === 'absent') {
         const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
