@@ -2668,10 +2668,27 @@ function maskPhone(p) {
   return d.slice(0, 3) + '-****-' + d.slice(-4);
 }
 
+// 새벽(01:30~06:00) 신규 입실 차단 여부 — 심야 미퇴실 정리 중 실수로 재입실되어
+// 유령 세션(예: 02:40 입실 → 05:20 퇴실 = 2시간 40분)이 누적되는 것을 방지. 퇴실은 항상 허용.
+function isLateNightCheckinBlocked() {
+  const now = new Date();
+  const t = now.getHours() * 60 + now.getMinutes();
+  return t >= 90 && t < 360; // 01:30 ~ 06:00
+}
+
 function showCheckinConfirmFor(student) {
   // 현재 상태 확인 (입실 중인지 퇴실 상태인지)
   const existing = todayRecords.find(r => r.studentName === student.name && !r.outTime);
   const isCheckout = !!existing;
+
+  // 새벽 시간대 신규 입실 차단 (퇴실은 허용)
+  if (!isCheckout && isLateNightCheckinBlocked()) {
+    checkinReset();
+    const errEl = document.getElementById('checkin-error');
+    errEl.innerHTML = `⛔ 새벽 시간(01:30~06:00)에는 입실할 수 없습니다.`;
+    errEl.style.display = 'block';
+    return;
+  }
 
   // 만료일 확인 (퇴실은 만료돼도 허용, 입실만 차단)
   if (!isCheckout && student.expiry) {
@@ -2780,6 +2797,13 @@ window.checkinConfirm = function() {
     checkinReset();
     return;
   }
+  // (3) 새벽 시간대 신규 입실 차단 백스톱 — 확인 화면을 띄워둔 채 01:30을 넘긴 경우,
+  //     이월 기록의 "새로 입실" 버튼(checkinFreshCheckin) 경유 입실도 여기서 함께 차단된다
+  if (!isCheckout && isLateNightCheckinBlocked()) {
+    showAdminToast('⛔ 새벽 시간(01:30~06:00)에는 입실할 수 없습니다');
+    checkinReset();
+    return;
+  }
   window._checkinProcessing = true;
 
   const now = new Date();
@@ -2806,10 +2830,17 @@ window.checkinConfirm = function() {
     });
 
     // ── 누적시간 계산 및 저장 ──
-    let inMin  = timeToMin(existing.inTime) ?? 0;
+    const inRaw = timeToMin(existing.inTime);
+    let inMin  = inRaw ?? 0;
     let outMin = timeToMin(timeStr) ?? 0;
     if (outMin < inMin) outMin += 24 * 60; // 자정 넘긴 경우
-    const diffMin = Math.max(0, outMin - inMin);
+    let diffMin = Math.max(0, outMin - inMin);
+    // 이월(전날 미퇴실) 기록의 퇴실: 실제 퇴실 시각을 알 수 없으므로 마감(01:00 = 25:00)까지만
+    // 인정 — 새벽에 미퇴실을 정리할 때 정리 시점까지 몇 시간씩 과대 누적되는 것을 방지.
+    // 입실 시각을 모르는(?) 이월 기록은 누적하지 않는다.
+    if (existing.carriedOver) {
+      diffMin = (inRaw == null) ? 0 : Math.max(0, Math.min(outMin, 25 * 60) - inMin);
+    }
     _checkoutTotalMin = diffMin;
     const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
 
