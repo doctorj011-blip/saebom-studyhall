@@ -970,13 +970,13 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <div class="sched-modal-header">
       <div style="flex:1">
         <div style="display:flex;align-items:baseline;gap:8px">
-          <input id="edit-name" class="sched-modal-title" placeholder="이름" maxlength="20" title="학생 이름 — 잘못 입력했으면 수정하세요"
+          <input id="edit-name" class="sched-modal-title" placeholder="이름" maxlength="20" title="이름 — 잘못 입력했으면 수정하세요"
             style="border:none;border-bottom:1px dashed var(--color-border-secondary);background:transparent;color:var(--color-text-primary);outline:none;width:100px;padding:0 2px 2px">
           <div id="sched-modal-seat" style="font-size:16px;font-weight:700;color:#C8900A"></div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <div id="edit-phone-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
           <div>
-            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
+            <div id="edit-phone-label" style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
             <div style="display:flex;align-items:stretch;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
               <span style="display:flex;align-items:center;padding:0 4px 0 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap;background:var(--color-background-primary)">010-</span>
               <input id="edit-phone" type="tel" placeholder="0000-0000" maxlength="9"
@@ -4134,10 +4134,12 @@ function openScheduleModal(idx) {
   document.getElementById('edit-start-date').value = s.startDate || '';
   setEditGender(s.gender || 'f');
 
-  // 관리자: 부모님번호·이용기간 숨기고 본문을 근무요일 편집으로 대체
+  // 관리자: 부모님번호·이용기간 숨기고, 전화번호 라벨을 '관리자 번호'로, 본문을 근무요일 편집으로 대체
   const isAdmin = parseInt(s.seat) >= 54;
   document.getElementById('edit-parent-wrap').style.display = isAdmin ? 'none' : '';
   document.getElementById('edit-dates-wrap').style.display = isAdmin ? 'none' : '';
+  document.getElementById('edit-phone-label').textContent = isAdmin ? '📱 관리자 번호' : '📱 학생 번호';
+  document.getElementById('edit-phone-grid').style.gridTemplateColumns = isAdmin ? '1fr' : '1fr 1fr';
   if (isAdmin) {
     renderAdminWorkDays(s);
   } else {
@@ -6139,7 +6141,10 @@ window.saveNoticesToFirebase = async function(notices) {
 // 공통 HMAC 인증 헤더 생성
 async function getSolapiAuthHeader() {
   const date = new Date().toISOString();
-  const salt = Math.random().toString(36).substr(2,32);
+  // salt는 솔라피 규격상 12~64자여야 함 (Math.random 방식은 ~10자로 규격 미달 → SignatureDoesNotMatch)
+  const saltBytes = new Uint8Array(32);
+  crypto.getRandomValues(saltBytes);
+  const salt = Array.from(saltBytes).map(b=>b.toString(16).padStart(2,'0')).join(''); // 64자 hex
   const enc = new TextEncoder();
   const key = await crypto.subtle.importKey(
     'raw', enc.encode(SOLAPI_API_SECRET),
@@ -6842,7 +6847,9 @@ window.showTodayAttendees = function() {
 
 // 관리자 강제 퇴실 처리
 window.adminForceCheckout = function(name) {
-  if (!confirm(`${name} 학생을 퇴실 처리할까요?`)) return;
+  const _fcStu = STUDENTS.find(s => s.name === name);
+  const _fcRole = (_fcStu && parseInt(_fcStu.seat) >= 54) ? '관리자' : '학생';
+  if (!confirm(`${name} ${_fcRole}을 퇴실 처리할까요?`)) return;
   const now = new Date();
   const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
   const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
@@ -6865,9 +6872,10 @@ window.adminForceCheckout = function(name) {
 // (출석 기록, Firebase 저장, 학부모 알림, 18시 이후 스터디룸 자동배정 포함)
 window.adminForceCheckin = function(name) {
   const student = STUDENTS.find(s => s.name === name);
-  if (!student) { showAdminToast('❌ 학생 정보를 찾을 수 없습니다'); return; }
+  if (!student) { showAdminToast('❌ 정보를 찾을 수 없습니다'); return; }
+  const role = parseInt(student.seat) >= 54 ? '관리자' : '학생';
   if (todayRecords.some(r => r.studentName === name && !r.outTime)) {
-    showAdminToast(`ℹ️ ${name} 학생은 이미 입실 중입니다`); return;
+    showAdminToast(`ℹ️ ${name} ${role}은 이미 입실 중입니다`); return;
   }
   // 만료일 확인 — 학생 직접 입실은 차단되지만 관리자는 확인 후 진행 가능
   if (student.expiry) {
@@ -6875,7 +6883,7 @@ window.adminForceCheckin = function(name) {
     const expDate = new Date(student.expiry); expDate.setHours(0,0,0,0);
     if (expDate < today && !confirm(`⛔ ${name} 학생은 사용기간이 만료되었습니다 (${student.expiry}).\n그래도 입실 처리할까요?`)) return;
   }
-  if (!confirm(`${name} 학생을 입실 처리할까요?\n(학생이 직접 번호를 눌러 입실한 것과 동일하게 처리됩니다)`)) return;
+  if (!confirm(`${name} ${role}을 입실 처리할까요?\n(직접 번호를 눌러 입실한 것과 동일하게 처리됩니다)`)) return;
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
