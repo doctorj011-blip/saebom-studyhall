@@ -298,20 +298,20 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .chart-tag{font-size:9px;font-weight:700;color:#fff;background:#4A3FA8;border-radius:6px;padding:2px 5px;white-space:nowrap}
 .chart-day{font-size:10px;color:var(--text3)}
 /* ── 이벤트 게이지바 (세그먼트형) ── */
-.ev-card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 2px 10px rgba(0,0,0,0.06);margin-bottom:14px}
+.ev-card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);margin-bottom:14px}
 .ev-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-.ev-card-title{font-size:15px;font-weight:800;color:#2B2B33}
-.ev-badge{font-size:10px;font-weight:700;color:#fff;background:#3DBE8B;border-radius:8px;padding:3px 8px}
-.ev-desc{font-size:12px;color:#77777F;line-height:1.6;white-space:pre-line;margin-bottom:12px}
-.ev-gauge-wrap{background:#23232B;border-radius:12px;padding:14px 14px 10px}
+.ev-card-title{font-size:15px;font-weight:800;color:var(--text)}
+.ev-badge{font-size:10px;font-weight:700;color:var(--amber-dark);background:var(--amber-pale);border:1px solid rgba(108,93,211,0.25);border-radius:8px;padding:3px 8px}
+.ev-desc{font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-line;margin-bottom:12px}
+.ev-gauge-wrap{background:var(--surface);border:1px solid var(--border-light);border-radius:12px;padding:14px 14px 10px}
 .ev-gauge-track{position:relative;display:flex;gap:2px;height:34px}
-.ev-seg{flex:1;background:#3A3A46;border-radius:2px}
-.ev-seg.on{background:linear-gradient(180deg,#5FD9A2,#2E9E6B)}
-.ev-gauge-val{position:absolute;top:50%;transform:translateY(-50%);left:8px;font-size:16px;font-weight:800;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,0.5);pointer-events:none}
+.ev-seg{flex:1;background:#E4E0F5;border-radius:2px}
+.ev-seg.on{background:linear-gradient(180deg,#8F82E4,#6C5DD3)}
+.ev-gauge-val{position:absolute;top:50%;transform:translateY(-50%);left:8px;font-size:14px;font-weight:800;color:var(--amber-dark);background:rgba(255,255,255,0.92);padding:1px 7px;border-radius:7px;box-shadow:var(--shadow-sm);pointer-events:none}
 .ev-gauge-foot{display:flex;align-items:baseline;justify-content:space-between;margin-top:8px}
-.ev-gauge-pct{font-size:18px;font-weight:800;color:#4FC3F7}
-.ev-gauge-frac{font-size:11px;font-weight:700;color:#8BD5F5}
-.ev-gauge-goal{font-size:11px;color:#9B9BA6;font-weight:600}
+.ev-gauge-pct{font-size:18px;font-weight:800;color:var(--amber)}
+.ev-gauge-frac{font-size:11px;font-weight:700;color:var(--text2)}
+.ev-gauge-goal{font-size:11px;color:var(--text3);font-weight:600}
 .ps-card{background:var(--card);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-bottom:14px}
 .ps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .ps-title{font-size:14px;font-weight:800;color:var(--text)}
@@ -342,6 +342,13 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .quest-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 2px;background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px 8px;box-shadow:var(--shadow-sm)}
 .quest-cell{display:flex;flex-direction:column;align-items:center;gap:4px}
 .quest-date{font-size:9px;color:var(--text3)}
+/* ── 공통 유틸 (학습현황 톤) ── */
+.panel{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--shadow-sm);margin-bottom:10px}
+.pill-btn{padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;background:var(--card);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;transition:all .12s;font-family:inherit;min-width:84px;text-align:center;box-shadow:var(--shadow-sm)}
+.pill-btn:active{transform:scale(0.96)}
+.pill-btn small{display:block;font-size:10px;color:var(--text3);font-weight:500;margin-top:2px}
+.pl-navbtn{background:var(--amber-pale);border:1px solid rgba(108,93,211,0.2);border-radius:var(--r-sm);padding:6px 14px;font-size:16px;cursor:pointer;font-weight:700;color:var(--amber-dark);transition:background .12s}
+.pl-navbtn:active{background:#E1DBF7}
 </style>
 </head>
 <body>
@@ -496,14 +503,16 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 
     <!-- 요일별 스케줄 -->
     <div id="tab-daily" style="display:none">
-      <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
+      <div class="section-label">TODAY · 오늘 일정</div>
+      <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
       <div class="day-tabs" id="student-day-tabs"></div>
       <div id="daily-periods"></div>
     </div>
 
     <!-- 주간 시간표 -->
     <div id="tab-weekly" style="display:none">
-      <div id="weekly-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px">🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.</div>
+      <div class="section-label">WEEKLY · 주간 시간표</div>
+      <div id="weekly-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px">🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.</div>
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
@@ -523,73 +532,74 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
     <!-- 자리선택 배치도 -->
     <!-- 스터디룸 신청 -->
     <div id="tab-studyroom" style="display:none;padding:16px">
-      <div style="font-size:15px;font-weight:700;color:#4A4370;margin-bottom:4px">📚 스터디룸 신청</div>
-      <div style="font-size:12px;color:#888;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
+      <div class="section-label">STUDY ROOM · 스터디룸 신청</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
       <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:#4A4370;margin-bottom:8px">오늘 교시 선택</div>
+        <div class="section-label" style="margin-top:2px">SELECT PERIOD · 오늘 교시 선택</div>
         <div id="studyroom-period-btns" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div style="margin-bottom:16px">
-        <div style="font-size:12px;font-weight:700;color:#4A4370;margin-bottom:8px">내 신청 현황</div>
-        <div id="studyroom-my-requests"><div style="font-size:13px;color:#aaa">신청 내역 없음</div></div>
+        <div class="section-label">MY REQUESTS · 내 신청 현황</div>
+        <div id="studyroom-my-requests"><div style="font-size:13px;color:var(--text3)">신청 내역 없음</div></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:#4A4370;margin-bottom:8px">스터디룸 현황</div>
+        <div class="section-label">ROOM STATUS · 스터디룸 현황</div>
         <div id="studyroom-status" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
 
     <div id="tab-seatmap" style="display:none;padding:12px">
       <div id="seatmap-header" style="margin-bottom:12px">
-        <div style="font-size:14px;font-weight:700;color:#4A4370;margin-bottom:4px">🪑 자리 선택</div>
-        <div id="seatmap-deadline" style="font-size:12px;color:#C62828;font-weight:600"></div>
-        <div style="font-size:12px;color:#888;margin-top:4px">
-          <span style="display:inline-block;width:14px;height:14px;background:#4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
-          <span style="display:inline-block;width:14px;height:14px;background:#E5E7EB;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
-          <span style="display:inline-block;width:14px;height:14px;background:#6C5DD3;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
+        <div class="section-label">SEAT SELECTION · 자리 선택</div>
+        <div id="seatmap-deadline" style="font-size:12px;color:var(--red);font-weight:700"></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:6px">
+          <span style="display:inline-block;width:14px;height:14px;background:#DCFCE7;border:1.5px solid #4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
+          <span style="display:inline-block;width:14px;height:14px;background:var(--surface);border:1px solid var(--border);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
+          <span style="display:inline-block;width:14px;height:14px;background:var(--amber);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
         </div>
       </div>
       <div id="student-seatmap" style="overflow-x:auto"></div>
     </div>
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
+      <div class="section-label">PLANNER · 월별 학습 기록</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <button onclick="plannerPrevMonth()" style="background:#E6E2F9;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#4A4370">◀</button>
-        <div id="planner-month-title" style="font-size:16px;font-weight:700;color:#4A4370"></div>
-        <button onclick="plannerNextMonth()" style="background:#E6E2F9;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#4A4370">▶</button>
+        <button onclick="plannerPrevMonth()" class="pl-navbtn">◀</button>
+        <div id="planner-month-title" style="font-size:16px;font-weight:800;color:var(--text)"></div>
+        <button onclick="plannerNextMonth()" class="pl-navbtn">▶</button>
       </div>
       <div id="planner-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px"></div>
       <!-- 사진 업로드/조회 영역 -->
       <div id="planner-detail" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div id="planner-selected-date" style="font-size:15px;font-weight:700;color:#4A4370"></div>
-          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">✕</button>
+          <div id="planner-selected-date" style="font-size:15px;font-weight:800;color:var(--text)"></div>
+          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)">✕</button>
         </div>
         <div id="planner-photo-view" style="text-align:center;margin-bottom:12px">
           <img id="planner-photo-img" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
-          <div id="planner-no-photo" style="color:#aaa;font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
+          <div id="planner-no-photo" style="color:var(--text3);font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
         </div>
         <!-- 선생님 코멘트 -->
         <div id="planner-comments-area" style="display:none;margin-bottom:12px">
-          <div style="font-size:12px;font-weight:700;color:#4A4370;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div class="section-label">TEACHER'S NOTE · 선생님 코멘트</div>
           <div id="planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
         <div style="display:flex;gap:8px;justify-content:center">
-          <label style="flex:1;background:#6C5DD3;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+          <label style="flex:1;background:var(--amber);color:#fff;padding:10px;border-radius:var(--r-md);text-align:center;font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--shadow-sm)">
             📷 카메라
             <input type="file" accept="image/*" capture="environment" id="planner-camera-input" style="display:none" onchange="plannerUploadPhoto(this)">
           </label>
-          <label style="flex:1;background:#8F82E4;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+          <label style="flex:1;background:var(--amber-light);color:#fff;padding:10px;border-radius:var(--r-md);text-align:center;font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--shadow-sm)">
             🖼️ 갤러리
             <input type="file" accept="image/*" id="planner-gallery-input" style="display:none" onchange="plannerUploadPhoto(this)">
           </label>
-          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:#C62828;color:#fff;padding:10px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer">🗑️ 삭제</button>
+          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:var(--red);color:#fff;padding:10px;border-radius:var(--r-md);font-size:13px;font-weight:700;border:none;cursor:pointer;box-shadow:var(--shadow-sm)">🗑️ 삭제</button>
         </div>
         <div id="planner-upload-progress" style="display:none;margin-top:10px">
-          <div style="background:#eee;border-radius:20px;height:6px">
-            <div id="planner-progress-bar" style="background:#6C5DD3;height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
+          <div style="background:var(--border-light);border-radius:20px;height:6px">
+            <div id="planner-progress-bar" style="background:var(--amber);height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
           </div>
-          <div style="text-align:center;font-size:12px;color:#888;margin-top:4px">업로드 중...</div>
+          <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:4px">업로드 중...</div>
         </div>
       </div>
     </div>
@@ -1066,7 +1076,7 @@ function buildNotices() {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">공지사항이 없습니다</div></div>`;
     return;
   }
-  el.innerHTML = NOTICES.map((n,i) => `
+  el.innerHTML = '<div class="section-label">NOTICE · 공지사항</div>' + NOTICES.map((n,i) => `
     <div class="notice-card">
       <div class="notice-header" onclick="toggleNotice(${i})">
         <div style="flex:1">
@@ -1738,18 +1748,9 @@ function buildMyStats() {
       <div class="record-card"><div class="record-lbl">일일 최고</div><div class="record-val">${_fmtHM(bestDay)}</div></div>
       <div class="record-card"><div class="record-lbl">주간 최고</div><div class="record-val">${_fmtHM(bestWeek)}</div></div>
       <div class="record-card"><div class="record-lbl">월간 최고</div><div class="record-val">${_fmtHM(maxMonthMin)}</div></div>
-      <div class="record-card" onclick="openSection('quest','#6C5DD3')" style="cursor:pointer"><div class="record-lbl">연속 출석일</div><div class="record-val" style="color:#6C5DD3">${streak} 일</div></div>
+      <div class="record-card"><div class="record-lbl">연속 출석일</div><div class="record-val" style="color:#6C5DD3">${streak} 일</div></div>
       <div class="record-card"><div class="record-lbl">연속 최고시간</div><div class="record-val">${_fmtHM(bestSession)}</div></div>
       <div class="record-card"><div class="record-lbl">총 누적시간</div><div class="record-val">${_fmtHM(allMin)}</div></div>
-    </div>
-
-    <div class="quest-banner" onclick="openSection('quest','#6C5DD3')">
-      <div class="quest-banner-icon">🔥</div>
-      <div>
-        <div class="quest-banner-title">연속 출석 퀘스트</div>
-        <div class="quest-banner-sub">현재 연속 ${streak}일 출석 중 · 달성하고 보상 받기</div>
-      </div>
-      <div class="quest-banner-arrow">›</div>
     </div>`;
 
   el.innerHTML = html;
@@ -1849,10 +1850,10 @@ function buildEvents() {
   const list = (EVENTS_CACHE || DEFAULT_EVENTS).filter(e => e.active !== false);
   if (!EVENTS_CACHE) loadEventsList();
   if (list.length === 0) {
-    el.innerHTML = '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 진행 중인 이벤트가 없습니다.</div>';
+    el.innerHTML = '<div class="section-label">EVENTS</div><div class="empty-state"><div class="empty-icon">🎉</div><div class="empty-text">현재 진행 중인 이벤트가 없습니다.</div></div>';
     return;
   }
-  el.innerHTML = list.map(ev => {
+  el.innerHTML = '<div class="section-label">EVENTS · 진행 중인 이벤트</div>' + list.map(ev => {
     const isStreak = ev.type === 'streak';
     const isStudy = ev.type === 'studytime' || ev.id === 'kkeutkkeuta';
     let gauge = '', badge = '진행 중';
@@ -1901,6 +1902,7 @@ function buildQuest() {
   if (!EVENTS_CACHE) loadEventsList();
 
   let html = `
+    <div class="section-label">ATTENDANCE QUEST · 연속 출석</div>
     <div class="quest-info" style="white-space:pre-line">${ev.desc || ''}</div>
     ${_gaugeHTML(streak, goal, '일')}
     <div class="quest-streak-line">🔥 현재 <b>연속 ${streak}일</b> 출석 중!${streak < goal ? ` (달성까지 ${goal - streak}일)` : ' — 퀘스트 달성! 🎉'}</div>
@@ -1924,7 +1926,7 @@ async function checkSeatSelectionActive() {
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
     const tabBtn = document.getElementById('seat-tab-btn');
     if (!snap.exists()) {
-      document.getElementById('student-seatmap').innerHTML = '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.</div>';
+      document.getElementById('student-seatmap').innerHTML = '<div class="empty-state"><div class="empty-icon">🪑</div><div class="empty-text">현재 자리 선택 기간이 아닙니다.</div></div>';
       return;
     }
     const d = snap.data ? snap.data() : null;
@@ -1941,7 +1943,7 @@ async function checkSeatSelectionActive() {
     } else {
       document.getElementById('seatmap-deadline').textContent = '';
       document.getElementById('student-seatmap').innerHTML =
-        '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div>';
+        '<div class="empty-state"><div class="empty-icon">🪑</div><div class="empty-text">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div></div>';
       if (card) card.style.display = 'none';
     }
   } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
@@ -1958,7 +1960,7 @@ function buildStudentSeatmap() {
   // 기존 구독 해제
   if (seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
 
-  el.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">로딩 중...</div>';
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">로딩 중...</div>';
 
   // onSnapshot으로 실시간 감시
   seatmapUnsubscribe = window._fsOnSnapshot(
@@ -2002,36 +2004,12 @@ function renderSeatmap(takenSeats) {
 
   let html = `<style>
     #sm-grid { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(11,44px); gap:3px; max-width:420px; }
-    .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:600; cursor:default; transition:transform 0.1s; }
-    .sm-taken { background:#E5E7EB; color:#9CA3AF; }
+    .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:700; cursor:default; transition:transform 0.1s; }
+    .sm-taken { background:var(--surface); border:1px solid var(--border); color:var(--text3); }
     .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
     .sm-available:active { transform:scale(0.95); }
-    .sm-mine { background:#6C5DD3; color:#fff; border:2px solid #5142B8; }
-  
-/* ── 홈 메뉴 화면 ── */
-.home-screen{display:none;min-height:100vh;flex-direction:column}
-.home-screen.visible{display:flex}
-.home-header{background:linear-gradient(135deg,#6C5DD3 0%,#5142B8 100%);padding:20px 20px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
-.home-header-info{display:flex;align-items:center;gap:10px}
-.home-avatar{width:40px;height:40px;border-radius:50%;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.home-name{font-size:16px;font-weight:700;color:#fff}
-.home-seat{font-size:12px;color:rgba(255,255,255,0.85)}
-.menu-blocks{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.menu-block{flex:1;display:flex;align-items:center;justify-content:space-between;padding:0 28px;cursor:pointer;position:relative;transition:filter 0.1s;min-height:80px}
-.menu-block:active{filter:brightness(0.9)}
-.menu-block-left{display:flex;align-items:center;gap:18px}
-.menu-block-icon{font-size:32px;opacity:0.9}
-.menu-block-label{font-size:22px;font-weight:800;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.15)}
-.menu-block-sub{font-size:12px;color:rgba(255,255,255,0.75);margin-top:3px;font-weight:500}
-.menu-block-arrow{font-size:24px;color:rgba(255,255,255,0.6);font-weight:300}
-.menu-block-badge{position:absolute;top:16px;right:52px;background:rgba(255,255,255,0.3);color:#fff;border-radius:12px;font-size:11px;font-weight:700;padding:2px 8px}
-
-/* 섹션 헤더 (뒤로가기) */
-.section-header{display:flex;align-items:center;gap:12px;padding:16px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
-.back-btn{background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.section-title{font-size:17px;font-weight:700;color:#fff;flex:1}
-.section-logout{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
-</style>
+    .sm-mine { background:var(--amber); color:#fff; border:2px solid var(--amber-dark); }
+  </style>
   <div id="sm-grid">`;
 
   // 빈 셀 채우기
@@ -2114,7 +2092,7 @@ function buildStudyroomPeriodBtns() {
   if (!el) return;
 
   if (isSun) {
-    el.innerHTML = '<div style="color:#aaa;font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
     return;
   }
 
@@ -2127,10 +2105,8 @@ function buildStudyroomPeriodBtns() {
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
 
   el.innerHTML = periods.map(p =>
-    `<button onclick="applyStudyroom(${p.n})"
-      style="padding:8px 14px;border:1.5px solid #8F82E4;border-radius:10px;background:#FBFAFF;
-             color:#4A4370;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
-      ${p.n}교시<br><span style="font-size:10px;color:#888;font-weight:400">${p.t}</span>
+    `<button class="pill-btn" onclick="applyStudyroom(${p.n})">
+      ${p.n}교시<small>${p.t}</small>
     </button>`
   ).join('');
 }
@@ -2161,17 +2137,17 @@ function showStudyroomModal(periodNum, totalCount, roomCounts) {
   overlay.id = 'studyroom-apply-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   const countMsg = totalCount === 0 ? '현재 신청 인원이 없습니다.' : `현재 ${totalCount}명이 사용 대기중입니다.`;
-  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.2)">
-    <div style="font-size:15px;font-weight:700;color:#1F2937;margin-bottom:4px">📚 스터디룸 신청</div>
-    <div style="font-size:13px;color:#7C3AED;font-weight:600;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
-    <div style="font-size:12px;color:#555;margin-bottom:6px">사용 사유 <span style="color:#C62828">*</span></div>
+  overlay.innerHTML = `<div style="background:var(--card);border-radius:var(--r-lg);padding:20px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)">
+    <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">📚 스터디룸 신청</div>
+    <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">사용 사유 <span style="color:var(--red)">*</span></div>
     <textarea id="studyroom-reason-input" placeholder="사용 사유를 입력하세요" rows="3"
-      style="width:100%;border:1.5px solid #8F82E4;border-radius:10px;padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box"></textarea>
+      style="width:100%;border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="document.getElementById('studyroom-apply-modal').remove()"
-        style="flex:1;padding:10px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:13px;cursor:pointer">취소</button>
+        style="flex:1;padding:10px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">취소</button>
       <button onclick="submitStudyroomReq(${periodNum},${JSON.stringify(roomCounts).replace(/"/g,'&quot;')})"
-        style="flex:2;padding:10px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
+        style="flex:2;padding:10px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -2214,19 +2190,19 @@ function loadStudyroomData() {
       const myEl = document.getElementById('studyroom-my-requests');
       if (myEl) {
         myEl.innerHTML = myReqs.length === 0
-          ? '<div style="font-size:13px;color:#aaa">신청 내역 없음</div>'
+          ? '<div style="font-size:13px;color:var(--text3)">신청 내역 없음</div>'
           : myReqs.map(r => {
-              const sc = r.status==='approved'?'#2D7A4F':r.status==='rejected'?'#C62828':'#6C5DD3';
+              const sc = r.status==='approved'?'#1AB5A3':r.status==='rejected'?'var(--red)':'var(--amber)';
               const st = r.status==='approved'?'✅ 사용가능':r.status==='rejected'?'❌ 거절됨':'⏳ 대기중';
-              const bg = r.status==='approved'?'#F0FDF4':r.status==='rejected'?'#FFF0F0':'#FBFAFF';
-              const bd = r.status==='approved'?'#4CAF50':r.status==='rejected'?'#F09595':'#8F82E4';
-              return `<div style="padding:10px 12px;background:${bg};border:1.5px solid ${bd};border-radius:10px;margin-bottom:6px">
+              const bg = r.status==='approved'?'#F0FBF7':r.status==='rejected'?'var(--red-pale)':'var(--amber-pale)';
+              const bd = r.status==='approved'?'#9BE0D3':r.status==='rejected'?'var(--red-border)':'rgba(108,93,211,0.3)';
+              return `<div style="padding:10px 12px;background:${bg};border:1px solid ${bd};border-radius:var(--r-md);margin-bottom:6px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-                  <span style="font-size:13px;font-weight:600">${r.period}교시 · 스터디룸 ${r.room}번</span>
+                  <span style="font-size:13px;font-weight:700;color:var(--text)">${r.period}교시 · 스터디룸 ${r.room}번</span>
                   <span style="font-size:11px;font-weight:700;color:${sc}">${st}</span>
                 </div>
-                ${r.reason?`<div style="font-size:11px;color:#666">📝 ${r.reason}</div>`:''}
-                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:#C62828;background:none;border:1px solid #F09595;border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
+                ${r.reason?`<div style="font-size:11px;color:var(--text2)">📝 ${r.reason}</div>`:''}
+                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:var(--red);background:none;border:1px solid var(--red-border);border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
               </div>`;
             }).join('');
       }
@@ -2235,10 +2211,10 @@ function loadStudyroomData() {
       const stEl = document.getElementById('studyroom-status');
       if (stEl) {
         stEl.innerHTML = [1,2,3].map(room =>
-          `<div style="background:#F3E8FF;border:1.5px solid #C084FC;border-radius:10px;padding:10px 14px">
-            <div style="font-size:12px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
-            ${rc[room].length===0?'<div style="font-size:12px;color:#aaa">신청자 없음</div>'
-              :rc[room].map(m=>`<div style="font-size:12px;color:#4A4370">${m.period}교시 · 이용자</div>`).join('')}
+          `<div class="panel" style="margin-bottom:0">
+            <div style="font-size:12px;font-weight:700;color:var(--amber-dark);margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
+            ${rc[room].length===0?'<div style="font-size:12px;color:var(--text3)">신청자 없음</div>'
+              :rc[room].map(m=>`<div style="font-size:12px;color:var(--text2)">${m.period}교시 · 이용자</div>`).join('')}
           </div>`
         ).join('');
       }
@@ -2369,7 +2345,7 @@ function renderPlannerCalendar() {
   let html = '';
   // 요일 헤더
   days.forEach((d,i) => {
-    const color = i===0?'#C62828':i===6?'#1565C0':'#4A4370';
+    const color = i===0?'var(--red)':i===6?'#1565C0':'var(--text2)';
     html += `<div style="text-align:center;font-size:11px;font-weight:700;color:${color};padding:4px 0">${d}</div>`;
   });
 
@@ -2384,9 +2360,9 @@ function renderPlannerCalendar() {
     const isToday = dateStr === todayStr;
     const hasPhoto = !!plannerUploadedDates[dateStr];
     const dow = new Date(plannerYear, plannerMonth, d).getDay();
-    const textColor = dow===0?'#C62828':dow===6?'#1565C0':'#333';
-    const bgColor = isToday ? '#6C5DD3' : hasPhoto ? '#EFECFB' : '#f9f9f9';
-    const border = isToday ? '2px solid #6C5DD3' : hasPhoto ? '2px solid #8F82E4' : '1.5px solid #eee';
+    const textColor = dow===0?'var(--red)':dow===6?'#1565C0':'var(--text)';
+    const bgColor = isToday ? 'var(--amber)' : hasPhoto ? 'var(--amber-pale)' : 'var(--surface)';
+    const border = isToday ? '2px solid var(--amber)' : hasPhoto ? '1.5px solid var(--amber-light)' : '1px solid var(--border-light)';
     const dateColor = isToday ? '#fff' : textColor;
     html += `<div onclick="plannerSelectDate('${dateStr}')"
       style="border-radius:10px;padding:6px 2px;text-align:center;cursor:pointer;background:${bgColor};border:${border};position:relative">
@@ -2442,9 +2418,9 @@ async function plannerLoadComments(dateStr) {
       if (comments.length > 0) {
         area.style.display = 'block';
         list.innerHTML = comments.map(c => `
-          <div style="background:#EFECFB;border:1px solid #8F82E4;border-radius:8px;padding:8px 10px">
-            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+          <div style="background:var(--amber-pale);border:1px solid rgba(108,93,211,0.25);border-radius:var(--r-sm);padding:8px 10px">
+            <div style="font-size:13px;color:var(--text);white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div style="font-size:11px;color:var(--text3)">${c.time || ''}</div>
           </div>`).join('');
         return;
       }
