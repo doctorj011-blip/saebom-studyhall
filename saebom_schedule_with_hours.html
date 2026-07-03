@@ -1752,6 +1752,8 @@ function loadSettingsTab() {
   loadScheduleEditStatus();
   if (s) s.value = SOLAPI_API_SECRET;
   if (sn) sn.value = SOLAPI_SENDER;
+  // 클라우드에서 최신 설정을 다시 불러와 입력칸을 채움 (localStorage가 비었어도 복원됨)
+  if (window.loadSolapiConfigFromCloud) window.loadSolapiConfigFromCloud();
 }
 
 async function loadScheduleEditStatus() {
@@ -1802,6 +1804,7 @@ window.saveSettingsFromTab = function() {
   localStorage.setItem('solapi_api_key', SOLAPI_API_KEY);
   localStorage.setItem('solapi_api_secret', SOLAPI_API_SECRET);
   localStorage.setItem('solapi_sender', SOLAPI_SENDER);
+  if (window.saveSolapiConfigToCloud) window.saveSolapiConfigToCloud();
   const st = document.getElementById('cfg-status');
   if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
 };
@@ -6447,6 +6450,42 @@ let SOLAPI_SENDER = (function() {
   return saved;
 })();
 
+// 솔라피 설정을 Firestore에도 저장/복원 — localStorage가 유지 안 되는 환경(임베드/개인정보보호) 대비
+window.loadSolapiConfigFromCloud = async function() {
+  try {
+    const db = await new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'solapi'));
+    if (!snap.exists()) return;
+    const d = snap.data() || {};
+    if (d.apiKey)    { SOLAPI_API_KEY    = d.apiKey;    localStorage.setItem('solapi_api_key', d.apiKey); }
+    if (d.apiSecret) { SOLAPI_API_SECRET = d.apiSecret; localStorage.setItem('solapi_api_secret', d.apiSecret); }
+    if (d.sender)    { SOLAPI_SENDER     = d.sender;    localStorage.setItem('solapi_sender', d.sender); }
+    // 설정창이 열려 있으면 입력칸도 채워줌
+    const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+    set('cfg-key', SOLAPI_API_KEY);   set('cfg-secret', SOLAPI_API_SECRET);   set('cfg-sender', SOLAPI_SENDER);
+    set('sp-key', SOLAPI_API_KEY);    set('sp-secret', SOLAPI_API_SECRET);    set('sp-sender', SOLAPI_SENDER);
+  } catch(e) {}
+};
+
+window.saveSolapiConfigToCloud = async function() {
+  try {
+    const db = window._adminDb;
+    if (!db) return;
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'solapi'), {
+      apiKey: SOLAPI_API_KEY,
+      apiSecret: SOLAPI_API_SECRET,
+      sender: SOLAPI_SENDER,
+      updatedAt: window._fsServerTimestamp()
+    });
+  } catch(e) {}
+};
+
+// 앱 시작 시 클라우드에서 설정 복원
+window.loadSolapiConfigFromCloud();
+
 window.openSolapiSettings = function() {
   const old = document.getElementById('solapi-modal');
   if (old) old.remove();
@@ -6497,6 +6536,7 @@ window.saveSolapiSettings = function() {
   localStorage.setItem('solapi_api_key', SOLAPI_API_KEY);
   localStorage.setItem('solapi_api_secret', SOLAPI_API_SECRET);
   localStorage.setItem('solapi_sender', SOLAPI_SENDER);
+  if (window.saveSolapiConfigToCloud) window.saveSolapiConfigToCloud();
   document.getElementById('solapi-modal').remove();
   showAdminToast('✅ 솔라피 설정이 저장됐습니다');
 };
