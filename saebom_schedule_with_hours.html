@@ -984,7 +984,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
                 style="flex:1;padding:5px 8px;border:none;font-size:12px;background:transparent;color:var(--color-text-primary);outline:none;min-width:0">
             </div>
           </div>
-          <div>
+          <div id="edit-parent-wrap">
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">👨‍👩‍👧 부모님 번호</div>
             <div style="display:flex;align-items:stretch;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
               <span style="display:flex;align-items:center;padding:0 4px 0 8px;font-size:12px;color:var(--color-text-primary);font-weight:600;white-space:nowrap;background:var(--color-background-primary)">010-</span>
@@ -994,7 +994,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
             </div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+        <div id="edit-dates-wrap" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
           <div>
             <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📅 이용 시작일</div>
             <input id="edit-start-date" type="date"
@@ -2191,7 +2191,7 @@ function buildScheduleTable(day){
   let html='<thead><tr><th style="text-align:left;padding-left:12px">좌석</th><th>이름</th>';
   PERIODS.forEach(p=>{html+=`<th><div class="period-header">${p.n}<br><span style="font-weight:400;opacity:0.8;font-size:9px">${p.t}</span></div></th>`;});
   html+='</tr></thead><tbody>';
-  [...STUDENTS].sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)).forEach(s=>{
+  [...STUDENTS].filter(s=>parseInt(s.seat)<54).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)).forEach(s=>{ // 관리자(54번~) 제외
     html+=`<tr><td class="name-cell" style="padding-left:12px"><span class="seat-badge">${s.seat}</span></td><td>${s.name}</td>`;
     PERIODS.forEach((_,i)=>{html+=`<td>${getCellContent(s.schedule[day],i)}</td>`;});
     html+='</tr>';
@@ -2494,7 +2494,11 @@ function buildStudentList(filter=''){
       const hBg = h>=180?'#E8F5E9':h>=120?'#FFF8DC':'#FCEBEB';
 
       if (isAdmin) {
-        // 관리자 카드: 회색 계열, 이용시간 미표시
+        // 관리자 카드: 회색 계열, 이용시간 미표시, 근무요일 표시
+        const workDays = ['월','화','수','목','금','토'].filter(d => s.schedule && s.schedule[d] === '근무');
+        const workDaysHtml = workDays.length
+          ? `<span style="font-size:10px;font-weight:600;background:#DBEAFE;color:#1E40AF;border-radius:20px;padding:2px 8px;display:inline-block">🗓 ${workDays.join('·')}</span>`
+          : '';
         return `<div class="student-card" onclick="openScheduleModal(${idx})"
           style="background:linear-gradient(135deg,#F3F4F6 0%,#E5E7EB 100%);border:1.5px solid #D1D5DB">
           <div class="student-avatar" style="font-size:12px;font-weight:800;background:linear-gradient(135deg,#6B7280,#374151)">${s.seat}</div>
@@ -2504,7 +2508,10 @@ function buildStudentList(filter=''){
               <span onclick="toggleGender(${idx},event)" style="font-size:13px;cursor:pointer;user-select:none" title="클릭해서 성별 변경">${s.gender==="m"?'<span style="color:#4A90D9">♂</span>':'<span style="color:#E05C8A">♀</span>'}</span>
             </div>
             <div class="student-meta" style="font-size:11px;color:#6B7280;margin-bottom:2px">${s.phone||'전화번호 미등록'}</div>
-            <span style="font-size:10px;font-weight:600;background:#E5E7EB;color:#6B7280;border-radius:20px;padding:2px 8px;display:inline-block">관리자</span>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:10px;font-weight:600;background:#E5E7EB;color:#6B7280;border-radius:20px;padding:2px 8px;display:inline-block">관리자</span>
+              ${workDaysHtml}
+            </div>
           </div>
         </div>`;
       }
@@ -3527,15 +3534,15 @@ function buildFloorplan() {
           // 관리자석
           const adminSt = STUDENTS.find(s => parseInt(s.seat) === fixed.n) || null;
           const rec = adminSt ? todayRecords.find(r2 => r2.studentName === adminSt.name && !r2.outTime) : null;
-          const dday = adminSt?.expiry ? calcDday(adminSt.expiry) : null;
-          const ddayHtml = dday !== null ? `<span class="fp-dday">D${dday>=0?'-':'+'}${Math.abs(dday)}</span>` : '';
+          const workDays = adminSt ? ['월','화','수','목','금','토'].filter(d => adminSt.schedule && adminSt.schedule[d] === '근무') : [];
+          const workDaysHtml = workDays.length ? `<div style="font-size:9px;color:#1E40AF;font-weight:600;margin-top:1px">🗓 ${workDays.join('·')}</div>` : '';
           // 관리자석: 학생 있으면 클릭 상세·우클릭 배석해제, 빈자리는 클릭 시 관리자 등록
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
           const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : `onclick="if(!fpEditMode)openAddStudentModal(${fixed.n})"`;
           html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'default':'pointer'}" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
             <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : '<span style="color:#C0A860;font-weight:600">＋ 등록</span>'}</div>
-            ${ddayHtml}
+            ${workDaysHtml}
             ${rec ? `<div style="font-size:9px;color:#2D7A4F;margin-top:2px">● 입실 ${rec.inTime||''}</div>` : ''}
           </div>`;
         }
@@ -4126,10 +4133,47 @@ function openScheduleModal(idx) {
   document.getElementById('edit-expiry').value = s.expiry || '';
   document.getElementById('edit-start-date').value = s.startDate || '';
   setEditGender(s.gender || 'f');
-  renderScheduleModal();
+
+  // 관리자: 부모님번호·이용기간 숨기고 본문을 근무요일 편집으로 대체
+  const isAdmin = parseInt(s.seat) >= 54;
+  document.getElementById('edit-parent-wrap').style.display = isAdmin ? 'none' : '';
+  document.getElementById('edit-dates-wrap').style.display = isAdmin ? 'none' : '';
+  if (isAdmin) {
+    renderAdminWorkDays(s);
+  } else {
+    renderScheduleModal();
+  }
+
   const ov = document.getElementById('schedule-modal-overlay');
   ov.style.display = 'flex';
 }
+
+// 관리자 근무요일 편집 UI (상세 모달 본문)
+window._editAdminDays = new Set();
+function renderAdminWorkDays(s) {
+  window._editAdminDays = new Set(DAYS.filter(d => s.schedule && s.schedule[d] === '근무'));
+  const body = document.getElementById('sched-modal-body');
+  body.innerHTML = `
+    <div style="padding:16px 4px">
+      <div style="font-size:13px;font-weight:700;color:var(--color-text-primary);margin-bottom:10px">🗓 근무요일</div>
+      <div style="display:flex;gap:8px">
+        ${DAYS.map(d => {
+          const on = window._editAdminDays.has(d);
+          return `<button type="button" onclick="toggleEditWorkDay('${d}',this)"
+            style="flex:1;padding:12px 0;border:1.5px solid ${on?'#C8900A':'var(--color-border-secondary)'};border-radius:10px;font-size:14px;cursor:pointer;font-weight:700;background:${on?'#FFF8DC':'var(--color-background-primary)'};color:${on?'#C8900A':'#888'}">${d}</button>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+window.toggleEditWorkDay = function(day, el) {
+  if (window._editAdminDays.has(day)) {
+    window._editAdminDays.delete(day);
+    el.style.background = 'var(--color-background-primary)'; el.style.color = '#888'; el.style.borderColor = 'var(--color-border-secondary)';
+  } else {
+    window._editAdminDays.add(day);
+    el.style.background = '#FFF8DC'; el.style.color = '#C8900A'; el.style.borderColor = '#C8900A';
+  }
+};
 
 window.setEditGender = function(g) {
   window._editGender = g;
@@ -4517,9 +4561,17 @@ function saveSchedule() {
   s.expiry    = document.getElementById('edit-expiry').value || '';
   s.startDate = document.getElementById('edit-start-date').value || '';
 
-  DAYS.forEach(day => {
-    s.schedule[day] = draftToStr(_schedDraft[day], day === '토');
-  });
+  const isAdmin = parseInt(s.seat) >= 54;
+  if (isAdmin) {
+    // 관리자: 근무요일만 저장 ('근무'/'-'), 교시 스케줄 없음
+    DAYS.forEach(day => {
+      s.schedule[day] = window._editAdminDays.has(day) ? '근무' : '-';
+    });
+  } else {
+    DAYS.forEach(day => {
+      s.schedule[day] = draftToStr(_schedDraft[day], day === '토');
+    });
+  }
 
   closeScheduleModal();
   buildStudentList(document.getElementById('student-search').value);
@@ -6556,7 +6608,60 @@ window.openAddStudentModal = function(seatNum) {
   modal.id = 'add-student-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
 
-  modal.innerHTML = `
+  const isAdmin = parseInt(seatNum) >= 54;
+  window._newStGender = 'f';
+  window._newAdminDays = new Set();
+
+  modal.innerHTML = isAdmin ? `
+    <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,360px);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">🧑‍💼 ${seatNum}번 관리자 등록</div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:16px">관리자 정보를 입력하세요</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;gap:8px">
+          <div style="flex:1">
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">이름 *</div>
+            <input id="new-st-name" type="text" placeholder="홍길동"
+              style="width:100%;padding:9px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+          </div>
+          <div style="flex:0 0 90px">
+            <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">성별</div>
+            <div style="display:flex;border:1.5px solid #E0B020;border-radius:10px;overflow:hidden">
+              <button id="new-st-gender-f" onclick="selectGender('f')"
+                style="flex:1;padding:9px 0;border:none;font-size:13px;cursor:pointer;background:#FFF8DC;color:#C8900A;font-weight:700">♀</button>
+              <button id="new-st-gender-m" onclick="selectGender('m')"
+                style="flex:1;padding:9px 0;border:none;font-size:13px;cursor:pointer;background:#fff;color:#888">♂</button>
+            </div>
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">전화번호</div>
+          <div style="display:flex;align-items:center;border:1.5px solid #E0B020;border-radius:10px;overflow:hidden;background:#fff">
+            <span style="padding:9px 0 9px 12px;font-size:13px;color:#5C3D08;font-weight:600;white-space:nowrap">010-</span>
+            <input id="new-st-phone" type="text" placeholder="0000-0000" maxlength="9"
+              oninput="formatPhoneInput(this)"
+              style="flex:1;padding:9px 12px 9px 0;border:none;font-size:13px;outline:none;width:100%">
+          </div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#8B6010;margin-bottom:4px">근무요일</div>
+          <div style="display:flex;gap:6px">
+            ${['월','화','수','목','금','토'].map(d=>`<button type="button" onclick="toggleWorkDay('${d}',this)"
+              style="flex:1;padding:9px 0;border:1.5px solid #E0B020;border-radius:10px;font-size:13px;cursor:pointer;background:#fff;color:#888;font-weight:700">${d}</button>`).join('')}
+          </div>
+        </div>
+        <div id="new-st-err" style="font-size:12px;color:#C62828;min-height:16px"></div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button onclick="document.getElementById('add-student-modal').remove()"
+            style="flex:1;padding:10px;background:#f5f5f5;border:none;border-radius:10px;font-size:13px;cursor:pointer;color:#666">
+            취소
+          </button>
+          <button onclick="confirmAddStudent(${seatNum})"
+            style="flex:1;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+            등록
+          </button>
+        </div>
+      </div>
+    </div>` : `
     <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,360px);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
       <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">➕ ${seatNum}번 학생 추가</div>
       <div style="font-size:12px;color:#8B6010;margin-bottom:16px">새 학생을 이 자리에 배정합니다</div>
@@ -6628,24 +6733,44 @@ window.openAddStudentModal = function(seatNum) {
 
 window._newStGender = 'f';
 window.selectGender = function(g) {
-  
+  window._newStGender = g;
   document.getElementById('new-st-gender-f').style.background = g==='f' ? '#FFF8DC' : '#fff';
   document.getElementById('new-st-gender-f').style.color = g==='f' ? '#C8900A' : '#888';
   document.getElementById('new-st-gender-m').style.background = g==='m' ? '#E8F0FF' : '#fff';
   document.getElementById('new-st-gender-m').style.color = g==='m' ? '#1a5fcc' : '#888';
 };
 
+window._newAdminDays = new Set();
+window.toggleWorkDay = function(day, el) {
+  if (window._newAdminDays.has(day)) {
+    window._newAdminDays.delete(day);
+    el.style.background = '#fff'; el.style.color = '#888'; el.style.borderColor = '#E0B020';
+  } else {
+    window._newAdminDays.add(day);
+    el.style.background = '#FFF8DC'; el.style.color = '#C8900A'; el.style.borderColor = '#C8900A';
+  }
+};
+
 window.confirmAddStudent = function(seatNum) {
+  const isAdmin   = parseInt(seatNum) >= 54;
   const name      = document.getElementById('new-st-name').value.trim();
   const phone     = '010-' + document.getElementById('new-st-phone').value.trim();
-  const parent    = '010-' + document.getElementById('new-st-parent').value.trim();
-  const expiry    = document.getElementById('new-st-expiry').value;
-  const startDate = document.getElementById('new-st-start-date').value;
   const gender    = window._newStGender || 'f';
   const err       = document.getElementById('new-st-err');
 
   if (!name) { err.textContent = '이름을 입력해주세요'; return; }
   if (STUDENTS.find(s => s.name === name)) { err.textContent = '이미 등록된 이름입니다'; return; }
+
+  // 근무요일(관리자) → schedule에 '근무'로 저장, 학생은 시작일/만료일/부모님번호 사용
+  const schedule = { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' };
+  let parent = '', expiry = '', startDate = '';
+  if (isAdmin) {
+    (window._newAdminDays || new Set()).forEach(d => { schedule[d] = '근무'; });
+  } else {
+    parent    = '010-' + document.getElementById('new-st-parent').value.trim();
+    expiry    = document.getElementById('new-st-expiry').value;
+    startDate = document.getElementById('new-st-start-date').value;
+  }
 
   // STUDENTS 배열에 추가
   const newStudent = {
@@ -6656,7 +6781,7 @@ window.confirmAddStudent = function(seatNum) {
     gender,
     expiry,
     startDate,
-    schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
+    schedule,
     hours: {}
   };
   STUDENTS.push(newStudent);
@@ -6670,7 +6795,7 @@ window.confirmAddStudent = function(seatNum) {
   if (window.saveStudentToFirebase) window.saveStudentToFirebase(newStudent).catch(console.error);
 
   document.getElementById('add-student-modal').remove();
-  showAdminToast(`✅ ${name} 학생이 ${seatNum}번 자리에 추가됐습니다`);
+  showAdminToast(`✅ ${name} ${isAdmin ? '관리자' : '학생'}이 ${seatNum}번 자리에 추가됐습니다`);
 };
 
 window.showTodayAttendees = function() {
