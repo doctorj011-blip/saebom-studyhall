@@ -2909,7 +2909,7 @@ window.checkinConfirm = function() {
   // 입실 시 교시 외 시간이면 스터디룸 배정
   let assignedRoom = null;
   let isDuringPeriod = false;
-  if (!isCheckout) {
+  if (!isCheckout && !window.isAdminSeat(student.seat)) {
     const curPeriod = getCurrentPeriod();
     // 7교시(18:00) 이후에만 스터디룸 안내 적용
     const now = new Date();
@@ -3420,6 +3420,12 @@ window.ADMIN_FIXED = {
   'r10_c1':{type:'admin',n:54,name:''},
 };
 
+// 관리자석 여부 판별 (관리자석 좌석번호는 스터디룸 배정 대상에서 제외)
+window.isAdminSeat = function(seat){
+  const n = parseInt(seat);
+  return !!(window.ADMIN_FIXED && Object.values(window.ADMIN_FIXED).some(a => a.n === n));
+};
+
 function buildFloorplan() {
   const el = document.getElementById('fp-room');
 
@@ -3496,11 +3502,16 @@ function buildFloorplan() {
   const studioSpan = {};
 
   // 그리드 CSS: C4는 복도(18px 고정)
-  const colW = '80px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
+  const colW = '104px 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr 1fr';
   let html = `<style>
-    #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,56px); gap:3px; min-width:900px; }
-    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; }
-    .fp-cell-admin { background:#FFF8DC; border:1px solid #E0B020; }
+    #fp-grid { display:grid; grid-template-columns:${colW}; grid-template-rows:repeat(11,70px); gap:3px; min-width:924px; }
+    .fp-cell { border-radius:6px; font-size:11px; display:flex; flex-direction:column; justify-content:center; padding:3px 5px; box-sizing:border-box; overflow:hidden; }
+    .fp-cell-admin { background:#FFF8DC; border:1px solid #E0B020; padding:3px 7px; justify-content:center; gap:0; line-height:1.05; }
+    .fp-cell-admin > div { margin-top:0 !important; }
+    .fp-cell-admin .fp-num { font-size:10px; line-height:1.1; }
+    .fp-cell-admin .fp-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.15; margin:1px 0 !important; }
+    /* 관리자석 입실 시 색 구분 (금색 배경 + 초록 테두리) */
+    .fp-cell-admin-in { background:#E6F7EC; border:2px solid #22A45D; }
     .fp-cell-studio { background:#F5F0FF; border:1px dashed #C4A4E0; align-items:center; justify-content:center; }
     .fp-cell-in { background:#DCFCE7; border:1.5px solid #4ADE80; }
     .fp-cell-out { background:#F9FAFB; border:1px solid #D1D5DB; }
@@ -3512,7 +3523,7 @@ function buildFloorplan() {
     .fp-cell-selected { outline:3px solid #C8900A !important; outline-offset:-2px; }
     .fp-num { font-size:9px; color:#9CA3AF; line-height:1; }
     .fp-name { font-size:12px; font-weight:700; color:#1F2937; line-height:1.3; margin-top:1px; }
-    .fp-badge { font-size:9px; font-weight:600; padding:1px 4px; border-radius:3px; margin-top:2px; display:inline-block; }
+    .fp-badge { font-size:8.5px; font-weight:600; padding:1px 3px; border-radius:3px; margin-top:1px; display:inline-block; white-space:nowrap; line-height:1.25; }
     .fp-badge-in { background:#16A34A; color:#fff; }
     .fp-badge-out { background:#9CA3AF; color:#fff; }
     .fp-badge-absent { background:#F3F4F6; color:#9CA3AF; }
@@ -3542,7 +3553,8 @@ function buildFloorplan() {
           // 관리자석: 학생 있으면 클릭 상세·우클릭 배석해제, 빈자리는 클릭 시 관리자 등록
           const ctxAttr = adminSt ? `oncontextmenu="fpSeatContextMenu(event,${fixed.n},'${key}')"` : '';
           const clickAttr = adminSt ? `onclick="fpSeatClick(${fixed.n})"` : `onclick="if(!fpEditMode)openAddStudentModal(${fixed.n})"`;
-          html += `<div class="fp-cell fp-cell-admin${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'default':'pointer'}" ${clickAttr} ${ctxAttr}>
+          const adminInClass = rec ? ' fp-cell-admin-in' : '';
+          html += `<div class="fp-cell fp-cell-admin${adminInClass}${selClass}" style="grid-row:${r};grid-column:${c};cursor:${adminSt?'default':'pointer'}" ${clickAttr} ${ctxAttr}>
             <div class="fp-num">${fixed.n}번 관리</div>
             <div class="fp-name" style="color:#7A5008;font-size:11px">${adminSt ? adminSt.name : '<span style="color:#C0A860;font-weight:600">＋ 등록</span>'}</div>
             ${workDaysHtml}
@@ -6934,7 +6946,7 @@ window.adminForceCheckin = function(name) {
   let assignedRoom = null;
   const curPeriod = getCurrentPeriod();
   const curMin = now.getHours() * 60 + now.getMinutes();
-  if (curPeriod && curMin >= 18 * 60) {
+  if (curPeriod && curMin >= 18 * 60 && !window.isAdminSeat(student.seat)) {
     const total = studyRoomStudents[1].length + studyRoomStudents[2].length + studyRoomStudents[3].length;
     if (!Object.values(studyRoomStudents).flat().includes(name)) {
       if (total < 12) {
