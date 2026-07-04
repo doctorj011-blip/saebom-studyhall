@@ -452,6 +452,14 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
         </div>
         <div class="quick-card-bg">🪑</div>
       </div>
+      <div class="quick-card quick-card-wide" onclick="openSection('focus','#6C5DD3')">
+        <div class="quick-card-icon">🎯</div>
+        <div class="quick-card-wide-body">
+          <div class="quick-card-title">집중 감지</div>
+          <div class="quick-card-sub">카메라로 졸음·집중 상태 확인</div>
+        </div>
+        <div class="quick-card-bg">🎯</div>
+      </div>
     </div>
   </div>
   <nav class="bottom-nav" id="home-bottom-nav">
@@ -604,6 +612,35 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
       </div>
     </div>
 
+
+    <!-- 집중 감지 탭 -->
+    <div id="tab-focus" style="display:none;padding:12px">
+      <div class="fm-note">📷 이 화면은 카메라로 <b>졸음·집중 상태만</b> 판단해 관리 대시보드에 전송합니다. 영상은 저장하거나 전송하지 않으며, 상태값(집중/졸음/이탈)만 기록됩니다. 카메라를 끄면 즉시 중단됩니다.</div>
+      <div class="fm-seatbar">
+        <span>내 좌석: <b id="fm-seat">-</b></span>
+        <span class="fm-conn"><span class="fm-conn-dot" id="fm-conn-dot"></span><span id="fm-conn-text">대기 중</span></span>
+      </div>
+      <div class="fm-video">
+        <div class="fm-badge"><span class="d" id="fm-dot"></span><span id="fm-badge-text">대기 중</span></div>
+        <video id="fm-video-el" autoplay playsinline muted></video>
+        <canvas id="fm-canvas"></canvas>
+      </div>
+      <div class="fm-state">
+        <div class="lab" id="fm-label">대기 중</div>
+        <div class="sub" id="fm-sub">시작을 누르면 감지가 시작됩니다</div>
+      </div>
+      <div class="fm-metrics">
+        <div class="fm-metric"><div class="v" id="fm-ear">--</div><div class="l">눈 개폐율</div></div>
+        <div class="fm-metric"><div class="v" id="fm-pitch">--</div><div class="l">고개 각도</div></div>
+        <div class="fm-metric"><div class="v" id="fm-dur">0.0s</div><div class="l">지속 시간</div></div>
+      </div>
+      <div class="fm-controls">
+        <button class="fm-start" id="fm-start" onclick="fmStart()">시작</button>
+        <button class="fm-stop" id="fm-stop" onclick="fmStop()" disabled>중지</button>
+      </div>
+      <label class="fm-opt"><input type="checkbox" id="fm-wake" checked> 감지 중 화면 꺼짐 방지</label>
+      <div class="fm-log" id="fm-log"></div>
+    </div>
 
   </div>
 
@@ -990,7 +1027,8 @@ const SECTION_NAMES = {
   quest: '연속 출석 퀘스트',
   planner: '플래너',
   studyroom: '스터디룸 신청',
-  seatmap: '자리 선택'
+  seatmap: '자리 선택',
+  focus: '집중 감지'
 };
 
 function openSection(id, color) {
@@ -1046,9 +1084,12 @@ function showTab(id, btn) {
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner'].forEach(t => {
+  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','focus'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
+  // 집중 감지 탭: 열면 좌석 표시, 벗어나면 카메라 중지
+  if (id === 'focus') { if (window.fmOnOpen) window.fmOnOpen(); }
+  else { if (window.fmOnLeave) window.fmOnLeave(); }
   if (id === 'planner') { initPlannerCalendar(); }
   if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); } // 탭 열 때마다 최신 기록으로 갱신
   if (id === 'quest') { buildQuest(); loadActualStudyData(); }
@@ -2551,6 +2592,210 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+</script>
+
+<!-- ══ 집중 감지 스타일 ══ -->
+<style>
+.fm-note{font-size:12px;color:var(--text2);line-height:1.6;background:var(--amber-pale);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px}
+.fm-note b{color:var(--amber-dark);font-weight:700}
+.fm-seatbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--text2)}
+.fm-seatbar b{color:var(--text);font-weight:700}
+.fm-conn{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)}
+.fm-conn-dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}
+.fm-conn-dot.on{background:#2E9E5B}
+.fm-conn-dot.err{background:var(--red)}
+.fm-video{position:relative;background:#0e1216;border-radius:var(--r-lg);overflow:hidden;aspect-ratio:4/3;margin-bottom:12px}
+.fm-video video,.fm-video canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.fm-badge{position:absolute;top:10px;left:10px;z-index:5;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.5);color:#fff;font-size:12px;padding:5px 10px;border-radius:20px}
+.fm-badge .d{width:8px;height:8px;border-radius:50%;background:#bbb}
+.fm-badge .d.focus{background:#3ddc97}
+.fm-badge .d.drowsy{background:#f5b942}
+.fm-badge .d.away{background:#ef5b5b}
+.fm-state{text-align:center;padding:16px;border-radius:var(--r-md);background:var(--card);border:1px solid var(--border);margin-bottom:12px}
+.fm-state .lab{font-size:20px;font-weight:800;color:var(--text)}
+.fm-state .sub{font-size:12px;color:var(--text3);margin-top:4px}
+.fm-state .lab.focus{color:#2E9E5B}
+.fm-state .lab.drowsy{color:#C88A00}
+.fm-state .lab.away{color:var(--red)}
+.fm-metrics{display:flex;gap:8px;margin-bottom:12px}
+.fm-metric{flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;text-align:center}
+.fm-metric .v{font-size:16px;font-weight:800;color:var(--text)}
+.fm-metric .l{font-size:10px;color:var(--text3);margin-top:2px}
+.fm-controls{display:flex;gap:8px;margin-bottom:12px}
+.fm-controls button{flex:1;padding:13px;border-radius:var(--r-md);border:none;font-size:14px;font-weight:700;cursor:pointer}
+.fm-start{background:var(--amber);color:#fff}
+.fm-stop{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.fm-controls button:disabled{opacity:0.4;cursor:default}
+.fm-opt{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:10px}
+.fm-log{font-size:11px;color:var(--text3);max-height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;background:var(--surface);border-radius:var(--r-sm);padding:8px;min-height:32px}
+</style>
+
+<!-- ══ 집중 감지 로직 (학생앱 내장) ══
+     · 로그인한 학생의 좌석(currentStudent.seat)을 그대로 사용
+     · 기존 Firebase 인스턴스(window._db 등) 재사용
+     · 영상은 저장/전송하지 않고 상태값만 seat_status/{좌석}에 기록  -->
+<script>
+(function(){
+  const EAR_THRESHOLD=0.21, DROWSY_SECONDS=2.5, AWAY_PITCH_DEG=28, AWAY_SECONDS=2.0;
+  const TARGET_FPS=8, FRAME_INTERVAL=1000/TARGET_FPS;
+  const LEFT_EYE={top1:159,top2:158,bottom1:145,bottom2:153,left:33,right:133};
+  const RIGHT_EYE={top1:386,top2:385,bottom1:374,bottom2:380,left:362,right:263};
+
+  let libsLoaded=false, faceMesh=null, camera=null, running=false;
+  let eyesClosedSince=null, headDownSince=null, noFaceSince=null;
+  let curState='idle', lastSent=null, lastMeta={}, heartbeat=null, wakeLock=null, lastFrameSent=0;
+  let el={};
+
+  const $=id=>document.getElementById(id);
+  function cache(){
+    el.video=$('fm-video-el'); el.canvas=$('fm-canvas'); el.dot=$('fm-dot'); el.badge=$('fm-badge-text');
+    el.label=$('fm-label'); el.sub=$('fm-sub'); el.ear=$('fm-ear'); el.pitch=$('fm-pitch'); el.dur=$('fm-dur');
+    el.seat=$('fm-seat'); el.connDot=$('fm-conn-dot'); el.connText=$('fm-conn-text');
+    el.start=$('fm-start'); el.stop=$('fm-stop'); el.wake=$('fm-wake'); el.log=$('fm-log');
+  }
+  function seatNo(){
+    try{ if(typeof currentStudent!=='undefined' && currentStudent && currentStudent.seat){
+      const s=String(currentStudent.seat); return s.replace(/[^0-9]/g,'')||s; } }catch(e){}
+    return '';
+  }
+  function log(msg){
+    if(!el.log) return;
+    const t=new Date().toLocaleTimeString('ko-KR',{hour12:false});
+    const d=document.createElement('div'); d.textContent=t+'  '+msg; el.log.prepend(d);
+    while(el.log.children.length>30) el.log.removeChild(el.log.lastChild);
+  }
+  function conn(state,extra){
+    if(!el.connDot) return;
+    const seat=seatNo();
+    if(!seat){ el.connDot.className='fm-conn-dot'; el.connText.textContent='좌석 정보 없음'; return; }
+    if(state==='on'){ el.connDot.className='fm-conn-dot on'; el.connText.textContent='좌석 '+seat+' · 전송 중'; }
+    else if(state==='err'){ el.connDot.className='fm-conn-dot err'; el.connText.textContent='전송 오류'+(extra?': '+extra:''); }
+    else { el.connDot.className='fm-conn-dot'; el.connText.textContent='대기 중'; }
+  }
+  async function push(state,meta,force){
+    const seat=seatNo();
+    if(!seat || !window._db || !window._fsDoc || !window._fsSetDoc) return;
+    if(!force && state===lastSent) return;
+    lastSent=state;
+    try{
+      await window._fsSetDoc(window._fsDoc(window._db,'seat_status',seat),{
+        state,
+        ear:(meta&&meta.ear!=null)?Number(meta.ear.toFixed(4)):null,
+        pitch:(meta&&meta.pitch!=null)?Number(meta.pitch.toFixed(2)):null,
+        duration:(meta&&meta.duration!=null)?Number(meta.duration.toFixed(1)):null,
+        source:'student_app',
+        updatedAt:new Date().toISOString()
+      });
+      if(running) conn('on');
+    }catch(e){ conn('err',e.message); }
+  }
+  function startHeartbeat(){ stopHeartbeat(); heartbeat=setInterval(()=>{ push(curState==='idle'?'empty':curState,lastMeta,true); },30000); }
+  function stopHeartbeat(){ if(heartbeat){ clearInterval(heartbeat); heartbeat=null; } }
+
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  function earOf(lm,e){ const v1=dist(lm[e.top1],lm[e.bottom1]), v2=dist(lm[e.top2],lm[e.bottom2]), h=dist(lm[e.left],lm[e.right]); return h===0?0.3:(v1+v2)/(2.0*h); }
+  function pitchOf(lm){ const f=lm[10],n=lm[1],c=lm[152],fh=dist(f,c)||1,mid=(f.y+c.y)/2; return ((n.y-mid)/fh)*90; }
+
+  function setState(state,sub,meta){
+    if(state===curState){ if(sub&&el.sub) el.sub.textContent=sub; return; }
+    curState=state;
+    const cls=state==='focus'?'focus':state==='drowsy'?'drowsy':state==='away'?'away':'';
+    if(el.dot) el.dot.className='d '+cls;
+    if(el.label) el.label.className='lab '+cls;
+    const map={ idle:['대기 중','시작을 누르면 감지가 시작됩니다'], focus:['집중','정상적으로 학습 중입니다'],
+      drowsy:['졸음 감지','눈 감김이 지속되고 있습니다'], away:['이탈/딴짓 의심','고개가 오래 숙여져 있습니다'] };
+    const pair=map[state]||map.idle;
+    if(el.badge) el.badge.textContent=pair[0];
+    if(el.label) el.label.textContent=pair[0];
+    if(el.sub) el.sub.textContent=sub||pair[1];
+    if(state==='drowsy') log('졸음 상태 진입');
+    if(state==='away') log('이탈/딴짓 의심');
+    if(state==='focus') log('집중 상태');
+    lastMeta=meta||{};
+    push(state,meta||{},false);
+  }
+  function onResults(res){
+    const v=el.video, cv=el.canvas; if(!cv||!v) return;
+    cv.width=v.videoWidth; cv.height=v.videoHeight;
+    const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+    if(!res.multiFaceLandmarks || res.multiFaceLandmarks.length===0){
+      if(!noFaceSince) noFaceSince=performance.now();
+      const elapsed=(performance.now()-noFaceSince)/1000;
+      if(elapsed>AWAY_SECONDS){ setState('away','얼굴이 감지되지 않습니다'); if(el.dur) el.dur.textContent=elapsed.toFixed(1)+'s'; }
+      if(el.ear) el.ear.textContent='--'; if(el.pitch) el.pitch.textContent='--';
+      return;
+    }
+    noFaceSince=null;
+    const lm=res.multiFaceLandmarks[0];
+    const e=(earOf(lm,LEFT_EYE)+earOf(lm,RIGHT_EYE))/2, p=pitchOf(lm);
+    if(el.ear) el.ear.textContent=e.toFixed(3);
+    if(el.pitch) el.pitch.textContent=p.toFixed(1)+'°';
+    const now=performance.now();
+    if(e<EAR_THRESHOLD){ if(!eyesClosedSince) eyesClosedSince=now; } else eyesClosedSince=null;
+    if(p>AWAY_PITCH_DEG){ if(!headDownSince) headDownSince=now; } else headDownSince=null;
+    const closedDur=eyesClosedSince?(now-eyesClosedSince)/1000:0;
+    const downDur=headDownSince?(now-headDownSince)/1000:0;
+    if(downDur>AWAY_SECONDS){ setState('away',null,{ear:e,pitch:p,duration:downDur}); if(el.dur) el.dur.textContent=downDur.toFixed(1)+'s'; }
+    else if(closedDur>DROWSY_SECONDS){ setState('drowsy',null,{ear:e,pitch:p,duration:closedDur}); if(el.dur) el.dur.textContent=closedDur.toFixed(1)+'s'; }
+    else { setState('focus'); if(el.dur) el.dur.textContent=Math.max(closedDur,downDur).toFixed(1)+'s'; }
+    ctx.fillStyle=e<EAR_THRESHOLD?'#f5b942':'#3ddc97';
+    [LEFT_EYE,RIGHT_EYE].forEach(eye=>{[eye.top1,eye.bottom1,eye.left,eye.right].forEach(i=>{
+      const pt=lm[i]; ctx.beginPath(); ctx.arc(pt.x*cv.width,pt.y*cv.height,2,0,Math.PI*2); ctx.fill();
+    });});
+  }
+  function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('로드 실패')); document.head.appendChild(s); }); }
+  async function ensureLibs(){
+    if(libsLoaded) return;
+    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+    libsLoaded=true;
+  }
+  async function acquireWake(){ if(!el.wake||!el.wake.checked) return; try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); } }catch(e){} }
+  async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); wakeLock=null; } }catch(e){} }
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'&&running) acquireWake(); });
+
+  async function start(){
+    cache();
+    if(!seatNo()){ alert('좌석 정보가 없습니다. 먼저 로그인/자리 선택을 완료해주세요.'); return; }
+    if(running) return;
+    if(el.start) el.start.disabled=true;
+    try{
+      log('감지 라이브러리 로딩...');
+      await ensureLibs();
+      faceMesh=new FaceMesh({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/'+f});
+      faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+      faceMesh.onResults(onResults);
+      camera=new Camera(el.video,{
+        onFrame:async()=>{ const n=performance.now(); if(n-lastFrameSent<FRAME_INTERVAL) return; lastFrameSent=n; await faceMesh.send({image:el.video}); },
+        width:640,height:480,facingMode:'user'
+      });
+      await camera.start();
+      running=true;
+      if(el.stop) el.stop.disabled=false;
+      log('감지 시작'); setState('focus','분석을 시작합니다');
+      startHeartbeat(); acquireWake(); conn('on');
+    }catch(err){
+      log('시작 실패: '+(err&&err.message||err));
+      alert('카메라를 시작할 수 없습니다.\n· 카메라 권한을 허용했는지\n· https(GitHub Pages)에서 열었는지 확인해주세요.\n\n오류: '+(err&&err.message||err));
+      if(el.start) el.start.disabled=false; running=false;
+    }
+  }
+  function stop(){
+    if(camera){ try{camera.stop();}catch(e){} }
+    if(el.video && el.video.srcObject){ el.video.srcObject.getTracks().forEach(t=>t.stop()); el.video.srcObject=null; }
+    running=false;
+    if(el.start) el.start.disabled=false;
+    if(el.stop) el.stop.disabled=true;
+    eyesClosedSince=headDownSince=noFaceSince=null;
+    setState('idle');
+    if(el.canvas){ const c=el.canvas.getContext('2d'); if(c) c.clearRect(0,0,el.canvas.width,el.canvas.height); }
+    log('감지 중지'); stopHeartbeat(); releaseWake(); push('empty',{},true); conn('off');
+  }
+  window.fmStart=start;
+  window.fmStop=stop;
+  window.fmOnOpen=function(){ cache(); if(el.seat) el.seat.textContent=seatNo()||'미설정'; conn(running?'on':'off'); };
+  window.fmOnLeave=function(){ if(running) stop(); };
+})();
 </script>
 </body>
 </html>
