@@ -349,6 +349,48 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .pill-btn small{display:block;font-size:10px;color:var(--text3);font-weight:500;margin-top:2px}
 .pl-navbtn{background:var(--amber-pale);border:1px solid rgba(108,93,211,0.2);border-radius:var(--r-sm);padding:6px 14px;font-size:16px;cursor:pointer;font-weight:700;color:var(--amber-dark);transition:background .12s}
 .pl-navbtn:active{background:#E1DBF7}
+
+/* ══════════════════════════════════════════
+   태블릿 대응 (Tablet responsive)
+   기존 폰 레이아웃은 그대로 두고, 넓은 화면에서만 적용됩니다.
+   ══════════════════════════════════════════ */
+@media (min-width:700px){
+  /* 로그인: 카드 · 숫자패드 확대 */
+  .login-card{max-width:400px;padding:36px 32px}
+  .numpad{gap:10px}
+  .np-btn{padding:19px;font-size:25px}
+  .pin-dot{width:16px;height:16px}
+
+  /* 공통 콘텐츠: 폭을 넓히고 가운데 정렬 */
+  .app-content{max-width:680px;padding:22px 24px 90px}
+  .home-content{max-width:720px;width:100%;margin:0 auto;padding:22px 24px 90px}
+
+  /* 헤더 내용도 콘텐츠 폭에 맞춰 정렬 */
+  .home-header{padding:16px 24px}
+  .home-header-info{max-width:720px;width:100%;margin:0 auto}
+  .app-topbar{padding:16px 28px}
+
+  /* 홈 퀵메뉴: 2열 → 3열 (넓은 화면 활용) */
+  .quick-grid{grid-template-columns:repeat(3,1fr);gap:14px}
+  .quick-card{min-height:124px;padding:20px 18px 16px}
+  .quick-card-icon{font-size:28px}
+  .quick-card-title{font-size:15px}
+  .quick-card-sub{font-size:12px}
+
+  /* 하단 네비게이션: 화면 전체로 늘어나지 않게 가운데 바 형태 */
+  .bottom-nav{max-width:720px;left:0;right:0;margin:0 auto;border-radius:20px 20px 0 0;border:1px solid var(--border-light);border-bottom:none}
+
+  /* 학습현황 등 카드 그리드 간격 살짝 넉넉하게 */
+  .stat-row{gap:14px}
+}
+
+/* 큰 태블릿 · 가로모드 */
+@media (min-width:1024px){
+  .app-content{max-width:760px}
+  .home-content{max-width:820px}
+  .home-header-info{max-width:820px}
+  .bottom-nav{max-width:820px}
+}
 </style>
 </head>
 <body>
