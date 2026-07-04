@@ -662,10 +662,15 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
         <span>내 좌석: <b id="fm-seat">-</b></span>
         <span class="fm-conn"><span class="fm-conn-dot" id="fm-conn-dot"></span><span id="fm-conn-text">대기 중</span></span>
       </div>
-      <div class="fm-video">
+      <div class="fm-video" id="fm-video-wrap">
         <div class="fm-badge"><span class="d" id="fm-dot"></span><span id="fm-badge-text">대기 중</span></div>
         <video id="fm-video-el" autoplay playsinline muted></video>
         <canvas id="fm-canvas"></canvas>
+        <div class="fm-cover" id="fm-cover">
+          <div class="fm-cover-ico">🙈</div>
+          <div class="fm-cover-txt">카메라 화면을 가렸어요</div>
+          <div class="fm-cover-sub">감지는 그대로 진행 중입니다</div>
+        </div>
       </div>
       <div class="fm-state">
         <div class="lab" id="fm-label">대기 중</div>
@@ -680,6 +685,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
         <button class="fm-start" id="fm-start" onclick="fmStart()">시작</button>
         <button class="fm-stop" id="fm-stop" onclick="fmStop()" disabled>중지</button>
       </div>
+      <label class="fm-opt"><input type="checkbox" id="fm-hide-preview" onchange="fmTogglePreview(this.checked)"> 내 모습 가리기 <span style="color:var(--text3)">(감지는 계속돼요)</span></label>
       <label class="fm-opt"><input type="checkbox" id="fm-wake" checked> 감지 중 화면 꺼짐 방지</label>
       <div class="fm-log" id="fm-log"></div>
     </div>
@@ -2649,6 +2655,12 @@ function showToast(msg) {
 .fm-video{position:relative;background:#0e1216;border-radius:var(--r-lg);overflow:hidden;aspect-ratio:4/3;margin-bottom:12px}
 .fm-video video,.fm-video canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
 .fm-badge{position:absolute;top:10px;left:10px;z-index:5;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.5);color:#fff;font-size:12px;padding:5px 10px;border-radius:20px}
+/* 카메라 미리보기 가림 커버 (영상은 밑에서 계속 재생 → 감지 유지) */
+.fm-cover{position:absolute;inset:0;z-index:4;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px;background:linear-gradient(135deg,#1E1B4B 0%,#4338A8 60%,#33307E 100%)}
+.fm-video.preview-off .fm-cover{display:flex}
+.fm-cover-ico{font-size:38px;line-height:1}
+.fm-cover-txt{font-size:14px;font-weight:800;color:#fff;letter-spacing:-0.2px}
+.fm-cover-sub{font-size:11px;color:rgba(255,255,255,0.72)}
 .fm-badge .d{width:8px;height:8px;border-radius:50%;background:#bbb}
 .fm-badge .d.focus{background:#3ddc97}
 .fm-badge .d.drowsy{background:#f5b942}
@@ -2694,6 +2706,7 @@ function showToast(msg) {
     el.label=$('fm-label'); el.sub=$('fm-sub'); el.ear=$('fm-ear'); el.pitch=$('fm-pitch'); el.dur=$('fm-dur');
     el.seat=$('fm-seat'); el.connDot=$('fm-conn-dot'); el.connText=$('fm-conn-text');
     el.start=$('fm-start'); el.stop=$('fm-stop'); el.wake=$('fm-wake'); el.log=$('fm-log');
+    el.videoWrap=$('fm-video-wrap'); el.hidePreview=$('fm-hide-preview');
   }
   function seatNo(){
     try{ if(typeof currentStudent!=='undefined' && currentStudent && currentStudent.seat){
@@ -2835,7 +2848,20 @@ function showToast(msg) {
   }
   window.fmStart=start;
   window.fmStop=stop;
-  window.fmOnOpen=function(){ cache(); if(el.seat) el.seat.textContent=seatNo()||'미설정'; conn(running?'on':'off'); };
+  // 미리보기(내 얼굴) 화면만 가림 — 카메라/감지는 그대로 유지
+  function applyPreview(hide){
+    if(el.videoWrap) el.videoWrap.classList.toggle('preview-off', !!hide);
+    if(el.hidePreview) el.hidePreview.checked=!!hide;
+    try{ localStorage.setItem('fm_hide_preview', hide?'1':'0'); }catch(e){}
+  }
+  window.fmTogglePreview=function(hide){ applyPreview(hide); };
+  window.fmOnOpen=function(){
+    cache();
+    if(el.seat) el.seat.textContent=seatNo()||'미설정';
+    conn(running?'on':'off');
+    let saved='0'; try{ saved=localStorage.getItem('fm_hide_preview')||'0'; }catch(e){}
+    applyPreview(saved==='1');
+  };
   window.fmOnLeave=function(){ if(running) stop(); };
 })();
 </script>
