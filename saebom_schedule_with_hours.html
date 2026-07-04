@@ -3917,22 +3917,24 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     window._seatChanging = true; // onSnapshot 중복 방지 플래그
 
     if (occupant) {
-      // 두 학생 교환: occupant → oldSeat
-      await _saveSeatDoc({...occupant, seat: oldSeat}, newSeat);
+      // 두 학생 좌석 교환 — 삭제 없이 양방향 스왑.
+      // (기존에는 _saveSeatDoc를 순차 호출했는데, _saveSeatDoc가 마지막에 '이전 좌석
+      //  문서'를 삭제하기 때문에 먼저 이동시킨 상대 학생 문서를 다음 저장이 지워버려
+      //  상대(예: 정은영)가 사라지는 버그가 있었음. schedules/base 이동도 뒤섞였음.)
+      await _swapSeatDocs(student, oldSeat, occupant, newSeat);
       const oi = STUDENTS.findIndex(s => s.name === occupant.name);
       if (oi !== -1) STUDENTS[oi].seat = oldSeat;
       todayRecords.forEach(r => { if (r.studentName === occupant.name) r.seat = oldSeat; });
+      const si = STUDENTS.findIndex(s => s.name === studentName);
+      if (si !== -1) STUDENTS[si].seat = newSeat;
+      todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
     } else {
-      // 기존 문서 삭제
-      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', oldSeat)); } catch(e){}
-      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'schedules', oldSeat)); } catch(e){}
+      // 빈 자리로 이동: _saveSeatDoc가 schedules/base 이동 후 이전 문서를 정리한다.
+      await _saveSeatDoc({...student, seat: newSeat}, oldSeat);
+      const si = STUDENTS.findIndex(s => s.name === studentName);
+      if (si !== -1) STUDENTS[si].seat = newSeat;
+      todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
     }
-
-    // 드래그한 학생 → newSeat
-    await _saveSeatDoc({...student, seat: newSeat}, oldSeat);
-    const si = STUDENTS.findIndex(s => s.name === studentName);
-    if (si !== -1) STUDENTS[si].seat = newSeat;
-    todayRecords.forEach(r => { if (r.studentName === studentName) r.seat = newSeat; });
 
     STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));
     buildFloorplan();
@@ -3951,10 +3953,9 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
   }
 }
 
-async function _saveSeatDoc(student, oldDocId) {
-  const db = window._adminDb;
-  const ns = String(student.seat).replace('번',''); // 항상 숫자 형태로
-  await window._fsSetDoc(window._fsDoc(db, 'students', ns), {
+// students 컬렉션에 저장할 문서 데이터 (좌석번호 ns는 숫자 문자열)
+function _studentDocData(student, ns) {
+  return {
     seat: ns, name: student.name,
     phone: student.phone||'', parent: student.parent||'',
     gender: student.gender||'f', expiry: student.expiry||'', startDate: student.startDate||'',
@@ -3962,7 +3963,55 @@ async function _saveSeatDoc(student, oldDocId) {
     수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
     금: student.schedule?.['금']||'-', 토: student.schedule?.['토']||'-',
     hours: student.hours||{}, updatedAt: window._fsServerTimestamp()
-  });
+  };
+}
+
+// 두 학생의 좌석을 서로 교환한다. 삭제 없이 각 좌석 문서를 상대 학생으로 덮어쓰므로
+// (studentA: seatA→seatB, studentB: seatB→seatA) 어느 쪽도 사라지지 않는다.
+// schedules/schedule_base는 반드시 '쓰기 전에' 양쪽을 먼저 읽어둬야 서로 뒤섞이지 않는다.
+async function _swapSeatDocs(studentA, seatA, studentB, seatB) {
+  const db = window._adminDb;
+  const aOld = String(seatA).replace('번','');
+  const bOld = String(seatB).replace('번','');
+  const aNew = bOld; // studentA는 seatB로
+  const bNew = aOld; // studentB는 seatA로
+
+  const readDoc = async (col, id) => {
+    try { const s = await window._fsGetDoc(window._fsDoc(db, col, id)); return s.exists() ? s.data() : null; }
+    catch(e) { return null; }
+  };
+  // 덮어쓰기 전에 네 문서를 모두 스냅샷
+  const aSched = await readDoc('schedules', aOld);
+  const bSched = await readDoc('schedules', bOld);
+  const aBase  = await readDoc('schedule_base', aOld);
+  const bBase  = await readDoc('schedule_base', bOld);
+
+  // students 문서 상호 덮어쓰기 (두 좌석 모두 채워지므로 삭제 불필요)
+  await window._fsSetDoc(window._fsDoc(db, 'students', aNew), _studentDocData(studentA, aNew));
+  await window._fsSetDoc(window._fsDoc(db, 'students', bNew), _studentDocData(studentB, bNew));
+
+  // schedules / schedule_base 상호 이동 (미리 읽어둔 데이터 사용)
+  const writeAux = async (col, data, ns, name) => {
+    if (!data) return;
+    await window._fsSetDoc(window._fsDoc(db, col, ns), { ...data, seat: ns, name, updatedAt: window._fsServerTimestamp() });
+  };
+  await writeAux('schedules', aSched, aNew, studentA.name);
+  await writeAux('schedules', bSched, bNew, studentB.name);
+  await writeAux('schedule_base', aBase, aNew, studentA.name);
+  await writeAux('schedule_base', bBase, bNew, studentB.name);
+
+  // '11번' 같은 접미사 형태의 잔여 문서만 정리 (숫자 문서는 지금 사용 중이라 건드리지 않음)
+  for (const id of [aOld + '번', bOld + '번']) {
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'students', id)); } catch(e){}
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'schedules', id)); } catch(e){}
+    try { await window._fsDeleteDoc(window._fsDoc(db, 'schedule_base', id)); } catch(e){}
+  }
+}
+
+async function _saveSeatDoc(student, oldDocId) {
+  const db = window._adminDb;
+  const ns = String(student.seat).replace('번',''); // 항상 숫자 형태로
+  await window._fsSetDoc(window._fsDoc(db, 'students', ns), _studentDocData(student, ns));
   // schedules 이동
   try {
     const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', oldDocId));
