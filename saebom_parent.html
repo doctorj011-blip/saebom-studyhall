@@ -24,6 +24,15 @@
     --shadow-pop: 0 10px 36px rgba(139,96,16,0.16);
     --safe-b: env(safe-area-inset-bottom, 0px);
     --safe-t: env(safe-area-inset-top, 0px);
+    /* 학습현황(학생앱과 동일 디자인)용 변수 */
+    --surface: #F7F7FA;
+    --text2: #55555F;
+    --text3: #9B9BA6;
+    --border-light: #EDEDF3;
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
+    --r-lg: 18px;
+    --r-md: 14px;
+    --r-sm: 10px;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
   html, body { -webkit-font-smoothing: antialiased; }
@@ -128,6 +137,46 @@
   .hours-bar { height: 9px; background: #F0F1F3; border-radius: 5px; overflow: hidden; margin-top: 6px; }
   .hours-fill { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-light)); border-radius: 5px; transition: width 0.6s cubic-bezier(.2,.8,.2,1); }
 
+  /* ── 학습현황 (학생앱과 동일 디자인) ── */
+  .section-label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
+  .seg-wrap{display:flex;background:#E9E9F0;border-radius:12px;padding:3px;margin-bottom:14px}
+  .seg-btn{flex:1;padding:9px 0;border:none;background:transparent;border-radius:10px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
+  .seg-btn.active{background:#fff;color:#6C5DD3;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+  .avg-card{background:var(--card);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-bottom:14px}
+  .avg-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .avg-label{font-size:13px;font-weight:600;color:var(--text2)}
+  .avg-value{font-size:23px;font-weight:800;color:var(--text);letter-spacing:-0.5px}
+  .avg-range{font-size:11px;color:var(--text3);margin-top:4px}
+  .tri-row{display:flex;margin-top:16px;border-top:1px solid var(--border-light);padding-top:16px}
+  .tri-cell{flex:1;text-align:center;border-right:1px solid var(--border-light)}
+  .tri-cell:last-child{border-right:none}
+  .tri-val{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-0.3px}
+  .tri-val small{font-size:11px;font-weight:700}
+  .tri-val.hl{color:#6C5DD3}
+  .tri-lbl{font-size:11px;color:var(--text3);margin-top:5px}
+  .chart-wrap{display:flex;align-items:flex-end;gap:8px;height:160px;margin-top:18px;padding:0 4px}
+  .chart-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+  .chart-bar{width:70%;max-width:26px;border-radius:8px;background:#DAD4F6;min-height:4px}
+  .chart-bar.max{background:#6C5DD3}
+  .chart-tag{font-size:9px;font-weight:700;color:#fff;background:#4A3FA8;border-radius:6px;padding:2px 5px;white-space:nowrap}
+  .chart-day{font-size:10px;color:var(--text3)}
+  .ps-card{background:var(--card);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-bottom:14px}
+  .ps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+  .ps-title{font-size:14px;font-weight:800;color:var(--text)}
+  .ps-head i{font-size:18px;color:var(--text3)}
+  .ps-block{border-left:3px solid #6C5DD3;padding:2px 0 2px 12px;margin:16px 0 4px}
+  .ps-name{font-size:13px;font-weight:800;letter-spacing:0.3px;margin-bottom:9px}
+  .ps-cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}
+  .ps-col-h{font-size:11px;font-weight:600;margin-bottom:4px}
+  .ps-line{font-size:12px;display:flex;gap:6px;align-items:baseline;padding:2px 0}
+  .ps-line b{font-weight:700}
+  .ps-k{color:var(--text3);font-size:11px;width:34px;flex-shrink:0}
+  .record-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+  .record-card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-md);padding:11px 6px 10px;text-align:center;box-shadow:var(--shadow-sm)}
+  .record-lbl{font-size:10px;color:var(--text3);font-weight:600;margin-bottom:7px}
+  .record-val{font-size:14px;font-weight:800;color:var(--text);border-top:1px solid var(--border-light);padding-top:8px;letter-spacing:-0.3px}
+  .record-val small{font-size:10px;font-weight:700}
+
   /* 공지 */
   .notice-card{background:#fff;border-radius:var(--radius-lg);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-card);border:1px solid var(--border);border-left:4px solid var(--brand-light)}
   .notice-card.imp{border-left-color:#E03131}
@@ -207,6 +256,8 @@
   </div>
 
   <div class="app-content">
+    <!-- SEE EYES 보호자(법정대리인) 동의 요청 배너 -->
+    <div id="see-consent-req" style="display:none;margin-bottom:14px"></div>
     <!-- 현황 탭 -->
     <!-- 공지 탭 -->
     <div id="tab-notice">
@@ -214,31 +265,7 @@
     </div>
 
     <div id="tab-status" style="display:none">
-      <div class="card">
-        <div id="status-content" class="status-hero">
-          <div id="status-icon-ring" class="status-icon-ring" style="background:#F3F4F6;color:#9CA3AF"><i class="ti ti-door-exit"></i></div>
-          <div id="status-badge" class="badge-out">확인 중...</div>
-          <div id="status-time" style="font-size:12px;color:#888;margin-top:10px"></div>
-          <div id="status-seat" style="font-size:13px;font-weight:600;color:#5C3D08;margin-top:6px"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title"><i class="ti ti-history"></i> 오늘 입퇴실 기록</div>
-        <div id="today-records" style="font-size:13px;color:#888">불러오는 중...</div>
-      </div>
-      <div class="card">
-        <div class="card-title"><i class="ti ti-chart-bar"></i> 이번 달 현황</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div class="stat-card">
-            <div class="stat-label">누적 시간</div>
-            <div id="month-hours" class="stat-value">0h</div>
-          </div>
-          <div class="stat-card">
-            <div class="stat-label">좌석</div>
-            <div id="month-seat" class="stat-value">-</div>
-          </div>
-        </div>
-      </div>
+      <div id="mystats-content"></div>
     </div>
 
     <!-- 스케줄 탭 -->
@@ -290,7 +317,7 @@
 
   <div class="app-tabs">
     <button class="app-tab active" onclick="showTab('notice',this)"><i class="ti ti-bell"></i>공지</button>
-    <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-map-pin"></i>현황</button>
+    <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-chart-bar"></i>학습현황</button>
     <button class="app-tab" onclick="showTab('schedule',this)"><i class="ti ti-calendar-event"></i>스케줄</button>
     <button class="app-tab" onclick="showTab('hours',this)"><i class="ti ti-clock-hour-4"></i>누적시간</button>
     <button class="app-tab" onclick="showTab('planner',this)"><i class="ti ti-notebook"></i>플래너</button>
@@ -343,6 +370,7 @@ function getTodayKST() {
 function showTab(id, btn) {
   if (id === 'planner') loadParentPlanner();
   if (id === 'notice') loadNotices();
+  if (id === 'status') buildMyStats();
   ['notice','status','schedule','hours','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
@@ -449,11 +477,13 @@ function enterApp() {
   document.getElementById('hdr-name').textContent = currentStudent.name;
   document.getElementById('hdr-sub').textContent = (currentStudent.seat || '-') + '번 · 새봄 면학관';
   loadAllData();
+  if (window.seeReqStart) window.seeReqStart();
 }
 
 function doLogout() {
   if (_statusUnsub) { _statusUnsub(); _statusUnsub = null; }
   if (_scheduleUnsub) { _scheduleUnsub(); _scheduleUnsub = null; }
+  if (window.seeReqStop) window.seeReqStop();
   _changedSchedule = null;
   currentStudent = null;
   try { sessionStorage.removeItem('saebom_parent'); } catch(e) {}
@@ -498,67 +528,62 @@ async function startStatusRealtime() {
   // Firebase가 준비될 때까지 최대 3초 대기
   let waited = 0;
   while (!window._onSnapshot || !window._db) {
-    if (waited >= 3000) { loadStatus(); return; }
+    if (waited >= 3000) { buildMyStats(); return; }
     await new Promise(r => setTimeout(r, 100));
     waited += 100;
   }
-  if (!currentStudent) { loadStatus(); return; }
+  if (!currentStudent) { buildMyStats(); return; }
   try {
     // 관리자앱이 기록하는 'checkin_logs' 컬렉션을 구독한다.
     // (이벤트 단위 문서: { studentName, seat, type:'in'|'out', time, date })
     _statusUnsub = window._onSnapshot(
       window._query(window._collection(window._db, 'checkin_logs'), window._where('studentName','==', currentStudent.name)),
       snap => {
-        const today = getTodayAdminDate(); // 관리자앱과 동일한 날짜 포맷 (콜백마다 갱신)
-        // 오늘 이벤트만 시간순 정렬 후 입실/퇴실 기록으로 재구성
-        // 날짜는 포맷/0패딩/시간대 차이에 영향받지 않도록 정규화 후 비교한다.
-        const events = [];
-        snap.forEach(d => { const x = d.data(); if (isSameDay(x.date, today)) events.push(x); });
-        console.log(`[현황] ${currentStudent.name} · 오늘(${today}) 이벤트 ${events.length}건 / 전체 문서 ${snap.size}건`);
-        // ⚠️ time 은 "오후 02:35" 처럼 오전/오후 + 12시간제 문자열이라
-        //    localeCompare(문자열 비교)로 정렬하면 시간순이 되지 않는다.
-        //    (예: 입실 "오후 12:30" 이 퇴실 "오후 02:35" 보다 뒤로 정렬되어
-        //     out→in 순서가 뒤집히고, 퇴실했는데도 '입실 중'으로 표시됨)
-        //    관리자 앱과 동일하게 ts(epoch ms) 기준으로 '실제 시간순' 정렬한다.
-        //    ⚠️ timeToMin(시분)만으로 정렬하면, 이전 입실이 큰 시분("오후 09:24"=1284)이고
-        //       이후 퇴실/재입실이 작은 시분(예 "오후 12:5x")이면 순서가 뒤집혀
-        //       재구성이 꼬이고 '퇴실'로 오판된다. ts 가 없는 구버전 문서는 시분으로 폴백.
-        const eventSortKey = x => (x && typeof x.ts === 'number') ? x.ts : (timeToMin(x && x.time) ?? 0) * 60000;
-        events.sort((a,b) => eventSortKey(a) - eventSortKey(b));
-        const todayRecs = [];
-        events.forEach(e => {
-          if (e.type === 'in') {
-            // ⚠️ 이미 입실 중(열린 기록)이면 중복 in 은 무시한다 — 학생당 열린 기록은 하나만.
-            //    이 처리가 없으면 in 이 여러 번 쌓일 때 짝 없는 열린 기록이 남아
-            //    퇴실했는데도 계속 '입실 중'으로 표시된다. (관리자 앱 loadToday 와 동일 로직)
-            const alreadyOpen = todayRecs.find(r => !r.outTime);
-            if (!alreadyOpen) todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: e.time, outTime: null });
-          } else if (e.type === 'out') {
-            // 가장 최근의 미퇴실 기록에 퇴실시각 매칭
-            const open = [...todayRecs].reverse().find(r => !r.outTime);
-            if (open) open.outTime = e.time;
-            else todayRecs.push({ studentName: e.studentName, seat: e.seat, inTime: '?', outTime: e.time });
-          }
+        // 학생앱 학습현황과 동일 로직: 날짜별로 입/퇴실을 짝지어 실제 공부시간(분)을 집계한다.
+        // 문서 형식: { studentName, seat, type:'in'|'out', time, date, ts }
+        const byDate = {};
+        snap.forEach(d => {
+          const x = d.data();
+          if (!x.date || !x.time) return;
+          const k = _normDkey(x.date);           // 0패딩/시간대 차이 무관하게 정규화
+          (byDate[k] = byDate[k] || []).push(x);
         });
-        // 진단: 이 학생의 전체 기록(모든 날짜) 덤프 — 이월/누락 여부 확인용
-        const _all = [];
-        snap.forEach(d => { const x = d.data(); _all.push(`${x.date} ${x.type} ${x.time}`); });
-        _all.sort();
-        console.log('[현황] 전체 기록(날짜순):', _all);
-        // 진단: 오늘 이벤트 원본과 재구성 결과, 최종 입실여부를 그대로 출력
-        console.log('[현황] 오늘 이벤트(정렬후):', events.map(e => `${e.type} ${e.time} 좌석${e.seat}`));
-        console.log('[현황] 재구성 기록:', JSON.parse(JSON.stringify(todayRecs)),
-                    '→ 입실중?', todayRecs.some(r => r.inTime && !r.outTime));
-        renderStatus(todayRecs);
+        const map = {}; let bestSession = 0;
+        const todayKey = _dkey(new Date());
+        Object.keys(byDate).forEach(dateKey => {
+          // ts(epoch ms) 우선 정렬 — 같은 분의 입/퇴실 순서가 뒤집히지 않도록 (관리자앱과 동일)
+          const evs = byDate[dateKey].sort((a,b) => _evKey(a) - _evKey(b));
+          let total = 0, inMin = null;
+          evs.forEach(ev => {
+            const t = timeToMin(ev.time);
+            if (t === null) return;
+            if (ev.type === 'in') { if (inMin === null) inMin = t; }
+            else if (ev.type === 'out' && inMin !== null) {
+              let out = t; if (out < inMin) out += 1440; // 자정 넘김(11교시)은 전날 밤으로 이어붙임
+              total += out - inMin;
+              if (out - inMin > bestSession) bestSession = out - inMin;
+              inMin = null;
+            }
+          });
+          // 오늘 아직 퇴실 전이면 지금 시각까지 집계
+          if (inMin !== null && dateKey === todayKey) {
+            const n = new Date(); let cur = n.getHours()*60 + n.getMinutes();
+            if (cur < inMin) cur += 1440;
+            total += Math.max(0, cur - inMin);
+          }
+          map[dateKey] = total;
+        });
+        ACTUAL_MIN = map; actualBestSession = bestSession;
+        buildMyStats();
       },
       err => {
         // onSnapshot 의 오류(예: Firestore 보안규칙이 checkin_logs 읽기를 막는 경우)는
-        // 여기 비동기 에러 콜백으로 온다. 조용히 실패하지 않도록 로그를 남기고 폴백한다.
-        console.error('[현황] checkin_logs 실시간 구독 실패:', err && err.code, err && err.message, err);
-        loadStatus();
+        // 여기 비동기 에러 콜백으로 온다. 조용히 실패하지 않도록 로그를 남기고 스케줄 기준 추정치로 폴백한다.
+        console.error('[학습현황] checkin_logs 실시간 구독 실패:', err && err.code, err && err.message, err);
+        buildMyStats();
       }
     );
-  } catch(e) { console.error('[현황] 구독 설정 오류:', e); loadStatus(); }
+  } catch(e) { console.error('[학습현황] 구독 설정 오류:', e); buildMyStats(); }
 }
 
 // "오후 02:35" / "오전 9:05" / "14:30" 등을 자정 기준 분(minute)으로 변환
@@ -592,56 +617,229 @@ function getTodayAdminDate() {
   return `${kst.getUTCFullYear()}-${kst.getUTCMonth() + 1}-${kst.getUTCDate()}`;
 }
 
-function loadStatus() {
-  const today = new Date().toISOString().slice(0,10);
-  const todayRecs = DUMMY_RECORDS.filter(r => r.date === today).sort((a,b) => (a.inTime||'').localeCompare(b.inTime||''));
-  renderStatus(todayRecs);
+// ══════════════════════════════════════════
+//  학습현황 (학생앱과 동일한 화면·데이터)
+// ══════════════════════════════════════════
+const DAY_NAMES = ['일','월','화','수','목','금','토'];
+const PERIOD_MIN = {1:60,2:60,3:70,4:60,5:60,6:70,7:50,8:80,9:90,10:80,11:60};
+let statsView = 'daily';
+
+// 관리자앱 checkin_logs 에서 집계한 실제 공부시간(분). { '2026-7-3': 분 }
+// startStatusRealtime 구독이 채운다. null 이면 스케줄 기준 추정치로 표시.
+let ACTUAL_MIN = null;
+let actualBestSession = 0;
+
+function _dkey(d) { return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
+function _normDkey(s) { const m = String(s).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? `${+m[1]}-${+m[2]}-${+m[3]}` : String(s).trim(); }
+function _parseDkey(k) { const p = String(k).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+// 같은 분의 입·퇴실이 섞이지 않도록 epoch ms(ts) 우선 정렬 (관리자앱 eventSortKey와 동일)
+function _evKey(x) { return (x && typeof x.ts === 'number') ? x.ts : (timeToMin(x && x.time) ?? 0) * 60000; }
+
+// 스케줄(요일 문자열) 기준 추정 공부시간(분) — 실제 기록 로드 전 폴백
+function _dayMinutes(dayName) {
+  if (dayName === '일') return 0;
+  const parsed = parseScheduleStr(getBaseDayStr(dayName));
+  let sum = 0;
+  parsed.periods.forEach(n => { sum += (PERIOD_MIN[n] || 60); });
+  return sum;
+}
+function _dateMinutes(d) {
+  if (ACTUAL_MIN) return ACTUAL_MIN[_dkey(d)] || 0; // 실제 입퇴실 기록
+  return _dayMinutes(DAY_NAMES[d.getDay()]);        // 로드 전 스케줄 기준 추정
+}
+function _fmtHM(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}<small>H</small> ${String(min%60).padStart(2,'0')}<small>M</small>`; }
+function _fmtHMtext(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}H ${String(min%60).padStart(2,'0')}M`; }
+function _fmtKor(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}시간 ${String(min%60).padStart(2,'0')}분`; }
+
+// 스케줄 기준 출석 여부 (일요일 휴관)
+function _attendedOn(d) {
+  if (DAY_NAMES[d.getDay()] === '일') return false;
+  return _dateMinutes(d) > 0;
+}
+function _streakDays() { // 매월 1일부터 집계
+  let streak = 0;
+  const d = new Date();
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  if (!_attendedOn(d)) d.setDate(d.getDate() - 1); // 오늘 미출석이면 어제까지 기준
+  while (d >= first) {
+    if (DAY_NAMES[d.getDay()] === '일') { d.setDate(d.getDate() - 1); continue; } // 일요일은 연속 유지
+    if (!_attendedOn(d)) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
 }
 
-function renderStatus(todayRecs) {
-  const isIn = todayRecs.some(r => r.inTime && !r.outTime);
-  const lastRec = todayRecs[todayRecs.length - 1];
-  const badge = document.getElementById('status-badge');
-  const timeEl = document.getElementById('status-time');
-  const seatEl = document.getElementById('status-seat');
-  const ring = document.getElementById('status-icon-ring');
+function setStatsView(v) { statsView = v; buildMyStats(); }
 
-  if (isIn) {
-    badge.className = 'badge-in'; badge.innerHTML = '<i class="ti ti-circle-check-filled"></i> 입실 중';
-    if (ring) { ring.style.background = '#DCFCE7'; ring.style.color = '#166534'; ring.innerHTML = '<i class="ti ti-door-enter"></i>'; }
-    const inRec = todayRecs.find(r => r.inTime && !r.outTime);
-    timeEl.textContent = `입실 시각: ${inRec?.inTime || ''}`;
-    seatEl.textContent = `좌석: ${currentStudent.seat || '-'}번`;
-  } else if (lastRec) {
-    badge.className = 'badge-out'; badge.innerHTML = '<i class="ti ti-home"></i> 퇴실';
-    if (ring) { ring.style.background = '#F3F4F6'; ring.style.color = '#6B7280'; ring.innerHTML = '<i class="ti ti-door-exit"></i>'; }
-    timeEl.textContent = `퇴실 시각: ${lastRec.outTime || ''}`;
-    seatEl.textContent = '';
+function buildMyStats() {
+  const el = document.getElementById('mystats-content');
+  if (!el || !currentStudent) return;
+  const s = currentStudent;
+  const now = new Date();
+
+  // 일간: 그저께·어제·오늘
+  const days = [2,1,0].map(off => { const d = new Date(); d.setDate(d.getDate()-off); return d; });
+  const dayMins = days.map(d => _dateMinutes(d));
+  const dailyAvg = (dayMins[0]+dayMins[1]+dayMins[2]) / 3;
+
+  // 주간: 지난주(월~토) vs 이번주(월~오늘) — 실제 날짜 기준으로 집계
+  const dowIdx = (now.getDay()+6) % 7; // 월=0 … 일=6
+  const monThis = new Date(now); monThis.setDate(now.getDate() - dowIdx); // 이번주 월요일
+  const _offDate = (base, off) => { const d = new Date(base); d.setDate(d.getDate()+off); return d; };
+  let lastWeekTotal = 0;
+  for (let i = 0; i < 6; i++) lastWeekTotal += _dateMinutes(_offDate(monThis, i-7));
+  const elapsedCnt = Math.min(dowIdx+1, 6);
+  let thisWeekTotal = 0;
+  for (let i = 0; i < elapsedCnt; i++) thisWeekTotal += _dateMinutes(_offDate(monThis, i));
+  const lastWeekAvg = lastWeekTotal / 6;
+  const thisWeekAvg = thisWeekTotal / Math.max(1, elapsedCnt);
+
+  // 월간
+  const curKey = _curYm(), prevKey = _prevYm(curKey);
+  const thisMonthMin = _readHour(s.hours, curKey) * 60;
+  const prevMonthMin = _readHour(s.hours, prevKey) * 60;
+  const prevMonthDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+
+  // 연간·누적
+  const yearPrefix = now.getFullYear() + '-';
+  let yearMin = 0, allMin = 0, maxMonthMin = 0;
+  Object.keys(s.hours || {}).forEach(k => {
+    const m = (Number(s.hours[k]) || 0) * 60;
+    allMin += m;
+    if (String(k).startsWith(yearPrefix)) yearMin += m;
+    if (m > maxMonthMin) maxMonthMin = m;
+  });
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,1)) / 86400000) + 1;
+
+  // 최고 기록 — 실제 기록이 로드되면 전체 이력 기준으로 계산
+  let bestDay, bestWeek, bestSession;
+  if (ACTUAL_MIN) {
+    bestDay = Math.max(0, ...Object.values(ACTUAL_MIN));
+    const weekSums = {};
+    Object.keys(ACTUAL_MIN).forEach(k => {
+      const d = _parseDkey(k);
+      const mon = new Date(d); mon.setDate(d.getDate() - (d.getDay()+6)%7);
+      const wk = _dkey(mon);
+      weekSums[wk] = (weekSums[wk] || 0) + ACTUAL_MIN[k];
+    });
+    bestWeek = Math.max(0, ...Object.values(weekSums));
+    bestSession = actualBestSession;
   } else {
-    badge.className = 'badge-out'; badge.textContent = '미입실';
-    if (ring) { ring.style.background = '#F3F4F6'; ring.style.color = '#9CA3AF'; ring.innerHTML = '<i class="ti ti-moon"></i>'; }
-    timeEl.textContent = '오늘 아직 입실하지 않았어요';
-    seatEl.textContent = '';
+    bestDay = Math.max(0, ...DAYS.map(d => _dayMinutes(d)));
+    bestWeek = Math.max(lastWeekTotal, thisWeekTotal);
+    bestSession = bestDay;
+  }
+  const streak = _streakDays();
+
+  const rangeStr = (a,b) => `${a.getFullYear()}년 ${a.getMonth()+1}월 ${a.getDate()}일 - ${a.getMonth()===b.getMonth() ? '' : (b.getMonth()+1)+'월 '}${b.getDate()}일`;
+
+  let topCard = '';
+  if (statsView === 'daily') {
+    topCard = `
+    <div class="avg-card">
+      <div class="avg-top"><div class="avg-label">평균 공부시간</div><div class="avg-value">${_fmtKor(dailyAvg)}</div></div>
+      <div class="avg-range">${rangeStr(days[0], days[2])}</div>
+      <div class="tri-row">
+        <div class="tri-cell"><div class="tri-val">${_fmtHM(dayMins[0])}</div><div class="tri-lbl">그저께</div></div>
+        <div class="tri-cell"><div class="tri-val">${_fmtHM(dayMins[1])}</div><div class="tri-lbl">어제</div></div>
+        <div class="tri-cell"><div class="tri-val hl">${_fmtHM(dayMins[2])}</div><div class="tri-lbl">오늘</div></div>
+      </div>
+    </div>`;
+  } else {
+    // 최근 7일 바 차트
+    const week = [6,5,4,3,2,1,0].map(off => { const d = new Date(); d.setDate(d.getDate()-off); return d; });
+    const weekMins = week.map(d => _dateMinutes(d));
+    const weekAvg = weekMins.reduce((a,b)=>a+b,0) / 7;
+    const maxMin = Math.max(1, ...weekMins);
+    const maxIdx = weekMins.indexOf(Math.max(...weekMins));
+    let bars = '';
+    week.forEach((d,i) => {
+      const hPct = Math.max(4, Math.round(weekMins[i] / maxMin * 100));
+      bars += `<div class="chart-col">
+        ${i === maxIdx && weekMins[i] > 0 ? `<div class="chart-tag">${_fmtHMtext(weekMins[i])}</div>` : ''}
+        <div class="chart-bar${i === maxIdx ? ' max' : ''}" style="height:${hPct}%"></div>
+        <div class="chart-day">${d.getDate()}</div>
+      </div>`;
+    });
+    topCard = `
+    <div class="avg-card">
+      <div class="avg-top"><div class="avg-label">평균 공부시간</div><div class="avg-value">${_fmtKor(weekAvg)}</div></div>
+      <div class="avg-range">${rangeStr(week[0], week[6])}</div>
+      <div class="chart-wrap">${bars}</div>
+    </div>`;
   }
 
-  // 오늘 기록
-  const recEl = document.getElementById('today-records');
-  if (!todayRecs.length) {
-    recEl.innerHTML = '<div style="color:#aaa;padding:8px 0">오늘 입퇴실 기록이 없습니다</div>';
-  } else {
-    recEl.innerHTML = todayRecs.map(r =>
-      `<div class="record-row">
-        <span class="record-dot"></span>
-        <span style="color:#5C3D08;font-weight:600;flex:1">입실 ${r.inTime}</span>
-        <span style="color:#6B7280">${r.outTime ? '퇴실 '+r.outTime : '입실 중'}</span>
-      </div>`
-    ).join('');
-  }
+  const psLine = (k, v, color) => `<div class="ps-line"><span class="ps-k">${k}</span><b style="color:${color}">${v}</b></div>`;
 
-  // 이번 달 누적
-  const h = _readHour(currentStudent.hours, _curYm());
-  document.getElementById('month-hours').textContent = h + 'h';
-  document.getElementById('month-seat').textContent = currentStudent.seat ? currentStudent.seat+'번' : '-';
+  const html = `
+    <div class="seg-wrap">
+      <button class="seg-btn${statsView==='daily'?' active':''}" onclick="setStatsView('daily')">일간</button>
+      <button class="seg-btn${statsView==='weekly'?' active':''}" onclick="setStatsView('weekly')">주간</button>
+    </div>
+    <div style="text-align:center;font-size:11px;color:${ACTUAL_MIN ? '#1AB5A3' : '#B9B9C4'};margin:-4px 0 8px">
+      ${ACTUAL_MIN ? '✓ 실제 입퇴실 기록 기준' : '스케줄 기준 추정 · 실제 기록 불러오는 중...'}
+    </div>
+    ${topCard}
+
+    <div class="ps-card">
+      <div class="ps-head"><div class="ps-title">기간별 공부시간</div><i class="ti ti-calendar-stats"></i></div>
+
+      <div class="ps-block" style="border-color:#1AB5A3">
+        <div class="ps-name" style="color:#1AB5A3">Weekly</div>
+        <div class="ps-cols">
+          <div>
+            <div class="ps-col-h" style="color:#9B9BA6">지난주 (월 - 토)</div>
+            ${psLine('Total.', _fmtHMtext(lastWeekTotal), '#55555F')}
+            ${psLine('Avg.', _fmtHMtext(lastWeekAvg), '#55555F')}
+          </div>
+          <div>
+            <div class="ps-col-h" style="color:#1AB5A3">이번주 (월 - 오늘)</div>
+            ${psLine('Total.', _fmtHMtext(thisWeekTotal), '#1AB5A3')}
+            ${psLine('Avg.', _fmtHMtext(thisWeekAvg), '#1AB5A3')}
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-block" style="border-color:#6C5DD3">
+        <div class="ps-name" style="color:#6C5DD3">Monthly</div>
+        <div class="ps-cols">
+          <div>
+            <div class="ps-col-h" style="color:#9B9BA6">지난달</div>
+            ${psLine('Total.', _fmtHMtext(prevMonthMin), '#55555F')}
+            ${psLine('Avg.', _fmtHMtext(prevMonthMin / prevMonthDays), '#55555F')}
+          </div>
+          <div>
+            <div class="ps-col-h" style="color:#6C5DD3">이번달 (1일 - 오늘)</div>
+            ${psLine('Total.', _fmtHMtext(thisMonthMin), '#6C5DD3')}
+            ${psLine('Avg.', _fmtHMtext(thisMonthMin / now.getDate()), '#6C5DD3')}
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-block" style="border-color:#4A3FA8">
+        <div class="ps-name" style="color:#4A3FA8">Yearly</div>
+        <div class="ps-cols">
+          <div>
+            <div class="ps-col-h" style="color:#4A3FA8">총계 (1월 - 오늘)</div>
+            ${psLine('Total.', _fmtHMtext(yearMin), '#4A3FA8')}
+            ${psLine('Avg.', _fmtHMtext(yearMin / dayOfYear), '#4A3FA8')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">최고 기록</div>
+    <div class="record-grid">
+      <div class="record-card"><div class="record-lbl">일일 최고</div><div class="record-val">${_fmtHM(bestDay)}</div></div>
+      <div class="record-card"><div class="record-lbl">주간 최고</div><div class="record-val">${_fmtHM(bestWeek)}</div></div>
+      <div class="record-card"><div class="record-lbl">월간 최고</div><div class="record-val">${_fmtHM(maxMonthMin)}</div></div>
+      <div class="record-card"><div class="record-lbl">연속 출석일</div><div class="record-val" style="color:#6C5DD3">${streak} 일</div></div>
+      <div class="record-card"><div class="record-lbl">연속 최고시간</div><div class="record-val">${_fmtHM(bestSession)}</div></div>
+      <div class="record-card"><div class="record-lbl">총 누적시간</div><div class="record-val">${_fmtHM(allMin)}</div></div>
+    </div>`;
+
+  el.innerHTML = html;
 }
 
 // ── 스케줄 문자열 파서 (관리자/학생앱과 동일 로직 — 포맷 불일치 방지) ──
@@ -1058,7 +1256,7 @@ document.addEventListener('visibilitychange', function() {
       currentStudent = JSON.parse(saved);
       enterApp();
       const tab = sessionStorage.getItem('saebom_parent_tab');
-      if (tab && tab !== 'status') {
+      if (tab && tab !== 'notice') {
         const btn = document.querySelector(`.app-tab[onclick*="${tab}"]`);
         if (btn) setTimeout(() => showTab(tab, btn), 300);
       }
@@ -1071,10 +1269,79 @@ document.addEventListener('visibilitychange', function() {
 })();
 </script>
 
+<!-- ══ SEE EYES 보호자(법정대리인) 동의 요청 ══ -->
+<script>
+(function(){
+  const CONSENT_VERSION='v1';
+  let unsub=null, state=null, seat=null;
+  const $=id=>document.getElementById(id);
+
+  function childSeat(){ try{ if(currentStudent && currentStudent.seat){ const s=String(currentStudent.seat); return s.replace(/[^0-9]/g,'')||s; } }catch(e){} return ''; }
+  function docRef(s){ return window._doc(window._db,'see_eyes_consents',String(s)); }
+
+  function render(){
+    const box=$('see-consent-req'); if(!box) return;
+    // 학생이 본인 동의 후 보호자 승인 대기 중일 때만 요청 카드 노출
+    if(!state || state.studentConsent!==true || state.guardianStatus!=='pending'){ box.style.display='none'; box.innerHTML=''; return; }
+    const nm=state.studentName||(currentStudent&&currentStudent.name)||'자녀';
+    box.style.display='block';
+    box.innerHTML=
+      '<div style="border:1px solid #F0D28A;background:#FFF8E8;border-radius:16px;padding:16px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.06)">'+
+        '<div style="font-weight:800;font-size:15px;color:#7A5610;display:flex;align-items:center;gap:7px;margin-bottom:8px"><i class="ti ti-shield-check"></i> SEE EYES 개인정보 수집·이용 보호자 동의</div>'+
+        '<div style="font-size:13px;color:#5b5b5b;line-height:1.7;margin-bottom:10px"><b>'+nm+'</b> 학생이 <b>SEE EYES(학습 집중 관리)</b> 사용에 동의했습니다. 만 14세 미만 미성년자의 경우 보호자(법정대리인) 동의가 필요합니다.</div>'+
+        '<div style="font-size:12px;color:#6b6b6b;line-height:1.7;background:#fff;border:1px solid #eee;border-radius:10px;padding:11px 12px;margin-bottom:12px">'+
+          '• <b>수집 항목</b>: 카메라 영상을 실시간 분석한 특징값(눈 개폐율·고개 각도·시선)과 상태값(집중/졸음/이탈)<br>'+
+          '• <b>영상 처리</b>: 영상은 저장·전송하지 않고 상태값만 관리 대시보드로 전송<br>'+
+          '• <b>목적</b>: 학습 집중 관리 · <b>제공대상</b>: 새봄 면학관 관리자<br>'+
+          '• <b>보유기간</b>: 목적 달성 또는 동의 철회 시까지 · 동의 거부 및 철회 가능(불이익 없음)'+
+        '</div>'+
+        '<div style="display:flex;gap:8px">'+
+          '<button onclick="seeReqReject()" style="flex:1;border:1px solid #E0B4B4;background:#FDECEC;color:#C0392B;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">동의하지 않음</button>'+
+          '<button onclick="seeReqApprove()" style="flex:2;border:none;background:#C8900A;color:#fff;border-radius:12px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit">보호자로서 동의합니다</button>'+
+        '</div>'+
+      '</div>';
+  }
+
+  async function write(fields){
+    const s=childSeat(); if(!s || !window._db || !window._setDoc){ alert('연결 정보를 확인할 수 없습니다.'); return false; }
+    let gname=''; try{ gname=(currentStudent&&currentStudent.name)?(currentStudent.name+' 보호자'):''; }catch(e){}
+    try{
+      await window._setDoc(docRef(s), Object.assign({
+        guardianName:gname, updatedAt:new Date().toISOString(), version:CONSENT_VERSION, guardianSource:'parent_app'
+      }, fields), {merge:true});
+      return true;
+    }catch(e){ alert('처리 중 오류가 발생했습니다: '+(e&&e.message||e)); return false; }
+  }
+
+  window.seeReqApprove=async function(){
+    if(!confirm('보호자(법정대리인)로서 위 개인정보 수집·이용에 동의하시겠습니까?')) return;
+    if(await write({ guardianStatus:'approved', guardianConsentAt:new Date().toISOString() })){
+      alert('동의가 완료되었습니다. 자녀가 SEE EYES를 사용할 수 있습니다.');
+    }
+  };
+  window.seeReqReject=async function(){
+    if(!confirm('동의하지 않으시겠습니까? 자녀는 SEE EYES를 사용할 수 없습니다.')) return;
+    if(await write({ guardianStatus:'rejected', guardianConsentAt:new Date().toISOString() })){
+      alert('동의 거부로 처리되었습니다.');
+    }
+  };
+
+  window.seeReqStart=function(){
+    if(!window._db || !window._onSnapshot){ return; }
+    seat=childSeat(); if(!seat){ return; }
+    if(unsub){ try{unsub();}catch(e){} unsub=null; }
+    unsub=window._onSnapshot(docRef(seat),(snap)=>{
+      state=(snap && snap.exists && snap.exists())?snap.data():null; render();
+    },(err)=>{ /* 무시 */ });
+  };
+  window.seeReqStop=function(){ if(unsub){ try{unsub();}catch(e){} unsub=null; } state=null; const box=$('see-consent-req'); if(box){ box.style.display='none'; box.innerHTML=''; } };
+})();
+</script>
+
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, getDocs, collection, getDoc, doc, query, where, onSnapshot } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+import { getFirestore, getDocs, collection, getDoc, doc, query, where, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -1101,6 +1368,7 @@ window._doc = doc;
 window._query = query;
 window._where = where;
 window._onSnapshot = onSnapshot;
+window._setDoc = setDoc;
 window._firebaseReady = true;
 console.log('🔥 학부모앱 Firebase 연결 완료');
 </script>
