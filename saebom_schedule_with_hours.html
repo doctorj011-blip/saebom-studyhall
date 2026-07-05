@@ -110,6 +110,20 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .hours-table tr:last-child td{border-bottom:none}
 .hours-table tr:hover td{background:var(--color-background-secondary)}
 
+.hours-name-link{cursor:pointer;color:#A87008;text-decoration:underline dotted;text-underline-offset:2px}
+.hours-name-link:hover{color:#C8900A;text-decoration:underline}
+.sess-day{border:1px solid #E0B020;border-radius:12px;margin-bottom:10px;overflow:hidden}
+.sess-day-head{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#FFF8DC}
+.sess-day-date{font-size:13px;font-weight:700;color:#5C3D08}
+.sess-day-total{font-size:12px;font-weight:600;color:#A87008}
+.sess-row{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:0.5px solid #F0E0A0;font-size:12px}
+.sess-row:first-child{border-top:none}
+.sess-idx{width:20px;height:20px;border-radius:50%;background:#F0E4C0;color:#8B6010;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.sess-in{color:#27500A;font-weight:600}
+.sess-arrow{color:#C0A860}
+.sess-out{color:#7A5008;font-weight:600}
+.sess-open{color:#C62828;font-weight:600}
+.sess-dur{margin-left:auto;color:var(--color-text-secondary);font-weight:600}
 .hours-bar-wrap{width:100%;background:var(--color-background-secondary);border-radius:3px;height:6px;overflow:hidden;display:inline-block;vertical-align:middle;width:80px}
 .hours-bar{height:100%;border-radius:3px;background:#A87008}
 .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:500}
@@ -1889,13 +1903,17 @@ function buildHoursTable(){
     return timeToMin(t);
   };
 
+  const nowMinStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   const todayHoursMap = {};
   todayRecords.forEach(r => {
     const inMin = parseTimeMin(r.inTime);
     if (inMin === null) return;
-    const outMin = r.outTime ? parseTimeMin(r.outTime) : parseTimeMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+    // 외출 중인(열린) 기록은 외출 시작 시각까지만 카운트(시계 멈춤), 그 외엔 퇴실시각/현재시각까지
+    const awayNow = (!r.outTime && window._awayStudents && window._awayStudents[r.studentName]) ? window._awayStudents[r.studentName] : null;
+    let outMin = r.outTime ? parseTimeMin(r.outTime) : parseTimeMin(awayNow || nowMinStr);
     if (outMin === null) return;
-    const diff = Math.max(0, (outMin < inMin ? outMin + 1440 : outMin) - inMin);
+    let diff = Math.max(0, (outMin < inMin ? outMin + 1440 : outMin) - inMin);
+    diff = Math.max(0, diff - (r.awayMin || 0)); // 이미 복귀한 외출 구간 제외
     todayHoursMap[r.studentName] = (todayHoursMap[r.studentName] || 0) + diff;
   });
 
@@ -1922,7 +1940,7 @@ function buildHoursTable(){
     const todayColor = todayMin >= 180 ? '#27500A' : todayMin >= 60 ? '#7A5008' : '#9CA3AF';
     html+=`<tr>
       <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
-      <td style="font-weight:500">${s.name}</td>
+      <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(s.name).replace(/'/g,"\\'")}')">${s.name}</span></td>
       <td><span class="seat-badge">${s.seat}</span></td>
       <td style="font-weight:600;color:${todayColor}">${todayStr}</td>
       <td>${getHoursChip(h)}</td>
@@ -2108,7 +2126,7 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
     const totalH = Math.round(r.min / 60 * 10) / 10;
     html += `<tr>
       <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
-      <td style="font-weight:500">${r.name}${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
+      <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(r.name).replace(/'/g,"\\'")}')">${r.name}</span>${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
       <td><span class="seat-badge">${r.seat}</span></td>
       <td style="font-weight:600">${_fmtRangeMin(r.min)}${r.min > 0 ? ` <span style="font-size:10px;color:var(--color-text-tertiary)">(${totalH}h)</span>` : ''}</td>
       <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
@@ -2140,6 +2158,161 @@ window.resetHoursRange = function(skipRebuild){
   s.value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
   e.value = iso(now);
 })();
+
+// ── 학생 입·퇴실 상세 모달 ──
+// 사용시간 표에서 이름을 누르면 그 학생이 며칠에 몇 시에 입실/퇴실했는지 보여준다.
+// 하루에 여러 번 입·퇴실했으면 세션을 모두 나열한다.
+// 조회 기간: 기간조회 모드면 그 기간, 아니면 현재 선택된 월(1일~말일, 이번 달이면 오늘까지).
+window.showStudentSessionsModal = async function(name){
+  const old = document.getElementById('sess-modal-overlay');
+  if (old) old.remove();
+
+  // 조회 기간(ISO) 결정
+  let startISO, endISO, rangeLabel;
+  if (window._hoursRangeMode) {
+    startISO = document.getElementById('hours-range-start').value;
+    endISO   = document.getElementById('hours-range-end').value;
+    rangeLabel = `${startISO.replace(/-/g,'.')} ~ ${endISO.replace(/-/g,'.')}`;
+  } else {
+    const [y, m] = String(currentMonth).split('-').map(Number);
+    const now = new Date();
+    const isCur = (y === now.getFullYear() && m === now.getMonth()+1);
+    const lastDay = isCur ? now.getDate() : new Date(y, m, 0).getDate();
+    startISO = `${y}-${String(m).padStart(2,'0')}-01`;
+    endISO   = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+    rangeLabel = `${m}월`;
+  }
+
+  // 오버레이 + 로딩
+  const overlay = document.createElement('div');
+  overlay.id = 'sess-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+  const seat = (STUDENTS.find(s => s.name === name) || {}).seat || '';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(94vw,460px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FFF8DC">
+        <div style="font-size:15px;font-weight:700;color:#5C3D08">${name} <span style="font-size:12px;font-weight:500;color:#8B6010">${seat ? seat + ' · ' : ''}${rangeLabel} 입·퇴실 기록</span></div>
+        <button onclick="document.getElementById('sess-modal-overlay').remove()"
+          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+      </div>
+      <div id="sess-modal-body" style="overflow-y:auto;padding:14px 16px">
+        <div style="text-align:center;padding:32px;color:#aaa;font-size:13px">불러오는 중...</div>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  const bodyEl = overlay.querySelector('#sess-modal-body');
+
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+
+    const dates = _rangeDateStrings(startISO, endISO); // 무패딩 Y-M-D 목록
+    const chunks = [];
+    for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i + 30));
+    const snaps = await Promise.all(chunks.map(c =>
+      getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', c)))
+    ));
+
+    // 이 학생의 이벤트만 날짜별로 모은다
+    const byDate = {};
+    snaps.forEach(snap => snap.forEach(doc => {
+      const d = doc.data();
+      if (d.studentName !== name || !d.type || !d.date) return;
+      (byDate[d.date] = byDate[d.date] || []).push(d);
+    }));
+
+    const fmtClock = t => {
+      const mm = timeToMin(t);
+      if (mm == null) return t || '?';
+      const h = Math.floor((mm % 1440) / 60), m = mm % 60;
+      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    };
+    const todayStr = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
+    const nowMin = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+
+    // 날짜별로 세션(입실→퇴실 짝) 구성. 미입실 규칙: 첫 입실만 열고 out으로 닫음.
+    const dateKeys = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a)); // 최신일 먼저
+    let grandMin = 0, dayCount = 0;
+    const blocks = dateKeys.map(date => {
+      const events = byDate[date].slice().sort((a, b) => {
+        const diff = eventSortKey(a) - eventSortKey(b);
+        if (diff !== 0) return diff;
+        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
+      });
+      const sessions = [];
+      let openEv = null;
+      events.forEach(ev => {
+        if (ev.type === 'in') { if (!openEv) openEv = ev; }
+        else if (ev.type === 'out') { if (openEv) { sessions.push({ in: openEv, out: ev }); openEv = null; } }
+      });
+      if (openEv) sessions.push({ in: openEv, out: null });
+      if (!sessions.length) return '';
+
+      let dayMin = 0;
+      const rows = sessions.map((s, i) => {
+        const inMin = timeToMin(s.in.time);
+        // 세션 시작이 '복귀'(away in)면 복귀로, 끝이 '외출'(away out)이면 외출로 표기
+        const inLabel = s.in.away ? '복귀' : '입실';
+        let durTxt = '', outTxt;
+        if (s.out) {
+          let outMin = timeToMin(s.out.time);
+          const outLabel = s.out.away ? '외출' : '퇴실';
+          const outCls = s.out.away ? 'sess-open' : 'sess-out';
+          outTxt = `${outLabel} <span class="${outCls}">${fmtClock(s.out.time)}</span>`;
+          if (inMin != null && outMin != null) {
+            if (outMin < inMin) outMin += 1440;
+            const d = outMin - inMin; dayMin += d;
+            durTxt = _fmtRangeMin(d);
+          }
+        } else if (date === todayStr && inMin != null && nowMin != null) {
+          outTxt = `<span class="sess-open">재실 중</span>`;
+          const d = Math.max(0, nowMin - inMin); dayMin += d;
+          durTxt = _fmtRangeMin(d) + ' 경과';
+        } else {
+          outTxt = `<span class="sess-open">미퇴실</span>`;
+        }
+        return `<div class="sess-row">
+          <span class="sess-idx">${i+1}</span>
+          <span class="sess-in">${inLabel} ${fmtClock(s.in.time)}</span>
+          <span class="sess-arrow">→</span>
+          <span>${outTxt}</span>
+          <span class="sess-dur">${durTxt}</span>
+        </div>`;
+      }).join('');
+
+      grandMin += dayMin; dayCount++;
+      const dObj = new Date(date);
+      const wd = ['일','월','화','수','목','금','토'][dObj.getDay()];
+      const dLabel = `${dObj.getMonth()+1}월 ${dObj.getDate()}일 (${wd})`;
+      return `<div class="sess-day">
+        <div class="sess-day-head">
+          <span class="sess-day-date">${dLabel}</span>
+          <span class="sess-day-total">${sessions.length}회 · ${_fmtRangeMin(dayMin)}</span>
+        </div>${rows}
+      </div>`;
+    });
+
+    const filled = blocks.filter(Boolean);
+    if (!filled.length) {
+      bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#aaa;font-size:13px">${rangeLabel} 기간에 입·퇴실 기록이 없습니다</div>`;
+      return;
+    }
+    bodyEl.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="summary-chip">출석 <span>${dayCount}일</span></div>
+        <div class="summary-chip">총 <span style="color:#A87008">${_fmtRangeMin(grandMin)}</span></div>
+      </div>
+      ${filled.join('')}`;
+  } catch(e) {
+    console.error('입·퇴실 상세 조회 실패:', e);
+    bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`;
+  }
+};
 
 function buildHoursChart(){
   const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
@@ -2879,7 +3052,9 @@ window.checkinConfirm = function() {
   if (isCheckout) {
     existing.outTime = timeStr;
     // 외출 중이던 학생이 바로 퇴실하는 경우 외출 상태 해제 (Firebase 포함)
+    let _awayAtCheckout = null; // 외출 중 퇴실이면 외출 시작 시각 — 사용시간에서 제외
     if (window._awayStudents && window._awayStudents[student.name]) {
+      _awayAtCheckout = window._awayStudents[student.name];
       delete window._awayStudents[student.name];
       saveAwayToFirebase(student, true, timeStr);
     }
@@ -2907,6 +3082,16 @@ window.checkinConfirm = function() {
     if (existing.carriedOver) {
       diffMin = (inRaw == null) ? 0 : Math.max(0, Math.min(outMin, 25 * 60) - inMin);
     }
+    // ── 외출 시간 제외 ──
+    // 이번 세션에서 완료된 외출 구간 합(existing.awayMin) + 지금 외출 중인 채로 퇴실하면
+    // 마지막 외출 시작~퇴실 구간까지 빼서 순수 학습시간만 누적한다.
+    let awayMinTotal = existing.awayMin || 0;
+    if (_awayAtCheckout != null) {
+      const a = timeToMin(_awayAtCheckout);
+      if (a != null) { let d = outMin - a; if (d < 0) d += 1440; awayMinTotal += Math.max(0, d); }
+    }
+    existing.awayMin = awayMinTotal; existing._awayStart = null; // 1일 사용시간 표와 월 누적을 일치시킴
+    diffMin = Math.max(0, diffMin - awayMinTotal);
     _checkoutTotalMin = diffMin;
     const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
 
@@ -3037,6 +3222,8 @@ window.checkinAway = function() {
     student.awayAt = timeStr;
     _showAwayDone(student, '🚶', '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
     saveAwayToFirebase(student, false, timeStr);
+    // checkin_logs에 외출(out·away) 기록 — 사용시간 제외 계산(awayMin)은 실시간 리스너/재구성이 담당
+    saveCheckinToFirebase(student, true, timeStr, null, true).catch(console.error);
     buildCheckinTodayList();
     // 🚪 자동문 열기
     if (window.requestDoorOpen) window.requestDoorOpen(3);
@@ -3059,6 +3246,8 @@ window.checkinAwayReturn = function() {
     student.awayAt = '';
     _showAwayDone(student, '✅', '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
     saveAwayToFirebase(student, true, timeStr);
+    // checkin_logs에 복귀(in·away) 기록 — 외출 구간(awayMin) 정산은 실시간 리스너/재구성이 담당
+    saveCheckinToFirebase(student, false, timeStr, null, true).catch(console.error);
     buildCheckinTodayList();
     // 🚪 자동문 열기
     if (window.requestDoorOpen) window.requestDoorOpen(3);
@@ -3174,14 +3363,16 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
 }
 
 // Firebase에 입퇴실 기록 저장
-async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride) {
+// awayFlag=true → 외출(type 'out')·복귀(type 'in') 이벤트. 문서에 away:true 마커를 남겨
+//   실시간 리스너·재구성 로직이 '진짜 퇴실/입실'과 구분하고, 사용시간 계산에서 그 구간을 제외한다.
+async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride, awayFlag) {
   try {
     const today = dateOverride || new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const type = isCheckout ? 'out' : 'in';
     // 같은 '분' 안에 같은 종류(입실/입실)가 들어와도 서로 다른 문서가 되도록
     // epoch ms를 ID 끝에 붙여 고유성을 보장한다. (기존엔 분 단위라 setDoc이 덮어써 유실됐음)
     const nowMs = Date.now();
-    const logId = `${today}_${student.seat}_${type}_${timeStr.replace(/[:\s]/g,'')}_${nowMs}`;
+    const logId = `${today}_${student.seat}_${type}${awayFlag ? '_away' : ''}_${timeStr.replace(/[:\s]/g,'')}_${nowMs}`;
     // Firebase가 준비될 때까지 대기
     const waitDb = () => new Promise(res => {
       if (window._adminDb) return res(window._adminDb);
@@ -3194,7 +3385,11 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
     // ── 다기기 동시 사용 시 중복 이벤트 방지 (쓰기 직전 서버 상태 확인) ──
     // 같은 학생의 같은 날짜 '마지막' 이벤트가 지금 쓰려는 것과 동일 type이면 기록하지 않는다.
     // (다른 기기가 이미 같은 입실/퇴실을 기록한 경우 in-in / out-out 중복 문서 방지)
-    try {
+    // ※ 외출/복귀(away) 이벤트는 진짜 입퇴실 사이에 끼어들므로 이 중복검사에서 제외한다:
+    //   - away 이벤트 자체는 검사 없이 저장(잠깐 나갔다 오는 것은 중복 위험이 낮음)
+    //   - 진짜 입퇴실 저장 시엔 away 이벤트를 '마지막 이벤트' 판정에서 무시
+    //     (외출 out 직후 진짜 퇴실 out을 out-out 중복으로 오인해 막는 것을 방지)
+    if (!awayFlag) try {
       // 오늘 날짜로 한정해 조회 — 전체 이력을 매번 읽지 않도록
       const snap = await getDocs(query(collection(db, 'checkin_logs'),
         where('studentName','==', student.name), where('date','==', today)));
@@ -3202,6 +3397,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
       snap.forEach(d => {
         const x = d.data();
         if (x.date !== today) return;
+        if (x.away === true) return; // 외출/복귀 이벤트는 마지막 판정에서 제외
         // 분 단위 시각(timeToMin)은 같은 분의 입실·퇴실을 구분하지 못하므로
         // ts(epoch ms) 기준으로 실제 마지막 이벤트를 판정한다.
         if (last === null || eventSortKey(x) > eventSortKey(last)) last = x;
@@ -3222,7 +3418,8 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride)
       time: timeStr,
       date: today,
       ts: nowMs,            // 초 단위 유실 방지용 정렬 키(epoch ms)
-      createdAt: serverTimestamp()
+      createdAt: serverTimestamp(),
+      ...(awayFlag ? { away: true } : {})   // 외출/복귀 마커
     });
 
   } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
@@ -5770,6 +5967,7 @@ async function loadTodayCheckinFromFirebase() {
     todayRecords.length = 0;
     PRESENT.length = 0;
     window._awayStudents = {};
+    if (window._awayAppliedTs) window._awayAppliedTs.clear(); // away 집계 상태도 재구성과 함께 초기화
 
     // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
     // ts(epoch ms)로 정렬하되, 같은 시각이면 입실(in)을 먼저 처리해
@@ -5785,16 +5983,37 @@ async function loadTodayCheckinFromFirebase() {
       const name = d.studentName;
       const seat = d.seat || '';
       const time = d.time || '';
+      const isAway = d.away === true; // 외출(out)·복귀(in) 마커
+      if (isAway && typeof d.ts === 'number') window._awayAppliedTs.add(d.ts); // 스냅샷 중복집계 방지
 
       if (d.type === 'in') {
+        if (isAway) {
+          // 복귀: 새 입실 아님 — 열린 기록에 외출 구간 누적하고 외출 상태만 해제
+          const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+          if (rec && rec._awayStart != null) {
+            let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
+            rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
+          }
+          return;
+        }
         const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
         if (!alreadyIn) {
-          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null, inTs: (typeof d.ts === 'number' ? d.ts : null) });
+          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null, inTs: (typeof d.ts === 'number' ? d.ts : null), awayMin: 0, _awayStart: null });
           if (!PRESENT.includes(name)) PRESENT.push(name);
         }
       } else if (d.type === 'out') {
         const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+        if (isAway) {
+          // 외출: 퇴실 아님 — 기록·PRESENT 유지, 외출 시작 시각만 표시
+          if (rec) rec._awayStart = timeToMin(time);
+          return;
+        }
         if (rec) {
+          // 외출 중(미복귀) 퇴실이면 마지막 외출 구간도 정산
+          if (rec._awayStart != null) {
+            let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
+            rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
+          }
           rec.outTime = time;
           const idx = PRESENT.indexOf(name);
           if (idx !== -1) PRESENT.splice(idx, 1);
@@ -5806,6 +6025,7 @@ async function loadTodayCheckinFromFirebase() {
     const ydByStudent = {};
     yesterdayDocs.forEach(d => {
       if (!d.studentName) return;
+      if (d.away === true) return; // 외출/복귀는 미퇴실 이월 판정에서 제외 (진짜 입퇴실만 카운트)
       if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
       if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
       else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
@@ -5851,6 +6071,9 @@ loadTodayCheckinFromFirebase();
 // ── 입퇴실 기록 실시간 감시 (다중 기기 동기화) ──
 const _todayStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
 let _checkinSnapshotReady = false; // loadTodayCheckinFromFirebase 완료 후 true
+// 외출/복귀(away) 이벤트를 사용시간 계산에 '한 번만' 반영하기 위한 적용 완료 ts 집합.
+// 재구성(loadTodayCheckin)이 채워두면, 같은 이벤트를 실시간 스냅샷이 다시 전달해도 중복 집계하지 않는다.
+window._awayAppliedTs = window._awayAppliedTs || new Set();
 
 // 오늘·어제 날짜로 필터해 구독 — 기록이 쌓여도 초기 스냅샷 읽기량이 늘지 않는다.
 // 날짜가 바뀌면 새벽 리셋 로직이 window._resubscribeCheckinLogs 로 재구독한다.
@@ -5877,6 +6100,31 @@ function subscribeCheckinLogs() {
       const time = d.time;
       if (!name || !type || !time) return;
 
+      // ── 외출/복귀(away) 이벤트 처리 ──
+      // 진짜 입퇴실과 달리 PRESENT/입실기록을 바꾸지 않고, 사용시간에서 뺄 외출구간(awayMin)만 정산.
+      // ts 기준 1회만 반영(스냅샷 재전달·재구독 대비).
+      if (d.away === true) {
+        const ts = (typeof d.ts === 'number') ? d.ts : null;
+        if (ts != null && window._awayAppliedTs.has(ts)) return; // 이미 반영됨
+        if (!window._awayStudents) window._awayStudents = {};
+        const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+        if (type === 'out') {
+          // 외출: 현재 세션에 외출 시작 시각 표시(퇴실 아님)
+          if (rec) rec._awayStart = timeToMin(time);
+          if (!window._awayStudents[name]) window._awayStudents[name] = time;
+        } else {
+          // 복귀: 외출 구간을 awayMin에 누적하고 외출 상태 해제(새 입실 아님)
+          if (rec && rec._awayStart != null) {
+            let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
+            rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
+          }
+          if (window._awayStudents[name]) delete window._awayStudents[name];
+        }
+        if (ts != null) window._awayAppliedTs.add(ts);
+        changed = true;
+        return;
+      }
+
       if (type === 'in') {
         // 이미 로컬에 있으면 중복 추가 안 함
         const exists = todayRecords.find(r => r.studentName === name && r.inTime === time);
@@ -5896,6 +6144,11 @@ function subscribeCheckinLogs() {
           const rec = todayRecords.find(r => r.studentName === name && !r.outTime
             && (outTs === null || r.inTs == null || r.inTs <= outTs));
           if (rec) {
+            // 외출 중(미복귀) 퇴실이면 마지막 외출 구간도 사용시간에서 제외
+            if (rec._awayStart != null) {
+              let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
+              rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
+            }
             rec.outTime = time;
             const idx = PRESENT.indexOf(name);
             if (idx !== -1) PRESENT.splice(idx, 1);
