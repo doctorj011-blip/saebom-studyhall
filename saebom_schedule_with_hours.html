@@ -2988,6 +2988,19 @@ function showCheckinConfirmFor(student) {
         '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
       + '<button class="confirm-btn confirm-ok" onclick="checkinAwayReturn()">복귀 확인</button>'
       + '<button class="confirm-btn confirm-ok checkout-mode" id="confirm-ok-btn" onclick="checkinConfirm()">퇴실</button>';
+  } else if (isCheckout && window.isBreakReentryWindow && window.isBreakReentryWindow()) {
+    // 쉬는 시간(+종료 직후 유예) — 입실 중 학생이 번호를 누른 경우 자동 퇴실하지 않는다.
+    // 쉬는 시간엔 문이 열려 있어 밖에 나갔던(기록상 입실 중) 학생이 문 닫힌 뒤 다시
+    // 들어오려 번호를 누르면 기존엔 퇴실로 오처리됐다. 여기서 '다시 입실/퇴실'을 직접 고르게 한다.
+    btnWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
+    statusEl.textContent = '쉬는 시간 · 직접 선택';
+    statusEl.className = 'confirm-status status-checkin';
+    document.getElementById('confirm-time').innerHTML =
+      `입실 시각: <b>${existing.inTime}</b><br>다시 들어오시나요, 퇴실하시나요?`;
+    btnWrap.innerHTML =
+        '<button class="confirm-btn confirm-cancel" onclick="checkinReset()">취소</button>'
+      + '<button class="confirm-btn confirm-ok" onclick="checkinBreakReentry()">🚪 다시 입실</button>'
+      + '<button class="confirm-btn confirm-ok checkout-mode" id="confirm-ok-btn" onclick="checkinConfirm()">퇴실</button>';
   } else if (isCheckout) {
     // 입실 중 → 외출(문자 없음) 또는 퇴실 선택
     btnWrap.style.gridTemplateColumns = '1fr 1fr 1fr';
@@ -3256,6 +3269,26 @@ window.checkinAwayReturn = function() {
   } catch(e) {
     console.error('복귀 처리 오류:', e);
     showAdminToast('⚠️ 복귀 처리 중 오류: ' + (e && e.message ? e.message : e));
+    checkinReset();
+  }
+};
+
+// 쉬는 시간에 잠깐 나갔던 '입실 중' 학생의 재입실 — 기록/문자 변경 없이 문만 연다.
+// (학생은 이미 입실 중이므로 todayRecords는 그대로 유지, 문자·누적시간에 영향 없음)
+window.checkinBreakReentry = function() {
+  try {
+    if (window._checkinProcessing) return;
+    const student = document.getElementById('confirm-ok-btn')._student;
+    window._checkinProcessing = true;
+    const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    _showAwayDone(student, '✅', '어서 오세요 · 입실 유지 (문자 발송 없음)', timeStr);
+    // 🚪 자동문 열기
+    if (window.requestDoorOpen) window.requestDoorOpen(3);
+    else if (window.doorOpenTimed) window.doorOpenTimed(3);
+    setTimeout(() => { checkinReset(); }, 2200);
+  } catch(e) {
+    console.error('재입실 처리 오류:', e);
+    showAdminToast('⚠️ 재입실 처리 중 오류: ' + (e && e.message ? e.message : e));
     checkinReset();
   }
 };
@@ -7718,6 +7751,25 @@ function getCurrentBreak() {
   }
   return null;
 }
+
+// ── 쉬는시간 입퇴실 오처리 방지 창(window) ──
+// 쉬는 시간엔 문이 열려 있어 학생들이 번호를 안 누르고 드나든다. 그 결과 밖에 나갔던
+// (기록상 '입실 중') 학생이 문 닫힌 뒤 다시 들어오려 번호를 누르면 자동으로 '퇴실' 판정된다.
+// 이를 막기 위해 쉬는 시간 + 종료 직후 유예시간 동안은 '다시 입실/퇴실'을 직접 고르게 한다.
+let _lastBreakEndTs = 0;       // 마지막 쉬는 시간이 끝난 시각(ms)
+let _prevBreakActive = false;  // 직전 점검 시 쉬는 시간이었는지
+const BREAK_REENTRY_GRACE_MIN = 5; // 문 닫힌 뒤 유예(분)
+setInterval(() => {
+  const active = !!getCurrentBreak();
+  if (_prevBreakActive && !active) _lastBreakEndTs = Date.now(); // 쉬는 시간 종료 시각 기록
+  _prevBreakActive = active;
+}, 10 * 1000);
+// 지금이 '쉬는 시간 또는 종료 직후 유예시간'인지 (자동개방이 켜져 문이 열렸을 때만 의미 있음)
+window.isBreakReentryWindow = function() {
+  if (!_breakAutoEnabled) return false; // 자동개방 꺼짐 → 문이 닫혀 있어 기록 어긋남 없음
+  if (getCurrentBreak()) return true;
+  return _lastBreakEndTs > 0 && (Date.now() - _lastBreakEndTs) < BREAK_REENTRY_GRACE_MIN * 60 * 1000;
+};
 
 window.toggleBreakAutoDoor = function(on) {
   _breakAutoEnabled = on;
