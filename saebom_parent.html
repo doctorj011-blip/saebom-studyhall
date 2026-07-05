@@ -2,7 +2,13 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<!-- 홈 화면에 추가 시 주소창 없이 전체화면(standalone)으로 실행 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="새봄 학부모">
+<meta name="theme-color" content="#C8900A">
 <title>새봄 면학관 학부모</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 <style>
@@ -181,6 +187,22 @@
   .empty-icon{font-size:40px;margin-bottom:14px;opacity:0.6}
   .empty-text{font-size:14px;font-weight:500}
 
+  /* ── 이벤트 게이지바 (세그먼트형, 학생앱과 동일 · 브랜드 골드) ── */
+  .ev-card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);margin-bottom:14px}
+  .ev-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .ev-card-title{font-size:15px;font-weight:800;color:var(--text)}
+  .ev-badge{font-size:10px;font-weight:700;color:var(--brand-dark);background:var(--brand-50);border:1px solid rgba(200,144,10,0.25);border-radius:8px;padding:3px 8px;white-space:nowrap}
+  .ev-desc{font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-line;margin-bottom:12px}
+  .ev-gauge-wrap{background:var(--surface);border:1px solid var(--border-light);border-radius:12px;padding:14px 14px 10px}
+  .ev-gauge-track{position:relative;display:flex;gap:2px;height:34px}
+  .ev-seg{flex:1;background:#F0E9D2;border-radius:2px}
+  .ev-seg.on{background:linear-gradient(180deg,var(--brand-light),var(--brand))}
+  .ev-gauge-val{position:absolute;top:50%;transform:translateY(-50%);left:8px;font-size:14px;font-weight:800;color:var(--brand-dark);background:rgba(255,255,255,0.92);padding:1px 7px;border-radius:7px;box-shadow:var(--shadow-sm);pointer-events:none}
+  .ev-gauge-foot{display:flex;align-items:baseline;justify-content:space-between;margin-top:8px}
+  .ev-gauge-pct{font-size:18px;font-weight:800;color:var(--brand)}
+  .ev-gauge-frac{font-size:11px;font-weight:700;color:var(--text2)}
+  .ev-gauge-goal{font-size:11px;color:var(--text3);font-weight:600}
+
   /* 토스트 */
   .toast { position: fixed; bottom: calc(84px + var(--safe-b)); left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 11px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
   .toast.show { opacity: 1; }
@@ -239,6 +261,11 @@
       <div id="mystats-content"></div>
     </div>
 
+    <!-- 이벤트 탭 -->
+    <div id="tab-events" style="display:none">
+      <div id="events-content"></div>
+    </div>
+
     <!-- 스케줄 탭 -->
     <div id="tab-schedule" style="display:none">
       <div class="card">
@@ -281,6 +308,7 @@
   <div class="app-tabs">
     <button class="app-tab active" onclick="showTab('notice',this)"><i class="ti ti-bell"></i>공지</button>
     <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-chart-bar"></i>학습현황</button>
+    <button class="app-tab" onclick="showTab('events',this)"><i class="ti ti-trophy"></i>이벤트</button>
     <button class="app-tab" onclick="showTab('schedule',this)"><i class="ti ti-calendar-event"></i>스케줄</button>
     <button class="app-tab" onclick="showTab('planner',this)"><i class="ti ti-notebook"></i>플래너</button>
   </div>
@@ -333,7 +361,8 @@ function showTab(id, btn) {
   if (id === 'planner') loadParentPlanner();
   if (id === 'notice') loadNotices();
   if (id === 'status') buildMyStats();
-  ['notice','status','schedule','planner'].forEach(t => {
+  if (id === 'events') buildEvents();
+  ['notice','status','events','schedule','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -513,6 +542,7 @@ async function startStatusRealtime() {
         });
         ACTUAL_MIN = map; actualBestSession = bestSession;
         buildMyStats();
+        try { buildEvents(); } catch(e){} // 실제 공부시간 반영되면 이벤트 달성률도 갱신
       },
       err => {
         // onSnapshot 의 오류(예: Firestore 보안규칙이 checkin_logs 읽기를 막는 경우)는
@@ -924,6 +954,122 @@ function loadSchedule() {
   document.getElementById('schedule-content').innerHTML = html;
 }
 
+// ── 이벤트 (학생앱과 동일 · 관리자앱 events 연동, notices/list 문서의 events 필드) ──
+const DEFAULT_EVENTS = [{
+  id: 'kkeutkkeuta', type: 'studytime', active: true,
+  name: '끝.끝.아 이벤트',
+  desc: '"끝나도 끝난게 아니야" 이벤트\n기간 : 7/6(월) ~ 7/19(일)\n대상 : 새봄면학관 썸머 신청 학생\n내용 : 14일간 공부시간 42시간 달성\n보상 : 시간 달성 시 썸머 비용에서 5만원 장학금 지원',
+  goal: 42, start: '2026-7-6', end: '2026-7-19'
+}, {
+  id: 'streakquest', type: 'streak', active: true,
+  name: '연속 출석 퀘스트',
+  desc: '내용 : 연속 20일 출석\n시작일 : 퀘스트 수락 다음 날부터 시작\n보상 : 이용권 기간 연장(1일) (+5일 / 시간권 : +15시간)',
+  goal: 20
+}];
+let EVENTS_CACHE = null;
+let _eventsLoading = false;
+
+// 구버전(연속출석형 끝.끝.아) 데이터가 남아 있으면 새 정의로 교체 (학생앱과 동일 규칙)
+function _normalizeEvents(list) {
+  if (!Array.isArray(list) || list.length === 0) return DEFAULT_EVENTS;
+  let legacy = false;
+  const out = list.map(ev => {
+    const isLegacyKk = (ev.id === 'kkeutkkeuta' || /끝\.?끝\.?아|끝나도/.test(ev.name || '')) && ev.type !== 'studytime';
+    if (!isLegacyKk) return ev;
+    legacy = true;
+    return Object.assign({}, DEFAULT_EVENTS[0], { active: ev.active !== false });
+  });
+  if (legacy && !out.some(e => e.type === 'streak')) out.push(DEFAULT_EVENTS[1]);
+  return out;
+}
+
+// 끝.끝.아(공부시간형) 이벤트 — 기간 내 누적 공부시간(분). _dateMinutes는 ACTUAL_MIN(실제 입퇴실) 기반
+function _eventStudyMinutes(ev) {
+  const start = _parseDkey(ev.start || '2026-7-6');
+  const end = _parseDkey(ev.end || '2026-7-19');
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (today < start) return 0;
+  const last = end < today ? end : today;
+  let total = 0;
+  for (const d = new Date(start); d <= last; d.setDate(d.getDate() + 1)) total += _dateMinutes(d);
+  return total;
+}
+
+async function loadEventsList(force) {
+  if (!window._getDoc || !window._doc || !window._db || _eventsLoading) return;
+  if (EVENTS_CACHE && !force) return;
+  _eventsLoading = true;
+  try {
+    // 관리자앱이 notices/list 문서의 events 필드에 저장 (보안규칙상 쓰기 가능한 문서가 그것뿐)
+    const snap = await window._getDoc(window._doc(window._db, 'notices', 'list'));
+    if (snap && snap.exists && snap.exists() && Array.isArray(snap.data().events)) {
+      EVENTS_CACHE = _normalizeEvents(snap.data().events);
+    } else {
+      EVENTS_CACHE = DEFAULT_EVENTS;
+    }
+    buildEvents();
+  } catch(e) { console.error('이벤트 목록 로드 실패:', e); }
+  _eventsLoading = false;
+}
+
+// 세그먼트형 달성률 게이지바 (학생앱과 동일)
+function _gaugeHTML(value, goal, unit) {
+  goal = Math.max(1, Number(goal) || 20);
+  const v = Math.max(0, Math.min(value, goal));
+  const pct = Math.round(value / goal * 100);
+  let segs = '';
+  for (let i = 0; i < goal; i++) segs += `<div class="ev-seg${i < v ? ' on' : ''}"></div>`;
+  const labelLeft = v <= 0 ? 8 : `calc(${Math.min(v, goal) / goal * 100}% - ${v > goal * 0.55 ? 46 : -6}px)`;
+  return `
+  <div class="ev-gauge-wrap">
+    <div class="ev-gauge-track">
+      ${segs}
+      <div class="ev-gauge-val" style="left:${typeof labelLeft === 'number' ? labelLeft + 'px' : labelLeft}">${value}${unit || '일'}</div>
+    </div>
+    <div class="ev-gauge-foot">
+      <span class="ev-gauge-frac">${value} / ${goal}${unit || '일'}</span>
+      <span class="ev-gauge-pct">${pct}%</span>
+      <span class="ev-gauge-goal">목표 ${goal}${unit || '일'}</span>
+    </div>
+  </div>`;
+}
+
+function buildEvents() {
+  const el = document.getElementById('events-content');
+  if (!el) return;
+  const list = (EVENTS_CACHE || DEFAULT_EVENTS).filter(e => e.active !== false);
+  if (!EVENTS_CACHE) loadEventsList();
+  if (list.length === 0) {
+    el.innerHTML = '<div class="section-label">EVENTS</div><div class="empty-state"><div class="empty-icon">🎉</div><div class="empty-text">현재 진행 중인 이벤트가 없습니다.</div></div>';
+    return;
+  }
+  el.innerHTML = '<div class="section-label">EVENTS · 진행 중인 이벤트</div>' + list.map(ev => {
+    const isStreak = ev.type === 'streak';
+    const isStudy = ev.type === 'studytime' || ev.id === 'kkeutkkeuta';
+    let gauge = '', badge = '진행 중';
+    if (isStreak) {
+      gauge = _gaugeHTML(_streakDays(), ev.goal || 20, '일');
+    } else if (isStudy) {
+      const now = new Date();
+      const start = _parseDkey(ev.start || '2026-7-6');
+      if (now < start) badge = '진행 예정';
+      const hours = Math.round(_eventStudyMinutes(ev) / 60 * 10) / 10;
+      gauge = _gaugeHTML(hours, ev.goal || 42, '시간');
+    } else {
+      return ''; // 알 수 없는 유형은 표시하지 않음
+    }
+    return `
+    <div class="ev-card">
+      <div class="ev-card-head">
+        <div class="ev-card-title">${isStreak ? '🔥 ' : '🎉 '}${ev.name || '이벤트'}</div>
+        <span class="ev-badge">${badge}</span>
+      </div>
+      <div class="ev-desc">${ev.desc || ''}</div>
+      ${gauge}
+    </div>`;
+  }).join('');
+}
+
 // ── 학부모앱 공지사항 ──
 let _ppNotices = [];
 let _ppNoticeUnsub = null;
@@ -943,6 +1089,11 @@ function loadNotices() {
         _ppNotices = [];
       }
       _buildParentNotices();
+      // 이벤트도 같은 문서(events 필드)에서 실시간 반영
+      if (snap.exists() && Array.isArray(snap.data().events)) {
+        EVENTS_CACHE = _normalizeEvents(snap.data().events);
+        buildEvents();
+      }
     },
     () => { _buildParentNotices(); }
   );
