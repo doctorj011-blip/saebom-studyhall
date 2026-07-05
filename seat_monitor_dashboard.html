@@ -87,6 +87,60 @@
   .step .k{font-family:var(--mono);font-size:10px;color:var(--focus);margin-bottom:6px;}
   .step .d{font-size:12px;line-height:1.5;color:var(--ink);}
   .step .d span{color:var(--dim);}
+
+  /* 집중 랭킹 리더보드 */
+  .leaderboard{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:18px;margin-top:20px;}
+  .leaderboard h2{font-size:13px;font-weight:600;margin-bottom:4px;display:flex;align-items:center;gap:8px;}
+  .leaderboard h2 .live{font-family:var(--mono);font-size:10px;color:var(--focus);border:1px solid rgba(61,220,151,.4);border-radius:3px;padding:1px 6px;text-transform:uppercase;letter-spacing:.5px;}
+  .leaderboard .sub{font-family:var(--mono);font-size:11px;color:var(--dim);margin-bottom:16px;}
+  .lb-tabs{display:flex;gap:6px;margin:2px 0 12px;}
+  .lb-tabs button{background:#171c22;border:1px solid var(--line);color:var(--dim);padding:6px 14px;border-radius:3px;font-family:var(--sans);font-size:12px;cursor:pointer;}
+  .lb-tabs button:hover{border-color:var(--focus);}
+  .lb-tabs button.on{border-color:var(--focus);color:var(--focus);}
+  .lb-liveflag{font-family:var(--mono);font-size:9px;color:var(--focus);border:1px solid rgba(61,220,151,.4);border-radius:2px;padding:0 4px;margin-left:2px;vertical-align:middle;}
+  .lb-row{display:flex;align-items:center;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);}
+  .lb-row:last-child{border-bottom:none;}
+  .lb-rank{flex:0 0 32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-weight:700;font-size:13px;background:#171c22;border:1px solid var(--line);color:var(--dim);}
+  .lb-rank.r1{background:linear-gradient(135deg,#f5d442,#d9a406);color:#1a1400;border-color:transparent;}
+  .lb-rank.r2{background:linear-gradient(135deg,#d4dbe2,#9aa6b2);color:#12161b;border-color:transparent;}
+  .lb-rank.r3{background:linear-gradient(135deg,#e0955a,#b46a2f);color:#1a0e00;border-color:transparent;}
+  .lb-body{flex:1;min-width:0;}
+  .lb-top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+  .lb-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lb-seat{font-family:var(--mono);font-size:11px;color:var(--dim);flex:0 0 auto;}
+  .lb-time{margin-left:auto;font-family:var(--mono);font-size:13px;color:var(--focus);font-weight:700;flex:0 0 auto;}
+  /* 레이스 트랙 막대 + 달려가는 스포츠카 */
+  .lb-track{position:relative;height:22px;background:#0e1216;border:1px solid var(--line);border-radius:4px;}
+  .lb-track::after{content:"";position:absolute;top:0;right:0;bottom:0;width:7px;border-radius:0 3px 3px 0;
+    background:repeating-conic-gradient(#e7ecef 0% 25%,#12161b 0% 50%) 0 0/5px 5px;opacity:.55;}
+  .lb-fill{position:relative;height:100%;background:linear-gradient(90deg,rgba(61,220,151,.25),var(--focus));border-radius:4px 0 0 4px;transition:width .6s ease;min-width:6px;overflow:visible;}
+  /* 차량: 막대 상하 폭에 꼭 맞춰 세로 100% */
+  .lb-car{position:absolute;right:-6px;top:50%;height:100%;pointer-events:none;transform:translateY(-50%);
+    animation:carbob .16s ease-in-out infinite;}
+  .lb-car svg{height:100%;width:auto;overflow:visible;display:block;filter:drop-shadow(0 2px 2px rgba(0,0,0,.55));}
+  @keyframes carbob{0%,100%{transform:translateY(-50%) rotate(-1.4deg);}50%{transform:translateY(-56%) rotate(1.4deg);}}
+
+  /* 차량 내부 애니메이션 (바퀴 회전 + 스피드 라인) — 인라인 SVG 공통 */
+  .carsvg .wheel{transform-box:fill-box;transform-origin:center;animation:spin .28s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .carsvg .sl{fill:var(--focus);transform-box:fill-box;animation:streak .42s linear infinite;}
+  .carsvg .s2{animation-delay:.12s;} .carsvg .s3{animation-delay:.24s;}
+  @keyframes streak{0%{opacity:0;transform:translateX(4px);}35%{opacity:.9;}100%{opacity:0;transform:translateX(-8px);}}
+
+  .lb-empty{font-family:var(--mono);font-size:12px;color:var(--dim);padding:10px 0;}
+
+  /* 레이스 포디움 (1·2·3위 시상대) */
+  .podium{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:6px 4px 24px;}
+  .podium .pod{flex:1;max-width:150px;display:flex;flex-direction:column;align-items:center;min-width:0;}
+  .podium .pod.pod-empty{visibility:hidden;}
+  .pod-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}
+  .pod-seat{font-family:var(--mono);font-size:10px;color:var(--dim);}
+  .pod-time{font-family:var(--mono);font-size:12px;color:var(--focus);font-weight:700;margin:2px 0 8px;}
+  .pod-block{width:100%;border-radius:6px 6px 0 0;display:flex;align-items:flex-start;justify-content:center;
+    padding-top:8px;font-family:var(--mono);font-weight:800;font-size:24px;color:#12161b;box-shadow:inset 0 -4px rgba(0,0,0,.22);}
+  .pod.p1 .pod-block{height:94px;background:linear-gradient(180deg,#f5d442,#d9a406);}
+  .pod.p2 .pod-block{height:70px;background:linear-gradient(180deg,#d4dbe2,#9aa6b2);}
+  .pod.p3 .pod-block{height:52px;background:linear-gradient(180deg,#e0955a,#b46a2f);}
 </style>
 </head>
 <body>
@@ -107,10 +161,20 @@
 </div>
 
 <div class="toolbar">
-  <button id="simBtn" class="on">시뮬레이션 모드</button>
+  <button id="simBtn" class="on">무한경쟁 모드</button>
   <button id="liveBtn">실시간 모드 (Firebase)</button>
   <div class="spacer"></div>
-  <span class="src" id="srcLabel">데이터 소스: 시뮬레이션</span>
+  <span class="src" id="srcLabel">데이터 소스: 무한경쟁 (데모)</span>
+</div>
+
+<div class="leaderboard">
+  <h2>🔥 집중 랭킹 <span class="live">실시간</span></h2>
+  <div class="lb-tabs">
+    <button id="lbStreak" class="on">지금 · 연속 집중</button>
+    <button id="lbTotal">누적 집중</button>
+  </div>
+  <div class="sub" id="lbSub">지금 이 순간 가장 오래 <b>연속 집중</b> 중인 학생 순위 · 졸거나 자리를 비우면 기록이 초기화됩니다</div>
+  <div id="leaderboard"><div class="lb-empty">현재 집중 중인 학생이 없습니다.</div></div>
 </div>
 
 <div class="grid2">
@@ -120,7 +184,7 @@
 
   <div class="panel">
     <h2>확인 대기 큐</h2>
-    <div class="sub">감지된 이상 상태를 사람이 직접 확인하고 판정합니다</div>
+    <div class="sub">감지된 이상 상태를 사람이 직접 확인하고 판정합니다 · <b>좌석을 클릭</b>하면 시스템이 놓친 졸음/이탈(미탐지)도 직접 신고할 수 있습니다</div>
     <div id="queueList"><div class="queue-empty">확인할 항목이 없습니다.</div></div>
   </div>
 </div>
@@ -131,12 +195,15 @@
   <div class="train-stats">
     <div class="box"><div class="n" id="trTotal">0</div><div class="l">총 판정</div></div>
     <div class="box"><div class="n" id="trFP" style="color:var(--away);">0</div><div class="l">오탐(정상)</div></div>
+    <div class="box"><div class="n" id="trFN" style="color:var(--drowsy);">0</div><div class="l">미탐지(놓침)</div></div>
     <div class="box"><div class="n" id="trFPRate" style="color:var(--drowsy);">0%</div><div class="l">오탐률</div></div>
   </div>
   <div class="train-actions">
+    <button class="retrain" id="retrainBtn" style="background:var(--focus);color:#08120c;font-weight:600;">🔄 지금 재학습 (자동 튜닝)</button>
     <button class="export" id="exportBtn">학습 데이터 내보내기 (JSON)</button>
     <button class="clear" id="clearBtn">전체 삭제</button>
   </div>
+  <div id="retrainResult" style="margin-top:14px;font-family:var(--mono,monospace);font-size:12px;line-height:1.7;color:var(--dim,#7d8a94);"></div>
 </div>
 
 <div class="pipeline">
@@ -144,8 +211,8 @@
   <div class="steps">
     <div class="step"><div class="k">1 · 감지</div><div class="d">태블릿이 EAR·고개각도로 이상 상태 추정 <span>(현재 규칙 기반)</span></div></div>
     <div class="step"><div class="k">2 · 검수</div><div class="d">사람이 실제 확인 후 오탐/졸음/이탈 판정 <span>(정답 라벨 생성)</span></div></div>
-    <div class="step"><div class="k">3 · 축적</div><div class="d">판정 결과 + 특징값을 데이터셋으로 저장 <span>(JSON 내보내기)</span></div></div>
-    <div class="step"><div class="k">4 · 재학습</div><div class="d">모인 데이터로 분류 모델 학습 → 정확도 개선 후 배포 <span>(반복)</span></div></div>
+    <div class="step"><div class="k">3 · 축적</div><div class="d">판정 즉시 특징값을 Firestore에 저장 <span>(자동 · feedback_events)</span></div></div>
+    <div class="step"><div class="k">4 · 재학습</div><div class="d">모인 데이터로 최적 임계값 자동 튜닝 → model_config 배포 <span>(자동 · 태블릿 즉시 반영)</span></div></div>
   </div>
 </div>
 
@@ -176,12 +243,44 @@
   const SEATS = SEAT_GRID.map(([r,c,n]) => String(n));   // 좌석 번호 목록(1~45, 45석)
   const STATE_LABEL = {focus:'집중',drowsy:'졸음',away:'이탈',empty:'빈좌석'};
   const FB_KEY = 'saebom_feedback_dataset_v1';
+  const STALE_MS = 60000; // 이 시간(60초) 이상 갱신 없으면 태블릿 오프라인으로 보고 빈좌석 처리
 
   let mode='sim';
   let seatState={};      // seat -> {state, since, ear, pitch}
   let queue=[];          // pending review items
   let dataset=[];        // labeled training records
-  let simTimer=null, firebaseUnsub=null, fbWrite=null;
+  let simTimer=null, firebaseUnsub=null, fbWrite=null, staleTimer=null;
+  let nameBySeat={};     // "12" -> "김범수" (students 컬렉션에서 로드)
+  let focusTotal={};     // seat -> 누적 집중 시간(ms). 집중 상태에서 벗어날 때 적립
+
+  // ---- Firebase 공유 초기화 (실시간 데이터 + 이름 조회에서 함께 사용) ----
+  const FIREBASE_CONFIG = {
+    apiKey:"AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
+    authDomain:"saebom-studyhall.firebaseapp.com",
+    projectId:"saebom-studyhall",
+    storageBucket:"saebom-studyhall.appspot.com",
+  };
+  let _fb=null;
+  async function getFB(){
+    if(_fb) return _fb;
+    const appMod=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js");
+    const fsMod=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
+    const app=appMod.initializeApp(FIREBASE_CONFIG);
+    _fb={ fs:fsMod, db:fsMod.getFirestore(app) };
+    return _fb;
+  }
+  // 좌석 → 학생 이름 매핑을 한 번 불러온다(모드와 무관, 실패해도 좌석번호로 표시)
+  async function loadNames(){
+    try{
+      const {fs,db}=await getFB();
+      const snap=await fs.getDocs(fs.collection(db,'students'));
+      snap.forEach(d=>{
+        const v=d.data()||{};
+        const key=String(d.id).replace(/[^0-9]/g,'') || String(v.seat||'').replace(/[^0-9]/g,'');
+        if(key && v.name) nameBySeat[key]=v.name;
+      });
+    }catch(e){ /* 이름은 선택사항 — 실패 시 'N번'으로 표시 */ }
+  }
 
   // ---- load dataset ----
   try{ dataset = JSON.parse(localStorage.getItem(FB_KEY)) || []; }catch(e){ dataset=[]; }
@@ -199,7 +298,21 @@
     const pos=SEAT_POS[seat];                             // 실제 배열 위치에 배치
     if(pos){ el.style.gridRow=pos[0]; el.style.gridColumn=pos[1]; }
     el.innerHTML=`<div class="alertdot"></div><div class="num">${seat}</div><div class="st">빈좌석</div><div class="dur"></div>`;
+    el.style.cursor='pointer';
+    el.title='클릭: 이 좌석 상태 직접 신고 (놓친 졸음/이탈 포함)';
     floor.appendChild(el);
+  });
+
+  // ---- 미탐지 신고: 좌석을 클릭하면 확인 큐에 올려 사람이 판정 ----
+  // 집중으로 표시된 좌석을 클릭 = "실은 졸고 있는데 시스템이 놓쳤다" 후보(false-negative)
+  floor.addEventListener('click', (e)=>{
+    const el = e.target.closest('.seat');
+    if(!el) return;
+    const seat = el.id.replace('seat_','');
+    const s = seatState[seat];
+    if(!s || s.state==='empty') return;                 // 빈 좌석은 신고 대상 아님
+    // 집중 좌석은 aiState='focus'(미탐지 후보)로, 이미 이상 좌석은 그 상태 그대로 큐에 올림
+    enqueue(seat, s.state, {ear:s.ear, pitch:s.pitch});
   });
 
   function tickClock(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('ko-KR',{hour12:false});}
@@ -211,6 +324,8 @@
     const ear = feat && feat.ear!=null ? feat.ear : prev.ear;
     const pitch = feat && feat.pitch!=null ? feat.pitch : prev.pitch;
     if(prev.state!==newState){
+      // 집중 상태에서 벗어나면 그동안 집중한 시간을 누적치에 적립
+      if(prev.state==='focus'){ focusTotal[seat]=(focusTotal[seat]||0)+(Date.now()-prev.since); }
       if(newState==='drowsy'||newState==='away'){
         enqueue(seat,newState,{ear,pitch});
       }
@@ -238,7 +353,104 @@
   const cntFocus=document.getElementById('cntFocus'),cntDrowsy=document.getElementById('cntDrowsy'),
         cntAway=document.getElementById('cntAway'),cntEmpty=document.getElementById('cntEmpty');
 
-  setInterval(()=>{ SEATS.forEach(renderSeat); renderSummary(); },1000);
+  // ---- 집중 랭킹 리더보드 ----
+  function fmtDur(sec){
+    const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=Math.floor(sec%60);
+    if(h>0) return `${h}시간 ${m}분`;
+    if(m>0) return `${m}분 ${s}초`;
+    return `${s}초`;
+  }
+  const lbEl=document.getElementById('leaderboard');
+  let lbMode='streak';                 // 'streak'=지금 연속 집중, 'total'=누적 집중
+  const LB_LIMIT=15;                    // 상위 N명만 표시
+
+  // 학생마다 다른 '실제 차종' 차량 SVG (좌석번호로 고정 배정) — 오른쪽 결승선을 향해 달린다
+  const _wheel=(cx,cy,r)=>`<g class="wheel"><circle cx="${cx}" cy="${cy}" r="${r}" fill="#141414"/><circle cx="${cx}" cy="${cy}" r="${(r*0.4).toFixed(1)}" fill="#9aa6b2"/><rect x="${(cx-0.7).toFixed(1)}" y="${(cy-r+0.6).toFixed(1)}" width="1.4" height="${(2*r-1.2).toFixed(1)}" fill="#555"/><rect x="${(cx-r+0.6).toFixed(1)}" y="${(cy-0.7).toFixed(1)}" width="${(2*r-1.2).toFixed(1)}" height="1.4" fill="#555"/></g>`;
+  const _SPEED=`<g class="speed"><rect class="sl s1" x="0" y="7" width="12" height="1.6" rx="0.8"/><rect class="sl s2" x="0" y="11" width="15" height="1.6" rx="0.8"/><rect class="sl s3" x="2" y="15" width="11" height="1.6" rx="0.8"/></g>`;
+  const _car=(name,body,wheels)=>`<svg class="carsvg" viewBox="0 0 66 24" xmlns="http://www.w3.org/2000/svg"><title>${name}</title>${_SPEED}<ellipse cx="40" cy="22.4" rx="26" ry="1.8" fill="rgba(0,0,0,.33)"/>${body}${wheels}</svg>`;
+  const CARS=[
+    _car('Lamborghini Aventador',
+      `<path d="M12 18 L16 18 L24 12 L42 11 L52 13 L63 16 Q65 16.5 65 18 L65 18.5 Q65 19.5 63 19.5 L15 19.5 Q11 19.5 12 18 Z" fill="#f6c700" stroke="#b58e00" stroke-width="0.6"/><path d="M25 12.3 L41 11.5 L49 13 L28 13.4 Z" fill="#20242c"/>`,
+      _wheel(48,18,5)+_wheel(22,18,5)),
+    _car('Porsche 911',
+      `<path d="M12 18 L16 14 Q22 9.6 33 9.6 Q44 9.6 50 13 L62 16 Q65 16.5 65 18 L65 18.5 Q65 19.5 63 19.5 L15 19.5 Q11 19.5 12 18 Z" fill="#cfd4d8" stroke="#8b9096" stroke-width="0.6"/><path d="M19 13.4 Q24 10.8 33 10.8 Q41 10.8 46 13.2 L44 13.6 L21 13.6 Z" fill="#8fd3ff"/>`,
+      _wheel(48,18,5)+_wheel(20,18,5)),
+    _car('Ford Mustang',
+      `<path d="M11 18 L11 15.4 L30 14.4 L34 11 Q37 10 44 10 L50 11.6 L52 14.4 L64 15.6 L64 18 Q64 19.5 62 19.5 L13 19.5 Q11 19.5 11 18 Z" fill="#2b6cb0" stroke="#1a4a80" stroke-width="0.6"/><path d="M35.5 11.4 L44 10.7 L49 11.9 L50 13.8 L35 13.8 Z" fill="#8fd3ff"/>`,
+      _wheel(50,18,5.2)+_wheel(22,18,5.2)),
+    _car('Tesla Model S',
+      `<path d="M11 18 L14 15.4 Q22 11 33 11 Q44 11 50 14.4 L63 16 Q65 16.5 65 18 L65 18.5 Q65 19.5 63 19.5 L14 19.5 Q10 19.5 11 18 Z" fill="#eef1f3" stroke="#aab0b6" stroke-width="0.6"/><path d="M17 14.7 Q24 11.9 33 11.9 Q42 11.9 47 14.4 L44 14.8 L20 14.8 Z" fill="#8fd3ff"/>`,
+      _wheel(49,18,5)+_wheel(20,18,5)),
+    _car('Jeep Wrangler',
+      `<path d="M12 19.5 L12 11 L47 11 L47 13 L62 13.4 L63 19.5 Z" fill="#4a7a3a" stroke="#2f4f24" stroke-width="0.6"/><rect x="15" y="12.2" width="28" height="4" fill="#8fd3ff"/><rect x="28.2" y="12.2" width="1.6" height="4" fill="#2f4f24"/>`,
+      _wheel(48,19,5.6)+_wheel(22,19,5.6)),
+    _car('Volkswagen Beetle',
+      `<path d="M12 19 Q12 12.2 20 11 Q26 8.6 33 8.6 Q40 8.6 45 11.6 Q56 12.5 60 15 Q64 16 64 18 L64 19 Q64 19.5 62 19.5 L14 19.5 Q12 19.5 12 19 Z" fill="#6cc5e6" stroke="#3a8fb0" stroke-width="0.6"/><path d="M22 12 Q27 9.6 33 9.6 Q39 9.6 43 12 L40 12.3 L24 12.3 Z" fill="#8fd3ff"/>`,
+      _wheel(46,18,4.7)+_wheel(22,18,4.7)),
+    _car('Mini Cooper',
+      `<path d="M16 19.5 L16 13 Q18 11 24 11 L40 11 Q45 11 47 13 L58 14.4 Q60 15 60 17.5 L60 19.5 Z" fill="#d33636" stroke="#8a1a20" stroke-width="0.6"/><path d="M18 12.6 Q19.5 11.4 24 11.4 L40 11.4 Q44 11.4 45.5 12.6 Z" fill="#f0f0f0"/><rect x="20" y="12.9" width="24" height="3.2" fill="#8fd3ff"/><rect x="31.2" y="12.9" width="1.5" height="3.2" fill="#b02a2a"/>`,
+      _wheel(50,18.5,5)+_wheel(24,18.5,5)),
+    _car('Ferrari F8',
+      `<path d="M11 18 L15 15 Q20 12.6 30 12 L36 10.9 Q40 10.3 44 11.1 L52 13.4 L63 16 Q65 16.5 65 18 L65 18.5 Q65 19.5 63 19.5 L14 19.5 Q10 19.5 11 18 Z" fill="#e2231a" stroke="#8a1a20" stroke-width="0.6"/><path d="M23 13 Q28 11.7 34 11.6 L39 11.9 L42 13.1 L25 13.3 Z" fill="#8fd3ff"/>`,
+      _wheel(50,18,5)+_wheel(21,18,5)),
+  ];
+  // 좌석번호로 항상 같은 차종을 배정(학생별 고정)
+  const carSvgFor=(seat)=>{ const n=parseInt(seat,10); const i=((isNaN(n)?0:(n-1))%CARS.length+CARS.length)%CARS.length; return CARS[i]; };
+  function renderLeaderboard(){
+    const now=Date.now();
+    let rows, emptyMsg;
+    if(lbMode==='total'){
+      // 누적: 적립된 집중시간 + 지금 집중 중이면 진행 중인 구간까지 합산
+      rows=SEATS.map(s=>{
+        const live = seatState[s].state==='focus' ? (now-seatState[s].since) : 0;
+        return {seat:s, name:nameBySeat[s]||(s+'번'), sec:Math.floor(((focusTotal[s]||0)+live)/1000), live:seatState[s].state==='focus'};
+      }).filter(r=>r.sec>0).sort((a,b)=>b.sec-a.sec);
+      emptyMsg='아직 집중 기록이 없습니다.';
+    } else {
+      // 연속: 지금 '집중' 중인 좌석만, 현재 연속 집중 시간 순
+      rows=SEATS.filter(s=>seatState[s].state==='focus')
+        .map(s=>({seat:s, name:nameBySeat[s]||(s+'번'), sec:Math.max(0,Math.floor((now-seatState[s].since)/1000)), live:true}))
+        .sort((a,b)=>b.sec-a.sec);
+      emptyMsg='현재 집중 중인 학생이 없습니다.';
+    }
+    if(rows.length===0){ lbEl.innerHTML='<div class="lb-empty">'+emptyMsg+'</div>'; return; }
+    const max=rows[0].sec||1;
+
+    // ---- 레이스 포디움 (2등·1등·3등 순으로 배치) ----
+    const pod=(r,rank)=> r
+      ? `<div class="pod p${rank}">
+           <div class="pod-name">${r.name}</div>
+           <div class="pod-seat">${r.seat}번</div>
+           <div class="pod-time">${fmtDur(r.sec)}</div>
+           <div class="pod-block">${rank}</div>
+         </div>`
+      : `<div class="pod p${rank} pod-empty"><div class="pod-block">${rank}</div></div>`;
+    const podium=`<div class="podium">${pod(rows[1],2)}${pod(rows[0],1)}${pod(rows[2],3)}</div>`;
+
+    // ---- 레이스 트랙 막대 (스포츠카가 결승선을 향해 달린다) ----
+    const lanes=rows.slice(0,LB_LIMIT).map((r,i)=>{
+      const rank=i+1;
+      const pct=Math.max(4, Math.round(r.sec/max*100));
+      const rankCls = rank<=3 ? ' r'+rank : '';
+      const medal = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank;
+      const liveFlag = (lbMode==='total' && r.live) ? '<span class="lb-liveflag">집중중</span>' : '';
+      return `<div class="lb-row">
+        <div class="lb-rank${rankCls}">${medal}</div>
+        <div class="lb-body">
+          <div class="lb-top">
+            <span class="lb-name">${r.name}</span>
+            <span class="lb-seat">${r.seat}번</span>${liveFlag}
+            <span class="lb-time">${fmtDur(r.sec)}</span>
+          </div>
+          <div class="lb-track"><div class="lb-fill" style="width:${pct}%"><span class="lb-car">${carSvgFor(r.seat)}</span></div></div>
+        </div>
+      </div>`;
+    }).join('');
+
+    lbEl.innerHTML=podium+lanes;
+  }
+
+  setInterval(()=>{ SEATS.forEach(renderSeat); renderSummary(); renderLeaderboard(); },1000);
 
   // ---- review queue ----
   function enqueue(seat,aiState,feat){
@@ -248,7 +460,7 @@
       id: Date.now()+'_'+Math.random().toString(36).slice(2,6),
       seat, aiState,
       ear: feat.ear, pitch: feat.pitch,
-      duration: 0,
+      duration: (feat && feat.duration!=null) ? feat.duration : null, // 미상이면 null(지속시간 튜닝 오염 방지)
       time: new Date()
     });
     if(queue.length>50) queue.length=50;
@@ -260,7 +472,7 @@
     if(queue.length===0){ el.innerHTML='<div class="queue-empty">확인할 항목이 없습니다.</div>'; return; }
     el.innerHTML=queue.map(q=>{
       const t=q.time.toLocaleTimeString('ko-KR',{hour12:false});
-      const badgeLabel = q.aiState==='drowsy'?'졸음 추정':'이탈/딴짓 추정';
+      const badgeLabel = q.aiState==='drowsy'?'졸음 추정':q.aiState==='away'?'이탈/딴짓 추정':'미탐지 의심 (AI: 집중)';
       const feat=`AI판단: ${STATE_LABEL[q.aiState]} · EAR ${q.ear!=null?q.ear.toFixed(3):'-'} · 각도 ${q.pitch!=null?q.pitch.toFixed(1)+'°':'-'}`;
       return `<div class="queue-item" id="q_${q.id}">
         <div class="queue-head">
@@ -288,19 +500,24 @@
       seat:q.seat,
       ai_predicted: q.aiState,
       human_label: humanLabel,
-      is_false_positive: (humanLabel==='focus'),
+      // 오탐: AI가 이상이라 했는데 사람은 정상 / 미탐지: AI가 집중이라 했는데 사람은 이상
+      is_false_positive: (humanLabel==='focus' && q.aiState!=='focus'),
+      is_false_negative: (humanLabel!=='focus' && q.aiState==='focus'),
       features: { ear:q.ear, pitch:q.pitch, duration:q.duration }
     };
     dataset.unshift(record);
     if(dataset.length>2000) dataset.length=2000;
     saveDataset();
     renderTrainStats();
+    maybeAutoRetrain();   // ④ 재학습: 라벨이 일정량 쌓이면 자동 실행
 
     // optionally write back to firebase in live mode
     if(mode==='live' && fbWrite){ fbWrite(record); }
 
-    // if human says it was actually normal, correct the seat display
-    if(humanLabel==='focus'){ setSeat(q.seat,'focus',{ear:q.ear,pitch:q.pitch}); }
+    // 사람 판정을 좌석 표시에 반영(정상/미탐지 신고로 상태가 바뀐 경우)
+    // updatedAt을 함께 찍어야 이후 태블릿이 꺼졌을 때 staleness가 정리할 수 있다(유령 방지)
+    if(humanLabel==='focus'){ setSeat(q.seat,'focus',{ear:q.ear,pitch:q.pitch}); if(seatState[q.seat]) seatState[q.seat].updatedAt=Date.now(); }
+    else if(q.aiState==='focus'){ setSeat(q.seat,humanLabel,{ear:q.ear,pitch:q.pitch}); if(seatState[q.seat]) seatState[q.seat].updatedAt=Date.now(); }
 
     queue.splice(idx,1);
     renderQueue();
@@ -309,8 +526,10 @@
   function renderTrainStats(){
     const total=dataset.length;
     const fp=dataset.filter(d=>d.is_false_positive).length;
+    const fn=dataset.filter(d=>d.is_false_negative).length;
     document.getElementById('trTotal').textContent=total;
     document.getElementById('trFP').textContent=fp;
+    document.getElementById('trFN').textContent=fn;
     document.getElementById('trFPRate').textContent= total? Math.round(fp/total*100)+'%':'0%';
   }
   renderTrainStats();
@@ -329,6 +548,273 @@
     dataset=[]; saveDataset(); renderTrainStats();
   };
 
+  // ================= 자동 재학습 (임계값 튜닝) =================
+  // 감지기 기본 임계값 — 최적값 탐색의 출발점이자 데이터가 부족할 때의 폴백
+  const MODEL_DEFAULTS = {
+    EAR_THRESHOLD:0.21, DROWSY_SECONDS:2.5, AWAY_PITCH_DEG:28, AWAY_SECONDS:2.0,
+    EAR_RATIO:0.72,        // 개인화: 졸음 if ear < 기준선 × ratio  (earNorm으로 튜닝)
+    AWAY_PITCH_DELTA:22,   // 개인화: 이탈 if pitch > 중립각 + delta (pitchDelta로 튜닝)
+    PERCLOS_THRESHOLD:0.15 // 졸음 if 눈감김 비율 > thr (감지기 기본값과 동일 · perclos로 튜닝)
+  };
+  const MIN_PER_CLASS = 6;          // 한 클래스가 이보다 적으면 그 임계값은 건드리지 않는다
+  let lastAutoTrainAt = 0;          // 자동 재학습 dataset 길이 기준(20건마다)
+
+  // 로컬 dataset + (가능하면) Firestore feedback_events / training_samples 를 합쳐 중복 제거
+  async function gatherTrainingRecords(){
+    const map = new Map();
+    dataset.forEach(r=>{ if(r && r.id) map.set(r.id, r); });
+    try{
+      const {fs, db} = await getFB();
+      for(const col of ['feedback_events','training_samples']){
+        try{
+          const snap = await fs.getDocs(fs.collection(db, col));
+          snap.forEach(d=>{ const r=d.data(); if(r && r.features){ map.set(r.id || d.id, r); } });
+        }catch(e){ /* 컬렉션 없음/권한 — 건너뜀 */ }
+      }
+    }catch(e){ /* 오프라인 — 로컬 dataset만으로 학습 */ }
+    return [...map.values()].filter(r=>r && r.features && r.human_label);
+  }
+
+  // 1차원 임계값 그리드 서치: pos는 "임계 통과(양성)"여야, neg는 "미통과"여야 정답.
+  // dir='below'  → 값 < thr 이면 양성(EAR)   /   dir='above' → 값 > thr 이면 양성(pitch, duration)
+  function bestThreshold(posVals, negVals, lo, hi, step, dir, fallback){
+    if(posVals.length < MIN_PER_CLASS || negVals.length < MIN_PER_CLASS){
+      return { value: fallback, acc: null, tuned:false, pos:posVals.length, neg:negVals.length };
+    }
+    const hit = (v,thr)=> dir==='below' ? v < thr : v > thr;
+    let best = { value: fallback, score:-1 };
+    for(let thr=lo; thr<=hi+1e-9; thr+=step){
+      let tp=0, tn=0;
+      posVals.forEach(v=>{ if(hit(v,thr)) tp++; });
+      negVals.forEach(v=>{ if(!hit(v,thr)) tn++; });
+      // 균형 정확도(두 클래스 각각의 정답률 평균) — 클래스 불균형에 강함
+      const score = (tp/posVals.length + tn/negVals.length) / 2;
+      // 동점이면 기본값에 가까운 쪽을 택해 과도한 드리프트 방지
+      if(score > best.score + 1e-9 ||
+         (Math.abs(score-best.score)<1e-9 && Math.abs(thr-fallback) < Math.abs(best.value-fallback))){
+        best = { value: Math.round(thr*1000)/1000, score };
+      }
+    }
+    return { value: best.value, acc: best.score, tuned:true, pos:posVals.length, neg:negVals.length };
+  }
+
+  function tuneThresholds(records){
+    const num = v => (typeof v === 'number' && !isNaN(v));
+    // 졸음 헤드: 양성=사람이 '졸음' 확정, 음성=졸음 오탐(사람이 '정상')
+    // PERCLOS로 발동한 건 그 순간 눈이 떠 있을 수 있어 EAR 튜닝을 오염시키므로 양성 풀에서 제외
+    const dPos = records.filter(r=> r.human_label==='drowsy' && num(r.features.ear) && r.features.trigger!=='perclos');
+    const dNeg = records.filter(r=> r.human_label==='focus' && r.ai_predicted==='drowsy' && num(r.features.ear));
+    // 이탈 헤드: 양성=사람이 '이탈' 확정, 음성=이탈 오탐
+    const aPos = records.filter(r=> r.human_label==='away' && num(r.features.pitch));
+    const aNeg = records.filter(r=> r.human_label==='focus' && r.ai_predicted==='away' && num(r.features.pitch));
+
+    const ear   = bestThreshold(dPos.map(r=>r.features.ear),   dNeg.map(r=>r.features.ear),   0.12, 0.30, 0.005, 'below', MODEL_DEFAULTS.EAR_THRESHOLD);
+    const pitch = bestThreshold(aPos.map(r=>r.features.pitch), aNeg.map(r=>r.features.pitch), 15,   50,   1,     'above', MODEL_DEFAULTS.AWAY_PITCH_DEG);
+    // 지속시간은 특징값이 있는 표본만으로(감지기 기록엔 있으나 데모엔 없음)
+    const dDurPos = dPos.filter(r=>num(r.features.duration)).map(r=>r.features.duration);
+    const dDurNeg = dNeg.filter(r=>num(r.features.duration)).map(r=>r.features.duration);
+    const aDurPos = aPos.filter(r=>num(r.features.duration)).map(r=>r.features.duration);
+    const aDurNeg = aNeg.filter(r=>num(r.features.duration)).map(r=>r.features.duration);
+    const dSec = bestThreshold(dDurPos, dDurNeg, 1.0, 5.0, 0.25, 'above', MODEL_DEFAULTS.DROWSY_SECONDS);
+    const aSec = bestThreshold(aDurPos, aDurNeg, 1.0, 5.0, 0.25, 'above', MODEL_DEFAULTS.AWAY_SECONDS);
+
+    // ---- 개인화 파라미터: 정규화 특징(earNorm, pitchDelta)이 있는 표본으로만 튜닝 ----
+    // 감지기가 보정된 세션에서 기록한 샘플만 이 값을 갖는다(데모/구버전 기록엔 없음 → 자동 제외)
+    const rPos = dPos.filter(r=>num(r.features.earNorm)).map(r=>r.features.earNorm);
+    const rNeg = dNeg.filter(r=>num(r.features.earNorm)).map(r=>r.features.earNorm);
+    const pdPos = aPos.filter(r=>num(r.features.pitchDelta)).map(r=>r.features.pitchDelta);
+    const pdNeg = aNeg.filter(r=>num(r.features.pitchDelta)).map(r=>r.features.pitchDelta);
+    // earNorm = ear/기준선 → 졸음이면 작다(below). ratio 범위 0.50~0.95
+    const ratio = bestThreshold(rPos, rNeg, 0.50, 0.95, 0.01, 'below', MODEL_DEFAULTS.EAR_RATIO);
+    // pitchDelta = pitch-중립각 → 이탈이면 크다(above). delta 범위 8~40°
+    const delta = bestThreshold(pdPos, pdNeg, 8, 40, 1, 'above', MODEL_DEFAULTS.AWAY_PITCH_DELTA);
+
+    // ---- PERCLOS 임계값: 눈감김 비율로 졸음 판정 (trigger 무관, perclos 값이 있는 표본만) ----
+    // EAR과 달리 발동원인(closure/perclos)을 가리지 않는다 — perclos 자체가 두 경우 모두에서 유효한 특징
+    // 양성=사람이 '졸음' 확정, 음성=졸음 오탐(사람이 '정상') · perclos↑면 졸음(above)
+    const pcPos = records.filter(r=> r.human_label==='drowsy' && num(r.features.perclos)).map(r=>r.features.perclos);
+    const pcNeg = records.filter(r=> r.human_label==='focus' && r.ai_predicted==='drowsy' && num(r.features.perclos)).map(r=>r.features.perclos);
+    const perclos = bestThreshold(pcPos, pcNeg, 0.05, 0.50, 0.01, 'above', MODEL_DEFAULTS.PERCLOS_THRESHOLD);
+
+    return {
+      config: {
+        EAR_THRESHOLD: ear.value, AWAY_PITCH_DEG: pitch.value,
+        DROWSY_SECONDS: dSec.value, AWAY_SECONDS: aSec.value,
+        EAR_RATIO: ratio.value, AWAY_PITCH_DELTA: delta.value,
+        PERCLOS_THRESHOLD: perclos.value
+      },
+      detail: { ear, pitch, dSec, aSec, ratio, delta, perclos }
+    };
+  }
+
+  // ---- 평가/교차검증: 과적합 방지, "향상됐을 때만 배포" ----
+  const num = v => (typeof v === 'number' && !isNaN(v));
+
+  // 고정 임계값 하나에 대한 균형 정확도(그리드 서치 없이 '채점'만)
+  function scoreAt(posVals, negVals, thr, dir){
+    if(!posVals.length || !negVals.length) return null;   // 한쪽 클래스가 없으면 채점 불가
+    const hit = v => dir==='below' ? v < thr : v > thr;
+    let tp=0, tn=0;
+    posVals.forEach(v=>{ if(hit(v)) tp++; });
+    negVals.forEach(v=>{ if(!hit(v)) tn++; });
+    return (tp/posVals.length + tn/negVals.length) / 2;
+  }
+
+  // 주어진 config(임계값 묶음)를 주어진 레코드로 평가 → 네 헤드 중 데이터 있는 것들의 평균 정확도
+  function evaluateConfig(cfg, recs){
+    const dPos = recs.filter(r=> r.human_label==='drowsy');
+    const dNeg = recs.filter(r=> r.human_label==='focus' && r.ai_predicted==='drowsy');
+    const aPos = recs.filter(r=> r.human_label==='away');
+    const aNeg = recs.filter(r=> r.human_label==='focus' && r.ai_predicted==='away');
+    // EAR 계열(절대 EAR·earNorm)은 튜닝과 마찬가지로 PERCLOS 발동 표본을 제외해야 기준이 일치한다
+    // (그 순간 눈이 떠 있을 수 있어 채점을 오염시킴 → tuneThresholds의 dPos 필터와 동일 규칙)
+    const dPosEye = dPos.filter(r=> r.features.trigger!=='perclos');
+    const col = (rs,f)=> rs.filter(r=>num(r.features[f])).map(r=>r.features[f]);
+    // 임계값 키가 없는 구버전 incumbent는 해당 헤드를 건너뛴다(없는 값으로 채점하면 비교가 왜곡됨)
+    const at = (pos,neg,thr,dir)=> num(thr) ? scoreAt(pos,neg,thr,dir) : null;
+    const parts = [
+      at(col(dPosEye,'ear'),     col(dNeg,'ear'),        cfg.EAR_THRESHOLD,    'below'),
+      at(col(aPos,'pitch'),      col(aNeg,'pitch'),      cfg.AWAY_PITCH_DEG,   'above'),
+      at(col(dPosEye,'earNorm'), col(dNeg,'earNorm'),    cfg.EAR_RATIO,        'below'),
+      at(col(aPos,'pitchDelta'), col(aNeg,'pitchDelta'), cfg.AWAY_PITCH_DELTA, 'above'),
+      at(col(dPos,'perclos'),    col(dNeg,'perclos'),    cfg.PERCLOS_THRESHOLD,'above')
+    ].filter(s=>s!=null);
+    return parts.length ? parts.reduce((a,b)=>a+b,0)/parts.length : null;
+  }
+
+  function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+  // 클래스별로 나눠 학습/검증을 분할(작은 데이터에서 한쪽 클래스가 통째로 빠지는 것 방지)
+  function stratifiedSplit(records, valFrac){
+    const byClass = {};
+    records.forEach(r=>{ (byClass[r.human_label] = byClass[r.human_label] || []).push(r); });
+    const train=[], val=[];
+    Object.values(byClass).forEach(pool=>{
+      const sh = shuffle(pool);
+      const cut = Math.max(1, Math.floor(sh.length*valFrac));
+      val.push(...sh.slice(0,cut));
+      train.push(...sh.slice(cut));
+    });
+    return { train, val };
+  }
+
+  // 반복 홀드아웃: 매번 train에서 튜닝→val에서 채점. 후보(새 튜닝)와 현행(incumbent)을 같은 val로 비교.
+  function crossValidate(records, incumbent, repeats=5, valFrac=0.3){
+    const cand=[], base=[];
+    for(let k=0;k<repeats;k++){
+      const {train, val} = stratifiedSplit(records, valFrac);
+      if(train.length < MIN_PER_CLASS || val.length < 2) continue;
+      const c = tuneThresholds(train).config;
+      const ca = evaluateConfig(c, val);          if(ca!=null) cand.push(ca);
+      if(incumbent){ const ba = evaluateConfig(incumbent, val); if(ba!=null) base.push(ba); }
+    }
+    const avg = arr => arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : null;
+    return { candAcc: avg(cand), baseAcc: avg(base), folds: cand.length };
+  }
+
+  async function retrainModel(auto){
+    const btn = document.getElementById('retrainBtn');
+    const out = document.getElementById('retrainResult');
+    if(btn) btn.disabled = true;
+    if(out) out.innerHTML = '데이터 수집 중…';
+    try{
+      const records = await gatherTrainingRecords();
+      if(records.length < MIN_PER_CLASS*2){
+        if(out) out.innerHTML = `⚠ 학습에는 라벨이 더 필요합니다 (현재 ${records.length}건, 최소 ${MIN_PER_CLASS*2}건 권장).`;
+        return null;
+      }
+      // 현행 모델(incumbent) + 버전 조회
+      let prevVer = 0, incumbent = null;
+      try{
+        const {fs, db} = await getFB();
+        const prev = await fs.getDoc(fs.doc(db,'model_config','current'));
+        if(prev.exists()){ const d = prev.data(); prevVer = d.version || 0; incumbent = d; }
+      }catch(e){}
+
+      // 교차검증으로 '정직한' 성능 추정 + 현행과 같은 검증셋에서 비교(과적합/퇴행 방지)
+      const cv = crossValidate(records, incumbent);
+      // 최종 배포 파라미터는 전체 데이터로 다시 튜닝(표준 관행: CV로 판단, 배포는 전체 적합)
+      const { config, detail } = tuneThresholds(records);
+
+      // 배포 결정: 최초면 배포, 이후엔 검증 정확도가 현행보다 (마진 이상) 좋을 때만
+      const MARGIN = 0.01;
+      let decision, reason;
+      if(!incumbent){ decision='deploy'; reason='최초 모델'; }
+      else if(cv.candAcc==null || cv.baseAcc==null){ decision='hold'; reason='검증 표본 부족'; }
+      else if(cv.candAcc >= cv.baseAcc + MARGIN){ decision='deploy'; reason='검증 정확도 향상'; }
+      else { decision='hold'; reason='개선 없음'; }
+
+      let deployed = false, payload = null;
+      if(decision==='deploy'){
+        payload = {
+          ...config,
+          version: prevVer + 1,
+          trainedAt: new Date().toISOString(),
+          sampleCount: records.length,
+          trigger: auto ? 'auto' : 'manual',
+          metrics: {
+            val_acc: cv.candAcc, base_val_acc: cv.baseAcc, cv_folds: cv.folds,   // 정직한(검증) 정확도
+            ear_acc: detail.ear.acc, pitch_acc: detail.pitch.acc,                 // 참고: 학습 정확도
+            ratio_acc: detail.ratio.acc, delta_acc: detail.delta.acc,
+            perclos_acc: detail.perclos.acc,
+            drowsy_n: detail.ear.pos + detail.ear.neg, away_n: detail.pitch.pos + detail.pitch.neg,
+            calibrated_n: detail.ratio.pos + detail.ratio.neg,
+            perclos_n: detail.perclos.pos + detail.perclos.neg
+          }
+        };
+        try{
+          const {fs, db} = await getFB();
+          await fs.setDoc(fs.doc(db,'model_config','current'), payload);
+          deployed = true;
+        }catch(e){ /* 오프라인이면 배포만 실패, 계산 결과는 표시 */ }
+      }
+
+      const pct = a => a==null ? '—' : Math.round(a*100)+'%';
+      const line = (label, r, unit) => `&nbsp;· ${label}: <b style="color:var(--ink,#e7ecef)">${r.value}${unit}</b> ` +
+        (r.tuned ? `<span style="color:var(--focus,#3ddc97)">(표본 ${r.pos}+${r.neg})</span>` : `<span style="color:var(--drowsy,#f5b942)">(표본 부족 → 기본값 유지)</span>`);
+      if(out){
+        // 배포 여부에 따라 헤더 색/문구를 다르게
+        const head = (decision==='deploy' && deployed)
+          ? `<span style="color:var(--focus,#3ddc97)">✅ 배포됨 · v${prevVer+1}</span>`
+          : (decision==='deploy' && !deployed)
+            ? `<span style="color:var(--drowsy,#f5b942)">⚠ 오프라인 — 미배포</span>`
+            : `<span style="color:var(--drowsy,#f5b942)">⏸ 배포 보류 (현행 v${prevVer} 유지)</span>`;
+        const cmp = (cv.candAcc!=null)
+          ? `검증 정확도 <b style="color:var(--ink,#e7ecef)">${pct(cv.candAcc)}</b>` +
+            (cv.baseAcc!=null ? ` vs 현행 ${pct(cv.baseAcc)}` : ' (현행 없음)') +
+            ` · ${reason} · ${cv.folds}겹`
+          : `검증 불가 (${reason})`;
+        out.innerHTML =
+          `${head} · 표본 ${records.length}건<br>` +
+          `<span style="color:var(--dim)">${cmp}</span><br>` +
+          `<span style="color:var(--focus,#3ddc97)">■ 개인화 (보정된 태블릿)</span><br>` +
+          `${line('EAR 비율', detail.ratio, '×기준선')}<br>` +
+          `${line('고개각도 델타', detail.delta, '°(+중립각)')}<br>` +
+          `<span style="color:var(--dim)">■ 절대값 (보정 전 폴백)</span><br>` +
+          `${line('EAR 임계값', detail.ear, '')}<br>` +
+          `${line('고개각도 임계값', detail.pitch, '°')}<br>` +
+          `${line('졸음 지속시간', detail.dSec, 's')}<br>` +
+          `${line('이탈 지속시간', detail.aSec, 's')}<br>` +
+          `<span style="color:var(--focus,#3ddc97)">■ PERCLOS (눈감김 비율 · 보정 무관)</span><br>` +
+          `${line('PERCLOS 임계값', detail.perclos, '')}<br>` +
+          `<span style="color:var(--dim)">${deployed ? '태블릿은 다음 앱 시작 시 이 값을 자동 적용합니다.' : '이번엔 배포하지 않았습니다 — 데이터가 더 쌓이면 다시 시도됩니다.'}</span>`;
+      }
+      return payload;
+    } finally {
+      if(btn) btn.disabled = false;
+    }
+  }
+
+  document.getElementById('retrainBtn').onclick = ()=> retrainModel(false);
+
+  // 20건 쌓일 때마다 자동 재학습(무한 반복 루프의 ④단계 자동화)
+  function maybeAutoRetrain(){
+    if(dataset.length >= lastAutoTrainAt + 20){
+      lastAutoTrainAt = dataset.length;
+      retrainModel(true);
+    }
+  }
+
   // ---- simulation ----
   function synthFeat(state){
     if(state==='drowsy') return {ear: 0.10+Math.random()*0.09, pitch: 5+Math.random()*15};
@@ -336,11 +822,15 @@
     return {ear: 0.28+Math.random()*0.08, pitch: -5+Math.random()*15};
   }
   function startSim(){
+    focusTotal={};                                     // 무한경쟁 누적치 초기화
     SEATS.forEach(seat=>{
-      const occupied=Math.random()<0.7;
-      const st=!occupied?'empty':(Math.random()<0.85?'focus':(Math.random()<0.5?'drowsy':'away'));
+      const occupied=Math.random()<0.85;               // 무한경쟁: 자리를 더 꽉 채운다
+      const st=!occupied?'empty':(Math.random()<0.8?'focus':(Math.random()<0.5?'drowsy':'away'));
       const f=st==='empty'?{ear:null,pitch:null}:synthFeat(st);
-      seatState[seat]={state:st,since:Date.now()-Math.floor(Math.random()*8000),ear:f.ear,pitch:f.pitch};
+      // 데모용 시드: 오늘 이미 쌓인 누적 집중(0~150분)과 제각각인 현재 연속 집중
+      focusTotal[seat]= occupied ? Math.floor(Math.random()*9000)*1000 : 0;
+      const streakMs = st==='focus' ? Math.floor(Math.random()*3600)*1000 : Math.floor(Math.random()*8000);
+      seatState[seat]={state:st,since:Date.now()-streakMs,ear:f.ear,pitch:f.pitch};
       if(st==='drowsy'||st==='away') enqueue(seat,st,f);
       renderSeat(seat);
     });
@@ -349,9 +839,10 @@
       for(let i=0;i<3;i++){
         const seat=SEATS[Math.floor(Math.random()*SEATS.length)];
         const cur=seatState[seat].state; const r=Math.random(); let next;
-        if(cur==='empty') next=r<0.6?'focus':'empty';
-        else if(cur==='focus') next=r<0.75?'focus':(r<0.88?'drowsy':(r<0.96?'away':'empty'));
-        else next=r<0.4?'focus':cur;
+        // 무한경쟁: 집중을 오래 유지하는 성향 ↑ → 순위 경쟁이 계속 이어진다
+        if(cur==='empty') next=r<0.5?'focus':'empty';
+        else if(cur==='focus') next=r<0.9?'focus':(r<0.95?'drowsy':(r<0.99?'away':'empty'));
+        else next=r<0.55?'focus':cur;
         setSeat(seat,next,next==='empty'?{ear:null,pitch:null}:synthFeat(next));
       }
     },1800);
@@ -361,42 +852,84 @@
   // ---- live (firebase) ----
   async function startLive(){
     try{
-      const appMod=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js");
-      const fsMod=await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-      const app=appMod.initializeApp({
-        apiKey:"AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
-        authDomain:"saebom-studyhall.firebaseapp.com",
-        projectId:"saebom-studyhall",
-        storageBucket:"saebom-studyhall.appspot.com",
-      });
-      const db=fsMod.getFirestore(app);
+      const {fs:fsMod, db}=await getFB();
+      loadNames();                                  // 실시간 진입 시 학생 이름 최신화
       const col=fsMod.collection(db,'seat_status');
       firebaseUnsub=fsMod.onSnapshot(col,(snap)=>{
-        snap.forEach(d=>{
+        // 컬렉션 스냅샷은 아무 문서 하나만 바뀌어도 전체를 다시 내려준다.
+        // 전체를 매번 처리하면 갱신이 끊긴 문서의 수신시각이 계속 '지금'으로 리셋되어
+        // 유령 좌석이 영원히 안 사라진다. 그래서 '실제로 변경된 문서'만 처리한다.
+        snap.docChanges().forEach(chg=>{
+          const d=chg.doc;
+          if(!SEATS.includes(d.id)) return;
+          if(chg.type==='removed'){                 // 문서 삭제 → 즉시 빈좌석
+            setSeat(d.id,'empty',{ear:null,pitch:null});
+            seatState[d.id].updatedAt=null;
+            return;
+          }
           const data=d.data();
-          if(SEATS.includes(d.id)) setSeat(d.id, data.state||'empty', {ear:data.ear, pitch:data.pitch});
+          setSeat(d.id, data.state||'empty', {ear:data.ear, pitch:data.pitch});
+          // 문서의 updatedAt을 우선 사용. 없거나 파싱 불가하면 '변경 수신시각'을 쓴다.
+          // (변경분에만 찍히므로 오래된 문서가 무한정 살아있지 않는다)
+          const t = data.updatedAt ? Date.parse(data.updatedAt) : NaN;
+          seatState[d.id].updatedAt = isNaN(t) ? Date.now() : t;
         });
       },(err)=>{ document.getElementById('srcLabel').textContent='Firebase 오류: '+err.message; });
+      startStale();
       fbWrite=async(record)=>{
         try{ await fsMod.addDoc(fsMod.collection(db,'feedback_events'), record); }catch(e){}
       };
       document.getElementById('srcLabel').textContent='데이터 소스: Firebase seat_status (실시간) · 판정 → feedback_events 기록';
     }catch(e){ document.getElementById('srcLabel').textContent='Firebase 로드 실패: '+e.message; }
   }
-  function stopLive(){ if(firebaseUnsub){firebaseUnsub();firebaseUnsub=null;} fbWrite=null; }
+  function stopLive(){ if(firebaseUnsub){firebaseUnsub();firebaseUnsub=null;} fbWrite=null; stopStale(); }
+
+  // ---- staleness: 갱신 끊긴 좌석 자동 정리 ----
+  function checkStale(){
+    const now=Date.now();
+    let changed=false;
+    SEATS.forEach(seat=>{
+      const s=seatState[seat];
+      // updatedAt이 없으면 상태가 바뀐 시각(since)이라도 기준으로 삼아, 어떤 좌석도 영구 유령이 되지 않게 한다
+      const ts = s.updatedAt || s.since;
+      if(s.state!=='empty' && ts && (now - ts > STALE_MS)){
+        setSeat(seat,'empty',{ear:null,pitch:null}); // 오프라인 → 빈좌석 처리
+        changed=true;
+      }
+    });
+    if(changed) renderSummary();
+  }
+  function startStale(){ stopStale(); staleTimer=setInterval(checkStale, 5000); }
+  function stopStale(){ if(staleTimer){clearInterval(staleTimer);staleTimer=null;} }
 
   // 시뮬레이션이 남긴 가짜 상태/대기 큐를 비우고 전 좌석을 빈좌석으로 초기화
   // (실시간 모드에서는 Firestore에 실제 문서가 있는 좌석만 채워지도록)
   function clearBoard(){
+    focusTotal={};   // 실시간 모드는 누적 집중을 0부터 정직하게 집계
     SEATS.forEach(seat=>{ seatState[seat]={state:'empty',since:Date.now(),ear:null,pitch:null}; renderSeat(seat); });
     queue.length=0; renderQueue(); renderSummary();
   }
 
   // ---- mode toggle ----
   const simBtn=document.getElementById('simBtn'),liveBtn=document.getElementById('liveBtn');
-  simBtn.onclick=()=>{ if(mode==='sim')return; mode='sim'; stopLive(); simBtn.classList.add('on'); liveBtn.classList.remove('on'); document.getElementById('srcLabel').textContent='데이터 소스: 시뮬레이션'; startSim(); };
+  simBtn.onclick=()=>{ if(mode==='sim')return; mode='sim'; stopLive(); simBtn.classList.add('on'); liveBtn.classList.remove('on'); document.getElementById('srcLabel').textContent='데이터 소스: 무한경쟁 (데모)'; startSim(); };
   liveBtn.onclick=()=>{ if(mode==='live')return; mode='live'; stopSim(); clearBoard(); liveBtn.classList.add('on'); simBtn.classList.remove('on'); document.getElementById('srcLabel').textContent='데이터 소스: Firebase 연결 중...'; startLive(); };
 
+  // ---- 랭킹 집계 방식 탭 ----
+  const lbStreakBtn=document.getElementById('lbStreak'), lbTotalBtn=document.getElementById('lbTotal'), lbSub=document.getElementById('lbSub');
+  function setLbMode(m){
+    lbMode=m;
+    lbStreakBtn.classList.toggle('on', m==='streak');
+    lbTotalBtn.classList.toggle('on', m==='total');
+    lbSub.innerHTML = m==='total'
+      ? '접속 이후 <b>누적 집중 시간</b>이 가장 많은 학생 순위 · 졸거나 자리를 비운 시간은 빠집니다'
+      : '지금 이 순간 가장 오래 <b>연속 집중</b> 중인 학생 순위 · 졸거나 자리를 비우면 기록이 초기화됩니다';
+    renderLeaderboard();
+  }
+  lbStreakBtn.onclick=()=>setLbMode('streak');
+  lbTotalBtn.onclick=()=>setLbMode('total');
+
+  loadNames();   // 좌석↔이름 매핑 미리 로드(실패해도 좌석번호로 표시)
   startSim();
 </script>
 </body>
