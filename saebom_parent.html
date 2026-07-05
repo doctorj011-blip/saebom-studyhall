@@ -60,18 +60,6 @@
   .login-btn:active { transform: scale(0.98); box-shadow: 0 3px 10px rgba(200,144,10,0.3); }
   .login-error { color: #C62828; font-size: 12px; margin-top: 10px; text-align: center; min-height: 16px; font-weight: 600; }
 
-  /* 로그인 키패드 (전화번호 뒷 4자리) */
-  .pin-display { display: flex; justify-content: center; gap: 14px; margin: 4px 0 16px; }
-  .pin-dot { width: 42px; height: 50px; border-radius: 12px; border: 1.5px solid var(--border); background: #FAFAFA; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: var(--text); transition: border 0.15s, background 0.15s; }
-  .pin-dot.filled { border-color: var(--brand); background: #fff; }
-  .pin-dot.active { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(200,144,10,0.15); }
-  .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 4px; }
-  .keypad-btn { padding: 14px 0; border: none; background: #F4F5F7; border-radius: 14px; font-size: 21px; font-weight: 700; color: var(--text); cursor: pointer; transition: transform 0.08s, background 0.15s; user-select: none; -webkit-user-select: none; }
-  .keypad-btn:active { transform: scale(0.94); background: var(--brand-50); }
-  .keypad-btn.empty { background: transparent; pointer-events: none; }
-  .keypad-btn.action { font-size: 14px; line-height: 1.15; color: var(--text-soft); }
-  .keypad-btn.action i { font-size: 22px; }
-
   /* 앱 */
   #app-screen { display: none; min-height: 100vh; flex-direction: column; }
   #app-screen.visible { display: flex; }
@@ -132,10 +120,6 @@
   .sched-changed { background: #FFF4E6 !important; position: relative; cursor: pointer; }
   .chg-dot { position: absolute; top: 2px; right: 2px; width: 6px; height: 6px; border-radius: 50%; background: #E8590C; }
   .chg-reason { font-size: 9px; color: #C62828; margin-top: 1px; line-height: 1.1; word-break: keep-all; }
-
-  /* 누적시간 */
-  .hours-bar { height: 9px; background: #F0F1F3; border-radius: 5px; overflow: hidden; margin-top: 6px; }
-  .hours-fill { height: 100%; background: linear-gradient(90deg, var(--brand), var(--brand-light)); border-radius: 5px; transition: width 0.6s cubic-bezier(.2,.8,.2,1); }
 
   /* ── 학습현황 (학생앱과 동일 디자인) ── */
   .section-label{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:0.7px;text-transform:uppercase;margin-bottom:10px;margin-top:4px}
@@ -216,26 +200,13 @@
       <input class="login-input" id="login-name" type="text" placeholder="홍길동" autocomplete="off">
     </div>
     <div class="login-label">학부모 전화번호 (뒷 4자리)</div>
-    <input id="login-phone" type="hidden" value="">
-    <div class="pin-display" id="pin-display">
-      <div class="pin-dot"></div>
-      <div class="pin-dot"></div>
-      <div class="pin-dot"></div>
-      <div class="pin-dot"></div>
-    </div>
-    <div class="keypad">
-      <button type="button" class="keypad-btn" onclick="pinPress('1')">1</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('2')">2</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('3')">3</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('4')">4</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('5')">5</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('6')">6</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('7')">7</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('8')">8</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('9')">9</button>
-      <button type="button" class="keypad-btn action" onclick="pinClear()" aria-label="전체삭제">전체<br>삭제</button>
-      <button type="button" class="keypad-btn" onclick="pinPress('0')">0</button>
-      <button type="button" class="keypad-btn action" onclick="pinDelete()" aria-label="지우기"><i class="ti ti-backspace"></i></button>
+    <div class="login-field">
+      <i class="ti ti-phone"></i>
+      <input class="login-input" id="login-phone" type="tel" inputmode="numeric" pattern="[0-9]*"
+        maxlength="4" placeholder="숫자 4자리" autocomplete="off"
+        oninput="onPhoneInput()"
+        onkeydown="if(event.key==='Enter'){event.preventDefault();doLogin();}"
+        onfocus="setTimeout(function(){document.getElementById('login-phone').scrollIntoView({block:'center',behavior:'smooth'});},250)">
     </div>
     <button class="login-btn" onclick="doLogin()">로그인 <i class="ti ti-arrow-right" style="font-size:15px;vertical-align:-2px"></i></button>
     <div class="login-error" id="login-error"></div>
@@ -276,14 +247,6 @@
       </div>
     </div>
 
-    <!-- 누적시간 탭 -->
-    <div id="tab-hours" style="display:none">
-      <div class="card">
-        <div class="card-title"><i class="ti ti-clock-hour-4"></i> 월별 누적시간</div>
-        <div id="hours-content">불러오는 중...</div>
-      </div>
-    </div>
-
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
       <!-- 월 이동 -->
@@ -319,7 +282,6 @@
     <button class="app-tab active" onclick="showTab('notice',this)"><i class="ti ti-bell"></i>공지</button>
     <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-chart-bar"></i>학습현황</button>
     <button class="app-tab" onclick="showTab('schedule',this)"><i class="ti ti-calendar-event"></i>스케줄</button>
-    <button class="app-tab" onclick="showTab('hours',this)"><i class="ti ti-clock-hour-4"></i>누적시간</button>
     <button class="app-tab" onclick="showTab('planner',this)"><i class="ti ti-notebook"></i>플래너</button>
   </div>
 </div>
@@ -371,7 +333,7 @@ function showTab(id, btn) {
   if (id === 'planner') loadParentPlanner();
   if (id === 'notice') loadNotices();
   if (id === 'status') buildMyStats();
-  ['notice','status','schedule','hours','planner'].forEach(t => {
+  ['notice','status','schedule','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -411,33 +373,14 @@ const DUMMY_RECORDS = [
   { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'14:30', outTime:null },
 ];
 
-// ── 전화번호 키패드 ──
-function renderPin() {
-  const phone = document.getElementById('login-phone').value;
-  const dots = document.querySelectorAll('#pin-display .pin-dot');
-  dots.forEach((dot, i) => {
-    dot.textContent = phone[i] || '';
-    dot.classList.toggle('filled', i < phone.length);
-    dot.classList.toggle('active', i === phone.length);
-  });
-}
-function pinPress(digit) {
+// ── 전화번호 입력 (숫자 입력창) ──
+// 숫자만 남기고 4자리로 제한, 4자리가 채워지면 자동 로그인 시도
+function onPhoneInput() {
   const el = document.getElementById('login-phone');
-  if (el.value.length >= 4) return;
-  el.value += digit;
-  renderPin();
+  el.value = el.value.replace(/\D/g, '').slice(0, 4);
   const errEl = document.getElementById('login-error');
   if (errEl) errEl.textContent = '';
   if (el.value.length === 4) doLogin();
-}
-function pinDelete() {
-  const el = document.getElementById('login-phone');
-  el.value = el.value.slice(0, -1);
-  renderPin();
-}
-function pinClear() {
-  document.getElementById('login-phone').value = '';
-  renderPin();
 }
 
 async function doLogin() {
@@ -491,7 +434,6 @@ function doLogout() {
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('login-name').value = '';
   document.getElementById('login-phone').value = '';
-  renderPin();
 }
 
 // ── 데이터 로드 ──
@@ -505,9 +447,6 @@ async function refreshParentData() {
     if (snap.exists()) {
       currentStudent.hours = _normalizeHours(snap.data().hours);
       try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
-      loadHours();
-      const el = document.getElementById('month-hours');
-      if (el) el.textContent = _readHour(currentStudent.hours, _curYm()) + 'h';
     }
   } catch(e) { console.error('학부모 데이터 갱신 실패:', e); }
 }
@@ -515,7 +454,6 @@ async function refreshParentData() {
 async function loadAllData() {
   await startStatusRealtime();  // 실시간 먼저
   startScheduleRealtime();      // 스케줄도 실시간 구독
-  loadHours();
   loadNotices();
   refreshParentData();          // 최신 hours 재조회 (캐시 갱신)
 }
@@ -984,34 +922,6 @@ function loadSchedule() {
         + '주황 표시 = 고정 시간표에서 <b>변경된 부분</b>'
         + '</div>';
   document.getElementById('schedule-content').innerHTML = html;
-}
-
-function loadHours() {
-  if (!currentStudent) return;
-  const hours = currentStudent.hours || {};
-  const currentMonth = _curYm();
-  const maxH = Math.max(...MONTHS.map(m => _readHour(hours, m.k)), 1);
-
-  let html = MONTHS.map(m => {
-    const h = _readHour(hours, m.k);
-    const pct = Math.round(h / maxH * 100);
-    const isCurrent = m.k === currentMonth;
-    return `<div style="margin-bottom:12px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
-        <span style="font-size:12px;font-weight:${isCurrent?'700':'400'};color:${isCurrent?'#C8900A':'#374151'}">${m.label}</span>
-        <span style="font-size:12px;font-weight:700;color:${isCurrent?'#C8900A':'#6B7280'}">${h}h</span>
-      </div>
-      <div class="hours-bar"><div class="hours-fill" style="width:${pct}%;opacity:${isCurrent?1:0.5}"></div></div>
-    </div>`;
-  }).join('');
-
-  const total = Object.values(hours).reduce((a,b)=>a+b, 0);
-  html += `<div class="stat-card" style="margin-top:18px">
-    <div class="stat-label">총 누적 시간</div>
-    <div class="stat-value" style="font-size:26px">${Math.round(total*10)/10}h</div>
-  </div>`;
-
-  document.getElementById('hours-content').innerHTML = html;
 }
 
 // ── 학부모앱 공지사항 ──
