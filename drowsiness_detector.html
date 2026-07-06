@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b0e11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="새봄 감지">
+<link rel="manifest" href="detector_manifest.json">
+<title>새봄 면학관 · 집중도 모니터</title>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  const firebaseConfig = {
+    apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
+    authDomain: "saebom-studyhall.firebaseapp.com",
+    projectId: "saebom-studyhall",
+    storageBucket: "saebom-studyhall.appspot.com",
+  };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  // expose to regular scripts (established window._* pattern)
+  window._db = db;
+  window._fsDoc = doc;
+  window._fsSetDoc = setDoc;
+  window.dispatchEvent(new Event('firebase-ready'));
+</script>
+<style>
+  :root{
+    --bg: #0b0e11;
+    --panel: #12161b;
+    --line: #232a31;
+    --ink: #e7ecef;
+    --dim: #7d8a94;
+    --focus: #3ddc97;
+    --drowsy: #f5b942;
+    --away: #ef5b5b;
+    --mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Pretendard', 'Noto Sans KR', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    min-height:100vh;
+    padding: 24px;
+  }
+  header{
+    display:flex; justify-content:space-between; align-items:baseline;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 16px;
+    margin-bottom: 20px;
+  }
+  header h1{
+    font-size: 15px; font-weight: 600; letter-spacing: 0.5px;
+  }
+  header .eyebrow{
+    font-family: var(--mono); font-size: 11px; color: var(--dim);
+    letter-spacing: 1px; text-transform: uppercase; margin-bottom: 4px;
+  }
+  header .clock{ font-family: var(--mono); font-size: 13px; color: var(--dim); }
+
+  .stage{
+    display:grid;
+    grid-template-columns: minmax(280px, 520px) 1fr;
+    gap: 20px;
+  }
+  @media (max-width: 760px){ .stage{ grid-template-columns: 1fr; } }
+
+  .video-panel{
+    position:relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow:hidden;
+    aspect-ratio: 4/3;
+  }
+  video, canvas{
+    position:absolute; top:0; left:0; width:100%; height:100%;
+    object-fit: cover;
+  }
+  video{ transform: scaleX(-1); }
+  canvas{ transform: scaleX(-1); }
+
+  .status-badge{
+    position:absolute; top:12px; left:12px;
+    font-family: var(--mono); font-size: 12px;
+    padding: 5px 10px; border-radius: 3px;
+    background: rgba(0,0,0,0.55);
+    border: 1px solid var(--line);
+    display:flex; align-items:center; gap:6px;
+    z-index: 5;
+  }
+  .dot{ width:7px; height:7px; border-radius:50%; background: var(--dim); }
+  .dot.focus{ background: var(--focus); box-shadow: 0 0 6px var(--focus); }
+  .dot.drowsy{ background: var(--drowsy); box-shadow: 0 0 6px var(--drowsy); animation: pulse 1s infinite; }
+  .dot.away{ background: var(--away); box-shadow: 0 0 6px var(--away); animation: pulse 0.6s infinite; }
+  @keyframes pulse{ 50%{ opacity: 0.35; } }
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 20px;
+    display:flex; flex-direction:column; gap:18px;
+  }
+
+  .metric-row{ display:flex; justify-content:space-between; align-items:center; }
+  .metric-label{ font-family: var(--mono); font-size: 11px; color: var(--dim); letter-spacing:0.5px; text-transform:uppercase; }
+  .metric-value{ font-family: var(--mono); font-size: 20px; font-weight:600; }
+
+  .state-display{
+    text-align:center; padding: 22px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .state-display .label{
+    font-size: 22px; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .state-display .sub{
+    font-family: var(--mono); font-size: 12px; color: var(--dim); margin-top:6px;
+  }
+  .label.focus{ color: var(--focus); }
+  .label.drowsy{ color: var(--drowsy); }
+  .label.away{ color: var(--away); }
+
+  .bar-track{
+    width:100%; height:6px; background:#1b2127; border-radius: 3px; overflow:hidden;
+  }
+  .bar-fill{
+    height:100%; width:0%; background: var(--focus); transition: width 0.15s linear, background 0.3s;
+  }
+
+  .log{
+    font-family: var(--mono); font-size: 12px; color: var(--dim);
+    max-height: 140px; overflow-y:auto;
+    display:flex; flex-direction:column-reverse; gap:4px;
+  }
+  .log div span.t{ color: var(--dim); margin-right:8px; }
+  .log div span.msg-drowsy{ color: var(--drowsy); }
+  .log div span.msg-away{ color: var(--away); }
+  .log div span.msg-focus{ color: var(--focus); }
+
+  .controls{ display:flex; gap:8px; }
+  button{
+    flex:1; padding: 10px; border-radius: 3px; border: 1px solid var(--line);
+    background: #171c22; color: var(--ink); font-family: var(--sans); font-size: 13px;
+    cursor:pointer; transition: border-color 0.15s;
+  }
+  button:hover{ border-color: var(--focus); }
+  button:disabled{ opacity: 0.4; cursor: default; }
+
+  .note{
+    font-size: 11px; color: var(--dim); line-height:1.6; margin-top: 4px;
+  }
+
+  .seat-config{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    padding-bottom: 14px; border-bottom: 1px solid var(--line);
+  }
+  .seat-config label{
+    font-family: var(--mono); font-size:11px; color:var(--dim);
+    text-transform:uppercase; letter-spacing:0.5px;
+  }
+  .seat-config input{
+    width: 70px; padding: 7px 9px; background:#0e1216; border:1px solid var(--line);
+    border-radius:3px; color:var(--ink); font-family:var(--mono); font-size:13px;
+  }
+  .seat-config .conn{
+    margin-left:auto; display:flex; align-items:center; gap:6px;
+    font-family: var(--mono); font-size:11px; color:var(--dim);
+  }
+  .conn-dot{ width:7px; height:7px; border-radius:50%; background:var(--dim); }
+  .conn-dot.online{ background:var(--focus); box-shadow:0 0 6px var(--focus); }
+  .conn-dot.error{ background:var(--away); }
+
+  .review-panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 20px;
+    margin-top: 20px;
+  }
+  .review-header{
+    display:flex; justify-content:space-between; align-items:center;
+    margin-bottom: 16px;
+  }
+  .review-header h2{ font-size: 13px; font-weight:600; }
+  .review-header .count{ font-family: var(--mono); font-size: 11px; color: var(--dim); }
+  .review-actions{ display:flex; gap:8px; }
+  .review-actions button{ flex:none; padding: 7px 12px; font-size: 12px; }
+
+  .review-grid{
+    display:grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 12px;
+  }
+  .review-empty{
+    font-family: var(--mono); font-size: 12px; color: var(--dim);
+    padding: 24px 0; text-align:center;
+  }
+  .card{
+    background: #0e1216;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .card img{ width:100%; display:block; aspect-ratio: 4/3; object-fit:cover; }
+  .card-body{ padding: 8px; }
+  .card-tag{
+    display:inline-block; font-family: var(--mono); font-size: 10px;
+    padding: 2px 6px; border-radius: 2px; margin-bottom:6px;
+  }
+  .card-tag.drowsy{ background: rgba(245,185,66,0.15); color: var(--drowsy); }
+  .card-tag.away{ background: rgba(239,91,91,0.15); color: var(--away); }
+  .card-meta{ font-family: var(--mono); font-size: 10px; color: var(--dim); line-height:1.5; }
+  .card-labelrow{ display:flex; gap:4px; margin-top:8px; }
+  .card-labelrow button{
+    flex:1; padding: 6px 4px; font-size: 11px; border-radius:2px;
+  }
+  .btn-correct.active{ background: rgba(61,220,151,0.15); border-color: var(--focus); color: var(--focus); }
+  .btn-wrong.active{ background: rgba(239,91,91,0.15); border-color: var(--away); color: var(--away); }
+  .card.labeled-correct{ opacity: 0.55; }
+  .card.labeled-wrong{ border-color: var(--away); }
+
+  .tablet-opts{
+    display:flex; align-items:center; gap:16px; flex-wrap:wrap;
+    padding: 10px 0; border-bottom:1px solid var(--line);
+  }
+  .tablet-opts .opt{
+    display:flex; align-items:center; gap:6px;
+    font-family:var(--mono); font-size:11px; color:var(--dim); cursor:pointer;
+  }
+  .tablet-opts input[type=checkbox]{ accent-color: var(--focus); }
+  .tablet-opts .opt-note{ margin-left:auto; font-family:var(--mono); font-size:11px; color:var(--dim); }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="eyebrow">Saebom Study Hall — Prototype</div>
+    <h1>집중도 모니터 · 단일 좌석 테스트</h1>
+  </div>
+  <div class="clock" id="clock">--:--:--</div>
+</header>
+
+<div class="stage">
+  <div class="video-panel">
+    <div class="status-badge">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">대기 중</span>
+    </div>
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <div class="panel">
+    <div class="seat-config">
+      <label for="seatInput">좌석 번호</label>
+      <input id="seatInput" type="text" placeholder="예: 12">
+      <button class="primary" id="seatSaveBtn" style="padding:7px 12px; border:1px solid var(--line); background:#171c22; color:var(--ink); border-radius:3px; font-size:12px; cursor:pointer;">설정</button>
+      <div class="conn">
+        <span class="conn-dot" id="connDot"></span>
+        <span id="connText">Firebase 미연결</span>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button id="startBtn">카메라 시작</button>
+      <button id="stopBtn" disabled>중지</button>
+      <button id="fsBtn">전체화면</button>
+    </div>
+
+    <div class="tablet-opts">
+      <label class="opt"><input type="checkbox" id="autoStart"> 앱 열면 자동 시작</label>
+      <label class="opt"><input type="checkbox" id="wakeOpt" checked> 화면 꺼짐 방지</label>
+      <span class="opt-note" id="perfNote">분석 속도: 절전(약 8fps)</span>
+    </div>
+
+    <div class="state-display">
+      <div class="label" id="bigLabel">대기 중</div>
+      <div class="sub" id="bigSub">카메라를 시작하면 분석이 시작됩니다</div>
+    </div>
+
+    <div>
+      <div class="metric-row">
+        <span class="metric-label">눈 개폐율 (EAR)</span>
+        <span class="metric-value" id="earValue">--</span>
+      </div>
+      <div class="bar-track"><div class="bar-fill" id="earBar"></div></div>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-label">고개 숙임 각도</span>
+      <span class="metric-value" id="pitchValue">--</span>
+    </div>
+
+    <div class="metric-row">
+      <span class="metric-label">이상 지속 시간</span>
+      <span class="metric-value" id="durValue">0.0s</span>
+    </div>
+
+    <div>
+      <div class="metric-label" style="margin-bottom:8px;">이벤트 로그</div>
+      <div class="log" id="log"></div>
+    </div>
+
+    <div class="note">
+      ※ 이 프로토타입은 브라우저에서 로컬로만 분석하며 영상을 저장·전송하지 않습니다.
+      실제 배포 시 학생·보호자 대상 CCTV 설치 고지 및 동의 절차가 필요합니다.
+    </div>
+  </div>
+</div>
+
+<div class="review-panel">
+  <div class="review-header">
+    <div>
+      <h2>오탐 검수</h2>
+      <div class="review-header count" id="reviewCount">감지 이벤트 0건 · 라벨링 0건</div>
+    </div>
+    <div class="review-actions">
+      <button id="exportBtn">라벨 데이터 내보내기 (JSON)</button>
+      <button id="clearBtn">전체 삭제</button>
+    </div>
+  </div>
+  <div class="review-grid" id="reviewGrid">
+    <div class="review-empty">아직 감지된 이벤트가 없습니다. 졸음/이탈이 감지되면 여기에 스냅샷이 쌓입니다.</div>
+  </div>
+</div>
+
+<script>
+const video = document.getElementById('video');
+const overlay = document.getElementById('overlay');
+const ctx = overlay.getContext('2d');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const bigLabel = document.getElementById('bigLabel');
+const bigSub = document.getElementById('bigSub');
+const earValue = document.getElementById('earValue');
+const earBar = document.getElementById('earBar');
+const pitchValue = document.getElementById('pitchValue');
+const durValue = document.getElementById('durValue');
+const logEl = document.getElementById('log');
+const reviewGrid = document.getElementById('reviewGrid');
+const reviewCount = document.getElementById('reviewCount');
+const exportBtn = document.getElementById('exportBtn');
+const clearBtn = document.getElementById('clearBtn');
+const seatInput = document.getElementById('seatInput');
+const seatSaveBtn = document.getElementById('seatSaveBtn');
+const connDot = document.getElementById('connDot');
+const connText = document.getElementById('connText');
+
+// ---------- seat identity + firebase sync ----------
+const SEAT_KEY = 'saebom_seat_number';
+let seatNumber = localStorage.getItem(SEAT_KEY) || '';
+let firebaseReady = false;
+let lastSentState = null;
+let heartbeatTimer = null;
+
+if(seatNumber) seatInput.value = seatNumber;
+
+window.addEventListener('firebase-ready', () => {
+  firebaseReady = true;
+  updateConn();
+});
+// in case module loaded before this script
+if(window._db) { firebaseReady = true; }
+
+function updateConn(){
+  if(!seatNumber){
+    connDot.className = 'conn-dot';
+    connText.textContent = '좌석 번호 미설정';
+  } else if(!firebaseReady){
+    connDot.className = 'conn-dot error';
+    connText.textContent = 'Firebase 연결 대기...';
+  } else {
+    connDot.className = 'conn-dot online';
+    connText.textContent = `좌석 ${seatNumber} · 실시간 전송 중`;
+  }
+}
+
+seatSaveBtn.addEventListener('click', () => {
+  const v = seatInput.value.trim();
+  if(!v){ alert('좌석 번호를 입력해주세요.'); return; }
+  seatNumber = v;
+  localStorage.setItem(SEAT_KEY, v);
+  lastSentState = null; // force resend
+  updateConn();
+  logEvent(`좌석 ${v}번으로 설정됨`, 'msg-focus');
+});
+
+// write current state to seat_status/{seat}; only on change or heartbeat
+async function pushStatus(state, meta, force){
+  if(!seatNumber || !firebaseReady || !window._db) return;
+  if(!force && state === lastSentState) return;
+  lastSentState = state;
+  try{
+    await window._fsSetDoc(
+      window._fsDoc(window._db, 'seat_status', seatNumber),
+      {
+        state,
+        ear: (meta && meta.ear != null) ? Number(meta.ear.toFixed(4)) : null,
+        pitch: (meta && meta.pitch != null) ? Number(meta.pitch.toFixed(2)) : null,
+        duration: (meta && meta.duration != null) ? Number(meta.duration.toFixed(1)) : null,
+        updatedAt: new Date().toISOString()
+      }
+    );
+  } catch(e){
+    connDot.className = 'conn-dot error';
+    connText.textContent = '전송 오류: ' + e.message;
+  }
+}
+
+// heartbeat every 30s so dashboard knows tablet is alive
+function startHeartbeat(){
+  stopHeartbeat();
+  heartbeatTimer = setInterval(() => {
+    pushStatus(currentState === 'idle' ? 'empty' : currentState, lastMeta, true);
+  }, 30000);
+}
+function stopHeartbeat(){ if(heartbeatTimer){ clearInterval(heartbeatTimer); heartbeatTimer = null; } }
+
+let lastMeta = {};
+
+const STORAGE_KEY = 'saebom_focus_events_v1';
+const MAX_EVENTS = 120; // cap stored snapshots so localStorage doesn't overflow
+let events = [];
+
+function loadEvents(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    events = raw ? JSON.parse(raw) : [];
+  } catch(e){ events = []; }
+}
+
+function saveEvents(){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(events));
+  } catch(e){
+    // storage full — drop oldest half and retry once
+    events = events.slice(0, Math.floor(events.length/2));
+    try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(events)); } catch(e2){}
+  }
+}
+
+function captureSnapshot(){
+  // small thumbnail, mirrored to match what's on screen
+  const c = document.createElement('canvas');
+  c.width = 160; c.height = 120;
+  const cctx = c.getContext('2d');
+  cctx.translate(160, 0); cctx.scale(-1, 1);
+  cctx.drawImage(video, 0, 0, 160, 120);
+  return c.toDataURL('image/jpeg', 0.6);
+}
+
+function recordEvent(state, meta){
+  const ev = {
+    id: Date.now() + '_' + Math.random().toString(36).slice(2,7),
+    time: new Date().toISOString(),
+    state, // 'drowsy' | 'away'
+    ear: meta.ear ?? null,
+    pitch: meta.pitch ?? null,
+    duration: meta.duration ?? null,
+    snapshot: captureSnapshot(),
+    label: null // null | 'correct' | 'wrong'
+  };
+  events.unshift(ev);
+  if(events.length > MAX_EVENTS) events.length = MAX_EVENTS;
+  saveEvents();
+  renderReview();
+}
+
+function setLabel(id, label){
+  const ev = events.find(e=>e.id===id);
+  if(!ev) return;
+  ev.label = (ev.label === label) ? null : label; // toggle off if clicked again
+  saveEvents();
+  renderReview();
+}
+
+function renderReview(){
+  reviewCount.textContent = `감지 이벤트 ${events.length}건 · 라벨링 ${events.filter(e=>e.label).length}건`;
+  if(events.length === 0){
+    reviewGrid.innerHTML = '<div class="review-empty">아직 감지된 이벤트가 없습니다. 졸음/이탈이 감지되면 여기에 스냅샷이 쌓입니다.</div>';
+    return;
+  }
+  reviewGrid.innerHTML = events.map(ev=>{
+    const t = new Date(ev.time).toLocaleTimeString('ko-KR', {hour12:false});
+    const tagClass = ev.state === 'drowsy' ? 'drowsy' : 'away';
+    const tagLabel = ev.state === 'drowsy' ? '졸음' : '이탈/딴짓';
+    const earLine = ev.ear !== null ? `EAR ${ev.ear.toFixed(3)}` : '';
+    const pitchLine = ev.pitch !== null ? `각도 ${ev.pitch.toFixed(1)}°` : '';
+    const cardCls = ev.label === 'correct' ? ' labeled-correct' : ev.label === 'wrong' ? ' labeled-wrong' : '';
+    return `
+      <div class="card${cardCls}">
+        <img src="${ev.snapshot}" alt="감지 스냅샷">
+        <div class="card-body">
+          <span class="card-tag ${tagClass}">${tagLabel}</span>
+          <div class="card-meta">${t} · ${earLine} ${pitchLine}<br>지속 ${ev.duration ? ev.duration.toFixed(1)+'s' : '-'}</div>
+          <div class="card-labelrow">
+            <button class="btn-correct${ev.label==='correct'?' active':''}" onclick="setLabel('${ev.id}','correct')">✓ 맞음</button>
+            <button class="btn-wrong${ev.label==='wrong'?' active':''}" onclick="setLabel('${ev.id}','wrong')">✕ 오탐</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function exportEvents(){
+  const blob = new Blob([JSON.stringify(events, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `saebom_focus_events_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function clearEvents(){
+  if(!confirm('저장된 이벤트와 라벨을 모두 삭제할까요? 이 작업은 되돌릴 수 없습니다.')) return;
+  events = [];
+  saveEvents();
+  renderReview();
+}
+
+loadEvents();
+
+function tickClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+}
+setInterval(tickClock, 1000); tickClock();
+
+// Thresholds
+const EAR_THRESHOLD = 0.21;      // below this = eyes closed
+const DROWSY_SECONDS = 2.5;      // eyes closed this long -> drowsy
+const AWAY_PITCH_DEG = 28;       // head pitched down this much -> looking away/desk
+const AWAY_SECONDS = 2.0;
+
+let camera = null;
+let faceMesh = null;
+let running = false;
+
+let eyesClosedSince = null;
+let headDownSince = null;
+let currentState = 'idle'; // idle | focus | drowsy | away
+let noFaceSince = null;
+
+function logEvent(msg, cls){
+  const t = new Date().toLocaleTimeString('ko-KR', {hour12:false});
+  const div = document.createElement('div');
+  div.innerHTML = `<span class="t">${t}</span><span class="${cls}">${msg}</span>`;
+  logEl.prepend(div);
+  while(logEl.children.length > 40) logEl.removeChild(logEl.lastChild);
+}
+
+function setState(state, sub, meta){
+  if(state === currentState) { bigSub.textContent = sub || bigSub.textContent; return; }
+  currentState = state;
+  statusDot.className = 'dot' + (state==='focus'?' focus':state==='drowsy'?' drowsy':state==='away'?' away':'');
+  bigLabel.className = 'label' + (state==='focus'?' focus':state==='drowsy'?' drowsy':state==='away'?' away':'');
+  const map = {
+    idle: ['대기 중', '카메라를 시작하면 분석이 시작됩니다'],
+    focus: ['집중', '정상적으로 학습 중입니다'],
+    drowsy: ['졸음 감지', '눈 감김이 지속되고 있습니다'],
+    away: ['이탈/딴짓 의심', '고개가 오래 숙여져 있습니다']
+  };
+  const [label, defaultSub] = map[state];
+  statusText.textContent = label;
+  bigLabel.textContent = label;
+  bigSub.textContent = sub || defaultSub;
+
+  if(state === 'drowsy'){
+    logEvent('졸음 상태 진입', 'msg-drowsy');
+    if(video.videoWidth > 0) recordEvent('drowsy', meta || {});
+  }
+  if(state === 'away'){
+    logEvent('자리 이탈/딴짓 의심 상태 진입', 'msg-away');
+    if(video.videoWidth > 0) recordEvent('away', meta || {});
+  }
+  if(state === 'focus') logEvent('집중 상태 복귀', 'msg-focus');
+
+  // sync to dashboard via Firebase
+  lastMeta = meta || {};
+  pushStatus(state, meta || {}, false);
+}
+
+function dist(a, b){
+  return Math.hypot(a.x - b.x, a.y - b.y);
+}
+
+// FaceMesh landmark indices for eyes (standard 468-point model)
+const LEFT_EYE = { top1:159, top2:158, bottom1:145, bottom2:153, left:33, right:133 };
+const RIGHT_EYE = { top1:386, top2:385, bottom1:374, bottom2:380, left:362, right:263 };
+
+function eyeAspectRatio(lm, eye){
+  const v1 = dist(lm[eye.top1], lm[eye.bottom1]);
+  const v2 = dist(lm[eye.top2], lm[eye.bottom2]);
+  const h = dist(lm[eye.left], lm[eye.right]);
+  if(h === 0) return 0.3;
+  return (v1 + v2) / (2.0 * h);
+}
+
+function estimatePitch(lm){
+  // rough proxy: vertical offset between nose tip (1) and forehead (10) vs eye line
+  const forehead = lm[10];
+  const nose = lm[1];
+  const chin = lm[152];
+  const faceHeight = dist(forehead, chin) || 1;
+  // positive = looking down (nose relatively lower vs forehead-chin midline shifts)
+  const mid = (forehead.y + chin.y) / 2;
+  const offset = (nose.y - mid) / faceHeight;
+  return offset * 90; // rough degrees proxy, not calibrated
+}
+
+function onResults(results){
+  overlay.width = video.videoWidth;
+  overlay.height = video.videoHeight;
+  ctx.clearRect(0,0,overlay.width, overlay.height);
+
+  if(!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0){
+    if(!noFaceSince) noFaceSince = performance.now();
+    const elapsed = (performance.now() - noFaceSince)/1000;
+    if(elapsed > AWAY_SECONDS){
+      setState('away', '얼굴이 감지되지 않습니다 (자리 이탈 가능)');
+      durValue.textContent = elapsed.toFixed(1) + 's';
+    }
+    earValue.textContent = '--';
+    pitchValue.textContent = '--';
+    earBar.style.width = '0%';
+    return;
+  }
+  noFaceSince = null;
+
+  const lm = results.multiFaceLandmarks[0];
+  const leftEAR = eyeAspectRatio(lm, LEFT_EYE);
+  const rightEAR = eyeAspectRatio(lm, RIGHT_EYE);
+  const ear = (leftEAR + rightEAR) / 2;
+  const pitch = estimatePitch(lm);
+
+  earValue.textContent = ear.toFixed(3);
+  pitchValue.textContent = pitch.toFixed(1) + '°';
+  earBar.style.width = Math.min(100, Math.max(0, (ear/0.4)*100)) + '%';
+  earBar.style.background = ear < EAR_THRESHOLD ? 'var(--drowsy)' : 'var(--focus)';
+
+  const now = performance.now();
+
+  // Eyes closed tracking
+  if(ear < EAR_THRESHOLD){
+    if(!eyesClosedSince) eyesClosedSince = now;
+  } else {
+    eyesClosedSince = null;
+  }
+
+  // Head down tracking
+  if(pitch > AWAY_PITCH_DEG){
+    if(!headDownSince) headDownSince = now;
+  } else {
+    headDownSince = null;
+  }
+
+  const closedDur = eyesClosedSince ? (now - eyesClosedSince)/1000 : 0;
+  const downDur = headDownSince ? (now - headDownSince)/1000 : 0;
+
+  if(downDur > AWAY_SECONDS){
+    setState('away', null, {ear, pitch, duration: downDur});
+    durValue.textContent = downDur.toFixed(1) + 's';
+  } else if(closedDur > DROWSY_SECONDS){
+    setState('drowsy', null, {ear, pitch, duration: closedDur});
+    durValue.textContent = closedDur.toFixed(1) + 's';
+  } else {
+    setState('focus');
+    durValue.textContent = Math.max(closedDur, downDur).toFixed(1) + 's';
+  }
+
+  // draw simple eye dots for feedback
+  ctx.fillStyle = ear < EAR_THRESHOLD ? '#f5b942' : '#3ddc97';
+  [LEFT_EYE, RIGHT_EYE].forEach(eye=>{
+    [eye.top1, eye.bottom1, eye.left, eye.right].forEach(i=>{
+      const p = lm[i];
+      ctx.beginPath();
+      ctx.arc(p.x*overlay.width, p.y*overlay.height, 2, 0, Math.PI*2);
+      ctx.fill();
+    });
+  });
+}
+
+const TARGET_FPS = 8;           // throttle analysis to save battery/heat
+const FRAME_INTERVAL = 1000 / TARGET_FPS;
+let lastFrameSent = 0;
+let wakeLock = null;
+
+async function acquireWakeLock(){
+  if(!document.getElementById('wakeOpt').checked) return;
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', ()=>{ wakeLock = null; });
+    }
+  }catch(e){ /* wake lock not supported/allowed */ }
+}
+async function releaseWakeLock(){
+  try{ if(wakeLock){ await wakeLock.release(); wakeLock = null; } }catch(e){}
+}
+// re-acquire when tab becomes visible again (tablets drop it on sleep)
+document.addEventListener('visibilitychange', () => {
+  if(document.visibilityState === 'visible' && running){ acquireWakeLock(); }
+});
+
+async function start(){
+  try{
+    faceMesh = new FaceMesh({locateFile:(f)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${f}`});
+    faceMesh.setOptions({
+      maxNumFaces: 1,
+      refineLandmarks: true,
+      minDetectionConfidence: 0.5,
+      minTrackingConfidence: 0.5
+    });
+    faceMesh.onResults(onResults);
+
+    camera = new Camera(video, {
+      onFrame: async () => {
+        // throttle: only analyze at TARGET_FPS to reduce heat/battery
+        const now = performance.now();
+        if(now - lastFrameSent < FRAME_INTERVAL) return;
+        lastFrameSent = now;
+        await faceMesh.send({image: video});
+      },
+      width: 640, height: 480,
+      facingMode: 'user'   // front camera faces the student
+    });
+    await camera.start();
+    running = true;
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+    logEvent('모니터링 시작', 'msg-focus');
+    setState('focus', '분석을 시작합니다');
+    startHeartbeat();
+    acquireWakeLock();
+  }catch(err){
+    logEvent('카메라 시작 실패: ' + err.message, 'msg-away');
+    alert('카메라를 시작할 수 없습니다.\n\n' +
+          '· 카메라 권한을 허용했는지 확인해주세요\n' +
+          '· HTTPS(또는 GitHub Pages)에서 열었는지 확인해주세요\n' +
+          '· 다른 앱이 카메라를 사용 중이면 종료해주세요\n\n' +
+          '오류: ' + err.message);
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+}
+
+function stop(){
+  if(camera){ camera.stop(); }
+  const stream = video.srcObject;
+  if(stream){ stream.getTracks().forEach(t=>t.stop()); }
+  running = false;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
+  eyesClosedSince = null; headDownSince = null; noFaceSince = null;
+  setState('idle');
+  logEvent('모니터링 중지', 'msg-focus');
+  ctx.clearRect(0,0,overlay.width, overlay.height);
+  stopHeartbeat();
+  releaseWakeLock();
+  pushStatus('empty', {}, true); // mark seat empty on dashboard
+}
+
+// fullscreen toggle
+document.getElementById('fsBtn').addEventListener('click', () => {
+  if(!document.fullscreenElement){
+    document.documentElement.requestFullscreen?.().catch(()=>{});
+  } else {
+    document.exitFullscreen?.();
+  }
+});
+
+// remember tablet options
+const autoStartEl = document.getElementById('autoStart');
+const wakeOptEl = document.getElementById('wakeOpt');
+autoStartEl.checked = localStorage.getItem('saebom_autostart') === '1';
+wakeOptEl.checked = localStorage.getItem('saebom_wakelock') !== '0';
+autoStartEl.addEventListener('change', ()=> localStorage.setItem('saebom_autostart', autoStartEl.checked?'1':'0'));
+wakeOptEl.addEventListener('change', ()=> localStorage.setItem('saebom_wakelock', wakeOptEl.checked?'1':'0'));
+
+startBtn.addEventListener('click', start);
+stopBtn.addEventListener('click', stop);
+exportBtn.addEventListener('click', exportEvents);
+clearBtn.addEventListener('click', clearEvents);
+renderReview();
+updateConn();
+
+// service worker registration (PWA install)
+if('serviceWorker' in navigator){
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('detector_sw.js').catch(()=>{});
+  });
+}
+
+// auto-start monitoring if enabled and seat is set
+window.addEventListener('load', () => {
+  if(autoStartEl.checked && seatNumber){
+    // slight delay so Firebase module + camera libs are ready
+    setTimeout(() => {
+      if(!running) start().catch(()=>{
+        logEvent('자동 시작 실패 — 수동으로 "카메라 시작"을 눌러주세요', 'msg-away');
+      });
+    }, 1200);
+  }
+});
+</script>
+
+</body>
+</html>
