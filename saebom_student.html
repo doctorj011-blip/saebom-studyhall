@@ -2,8 +2,25 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<!-- 홈 화면에 추가 시 주소창 없이 전체화면(standalone)으로 실행 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="새봄 학생">
+<meta name="theme-color" content="#6C5DD3">
 <title>새봄 면학관 — 학생</title>
+<!-- 카톡 등 메신저에 링크 붙여넣을 때 미리보기 카드(이미지+제목)가 자동으로 뜨게 하는 태그 -->
+<meta property="og:title" content="새봄 면학관 학생 앱">
+<meta property="og:description" content="터치 한 번으로 접속 · 휴대폰 번호 뒷 4자리 로그인">
+<meta property="og:image" content="https://doctorj011-blip.github.io/saebom-studyhall/icons/og-student.png">
+<meta property="og:url" content="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html">
+<meta property="og:type" content="website">
+<!-- 홈 화면 아이콘 & PWA 매니페스트 (상대경로 → GitHub Pages 하위 폴더에서도 동작) -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
@@ -34,17 +51,17 @@ window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
 window._fsGetDoc = getDoc;
 window._firebaseReady = true;
-console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#F0D020;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
+console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#E6E2F9;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
 window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;500;600;700;800&display=swap');
 :root{
-  --amber:#C8900A;--amber-dark:#A87008;--amber-light:#E8B030;--amber-pale:#FDF3DC;
+  --amber:#6C5DD3;--amber-dark:#5142B8;--amber-light:#8F82E4;--amber-pale:#EFECFB;
   --green-deep:#1B4D2E;--green:#27500A;
-  --bg:#F5F3EE;--card:#FFFFFF;--surface:#FAF8F3;
-  --text:#1C1A16;--text2:#5C5750;--text3:#9C9488;
-  --border:#E8E2D8;--border-light:#F0EBE2;
+  --bg:#F4F4F7;--card:#FFFFFF;--surface:#F7F7FA;
+  --text:#1B1B22;--text2:#55555F;--text3:#9B9BA6;
+  --border:#E4E4EC;--border-light:#EDEDF3;
   --red:#C62828;--red-pale:#FEF0F0;--red-border:#F5BABA;
   --shadow-sm:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
   --shadow-md:0 4px 12px rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.04);
@@ -55,7 +72,7 @@ window.dispatchEvent(new Event('firebase-ready'));
 body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;-webkit-font-smoothing:antialiased}
 
 /* ── 로그인 화면 ── */
-.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(150deg,#3B2000 0%,#7A4A00 30%,#C8900A 65%,#1B4D2E 100%)}
+.login-screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(150deg,#1E1B4B 0%,#4338A8 30%,#6C5DD3 65%,#33307E 100%)}
 .login-logo{margin-bottom:10px;display:flex;align-items:center;justify-content:center}
 .login-title{font-size:24px;font-weight:800;color:#fff;margin-bottom:4px;letter-spacing:-0.3px}
 .login-sub{font-size:13px;color:rgba(255,255,255,0.65);margin-bottom:36px;letter-spacing:0.2px}
@@ -78,7 +95,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .app-screen.visible{display:flex}
 
 /* 상단 헤더 */
-.app-header{background:linear-gradient(135deg,#C8900A 0%,#9A6A05 100%);padding:14px 20px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(120,70,0,0.25)}
+.app-header{background:linear-gradient(135deg,#6C5DD3 0%,#5546C4 100%);padding:14px 20px 0;position:sticky;top:0;z-index:100;box-shadow:0 2px 12px rgba(76,62,170,0.25)}
 .header-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .header-info{display:flex;align-items:center;gap:10px}
 .header-avatar{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.92);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:var(--amber-dark);border:2px solid rgba(255,255,255,0.6)}
@@ -100,7 +117,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .notice-card{background:var(--card);border-radius:var(--r-lg);margin-bottom:10px;overflow:hidden;box-shadow:var(--shadow-sm);border:1px solid var(--border-light)}
 .notice-badge{display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;margin-bottom:8px;letter-spacing:0.3px}
 .badge-important{background:var(--red-pale);color:var(--red);border:1px solid var(--red-border)}
-.badge-general{background:var(--amber-pale);color:var(--amber-dark);border:1px solid rgba(200,144,10,0.25)}
+.badge-general{background:var(--amber-pale);color:var(--amber-dark);border:1px solid rgba(108,93,211,0.25)}
 .badge-event{background:#E8F4FF;color:#1565C0;border:1px solid rgba(21,101,192,0.2)}
 .notice-title{font-size:15px;font-weight:700;margin-bottom:5px;line-height:1.4;color:var(--text)}
 .notice-body{font-size:13px;color:var(--text2);line-height:1.65;margin-bottom:10px}
@@ -124,7 +141,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .day-tabs{display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
 .day-tabs::-webkit-scrollbar{display:none}
 .day-tab{flex-shrink:0;padding:7px 15px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all 0.15s}
-.day-tab.active{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:700;box-shadow:0 2px 8px rgba(200,144,10,0.35)}
+.day-tab.active{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:700;box-shadow:0 2px 8px rgba(108,93,211,0.35)}
 .day-tab.today{border-color:var(--amber);color:var(--amber);font-weight:600}
 
 /* 교시 카드 */
@@ -134,7 +151,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .period-time{font-size:11px;color:var(--text3);margin-top:2px}
 .period-toggle{display:flex;gap:6px}
 .toggle-btn{padding:6px 15px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.12s;color:var(--text2)}
-.toggle-btn.attend{background:var(--amber-pale);color:var(--amber-dark);border-color:rgba(200,144,10,0.4)}
+.toggle-btn.attend{background:var(--amber-pale);color:var(--amber-dark);border-color:rgba(108,93,211,0.4)}
 .toggle-btn.absent{background:var(--red-pale);color:var(--red);border-color:var(--red-border)}
 .toggle-btn:active{transform:scale(0.95)}
 .toggle-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
@@ -156,12 +173,16 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .weekly-table tr:hover td{background:var(--amber-pale)}
 .wk-cell-attend{background:var(--amber-pale);color:var(--green);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-absent{background:var(--red-pale);color:var(--red);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
+.wk-cell-partial{background:#FFF3E0;color:#E67E22;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-empty{color:var(--border);font-size:14px;cursor:pointer;display:inline-block;min-width:32px}
+.wk-cell-input{margin-top:3px;width:100%;max-width:60px;box-sizing:border-box;border:1px solid var(--border-light);border-radius:5px;padding:2px 4px;font-size:10px;text-align:center;outline:none;color:var(--text)}
+.wk-cell-input:focus{border-color:#E67E22}
+.wk-cell-input.reason{max-width:64px}
 .wk-period-label{font-size:12px;color:var(--text);font-weight:600}
 .wk-period-time{font-size:10px;color:var(--text3)}
 
 /* 저장 버튼 */
-.save-fab{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#E8A820 0%,#C8900A 100%);color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:15px;font-weight:700;box-shadow:0 6px 20px rgba(200,144,10,0.45),0 2px 8px rgba(0,0,0,0.15);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;letter-spacing:0.2px}
+.save-fab{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#8F82E4 0%,#6C5DD3 100%);color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:15px;font-weight:700;box-shadow:0 6px 20px rgba(108,93,211,0.45),0 2px 8px rgba(0,0,0,0.15);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;letter-spacing:0.2px}
 .save-fab.show{display:flex}
 .save-fab:active{transform:translateX(-50%) scale(0.97)}
 
@@ -188,7 +209,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 /* ── 홈 메뉴 화면 ── */
 .home-screen{display:none;min-height:100vh;flex-direction:column;background:var(--bg)}
 .home-screen.visible{display:flex}
-.home-header{background:linear-gradient(135deg,#C8900A 0%,#9A6A05 100%);padding:20px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(120,70,0,0.25)}
+.home-header{background:linear-gradient(135deg,#6C5DD3 0%,#5546C4 100%);padding:20px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 12px rgba(76,62,170,0.25)}
 .home-header-info{display:flex;align-items:center;gap:12px}
 .home-avatar{width:42px;height:42px;border-radius:50%;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid rgba(255,255,255,0.4)}
 .home-name{font-size:16px;font-weight:800;color:#fff;letter-spacing:-0.3px}
@@ -212,14 +233,14 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .section-logout:active{background:rgba(0,0,0,0.3)}
 
 /* ── 새 앱 탑바 ── */
-.app-topbar{background:linear-gradient(135deg,#C8900A 0%,#9A6A05 100%);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 14px rgba(120,70,0,0.22)}
-.topbar-title{font-size:16px;font-weight:700;color:#fff;letter-spacing:-0.2px}
-.topbar-sub{font-size:11px;color:rgba(255,255,255,0.72);margin-top:2px}
+.app-topbar{background:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;border-bottom:1px solid var(--border-light);box-shadow:0 1px 8px rgba(0,0,0,0.04)}
+.topbar-title{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-0.3px}
+.topbar-sub{font-size:11px;color:var(--text3);margin-top:2px}
 .topbar-right{display:flex;align-items:center;gap:8px}
-.topbar-logout{background:rgba(0,0,0,0.18);border:1px solid rgba(255,255,255,0.3);color:rgba(255,255,255,0.9);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:background 0.15s}
-.topbar-logout:active{background:rgba(0,0,0,0.3)}
-.topbar-back-avatar-btn{width:36px;height:36px;border-radius:50%;border:2px solid rgba(255,255,255,0.5);background:rgba(255,255,255,0.12);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;padding:0;transition:background 0.15s}
-.topbar-back-avatar-btn:active{background:rgba(255,255,255,0.28)}
+.topbar-logout{background:var(--surface);border:1px solid var(--border);color:var(--text2);padding:5px 12px;border-radius:20px;font-size:11px;font-weight:600;cursor:pointer;transition:background 0.15s}
+.topbar-logout:active{background:var(--border)}
+.topbar-back-avatar-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;padding:0;transition:background 0.15s}
+.topbar-back-avatar-btn:active{background:var(--border)}
 .topbar-back-avatar-btn img{width:100%;height:100%;object-fit:cover;border-radius:50%}
 
 /* ── 하단 네비게이션 ── */
@@ -236,13 +257,13 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 
 /* ── 새 홈화면 ── */
 .home-screen{background:var(--bg)}
-.home-header{background:linear-gradient(135deg,#C8900A 0%,#9A6A05 100%);padding:14px 20px}
+.home-header{background:#fff;padding:14px 20px;border-bottom:1px solid var(--border-light)}
 .home-header-info{display:flex;align-items:center;justify-content:space-between;width:100%;margin-bottom:0}
 .home-user-row{display:flex;align-items:center;gap:12px}
-.home-avatar{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,0.15);display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid rgba(255,255,255,0.4)}
-.home-welcome{font-size:12px;color:rgba(255,255,255,0.72);margin-bottom:2px;letter-spacing:0.2px}
-.home-name{font-size:18px;font-weight:800;color:#fff;letter-spacing:-0.3px}
-.home-seat{font-size:12px;color:rgba(255,255,255,0.75)}
+.home-avatar{width:44px;height:44px;border-radius:50%;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden;border:2px solid var(--border)}
+.home-welcome{font-size:12px;color:var(--text3);margin-bottom:2px;letter-spacing:0.2px}
+.home-name{font-size:18px;font-weight:800;color:var(--text);letter-spacing:-0.3px}
+.home-seat{font-size:12px;color:var(--text3)}
 .home-header-stat{background:rgba(255,255,255,0.15);border-radius:12px;padding:8px 14px;text-align:right;backdrop-filter:blur(4px)}
 .home-header-stat-val{font-size:20px;font-weight:800;color:#fff;letter-spacing:-0.5px}
 .home-header-stat-lbl{font-size:10px;color:rgba(255,255,255,0.7);margin-top:1px}
@@ -270,10 +291,127 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 /* ── 홈 배너 ── */
 .home-banner{position:relative;height:150px;border-radius:var(--r-lg);margin-bottom:14px;overflow:hidden;box-shadow:var(--shadow-md)}
 .home-banner-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 38%;filter:brightness(0.72) saturate(0.85)}
-.home-banner-overlay{position:absolute;inset:0;background:linear-gradient(120deg,rgba(168,112,8,0.45) 0%,rgba(10,20,10,0.25) 100%)}
+.home-banner-overlay{position:absolute;inset:0;background:linear-gradient(120deg,rgba(92,77,190,0.45) 0%,rgba(10,20,10,0.25) 100%)}
 .home-banner-text{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;padding:0 20px;gap:4px}
 .home-banner-ko{font-size:13px;font-weight:700;color:rgba(255,255,255,0.85);letter-spacing:2px}
 .home-banner-en{font-size:19px;font-weight:800;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 4px rgba(0,0,0,0.3)}
+
+/* ── 학습현황 (신규 디자인) ── */
+.seg-wrap{display:flex;background:#E9E9F0;border-radius:12px;padding:3px;margin-bottom:14px}
+.seg-btn{flex:1;padding:9px 0;border:none;background:transparent;border-radius:10px;font-size:13px;font-weight:600;color:var(--text3);cursor:pointer;font-family:inherit;transition:all .15s}
+.seg-btn.active{background:#fff;color:#6C5DD3;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,0.08)}
+.avg-card{background:var(--card);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-bottom:14px}
+.avg-top{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.avg-label{font-size:13px;font-weight:600;color:var(--text2)}
+.avg-value{font-size:23px;font-weight:800;color:var(--text);letter-spacing:-0.5px}
+.avg-range{font-size:11px;color:var(--text3);margin-top:4px}
+.tri-row{display:flex;margin-top:16px;border-top:1px solid var(--border-light);padding-top:16px}
+.tri-cell{flex:1;text-align:center;border-right:1px solid var(--border-light)}
+.tri-cell:last-child{border-right:none}
+.tri-val{font-size:17px;font-weight:800;color:var(--text);letter-spacing:-0.3px}
+.tri-val small{font-size:11px;font-weight:700}
+.tri-val.hl{color:#6C5DD3}
+.tri-lbl{font-size:11px;color:var(--text3);margin-top:5px}
+.chart-wrap{display:flex;align-items:flex-end;gap:8px;height:160px;margin-top:18px;padding:0 4px}
+.chart-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;height:100%;justify-content:flex-end}
+.chart-bar{width:70%;max-width:26px;border-radius:8px;background:#DAD4F6;min-height:4px}
+.chart-bar.max{background:#6C5DD3}
+.chart-tag{font-size:9px;font-weight:700;color:#fff;background:#4A3FA8;border-radius:6px;padding:2px 5px;white-space:nowrap}
+.chart-day{font-size:10px;color:var(--text3)}
+/* ── 이벤트 게이지바 (세그먼트형) ── */
+.ev-card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);margin-bottom:14px}
+.ev-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.ev-card-title{font-size:15px;font-weight:800;color:var(--text)}
+.ev-badge{font-size:10px;font-weight:700;color:var(--amber-dark);background:var(--amber-pale);border:1px solid rgba(108,93,211,0.25);border-radius:8px;padding:3px 8px}
+.ev-desc{font-size:12px;color:var(--text2);line-height:1.6;white-space:pre-line;margin-bottom:12px}
+.ev-gauge-wrap{background:var(--surface);border:1px solid var(--border-light);border-radius:12px;padding:14px 14px 10px}
+.ev-gauge-track{position:relative;display:flex;gap:2px;height:34px}
+.ev-seg{flex:1;background:#E4E0F5;border-radius:2px}
+.ev-seg.on{background:linear-gradient(180deg,#8F82E4,#6C5DD3)}
+.ev-gauge-val{position:absolute;top:50%;transform:translateY(-50%);left:8px;font-size:14px;font-weight:800;color:var(--amber-dark);background:rgba(255,255,255,0.92);padding:1px 7px;border-radius:7px;box-shadow:var(--shadow-sm);pointer-events:none}
+.ev-gauge-foot{display:flex;align-items:baseline;justify-content:space-between;margin-top:8px}
+.ev-gauge-pct{font-size:18px;font-weight:800;color:var(--amber)}
+.ev-gauge-frac{font-size:11px;font-weight:700;color:var(--text2)}
+.ev-gauge-goal{font-size:11px;color:var(--text3);font-weight:600}
+.ps-card{background:var(--card);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-bottom:14px}
+.ps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.ps-title{font-size:14px;font-weight:800;color:var(--text)}
+.ps-head i{font-size:18px;color:var(--text3)}
+.ps-block{border-left:3px solid #6C5DD3;padding:2px 0 2px 12px;margin:16px 0 4px}
+.ps-name{font-size:13px;font-weight:800;letter-spacing:0.3px;margin-bottom:9px}
+.ps-cols{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}
+.ps-col-h{font-size:11px;font-weight:600;margin-bottom:4px}
+.ps-line{font-size:12px;display:flex;gap:6px;align-items:baseline;padding:2px 0}
+.ps-line b{font-weight:700}
+.ps-k{color:var(--text3);font-size:11px;width:34px;flex-shrink:0}
+.record-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.record-card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-md);padding:11px 6px 10px;text-align:center;box-shadow:var(--shadow-sm)}
+.record-lbl{font-size:10px;color:var(--text3);font-weight:600;margin-bottom:7px}
+.record-val{font-size:14px;font-weight:800;color:var(--text);border-top:1px solid var(--border-light);padding-top:8px;letter-spacing:-0.3px}
+.record-val small{font-size:10px;font-weight:700}
+.quest-banner{display:flex;align-items:center;gap:12px;background:linear-gradient(135deg,#6C5DD3,#8F82E4);border-radius:var(--r-lg);padding:15px 16px;color:#fff;cursor:pointer;box-shadow:0 4px 14px rgba(108,93,211,0.35);margin-bottom:14px;transition:transform .12s}
+.quest-banner:active{transform:scale(0.98)}
+.quest-banner-icon{font-size:26px}
+.quest-banner-title{font-size:14px;font-weight:800}
+.quest-banner-sub{font-size:11px;opacity:0.85;margin-top:2px}
+.quest-banner-arrow{margin-left:auto;font-size:18px;opacity:0.8}
+/* ── 연속 출석 퀘스트 ── */
+.quest-info{background:var(--surface);border:1px solid var(--border-light);border-radius:var(--r-md);padding:12px 14px;font-size:12px;color:var(--text2);line-height:1.9;margin-bottom:14px}
+.quest-info b{color:var(--text);font-weight:700}
+.quest-streak-line{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;text-align:center}
+.quest-streak-line b{color:#6C5DD3;font-weight:800}
+.quest-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px 2px;background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px 8px;box-shadow:var(--shadow-sm)}
+.quest-cell{display:flex;flex-direction:column;align-items:center;gap:4px}
+.quest-date{font-size:9px;color:var(--text3)}
+/* ── 공통 유틸 (학습현황 톤) ── */
+.panel{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:12px 14px;box-shadow:var(--shadow-sm);margin-bottom:10px}
+.pill-btn{padding:8px 14px;border:1.5px solid var(--border);border-radius:20px;background:var(--card);color:var(--text2);font-size:13px;font-weight:700;cursor:pointer;transition:all .12s;font-family:inherit;min-width:84px;text-align:center;box-shadow:var(--shadow-sm)}
+.pill-btn:active{transform:scale(0.96)}
+.pill-btn small{display:block;font-size:10px;color:var(--text3);font-weight:500;margin-top:2px}
+.pl-navbtn{background:var(--amber-pale);border:1px solid rgba(108,93,211,0.2);border-radius:var(--r-sm);padding:6px 14px;font-size:16px;cursor:pointer;font-weight:700;color:var(--amber-dark);transition:background .12s}
+.pl-navbtn:active{background:#E1DBF7}
+
+/* ══════════════════════════════════════════
+   태블릿 대응 (Tablet responsive)
+   기존 폰 레이아웃은 그대로 두고, 넓은 화면에서만 적용됩니다.
+   ══════════════════════════════════════════ */
+@media (min-width:700px){
+  /* 로그인: 카드 · 숫자패드 확대 */
+  .login-card{max-width:400px;padding:36px 32px}
+  .numpad{gap:10px}
+  .np-btn{padding:19px;font-size:25px}
+  .pin-dot{width:16px;height:16px}
+
+  /* 공통 콘텐츠: 폭을 넓히고 가운데 정렬 */
+  .app-content{max-width:680px;padding:22px 24px 90px}
+  .home-content{max-width:720px;width:100%;margin:0 auto;padding:22px 24px 90px}
+
+  /* 헤더 내용도 콘텐츠 폭에 맞춰 정렬 */
+  .home-header{padding:16px 24px}
+  .home-header-info{max-width:720px;width:100%;margin:0 auto}
+  .app-topbar{padding:16px 28px}
+
+  /* 홈 퀵메뉴: 2열 → 3열 (넓은 화면 활용) */
+  .quick-grid{grid-template-columns:repeat(3,1fr);gap:14px}
+  .quick-card{min-height:124px;padding:20px 18px 16px}
+  .quick-card-icon{font-size:28px}
+  .quick-card-title{font-size:15px}
+  .quick-card-sub{font-size:12px}
+
+  /* 하단 네비게이션: 화면 전체로 늘어나지 않게 가운데 바 형태 */
+  .bottom-nav{max-width:720px;left:0;right:0;margin:0 auto;border-radius:20px 20px 0 0;border:1px solid var(--border-light);border-bottom:none}
+
+  /* 학습현황 등 카드 그리드 간격 살짝 넉넉하게 */
+  .stat-row{gap:14px}
+}
+
+/* 큰 태블릿 · 가로모드 */
+@media (min-width:1024px){
+  .app-content{max-width:760px}
+  .home-content{max-width:820px}
+  .home-header-info{max-width:820px}
+  .bottom-nav{max-width:820px}
+}
 </style>
 </head>
 <body>
@@ -327,43 +465,49 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
   </div>
   <div class="home-content">
     <div class="quick-grid">
-      <div class="quick-card" onclick="openSection('notice','#C8900A')">
+      <div class="quick-card" onclick="openSection('notice','#6C5DD3')">
         <div class="quick-card-icon">📢</div>
         <div class="quick-card-title">공지사항</div>
         <div class="quick-card-sub">새봄 면학관 공지</div>
         <div class="quick-card-bg">📢</div>
       </div>
-      <div class="quick-card" onclick="openSection('daily','#C8900A')">
+      <div class="quick-card" onclick="openSection('events','#6C5DD3')">
+        <div class="quick-card-icon">🎉</div>
+        <div class="quick-card-title">이벤트</div>
+        <div class="quick-card-sub">진행 중인 이벤트 확인</div>
+        <div class="quick-card-bg">🎉</div>
+      </div>
+      <div class="quick-card" onclick="openSection('daily','#6C5DD3')">
         <div class="quick-card-icon">📅</div>
         <div class="quick-card-title">오늘 일정</div>
         <div class="quick-card-sub">변경된 스케줄 수정</div>
         <div class="quick-card-bg">📅</div>
       </div>
-      <div class="quick-card" onclick="openSection('weekly','#C8900A')">
+      <div class="quick-card" onclick="openSection('weekly','#6C5DD3')">
         <div class="quick-card-icon">📆</div>
         <div class="quick-card-title">주간 시간표</div>
         <div class="quick-card-sub">미리 제출된 고정된 시간표</div>
         <div class="quick-card-bg">📆</div>
       </div>
-      <div class="quick-card" onclick="openSection('mystats','#C8900A')">
+      <div class="quick-card" onclick="openSection('mystats','#6C5DD3')">
         <div class="quick-card-icon">📊</div>
-        <div class="quick-card-title">내 현황</div>
-        <div class="quick-card-sub">출석률 · 누적 시간</div>
+        <div class="quick-card-title">학습현황</div>
+        <div class="quick-card-sub">공부시간 · 최고 기록</div>
         <div class="quick-card-bg">📊</div>
       </div>
-      <div class="quick-card" onclick="openSection('planner','#C8900A')">
+      <div class="quick-card" onclick="openSection('planner','#6C5DD3')">
         <div class="quick-card-icon">📓</div>
         <div class="quick-card-title">플래너</div>
         <div class="quick-card-sub">월별 학습 기록 & 사진</div>
         <div class="quick-card-bg">📓</div>
       </div>
-      <div class="quick-card" onclick="openSection('studyroom','#C8900A')">
+      <div class="quick-card" onclick="openSection('studyroom','#6C5DD3')">
         <div class="quick-card-icon">🚪</div>
         <div class="quick-card-title">스터디룸 신청</div>
         <div class="quick-card-sub">교시별 스터디룸 배정</div>
         <div class="quick-card-bg">🚪</div>
       </div>
-      <div class="quick-card quick-card-wide" id="home-seatmap-card" style="display:none" onclick="openSection('seatmap','#C8900A')">
+      <div class="quick-card quick-card-wide" id="home-seatmap-card" style="display:none" onclick="openSection('seatmap','#6C5DD3')">
         <div class="quick-card-icon">🪑</div>
         <div class="quick-card-wide-body">
           <div class="quick-card-title">자리 선택</div>
@@ -371,26 +515,32 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
         </div>
         <div class="quick-card-bg">🪑</div>
       </div>
+      <div class="quick-card" onclick="openSection('focus','#6C5DD3')">
+        <div class="quick-card-icon"><i class="ti ti-eye" style="color:var(--amber)"></i></div>
+        <div class="quick-card-title">SEE EYES</div>
+        <div class="quick-card-sub">학습 집중 관리 프로그램</div>
+        <div class="quick-card-bg"><i class="ti ti-eye"></i></div>
+      </div>
     </div>
   </div>
   <nav class="bottom-nav" id="home-bottom-nav">
-    <button class="bn-item active">
-      <i class="ti ti-home"></i>
-      <span class="bn-label">홈</span>
-    </button>
-    <button class="bn-item" onclick="openSection('notice','#C8900A')">
+    <button class="bn-item" onclick="openSection('notice','#6C5DD3')">
       <i class="ti ti-speakerphone"></i>
       <span class="bn-label">공지</span>
     </button>
-    <button class="bn-item" onclick="openSection('daily','#C8900A')">
+    <button class="bn-item" onclick="openSection('events','#6C5DD3')">
+      <i class="ti ti-confetti"></i>
+      <span class="bn-label">이벤트</span>
+    </button>
+    <button class="bn-item" onclick="openSection('daily','#6C5DD3')">
       <i class="ti ti-calendar-event"></i>
       <span class="bn-label">스케줄</span>
     </button>
-    <button class="bn-item" onclick="openSection('mystats','#C8900A')">
+    <button class="bn-item" onclick="openSection('mystats','#6C5DD3')">
       <i class="ti ti-chart-bar"></i>
-      <span class="bn-label">현황</span>
+      <span class="bn-label">학습현황</span>
     </button>
-    <button class="bn-item" onclick="openSection('planner','#C8900A')">
+    <button class="bn-item" onclick="openSection('planner','#6C5DD3')">
       <i class="ti ti-notebook"></i>
       <span class="bn-label">플래너</span>
     </button>
@@ -398,7 +548,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 </div>
 <div class="app-screen" id="app-screen">
   <div class="app-topbar" id="section-header">
-    <button class="topbar-back-avatar-btn" onclick="goHome()" title="뒤로가기"><i class="ti ti-arrow-left" style="font-size:18px;color:#fff"></i></button>
+    <button class="topbar-back-avatar-btn" onclick="goHome()" title="뒤로가기"><i class="ti ti-arrow-left" style="font-size:18px;color:var(--text)"></i></button>
     <div>
       <div class="topbar-title" id="section-title">공지</div>
       <div class="topbar-sub" id="topbar-usersub"></div>
@@ -415,101 +565,172 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
       <div id="notice-list"></div>
     </div>
 
+    <!-- 이벤트 -->
+    <div id="tab-events" style="display:none">
+      <div id="events-content"></div>
+    </div>
+
     <!-- 요일별 스케줄 -->
     <div id="tab-daily" style="display:none">
-      <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
+      <div class="section-label">TODAY · 오늘 일정</div>
+      <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
       <div class="day-tabs" id="student-day-tabs"></div>
       <div id="daily-periods"></div>
     </div>
 
     <!-- 주간 시간표 -->
     <div id="tab-weekly" style="display:none">
-      <div id="weekly-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px">🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.</div>
+      <div class="section-label">WEEKLY · 주간 시간표</div>
+      <div id="weekly-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px">🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.</div>
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
       <div style="height:80px"></div>
     </div>
 
-    <!-- 내 현황 -->
+    <!-- 학습현황 -->
     <div id="tab-mystats" style="display:none">
       <div id="mystats-content"></div>
+    </div>
+
+    <!-- 연속 출석 퀘스트 -->
+    <div id="tab-quest" style="display:none">
+      <div id="quest-content"></div>
     </div>
 
     <!-- 자리선택 배치도 -->
     <!-- 스터디룸 신청 -->
     <div id="tab-studyroom" style="display:none;padding:16px">
-      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">📚 스터디룸 신청</div>
-      <div style="font-size:12px;color:#888;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
+      <div class="section-label">STUDY ROOM · 스터디룸 신청</div>
+      <div style="font-size:12px;color:var(--text2);line-height:1.6;margin-bottom:16px">교시를 선택하면 인원이 적은 스터디룸에 자동 배정됩니다.</div>
       <div style="margin-bottom:20px">
-        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">오늘 교시 선택</div>
+        <div class="section-label" style="margin-top:2px">SELECT PERIOD · 오늘 교시 선택</div>
         <div id="studyroom-period-btns" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div style="margin-bottom:16px">
-        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">내 신청 현황</div>
-        <div id="studyroom-my-requests"><div style="font-size:13px;color:#aaa">신청 내역 없음</div></div>
+        <div class="section-label">MY REQUESTS · 내 신청 현황</div>
+        <div id="studyroom-my-requests"><div style="font-size:13px;color:var(--text3)">신청 내역 없음</div></div>
       </div>
       <div>
-        <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">스터디룸 현황</div>
+        <div class="section-label">ROOM STATUS · 스터디룸 현황</div>
         <div id="studyroom-status" style="display:flex;flex-direction:column;gap:8px"></div>
       </div>
     </div>
 
     <div id="tab-seatmap" style="display:none;padding:12px">
       <div id="seatmap-header" style="margin-bottom:12px">
-        <div style="font-size:14px;font-weight:700;color:#5C3D08;margin-bottom:4px">🪑 자리 선택</div>
-        <div id="seatmap-deadline" style="font-size:12px;color:#C62828;font-weight:600"></div>
-        <div style="font-size:12px;color:#888;margin-top:4px">
-          <span style="display:inline-block;width:14px;height:14px;background:#4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
-          <span style="display:inline-block;width:14px;height:14px;background:#E5E7EB;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
-          <span style="display:inline-block;width:14px;height:14px;background:#C8900A;border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
+        <div class="section-label">SEAT SELECTION · 자리 선택</div>
+        <div id="seatmap-deadline" style="font-size:12px;color:var(--red);font-weight:700"></div>
+        <div style="font-size:12px;color:var(--text2);margin-top:6px">
+          <span style="display:inline-block;width:14px;height:14px;background:#DCFCE7;border:1.5px solid #4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
+          <span style="display:inline-block;width:14px;height:14px;background:var(--surface);border:1px solid var(--border);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
+          <span style="display:inline-block;width:14px;height:14px;background:var(--amber);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
         </div>
       </div>
       <div id="student-seatmap" style="overflow-x:auto"></div>
     </div>
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
+      <div class="section-label">PLANNER · 월별 학습 기록</div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <button onclick="plannerPrevMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">◀</button>
-        <div id="planner-month-title" style="font-size:16px;font-weight:700;color:#5C3D08"></div>
-        <button onclick="plannerNextMonth()" style="background:#F0D020;border:none;border-radius:8px;padding:6px 12px;font-size:16px;cursor:pointer;font-weight:700;color:#5C3D08">▶</button>
+        <button onclick="plannerPrevMonth()" class="pl-navbtn">◀</button>
+        <div id="planner-month-title" style="font-size:16px;font-weight:800;color:var(--text)"></div>
+        <button onclick="plannerNextMonth()" class="pl-navbtn">▶</button>
       </div>
       <div id="planner-calendar" style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:16px"></div>
       <!-- 사진 업로드/조회 영역 -->
       <div id="planner-detail" style="display:none">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div id="planner-selected-date" style="font-size:15px;font-weight:700;color:#5C3D08"></div>
-          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:#888">✕</button>
+          <div id="planner-selected-date" style="font-size:15px;font-weight:800;color:var(--text)"></div>
+          <button onclick="document.getElementById('tab-planner').querySelector('#planner-detail').style.display='none'" style="background:none;border:none;font-size:18px;cursor:pointer;color:var(--text3)">✕</button>
         </div>
         <div id="planner-photo-view" style="text-align:center;margin-bottom:12px">
           <img id="planner-photo-img" src="" alt="" style="display:none;max-width:100%;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.15)">
-          <div id="planner-no-photo" style="color:#aaa;font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
+          <div id="planner-no-photo" style="color:var(--text3);font-size:13px;padding:30px 0">아직 등록된 플래너 사진이 없습니다</div>
         </div>
         <!-- 선생님 코멘트 -->
         <div id="planner-comments-area" style="display:none;margin-bottom:12px">
-          <div style="font-size:12px;font-weight:700;color:#5C3D08;margin-bottom:8px">✏️ 선생님 코멘트</div>
+          <div class="section-label">TEACHER'S NOTE · 선생님 코멘트</div>
           <div id="planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
         <div style="display:flex;gap:8px;justify-content:center">
-          <label style="flex:1;background:#C8900A;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+          <label style="flex:1;background:var(--amber);color:#fff;padding:10px;border-radius:var(--r-md);text-align:center;font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--shadow-sm)">
             📷 카메라
             <input type="file" accept="image/*" capture="environment" id="planner-camera-input" style="display:none" onchange="plannerUploadPhoto(this)">
           </label>
-          <label style="flex:1;background:#E0B020;color:#fff;padding:10px;border-radius:10px;text-align:center;font-size:13px;font-weight:600;cursor:pointer">
+          <label style="flex:1;background:var(--amber-light);color:#fff;padding:10px;border-radius:var(--r-md);text-align:center;font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--shadow-sm)">
             🖼️ 갤러리
             <input type="file" accept="image/*" id="planner-gallery-input" style="display:none" onchange="plannerUploadPhoto(this)">
           </label>
-          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:#C62828;color:#fff;padding:10px;border-radius:10px;font-size:13px;font-weight:600;border:none;cursor:pointer">🗑️ 삭제</button>
+          <button id="planner-delete-btn" onclick="plannerDeletePhoto()" style="display:none;flex:1;background:var(--red);color:#fff;padding:10px;border-radius:var(--r-md);font-size:13px;font-weight:700;border:none;cursor:pointer;box-shadow:var(--shadow-sm)">🗑️ 삭제</button>
         </div>
         <div id="planner-upload-progress" style="display:none;margin-top:10px">
-          <div style="background:#eee;border-radius:20px;height:6px">
-            <div id="planner-progress-bar" style="background:#C8900A;height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
+          <div style="background:var(--border-light);border-radius:20px;height:6px">
+            <div id="planner-progress-bar" style="background:var(--amber);height:6px;border-radius:20px;width:0%;transition:width 0.3s"></div>
           </div>
-          <div style="text-align:center;font-size:12px;color:#888;margin-top:4px">업로드 중...</div>
+          <div style="text-align:center;font-size:12px;color:var(--text3);margin-top:4px">업로드 중...</div>
         </div>
       </div>
     </div>
 
+
+    <!-- 집중 감지 탭 -->
+    <div id="tab-focus" style="display:none;padding:12px">
+      <!-- ── SEE EYES 법적 동의 게이트 ── -->
+      <div id="see-consent-gate" class="see-gate" style="display:none"></div>
+      <div id="see-consent-modal" class="see-modal" style="display:none">
+        <div class="see-modal-card">
+          <div class="see-modal-title">SEE EYES 개인정보 수집·이용 동의</div>
+          <div class="see-modal-body">
+            <p><b>1. 수집·이용 목적</b><br>학습 집중 관리 — 졸음·집중·이탈 상태 확인 및 관리자 안내</p>
+            <p><b>2. 수집 항목</b><br>카메라 영상을 <b>실시간 분석</b>하여 산출하는 특징값(눈 개폐율·고개 각도·시선 방향 등)과 판정 상태값(집중/졸음/이탈)</p>
+            <p><b>3. 영상 처리 방식</b><br>영상은 <b>저장·전송하지 않으며</b>, 기기에서 즉시 분석 후 <b>상태값만</b> 관리 대시보드로 전송됩니다.</p>
+            <p><b>4. 보유·이용 기간</b><br>학습 관리 목적 달성 시 또는 동의 철회 시까지</p>
+            <p><b>5. 제공받는 자 / 이용 목적</b><br>새봄 면학관 관리자 · 학습 집중 모니터링</p>
+            <p><b>6. 동의 거부 권리 및 불이익</b><br>동의를 거부할 수 있으며, 거부 시 SEE EYES 기능만 사용되지 않을 뿐 다른 불이익은 없습니다. 동의는 언제든지 철회할 수 있습니다.</p>
+            <p class="see-minor">※ 만 14세 미만 학생은 관련 법령에 따라 보호자(법정대리인)의 동의가 필요할 수 있습니다.</p>
+          </div>
+          <label class="see-check"><input type="checkbox" id="see-agree-1"> <span>위 <b>개인정보 수집·이용</b>에 동의합니다. (필수)</span></label>
+          <div class="see-modal-btns">
+            <button class="see-btn-ghost" onclick="seeConsentCloseModal()">취소</button>
+            <button class="see-btn-primary" onclick="seeConsentAgree()">동의하고 시작</button>
+          </div>
+        </div>
+      </div>
+      <div class="fm-note">📷 이 화면은 카메라로 <b>졸음·집중 상태만</b> 판단해 관리 대시보드에 전송합니다. 영상은 저장하거나 전송하지 않으며, 상태값(집중/졸음/이탈)만 기록됩니다. 카메라를 끄면 즉시 중단됩니다.</div>
+      <div class="fm-seatbar">
+        <span>내 좌석: <b id="fm-seat">-</b></span>
+        <span class="fm-conn"><span class="fm-conn-dot" id="fm-conn-dot"></span><span id="fm-conn-text">대기 중</span></span>
+      </div>
+      <div class="fm-video" id="fm-video-wrap">
+        <div class="fm-badge"><span class="d" id="fm-dot"></span><span id="fm-badge-text">대기 중</span></div>
+        <video id="fm-video-el" autoplay playsinline muted></video>
+        <canvas id="fm-canvas"></canvas>
+        <div class="fm-cover" id="fm-cover">
+          <div class="fm-cover-ico">🙈</div>
+          <div class="fm-cover-txt">카메라 화면을 가렸어요</div>
+          <div class="fm-cover-sub">감지는 그대로 진행 중입니다</div>
+        </div>
+      </div>
+      <div class="fm-state">
+        <div class="lab" id="fm-label">대기 중</div>
+        <div class="sub" id="fm-sub">시작을 누르면 감지가 시작됩니다</div>
+      </div>
+      <div class="fm-metrics">
+        <div class="fm-metric"><div class="v" id="fm-ear">--</div><div class="l">눈 개폐율</div></div>
+        <div class="fm-metric"><div class="v" id="fm-pitch">--</div><div class="l">고개 각도</div></div>
+        <div class="fm-metric"><div class="v" id="fm-yaw">--</div><div class="l">좌우 각도</div></div>
+        <div class="fm-metric"><div class="v" id="fm-gaze">--</div><div class="l">시선 이탈</div></div>
+        <div class="fm-metric"><div class="v" id="fm-dur">0.0s</div><div class="l">지속 시간</div></div>
+      </div>
+      <div class="fm-controls">
+        <button class="fm-start" id="fm-start" onclick="fmStart()">시작</button>
+        <button class="fm-stop" id="fm-stop" onclick="fmStop()" disabled>중지</button>
+      </div>
+      <label class="fm-opt"><input type="checkbox" id="fm-hide-preview" onchange="fmTogglePreview(this.checked)"> 내 모습 가리기 <span style="color:var(--text3)">(감지는 계속돼요)</span></label>
+      <label class="fm-opt"><input type="checkbox" id="fm-wake" checked> 감지 중 화면 꺼짐 방지</label>
+      <div class="fm-log" id="fm-log"></div>
+    </div>
 
   </div>
 
@@ -518,6 +739,10 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
     <button class="bn-item active" data-tab="notice" onclick="switchTab('notice',this)">
       <i class="ti ti-speakerphone"></i>
       <span class="bn-label">공지</span>
+    </button>
+    <button class="bn-item" data-tab="events" onclick="switchTab('events',this)">
+      <i class="ti ti-confetti"></i>
+      <span class="bn-label">이벤트</span>
     </button>
     <button class="bn-item" data-tab="daily" onclick="switchTab('daily',this)">
       <i class="ti ti-calendar-event"></i>
@@ -529,7 +754,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
     </button>
     <button class="bn-item" data-tab="mystats" onclick="switchTab('mystats',this)">
       <i class="ti ti-chart-bar"></i>
-      <span class="bn-label">현황</span>
+      <span class="bn-label">학습현황</span>
     </button>
     <button class="bn-item" data-tab="planner" onclick="switchTab('planner',this)">
       <i class="ti ti-notebook"></i>
@@ -605,6 +830,19 @@ const NOTICES = [
     date:'2026.06.01'
   },
 ];
+
+// ── 누적시간 key 헬퍼 (YYYY-MM) ──
+// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
+function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
+function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
+function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
+function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
+// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로그인 시 1회 적용)
+function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={};
+  for(const k of Object.keys(hours)){ if(/^\d{4}-\d{2}$/.test(k)) out[k]=Number(hours[k])||0; }
+  for(const k of Object.keys(hours)){ if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12){ const nk=_ymKey(2026,m); if(out[nk]==null) out[nk]=Number(hours[k])||0; } } }
+  return out; }
 
 // ── 교시 데이터 ──
 const DAYS = ['월','화','수','목','금','토'];
@@ -694,6 +932,7 @@ async function tryLogin() {
 
 function logout() {
   currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false;
+  ACTUAL_MIN = null; actualBestSession = 0;
   try { sessionStorage.removeItem('saebom_student'); sessionStorage.removeItem('saebom_active_tab_student'); } catch(e) {}
   updatePinDisplay();
   document.getElementById('login-screen').style.display='flex';
@@ -703,6 +942,7 @@ function logout() {
 }
 
 function enterApp() {
+  if (currentStudent) currentStudent.hours = _normalizeHours(currentStudent.hours);
   document.getElementById('login-screen').style.display='none';
   document.getElementById('home-screen').classList.add('visible');
 
@@ -730,14 +970,35 @@ function enterApp() {
     checkSeatSelectionActive();
     loadNoticesFromFirebase();
     subscribeScheduleEdit();
+    refreshStudentData();
+    loadActualStudyData();
+    loadEventsList();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
       checkSeatSelectionActive();
       loadNoticesFromFirebase();
       subscribeScheduleEdit();
+      refreshStudentData();
+      loadActualStudyData();
+      loadEventsList();
     }, { once: true });
   }
+}
+
+// ── 최신 학생 데이터 갱신 (sessionStorage 캐시 stale 방지) ──
+async function refreshStudentData() {
+  try {
+    if (!currentStudent || !window._db || !window._fsGetDoc || !window._fsDoc) return;
+    const seat = String(currentStudent.seat || '').replace('번','');
+    if (!seat) return;
+    const snap = await window._fsGetDoc(window._fsDoc(window._db, 'students', seat));
+    if (snap && snap.exists && snap.exists()) {
+      currentStudent.hours = _normalizeHours(snap.data().hours);
+      try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+      buildMyStats();
+    }
+  } catch(e) { console.error('학생 데이터 갱신 실패:', e); }
 }
 
 function subscribeScheduleEdit() {
@@ -774,48 +1035,90 @@ function initDraft() {
   draftSchedule = {};
   DAYS.forEach(day => {
     const sched = currentStudent.schedule[day] || '';
-    draftSchedule[day] = { reason: '', periods: {} };
+    // partials: 관리자가 지정한 중간입실 교시({교시: 시간}) — 저장 시 그대로 보존
+    draftSchedule[day] = { reason: '', reasons: {}, periods: {}, partials: parsePartials(sched) };
 
     const reasonMatch = sched.match(/x\(([^)]+)\)/);
     if (reasonMatch) draftSchedule[day].reason = reasonMatch[1];
 
-    // 모든 교시(1~11) 파싱
+    // 모든 교시(1~11) 파싱 — 상태와 교시별 불참 사유를 함께 복원
     const allPeriods = [1,2,3,4,5,6,7,8,9,10,11];
     allPeriods.forEach(n => {
       draftSchedule[day].periods[n] = parsePeriodStatus(sched, n);
+      const r = parsePeriodReason(sched, n);
+      if (r) draftSchedule[day].reasons[n] = r;
     });
   });
 }
 
+// 스케줄 문자열에서 중간입실 교시 → 입실시간('' 가능) 맵 추출
+function parsePartials(sched) {
+  const out = {};
+  if (!sched || sched === '-') return out;
+  for (const m of sched.matchAll(/(?:^|,)\s*m(\d+)(?:\(([^)]*)\))?/gi)) {
+    out[Number(m[1])] = m[2] || '';
+  }
+  return out;
+}
+
+// 특정 교시의 불참 사유 추출 (교시별 x{n}(사유) 우선, 없으면 구버전 요일 단일 사유)
+function parsePeriodReason(sched, pNum) {
+  if (!sched || sched === '-') return '';
+  const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
+  for (const t of tokens) {
+    const m = t.match(/^x(\d+)\(([^)]*)\)$/i);
+    if (m && Number(m[1]) === pNum) return m[2] || '';
+  }
+  // 구버전: 요일 전체에 적용되던 단일 사유
+  const legacy = sched.match(/x\(([^)]+)\)/);
+  if (legacy && parsePeriodStatus(sched, pNum) === 'absent') return legacy[1];
+  return '';
+}
+
 function parsePeriodStatus(sched, pNum) {
   if (!sched || sched === '-') return 'none';
-  // 범위
-  const ranges = sched.match(/(\d+)~(\d+)/g) || [];
-  for (const r of ranges) {
-    const [a,b] = r.split('~').map(Number);
-    if (pNum >= a && pNum <= b) {
+  const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
+
+  // 0) 중간입실(세모): m8 또는 m8(7:30) — 교시 중간에 입실하는 별도 상태
+  for (const t of tokens) {
+    const m = t.match(/^m(\d+)(?:\(([^)]*)\))?$/i);
+    if (m && Number(m[1]) === pNum) return 'partial';
+  }
+  // 1) 명시적 결석: x10 또는 x10(사유)
+  for (const t of tokens) {
+    const m = t.match(/^x(\d+)(?:\(([^)]*)\))?$/i);
+    if (m && Number(m[1]) === pNum) return 'absent';
+  }
+  // 2) 출석: 개별 번호 또는 범위(a~b)
+  for (const t of tokens) {
+    if (/^\d+$/.test(t) && Number(t) === pNum) return 'attend';
+    const rm = t.match(/^(\d+)~(\d+)$/);
+    if (rm && pNum >= Number(rm[1]) && pNum <= Number(rm[2])) {
+      // 구버전: x(사유)로 시작하면 범위는 결석 의미
       return sched.startsWith('x(') ? 'absent' : 'attend';
     }
   }
-  // 개별
-  const nums = sched.match(/\b\d+\b/g)?.map(Number) || [];
-  if (nums.includes(pNum)) {
-    return sched.startsWith('x(') && !nums.includes(pNum) ? 'absent' : 'attend';
+  // 3) 구버전 위치기반 결석: x 또는 x(사유) (번호 없음)
+  const hasBareAbsent = tokens.some(t => /^x(\([^)]*\))?$/i.test(t));
+  if (hasBareAbsent || sched.startsWith('x(')) {
+    const nums = sched.match(/\b\d+\b/g)?.map(Number) || [];
+    if (!nums.includes(pNum)) return 'absent';
   }
-  // x( 로 시작하면 결석
-  if (sched.startsWith('x(') && !nums.includes(pNum)) return 'absent';
   return 'none';
 }
 
 // ── 홈 메뉴 네비게이션 ──
 const SECTION_NAMES = {
   notice: '공지사항',
+  events: '이벤트',
   daily: '오늘 일정',
   weekly: '주간 시간표',
-  mystats: '내 현황',
+  mystats: '학습현황',
+  quest: '연속 출석 퀘스트',
   planner: '플래너',
   studyroom: '스터디룸 신청',
-  seatmap: '자리 선택'
+  seatmap: '자리 선택',
+  focus: 'SEE EYES'
 };
 
 function openSection(id, color) {
@@ -871,10 +1174,16 @@ function showTab(id, btn) {
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','daily','weekly','mystats','seatmap','studyroom','planner'].forEach(t => {
+  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','focus'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
+  // 집중 감지 탭: 열면 좌석 표시, 벗어나면 카메라 중지
+  if (id === 'focus') { if (window.fmOnOpen) window.fmOnOpen(); }
+  else { if (window.fmOnLeave) window.fmOnLeave(); }
   if (id === 'planner') { initPlannerCalendar(); }
+  if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); } // 탭 열 때마다 최신 기록으로 갱신
+  if (id === 'quest') { buildQuest(); loadActualStudyData(); }
+  if (id === 'events') { buildEvents(); loadActualStudyData(); }
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   updateBottomNav(id);
@@ -898,7 +1207,7 @@ function buildNotices() {
     el.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><div class="empty-text">공지사항이 없습니다</div></div>`;
     return;
   }
-  el.innerHTML = NOTICES.map((n,i) => `
+  el.innerHTML = '<div class="section-label">NOTICE · 공지사항</div>' + NOTICES.map((n,i) => `
     <div class="notice-card">
       <div class="notice-header" onclick="toggleNotice(${i})">
         <div style="flex:1">
@@ -974,15 +1283,15 @@ function buildDailyPeriods() {
         </div>
       </div>
       <div class="period-toggle">
-        <button class="toggle-btn${status==='attend'?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
+        <button class="toggle-btn${(status==='attend'||status==='partial')?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
         <button class="toggle-btn${status==='absent'?' absent':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
       </div>
     </div>
     <div class="absent-reason${status==='absent'?' show':''}" id="reason-${currentDayTab}-${p.n}">
       <span class="reason-label">불참 사유</span>
       <input class="reason-input" type="text" placeholder="예: 수학학원"
-        value="${dayDraft.reason||''}"
-        ${isToday?`oninput="setReason('${currentDayTab}','${p.n}',this.value)"`:'readonly'}>
+        value="${((dayDraft.reasons&&dayDraft.reasons[p.n])||'').replace(/"/g,'&quot;')}"
+        ${isToday?`oninput="setReason('${currentDayTab}',${p.n},this.value)"`:'readonly'}>
     </div>`;
   }).join('');
 }
@@ -999,8 +1308,10 @@ function setPeriod(day, pNum, status) {
 }
 
 function setReason(day, pNum, val) {
-  draftSchedule[day].reason = val;
+  if (!draftSchedule[day].reasons) draftSchedule[day].reasons = {};
+  draftSchedule[day].reasons[pNum] = val;
   isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
 }
 
 // ── 주간 시간표 ──
@@ -1021,10 +1332,23 @@ function buildWeeklyTable() {
 
     DAYS.forEach(day => {
       const status = draftSchedule[day]?.periods[pNum] || 'none';
+      const editable = scheduleEditEnabled;
       let cell = '';
-      if (status === 'attend') cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
-      else if (status === 'absent') cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`;
-      else cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
+      if (status === 'attend') {
+        cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
+      } else if (status === 'absent') {
+        // X(불참): 사유를 숫자·글자로 입력할 수 있는 입력칸을 함께 표시
+        const reason = ((draftSchedule[day]?.reasons&&draftSchedule[day].reasons[pNum])||'').replace(/"/g,'&quot;');
+        cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`
+          + `<input class="wk-cell-input reason" type="text" placeholder="사유" value="${reason}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetReason('${day}',${pNum},this.value)"`:'readonly'}>`;
+      } else if (status === 'partial') {
+        // 세모(△): 중간입실 — 입실 시간을 숫자만 입력(예: 730 → 7:30)
+        const t = ((draftSchedule[day]?.partials&&draftSchedule[day].partials[pNum])||'').replace(/"/g,'&quot;');
+        cell = `<span class="wk-cell-partial" onclick="wkToggle('${day}',${pNum})" title="중간입실">△</span>`
+          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="시간" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetPartialTime('${day}',${pNum},this)"`:'readonly'}>`;
+      } else {
+        cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
+      }
       html += `<td>${cell}</td>`;
     });
     html += `</tr>`;
@@ -1039,13 +1363,51 @@ function wkToggle(day, pNum) {
     showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
     return;
   }
+  // 터치 순환: 공란(·) → O(참여) → X(불참) → 세모(중간입실) → 공란
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
-  const next = cur === 'none' ? 'attend' : cur === 'attend' ? 'absent' : 'none';
+  const order = { none:'attend', attend:'absent', absent:'partial', partial:'none' };
+  const next = order[cur] || 'attend';
   draftSchedule[day].periods[pNum] = next;
+  // 중간입실(세모)로 바뀌면 시간 저장칸을 준비, 벗어나면 시간 제거
+  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
+  if (next === 'partial') {
+    if (draftSchedule[day].partials[pNum] === undefined) draftSchedule[day].partials[pNum] = '';
+  } else {
+    delete draftSchedule[day].partials[pNum];
+  }
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
   buildWeeklyTable();
   if (currentDayTab === day) buildDailyPeriods();
+}
+
+// 주간표 X(불참) 사유 입력
+function wkSetReason(day, pNum, val) {
+  if (!draftSchedule[day].reasons) draftSchedule[day].reasons = {};
+  draftSchedule[day].reasons[pNum] = val;
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
+}
+
+// 중간입실 시간 입력: 숫자만 받아 "시:분" 형식으로 정규화 (관리앱과 동일 규칙)
+// 예: "730"→"7:30", "1130"→"11:30", "900"→"9:00". 분(뒤 2자리) 60 이상이면 59로 보정
+function _normalizePartialTime(raw) {
+  let d = String(raw || '').replace(/[^0-9]/g, '').slice(0, 4);
+  if (d.length < 3) return d; // 입력 도중(1~2자리)엔 콜론 넣지 않음
+  let hh = d.slice(0, d.length - 2);
+  let mm = d.slice(d.length - 2);
+  if (Number(mm) > 59) mm = '59';
+  return hh + ':' + mm;
+}
+
+// 주간표 세모(중간입실) 시간 입력 — 숫자만 입력받아 정규화
+function wkSetPartialTime(day, pNum, el) {
+  const val = _normalizePartialTime(el.value);
+  el.value = val; // 입력창에 정규화된 값(시:분) 즉시 반영
+  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
+  draftSchedule[day].partials[pNum] = val;
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
 }
 
 // ── 저장 ──
@@ -1063,9 +1425,15 @@ async function saveSchedule() {
       if (state === 'attend') {
         tokens.push(String(p.n));
         hasAny = true;
+      } else if (state === 'partial') {
+        // 세모(중간입실) → m교시(입실시간). 시간 미입력이면 m교시만 저장. (관리앱과 동일 형식)
+        const t = (dd.partials && dd.partials[p.n]) || '';
+        tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
+        hasAny = true;
       } else if (state === 'absent') {
         const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
-        tokens.push(reason ? `x(${reason})` : 'x');
+        // 교시 번호를 명시적으로 저장 (위치 기반 인코딩의 오프셋 버그 방지)
+        tokens.push(reason ? `x${p.n}(${reason})` : `x${p.n}`);
         hasAny = true;
       }
       // 'none' 또는 미정의 → 토큰 추가 안 함
@@ -1074,17 +1442,27 @@ async function saveSchedule() {
     currentStudent.schedule[day] = hasAny ? tokens.join(',') : '-';
   });
 
+  // 로컬에 즉시 반영 → 새로고침해도 저장 결과가 유지됨 (Firebase 로드 전/실패와 무관)
+  try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+
   isDirty = false;
   document.getElementById('save-fab').classList.remove('show');
   buildMyStats();
 
   // Firebase에 저장
-  await saveToFirebase();
-  showToast('✅ 스케줄이 저장됐습니다');
+  const ok = await saveToFirebase();
+  if (ok) {
+    try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {}
+    showToast('✅ 스케줄이 저장됐습니다');
+  } else {
+    // 서버 동기화 실패 → 미동기화 표시(새로고침 시 옛 서버 데이터가 로컬을 덮어쓰지 않도록)
+    try { sessionStorage.setItem('saebom_pending_sync', '1'); } catch(e) {}
+    showToast('⚠️ 저장됐지만 서버 동기화 실패 — 인터넷 연결을 확인하세요');
+  }
 }
 
 async function saveToFirebase() {
-  if (!window._firebaseReady) return;
+  if (!window._firebaseReady) return false;
   try {
     const db = window._db;
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
@@ -1097,9 +1475,25 @@ async function saveToFirebase() {
     };
     DAYS.forEach(day => { payload[day] = currentStudent.schedule[day] || '-'; });
     await window._fsSetDoc(docRef, payload);
+
+    // 원칙1: 주간 시간표 수정기간(관리자 허용) 저장은 '원본(base)'도 갱신 →
+    // 다음 수정기간까지 유지된다. (당일 변경은 scheduleEditEnabled=false 라 여기 안 탐)
+    if (scheduleEditEnabled) {
+      const baseRef = window._fsDoc(db, 'schedule_base', seatKey);
+      const basePayload = {
+        name: currentStudent.name,
+        seat: currentStudent.seat,
+        updatedAt: window._fsServerTimestamp(),
+      };
+      DAYS.forEach(day => { basePayload[day] = currentStudent.schedule[day] || '-'; });
+      await window._fsSetDoc(baseRef, basePayload);
+    }
+
     await saveDailyReportToFirebase(db, seatKey);
+    return true;
   } catch(e) {
     console.error('Firebase 저장 실패:', e);
+    return false;
   }
 }
 
@@ -1132,20 +1526,90 @@ async function saveDailyReportToFirebase(db, seatKey) {
 // Firebase에서 기존 저장된 스케줄 로드
 async function loadStudentScheduleFromFirebase() {
   if (!window._firebaseReady) return;
+  // 로컬에 아직 서버로 못 올린 변경이 있으면, 서버에서 끌어오지 말고(옛 데이터로 덮어쓰기 방지)
+  // 로컬 변경을 서버로 다시 올린다.
+  let pendingSync = false;
+  try { pendingSync = sessionStorage.getItem('saebom_pending_sync') === '1'; } catch(e) {}
+  if (pendingSync) {
+    const ok = await saveToFirebase();
+    if (ok) { try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {} }
+    return;
+  }
   try {
     const db = window._db;
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', currentStudent.seat));
-    if (snap.exists()) {
-      const data = snap.data();
+    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'schedules', seatKey));
+    const liveData = snap.exists() ? snap.data() : null;
+    if (liveData) {
       DAYS.forEach(day => {
-        if (data[day]) currentStudent.schedule[day] = data[day];
+        if (liveData[day]) currentStudent.schedule[day] = liveData[day];
       });
-      initDraft();
-      buildDailyPeriods();
-      buildWeeklyTable();
-      buildMyStats();
     }
+
+    // 원칙1·2: 원본(base) 기준으로 재구성하고 지난 당일변경을 복구한다.
+    await applyBaseAndRevert(db, seatKey, liveData);
+
+    // 서버 값을 로컬 캐시에도 반영 (새로고침 시 일관성 유지)
+    try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+    initDraft();
+    buildDailyPeriods();
+    buildWeeklyTable();
+    buildMyStats();
   } catch(e) { console.error('스케줄 로드 실패:', e); }
+}
+
+// ── 원본(base) 기준 복구 ──
+// 원칙1: 관리자/주간수정기간에 등록한 원본은 schedule_base에 보관되어 다음 수정기간까지 유지된다.
+// 원칙2: 학생의 당일 변경은 '오늘 날짜'의 daily_reports 에만 임시로 살아있고,
+//        날짜가 바뀌면 원본으로 자동 복구된다. (지난 당일변경이 schedules에 남아있으면 되돌려 씀)
+async function applyBaseAndRevert(db, seatKey, liveData) {
+  try {
+    // 1) 원본 로드 (없으면 현재 등록값을 원본으로 최초 저장 = 마이그레이션)
+    const baseRef = window._fsDoc(db, 'schedule_base', seatKey);
+    const baseSnap = await window._fsGetDoc(baseRef);
+    const base = {};
+    if (baseSnap.exists()) {
+      const bd = baseSnap.data();
+      DAYS.forEach(day => { base[day] = bd[day] || '-'; });
+    } else {
+      DAYS.forEach(day => { base[day] = currentStudent.schedule[day] || '-'; });
+      const basePayload = { name: currentStudent.name, seat: currentStudent.seat, updatedAt: window._fsServerTimestamp() };
+      DAYS.forEach(day => { basePayload[day] = base[day]; });
+      try { await window._fsSetDoc(baseRef, basePayload); } catch(e) {}
+    }
+
+    // 2) '오늘 날짜'의 당일변경(daily_reports)만 오늘 요일에 유지
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const tDay = DAY_NAMES[now.getDay()];
+    let todayOverride = null;
+    try {
+      const rptSnap = await window._fsGetDoc(window._fsDoc(db, 'daily_reports', `${dateStr}_${seatKey}`));
+      if (rptSnap.exists() && typeof rptSnap.data().schedule === 'string') {
+        todayOverride = rptSnap.data().schedule;
+      }
+    } catch(e) {}
+
+    // 3) 표시값 재구성: 모든 요일 = 원본, 단 오늘 요일은 오늘자 당일변경이 있으면 그 값
+    const rebuilt = {};
+    DAYS.forEach(day => { rebuilt[day] = base[day]; });
+    if (DAYS.includes(tDay) && todayOverride != null) rebuilt[tDay] = todayOverride;
+    DAYS.forEach(day => { currentStudent.schedule[day] = rebuilt[day]; });
+
+    // 4) Firebase schedules가 재구성값과 다르면 되돌려 씀 (지난 당일변경 복구).
+    //    원칙3: 이 되돌림도 관리앱 감지 로직이 정상 감지 — 감지 로직은 건드리지 않음.
+    if (liveData) {
+      const diff = DAYS.some(day => (liveData[day] || '-') !== (rebuilt[day] || '-'));
+      if (diff) {
+        const payload = {
+          name: currentStudent.name, seat: currentStudent.seat,
+          phone: currentStudent.phone || '', updatedAt: window._fsServerTimestamp(),
+        };
+        DAYS.forEach(day => { payload[day] = rebuilt[day] || '-'; });
+        try { await window._fsSetDoc(window._fsDoc(db, 'schedules', seatKey), payload); } catch(e) {}
+      }
+    }
+  } catch(e) { console.error('원본 복구 실패:', e); }
 }
 
 function loadNoticesFromFirebase() {
@@ -1162,6 +1626,11 @@ function loadNoticesFromFirebase() {
         buildNotices();
         // 새 공지 알림 뱃지
         updateNoticeBadge(items.length);
+      }
+      // 이벤트 목록도 같은 문서(events 필드)에서 실시간 반영
+      if (snap.exists() && Array.isArray(snap.data().events)) {
+        EVENTS_CACHE = _normalizeEvents(snap.data().events);
+        buildEvents(); buildQuest();
       }
     });
   } catch(e) { /* 실패 시 기본 공지 유지 */ }
@@ -1192,73 +1661,443 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
-// ── 내 현황 ──
-function buildMyStats() {
-  const s = currentStudent;
-  const months = [3,4,5,6];
-  const monthLabels = {3:'3월',4:'4월',5:'5월',6:'6월'};
-  const currentMonth = new Date().getMonth() + 1;
-  const curH = s.hours[currentMonth] || 0;
-  const prevH = s.hours[currentMonth-1] || 0;
-  const diff = curH - prevH;
-  const diffStr = diff > 0 ? `+${diff}h` : `${diff}h`;
-  const diffColor = diff > 0 ? '#C8900A' : '#C62828';
+// ── 학습현황 ──
+const PERIOD_MIN = {1:60,2:60,3:70,4:60,5:60,6:70,7:50,8:80,9:90,10:80,11:60};
+let statsView = 'daily';
 
-  let html = `
-    <div class="stat-row">
-      <div class="stat-card">
-        <div class="stat-card-label">이번달 누적시간</div>
-        <div class="stat-card-val">${curH}<span style="font-size:14px">h</span></div>
+function _dayMinutes(dayName) {
+  if (dayName === '일' || !draftSchedule[dayName]) return 0;
+  const periods = dayName === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  return periods.reduce((sum, p) => {
+    const st = draftSchedule[dayName].periods[p.n];
+    // 중간입실(partial)도 출석으로 집계
+    return sum + ((st === 'attend' || st === 'partial') ? (PERIOD_MIN[p.n] || 60) : 0);
+  }, 0);
+}
+
+// ── 실제 입퇴실 기록 연동 (관리자앱이 저장하는 checkin_logs 컬렉션) ──
+// 로드 전에는 스케줄 기준 추정치를 보여주고, 로드되면 실제 기록으로 전환된다.
+let ACTUAL_MIN = null;       // { '2026-7-3': 공부시간(분) } — 관리자앱 date 형식(0패딩 없음)과 동일 키
+let actualBestSession = 0;   // 한 번에 가장 오래 공부한 세션(분)
+let _actualLoading = false;
+
+function _dkey(d) { return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
+function _parseDkey(k) { const p = String(k).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
+function _timeToMin(t) { // '오후 10:30' / '22:30' → 분
+  if (t == null) return null;
+  const s = String(t); const m = s.match(/(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  let h = parseInt(m[1],10); const min = parseInt(m[2],10);
+  if (/오후/.test(s) && h !== 12) h += 12;
+  if (/오전/.test(s) && h === 12) h = 0;
+  return h*60 + min;
+}
+// 같은 분의 입실·퇴실이 섞이지 않도록 epoch ms(ts) 우선 정렬 (관리자앱 eventSortKey와 동일)
+function _evKey(x) { return (x && typeof x.ts === 'number') ? x.ts : (_timeToMin(x && x.time) ?? 0) * 60000; }
+
+async function loadActualStudyData(force) {
+  if (!window._firebaseReady || !currentStudent || _actualLoading) return;
+  if (ACTUAL_MIN && !force) return;
+  _actualLoading = true;
+  try {
+    const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const snap = await getDocs(query(collection(window._db, 'checkin_logs'),
+      where('studentName','==', currentStudent.name)));
+    const byDate = {};
+    snap.forEach(docu => {
+      const x = docu.data();
+      if (!x.date || !x.time) return;
+      (byDate[x.date] = byDate[x.date] || []).push(x);
+    });
+    const map = {}; let bestSession = 0;
+    const todayKey = _dkey(new Date());
+    Object.keys(byDate).forEach(dateKey => {
+      const evs = byDate[dateKey].sort((a,b) => _evKey(a) - _evKey(b));
+      let total = 0, inMin = null;
+      evs.forEach(ev => {
+        const t = _timeToMin(ev.time);
+        if (t === null) return;
+        if (ev.type === 'in') { if (inMin === null) inMin = t; }
+        else if (ev.type === 'out' && inMin !== null) {
+          let out = t; if (out < inMin) out += 1440; // 자정 넘김(11교시)은 전날 밤으로 이어붙임
+          total += out - inMin;
+          if (out - inMin > bestSession) bestSession = out - inMin;
+          inMin = null;
+        }
+      });
+      // 오늘 아직 퇴실 전이면 지금 시각까지 집계
+      if (inMin !== null && dateKey === todayKey) {
+        const n = new Date(); let cur = n.getHours()*60 + n.getMinutes();
+        if (cur < inMin) cur += 1440;
+        total += Math.max(0, cur - inMin);
+      }
+      map[dateKey] = total;
+    });
+    ACTUAL_MIN = map; actualBestSession = bestSession;
+    buildMyStats(); buildQuest(); buildEvents();
+  } catch(e) { console.error('학습현황 입퇴실 기록 로드 실패:', e); }
+  _actualLoading = false;
+}
+
+function _dateMinutes(d) {
+  if (ACTUAL_MIN) return ACTUAL_MIN[_dkey(d)] || 0; // 실제 입퇴실 기록
+  return _dayMinutes(DAY_NAMES[d.getDay()]);        // 로드 전 스케줄 기준 추정
+}
+function _fmtHM(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}<small>H</small> ${String(min%60).padStart(2,'0')}<small>M</small>`; }
+function _fmtHMtext(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}H ${String(min%60).padStart(2,'0')}M`; }
+function _fmtKor(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}시간 ${String(min%60).padStart(2,'0')}분`; }
+
+// 스케줄 기준 출석 여부 (일요일 휴관)
+function _attendedOn(d) {
+  if (DAY_NAMES[d.getDay()] === '일') return false;
+  return _dateMinutes(d) > 0;
+}
+function _streakDays() { // 매월 1일부터 집계 (퀘스트 기준)
+  let streak = 0;
+  const d = new Date();
+  const first = new Date(d.getFullYear(), d.getMonth(), 1);
+  if (!_attendedOn(d)) d.setDate(d.getDate() - 1); // 오늘 미출석이면 어제까지 기준
+  while (d >= first) {
+    if (DAY_NAMES[d.getDay()] === '일') { d.setDate(d.getDate() - 1); continue; } // 일요일은 연속 유지
+    if (!_attendedOn(d)) break;
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+function setStatsView(v) { statsView = v; buildMyStats(); }
+
+function buildMyStats() {
+  const el = document.getElementById('mystats-content');
+  if (!el || !currentStudent) return;
+  const s = currentStudent;
+  const now = new Date();
+
+  // 일간: 그저께·어제·오늘
+  const days = [2,1,0].map(off => { const d = new Date(); d.setDate(d.getDate()-off); return d; });
+  const dayMins = days.map(d => _dateMinutes(d));
+  const dailyAvg = (dayMins[0]+dayMins[1]+dayMins[2]) / 3;
+
+  // 주간: 지난주(월~토) vs 이번주(월~오늘) — 실제 날짜 기준으로 집계
+  const dowIdx = (now.getDay()+6) % 7; // 월=0 … 일=6
+  const monThis = new Date(now); monThis.setDate(now.getDate() - dowIdx); // 이번주 월요일
+  const _offDate = (base, off) => { const d = new Date(base); d.setDate(d.getDate()+off); return d; };
+  let lastWeekTotal = 0;
+  for (let i = 0; i < 6; i++) lastWeekTotal += _dateMinutes(_offDate(monThis, i-7));
+  const elapsedCnt = Math.min(dowIdx+1, 6);
+  let thisWeekTotal = 0;
+  for (let i = 0; i < elapsedCnt; i++) thisWeekTotal += _dateMinutes(_offDate(monThis, i));
+  const lastWeekAvg = lastWeekTotal / 6;
+  const thisWeekAvg = thisWeekTotal / Math.max(1, elapsedCnt);
+
+  // 월간
+  const curKey = _curYm(), prevKey = _prevYm(curKey);
+  const thisMonthMin = _readHour(s.hours, curKey) * 60;
+  const prevMonthMin = _readHour(s.hours, prevKey) * 60;
+  const prevMonthDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+
+  // 연간·누적
+  const yearPrefix = now.getFullYear() + '-';
+  let yearMin = 0, allMin = 0, maxMonthMin = 0;
+  Object.keys(s.hours || {}).forEach(k => {
+    const m = (Number(s.hours[k]) || 0) * 60;
+    allMin += m;
+    if (String(k).startsWith(yearPrefix)) yearMin += m;
+    if (m > maxMonthMin) maxMonthMin = m;
+  });
+  const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,1)) / 86400000) + 1;
+
+  // 최고 기록 — 실제 기록이 로드되면 전체 이력 기준으로 계산
+  let bestDay, bestWeek, bestSession;
+  if (ACTUAL_MIN) {
+    bestDay = Math.max(0, ...Object.values(ACTUAL_MIN));
+    const weekSums = {};
+    Object.keys(ACTUAL_MIN).forEach(k => {
+      const d = _parseDkey(k);
+      const mon = new Date(d); mon.setDate(d.getDate() - (d.getDay()+6)%7);
+      const wk = _dkey(mon);
+      weekSums[wk] = (weekSums[wk] || 0) + ACTUAL_MIN[k];
+    });
+    bestWeek = Math.max(0, ...Object.values(weekSums));
+    bestSession = actualBestSession;
+  } else {
+    bestDay = Math.max(0, ...DAYS.map(d => _dayMinutes(d)));
+    bestWeek = Math.max(lastWeekTotal, thisWeekTotal);
+    bestSession = bestDay;
+  }
+  const streak = _streakDays();
+
+  const rangeStr = (a,b) => `${a.getFullYear()}년 ${a.getMonth()+1}월 ${a.getDate()}일 - ${a.getMonth()===b.getMonth() ? '' : (b.getMonth()+1)+'월 '}${b.getDate()}일`;
+
+  let topCard = '';
+  if (statsView === 'daily') {
+    topCard = `
+    <div class="avg-card">
+      <div class="avg-top"><div class="avg-label">평균 공부시간</div><div class="avg-value">${_fmtKor(dailyAvg)}</div></div>
+      <div class="avg-range">${rangeStr(days[0], days[2])}</div>
+      <div class="tri-row">
+        <div class="tri-cell"><div class="tri-val">${_fmtHM(dayMins[0])}</div><div class="tri-lbl">그저께</div></div>
+        <div class="tri-cell"><div class="tri-val">${_fmtHM(dayMins[1])}</div><div class="tri-lbl">어제</div></div>
+        <div class="tri-cell"><div class="tri-val hl">${_fmtHM(dayMins[2])}</div><div class="tri-lbl">오늘</div></div>
       </div>
-      <div class="stat-card">
-        <div class="stat-card-label">전월 대비</div>
-        <div class="stat-card-val" style="color:${diffColor};font-size:18px">${diffStr}</div>
+    </div>`;
+  } else {
+    // 최근 7일 바 차트
+    const week = [6,5,4,3,2,1,0].map(off => { const d = new Date(); d.setDate(d.getDate()-off); return d; });
+    const weekMins = week.map(d => _dateMinutes(d));
+    const weekAvg = weekMins.reduce((a,b)=>a+b,0) / 7;
+    const maxMin = Math.max(1, ...weekMins);
+    const maxIdx = weekMins.indexOf(Math.max(...weekMins));
+    let bars = '';
+    week.forEach((d,i) => {
+      const hPct = Math.max(4, Math.round(weekMins[i] / maxMin * 100));
+      bars += `<div class="chart-col">
+        ${i === maxIdx && weekMins[i] > 0 ? `<div class="chart-tag">${_fmtHMtext(weekMins[i])}</div>` : ''}
+        <div class="chart-bar${i === maxIdx ? ' max' : ''}" style="height:${hPct}%"></div>
+        <div class="chart-day">${d.getDate()}</div>
+      </div>`;
+    });
+    topCard = `
+    <div class="avg-card">
+      <div class="avg-top"><div class="avg-label">평균 공부시간</div><div class="avg-value">${_fmtKor(weekAvg)}</div></div>
+      <div class="avg-range">${rangeStr(week[0], week[6])}</div>
+      <div class="chart-wrap">${bars}</div>
+    </div>`;
+  }
+
+  const psLine = (k, v, color) => `<div class="ps-line"><span class="ps-k">${k}</span><b style="color:${color}">${v}</b></div>`;
+
+  const html = `
+    <div class="seg-wrap">
+      <button class="seg-btn${statsView==='daily'?' active':''}" onclick="setStatsView('daily')">일간</button>
+      <button class="seg-btn${statsView==='weekly'?' active':''}" onclick="setStatsView('weekly')">주간</button>
+    </div>
+    <div style="text-align:center;font-size:11px;color:${ACTUAL_MIN ? '#1AB5A3' : '#B9B9C4'};margin:-4px 0 8px">
+      ${ACTUAL_MIN ? '✓ 실제 입퇴실 기록 기준' : '스케줄 기준 추정 · 실제 기록 불러오는 중...'}
+    </div>
+    ${topCard}
+
+    <div class="ps-card">
+      <div class="ps-head"><div class="ps-title">기간별 공부시간</div><i class="ti ti-calendar-stats"></i></div>
+
+      <div class="ps-block" style="border-color:#1AB5A3">
+        <div class="ps-name" style="color:#1AB5A3">Weekly</div>
+        <div class="ps-cols">
+          <div>
+            <div class="ps-col-h" style="color:#9B9BA6">지난주 (월 - 토)</div>
+            ${psLine('Total.', _fmtHMtext(lastWeekTotal), '#55555F')}
+            ${psLine('Avg.', _fmtHMtext(lastWeekAvg), '#55555F')}
+          </div>
+          <div>
+            <div class="ps-col-h" style="color:#1AB5A3">이번주 (월 - 오늘)</div>
+            ${psLine('Total.', _fmtHMtext(thisWeekTotal), '#1AB5A3')}
+            ${psLine('Avg.', _fmtHMtext(thisWeekAvg), '#1AB5A3')}
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-block" style="border-color:#6C5DD3">
+        <div class="ps-name" style="color:#6C5DD3">Monthly</div>
+        <div class="ps-cols">
+          <div>
+            <div class="ps-col-h" style="color:#9B9BA6">지난달</div>
+            ${psLine('Total.', _fmtHMtext(prevMonthMin), '#55555F')}
+            ${psLine('Avg.', _fmtHMtext(prevMonthMin / prevMonthDays), '#55555F')}
+          </div>
+          <div>
+            <div class="ps-col-h" style="color:#6C5DD3">이번달 (1일 - 오늘)</div>
+            ${psLine('Total.', _fmtHMtext(thisMonthMin), '#6C5DD3')}
+            ${psLine('Avg.', _fmtHMtext(thisMonthMin / now.getDate()), '#6C5DD3')}
+          </div>
+        </div>
+      </div>
+
+      <div class="ps-block" style="border-color:#4A3FA8">
+        <div class="ps-name" style="color:#4A3FA8">Yearly</div>
+        <div class="ps-cols">
+          <div>
+            <div class="ps-col-h" style="color:#4A3FA8">총계 (1월 - 오늘)</div>
+            ${psLine('Total.', _fmtHMtext(yearMin), '#4A3FA8')}
+            ${psLine('Avg.', _fmtHMtext(yearMin / dayOfYear), '#4A3FA8')}
+          </div>
+        </div>
       </div>
     </div>
 
-    <div class="section-label">이번주 스케줄</div>
-    <div class="this-week-card">`;
-
-  DAYS.forEach(day => {
-    const periods = day === '토' ? PERIODS_SAT : PERIODS_WEEK;
-    const dd = draftSchedule[day];
-    const attendList = periods.filter(p=>dd?.periods[p.n]==='attend');
-    const absentList = periods.filter(p=>dd?.periods[p.n]==='absent');
-
-    html += `<div class="week-row">
-      <div class="week-day">${day}</div>
-      <div class="week-periods">`;
-
-    if (attendList.length === 0 && absentList.length === 0) {
-      html += `<span class="chip-none">—</span>`;
-    } else {
-      attendList.forEach(p => html += `<span class="week-chip chip-attend">${p.n}교시</span>`);
-      absentList.forEach(p => html += `<span class="week-chip chip-absent">${p.n}교시 불참</span>`);
-    }
-    html += `</div></div>`;
-  });
-
-  html += `</div>
-    <div class="section-label">월별 누적시간</div>
-    <div class="this-week-card">`;
-
-  months.forEach(m => {
-    const h = s.hours[m] || 0;
-    const pct = Math.min(100, Math.round(h/250*100));
-    const color = h>=180?'#C8900A':h>=120?'#A87008':'#C62828';
-    html += `<div class="week-row">
-      <div class="week-day" style="font-size:12px">${monthLabels[m]}</div>
-      <div style="flex:1;display:flex;align-items:center;gap:10px">
-        <div style="flex:1;height:8px;background:#f0f0f0;border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${pct}%;background:${color};border-radius:4px"></div>
-        </div>
-        <span style="font-size:13px;font-weight:600;color:${color};width:40px;text-align:right">${h}h</span>
-      </div>
+    <div class="section-label">최고 기록</div>
+    <div class="record-grid">
+      <div class="record-card"><div class="record-lbl">일일 최고</div><div class="record-val">${_fmtHM(bestDay)}</div></div>
+      <div class="record-card"><div class="record-lbl">주간 최고</div><div class="record-val">${_fmtHM(bestWeek)}</div></div>
+      <div class="record-card"><div class="record-lbl">월간 최고</div><div class="record-val">${_fmtHM(maxMonthMin)}</div></div>
+      <div class="record-card"><div class="record-lbl">연속 출석일</div><div class="record-val" style="color:#6C5DD3">${streak} 일</div></div>
+      <div class="record-card"><div class="record-lbl">연속 최고시간</div><div class="record-val">${_fmtHM(bestSession)}</div></div>
+      <div class="record-card"><div class="record-lbl">총 누적시간</div><div class="record-val">${_fmtHM(allMin)}</div></div>
     </div>`;
-  });
 
+  el.innerHTML = html;
+}
+
+// ── 이벤트 (관리자앱 이벤트 탭과 Firebase events/list로 연동) ──
+const DEFAULT_EVENTS = [{
+  id: 'kkeutkkeuta', type: 'studytime', active: true,
+  name: '끝.끝.아 이벤트',
+  desc: '"끝나도 끝난게 아니야" 이벤트\n기간 : 7/6(월) ~ 7/19(일)\n대상 : 새봄면학관 썸머 신청 학생\n내용 : 14일간 공부시간 42시간 달성\n보상 : 시간 달성 시 썸머 비용에서 5만원 장학금 지원',
+  goal: 42, start: '2026-7-6', end: '2026-7-19'
+}, {
+  id: 'streakquest', type: 'streak', active: true,
+  name: '연속 출석 퀘스트',
+  desc: '내용 : 연속 20일 출석\n시작일 : 퀘스트 수락 다음 날부터 시작\n보상 : 이용권 기간 연장(1일) (+5일 / 시간권 : +15시간)',
+  goal: 20
+}];
+let EVENTS_CACHE = null;
+let _eventsLoading = false;
+
+// Firebase에 구버전(연속출석형 끝.끝.아) 데이터가 남아 있으면 새 정의로 교체한다.
+// 관리자앱이 같은 규칙으로 1회 이관·저장하므로, 이관 후에는 관리자앱 수정 내용이 그대로 반영된다.
+function _normalizeEvents(list) {
+  if (!Array.isArray(list) || list.length === 0) return DEFAULT_EVENTS;
+  let legacy = false;
+  const out = list.map(ev => {
+    const isLegacyKk = (ev.id === 'kkeutkkeuta' || /끝\.?끝\.?아|끝나도/.test(ev.name || '')) && ev.type !== 'studytime';
+    if (!isLegacyKk) return ev;
+    legacy = true;
+    return Object.assign({}, DEFAULT_EVENTS[0], { active: ev.active !== false });
+  });
+  // 구버전 데이터를 교체한 경우에만 연속 출석 퀘스트를 보충 (관리자가 삭제한 경우는 존중)
+  if (legacy && !out.some(e => e.type === 'streak')) out.push(DEFAULT_EVENTS[1]);
+  return out;
+}
+
+function _streakEvent() { // 연속출석형 퀘스트 정의 — Firebase 로드값 우선
+  const list = EVENTS_CACHE || DEFAULT_EVENTS;
+  return list.find(e => e.type === 'streak') || DEFAULT_EVENTS[1];
+}
+
+// 끝.끝.아(공부시간형) 이벤트 — 기간 내 누적 공부시간(분)
+function _eventStudyMinutes(ev) {
+  const start = _parseDkey(ev.start || '2026-7-6');
+  const end = _parseDkey(ev.end || '2026-7-19');
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (today < start) return 0;
+  const last = end < today ? end : today;
+  let total = 0;
+  for (const d = new Date(start); d <= last; d.setDate(d.getDate() + 1)) total += _dateMinutes(d);
+  return total;
+}
+
+async function loadEventsList(force) {
+  if (!window._firebaseReady || _eventsLoading) return;
+  if (EVENTS_CACHE && !force) return;
+  _eventsLoading = true;
+  try {
+    // 보안규칙상 쓰기 가능한 문서가 notices/list뿐이라 관리자앱이 events 필드에 저장함
+    const snap = await window._fsGetDoc(window._fsDoc(window._db, 'notices', 'list'));
+    if (snap && snap.exists && snap.exists() && Array.isArray(snap.data().events)) {
+      EVENTS_CACHE = _normalizeEvents(snap.data().events);
+    } else {
+      EVENTS_CACHE = DEFAULT_EVENTS;
+    }
+    buildEvents(); buildQuest();
+  } catch(e) { console.error('이벤트 목록 로드 실패:', e); }
+  _eventsLoading = false;
+}
+
+// 세그먼트형 게이지바 (첨부 이미지 스타일)
+function _gaugeHTML(value, goal, unit) {
+  goal = Math.max(1, Number(goal) || 20);
+  const v = Math.max(0, Math.min(value, goal));
+  const pct = Math.round(value / goal * 100);
+  let segs = '';
+  for (let i = 0; i < goal; i++) segs += `<div class="ev-seg${i < v ? ' on' : ''}"></div>`;
+  // 값 라벨을 채워진 구간 끝 근처에 표시 (이미지의 '18점' 위치)
+  const labelLeft = v <= 0 ? 8 : `calc(${Math.min(v, goal) / goal * 100}% - ${v > goal * 0.55 ? 46 : -6}px)`;
+  return `
+  <div class="ev-gauge-wrap">
+    <div class="ev-gauge-track">
+      ${segs}
+      <div class="ev-gauge-val" style="left:${typeof labelLeft === 'number' ? labelLeft + 'px' : labelLeft}">${value}${unit || '일'}</div>
+    </div>
+    <div class="ev-gauge-foot">
+      <span class="ev-gauge-frac">${value} / ${goal}${unit || '일'}</span>
+      <span class="ev-gauge-pct">${pct}%</span>
+      <span class="ev-gauge-goal">목표 ${goal}${unit || '일'}</span>
+    </div>
+  </div>`;
+}
+
+function buildEvents() {
+  const el = document.getElementById('events-content');
+  if (!el) return;
+  const list = (EVENTS_CACHE || DEFAULT_EVENTS).filter(e => e.active !== false);
+  if (!EVENTS_CACHE) loadEventsList();
+  if (list.length === 0) {
+    el.innerHTML = '<div class="section-label">EVENTS</div><div class="empty-state"><div class="empty-icon">🎉</div><div class="empty-text">현재 진행 중인 이벤트가 없습니다.</div></div>';
+    return;
+  }
+  el.innerHTML = '<div class="section-label">EVENTS · 진행 중인 이벤트</div>' + list.map(ev => {
+    const isStreak = ev.type === 'streak';
+    const isStudy = ev.type === 'studytime' || ev.id === 'kkeutkkeuta';
+    let gauge = '', badge = '진행 중';
+    if (isStreak) {
+      gauge = _gaugeHTML(_streakDays(), ev.goal || 20, '일');
+    } else if (isStudy) {
+      const now = new Date();
+      const start = _parseDkey(ev.start || '2026-7-6');
+      if (now < start) badge = '진행 예정';
+      const hours = Math.round(_eventStudyMinutes(ev) / 60 * 10) / 10;
+      gauge = _gaugeHTML(hours, ev.goal || 42, '시간');
+    }
+    return `
+    <div class="ev-card" ${isStreak ? `onclick="openSection('quest','#6C5DD3')" style="cursor:pointer"` : ''}>
+      <div class="ev-card-head">
+        <div class="ev-card-title">${isStreak ? '🔥 ' : '🎉 '}${ev.name || '이벤트'}</div>
+        <span class="ev-badge">${badge}</span>
+      </div>
+      <div class="ev-desc">${ev.desc || ''}</div>
+      ${gauge}
+    </div>`;
+  }).join('');
+}
+
+// ── 연속 출석 퀘스트 ──
+function _smiley(state) { // 'on' | 'off' | 'future'
+  if (state === 'on') {
+    return `<svg width="27" height="27" viewBox="0 0 24 24"><circle cx="12" cy="12" r="11" fill="#6C5DD3"/><circle cx="8.4" cy="9.8" r="1.4" fill="#fff"/><circle cx="15.6" cy="9.8" r="1.4" fill="#fff"/><path d="M7.4 14.3c1.2 1.9 3 2.8 4.6 2.8s3.4-.9 4.6-2.8" stroke="#fff" stroke-width="1.7" fill="none" stroke-linecap="round"/></svg>`;
+  }
+  const c = state === 'future' ? '#DFDFE8' : '#B9B9C4';
+  return `<svg width="27" height="27" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10.1" fill="none" stroke="${c}" stroke-width="1.7"/><circle cx="8.4" cy="9.8" r="1.2" fill="${c}"/><circle cx="15.6" cy="9.8" r="1.2" fill="${c}"/><path d="M8 15.3h8" stroke="${c}" stroke-width="1.7" stroke-linecap="round"/></svg>`;
+}
+
+function buildQuest() {
+  const el = document.getElementById('quest-content');
+  if (!el || !currentStudent) return;
+  const now = new Date();
+  const y = now.getFullYear(), m = now.getMonth();
+  const firstDow = new Date(y, m, 1).getDay();
+  const lastDate = new Date(y, m + 1, 0).getDate();
+  const todayD = now.getDate();
+  const streak = _streakDays();
+
+  const ev = _streakEvent();
+  const goal = Math.max(1, Number(ev.goal) || 20);
+  if (!EVENTS_CACHE) loadEventsList();
+
+  let html = `
+    <div class="section-label">ATTENDANCE QUEST · 연속 출석</div>
+    <div class="quest-info" style="white-space:pre-line">${ev.desc || ''}</div>
+    ${_gaugeHTML(streak, goal, '일')}
+    <div class="quest-streak-line">🔥 현재 <b>연속 ${streak}일</b> 출석 중!${streak < goal ? ` (달성까지 ${goal - streak}일)` : ' — 퀘스트 달성! 🎉'}</div>
+    <div class="quest-grid">`;
+
+  for (let i = 0; i < firstDow; i++) html += '<div></div>';
+  for (let d = 1; d <= lastDate; d++) {
+    const date = new Date(y, m, d);
+    const state = d > todayD ? 'future' : (_attendedOn(date) ? 'on' : 'off');
+    html += `<div class="quest-cell">${_smiley(state)}<div class="quest-date">${m + 1}/${d}</div></div>`;
+  }
   html += '</div>';
-  document.getElementById('mystats-content').innerHTML = html;
+  el.innerHTML = html;
 }
 
 // ── 자리선택 배치도 ──
@@ -1269,7 +2108,7 @@ async function checkSeatSelectionActive() {
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
     const tabBtn = document.getElementById('seat-tab-btn');
     if (!snap.exists()) {
-      document.getElementById('student-seatmap').innerHTML = '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.</div>';
+      document.getElementById('student-seatmap').innerHTML = '<div class="empty-state"><div class="empty-icon">🪑</div><div class="empty-text">현재 자리 선택 기간이 아닙니다.</div></div>';
       return;
     }
     const d = snap.data ? snap.data() : null;
@@ -1286,7 +2125,7 @@ async function checkSeatSelectionActive() {
     } else {
       document.getElementById('seatmap-deadline').textContent = '';
       document.getElementById('student-seatmap').innerHTML =
-        '<div style="text-align:center;padding:40px 20px;color:#aaa;font-size:14px">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div>';
+        '<div class="empty-state"><div class="empty-icon">🪑</div><div class="empty-text">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div></div>';
       if (card) card.style.display = 'none';
     }
   } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
@@ -1303,7 +2142,7 @@ function buildStudentSeatmap() {
   // 기존 구독 해제
   if (seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
 
-  el.innerHTML = '<div style="text-align:center;padding:20px;color:#aaa;font-size:13px">로딩 중...</div>';
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">로딩 중...</div>';
 
   // onSnapshot으로 실시간 감시
   seatmapUnsubscribe = window._fsOnSnapshot(
@@ -1332,51 +2171,30 @@ function renderSeatmap(takenSeats) {
   // DEFAULT_SEATS와 동일한 그리드 구성 (관리자앱과 동일)
   // 학생 좌석만 (스터디룸·빈열 제외) — 관리자앱 DEFAULT_SEATS에서 양수만
   const SEAT_GRID = [
-    // [row, col, seatNum]
+    // [row, col, seatNum]  — 새봄 면학관 실제 배열
     [2,1,1],[3,1,2],[4,1,3],[5,1,4],
-    [1,2,9],[2,2,8],[3,2,7],[4,2,6],[5,2,5],[8,2,45],[9,2,36],[11,2,35],
-    [8,3,44],[9,3,37],[11,3,34],
-    [1,4,10],[2,4,11],[3,4,12],[4,4,13],[5,4,14],[8,4,43],[9,4,38],[10,4,33],[11,4,30],
-    [1,5,19],[2,5,18],[3,5,17],[4,5,16],[5,5,15],[8,5,42],[9,5,39],[10,5,32],[11,5,31],
-    [8,6,41],[9,6,40],
-    [1,7,20],[2,7,21],[3,7,22],[4,7,23],[5,7,24],
-    [6,7,25],[7,7,26],[8,7,27],[9,7,28],[10,7,29],
+    [1,2,9],[2,2,8],[3,2,7],[4,2,6],[5,2,5],
+    [1,4,10],[2,4,11],[3,4,12],[4,4,13],[5,4,14],
+    [1,5,19],[2,5,18],[3,5,17],[4,5,16],[5,5,15],
+    [1,7,20],[2,7,21],[3,7,22],[4,7,23],[5,7,24],[6,7,25],[7,7,26],
+    // 우측 세로줄 27~29
+    [9,7,27],[10,7,28],[11,7,29],
+    // 하단 블록: 41~45(9행) / 36~40(10행) / 30~35(12행)
+    [9,1,45],[9,2,44],[9,3,43],[9,4,42],[9,5,41],
+    [10,1,36],[10,2,37],[10,3,38],[10,4,39],[10,5,40],
+    [12,1,35],[12,2,34],[12,3,33],[12,4,32],[12,5,31],[12,6,30],
   ];
-  const ROWS = 11, COLS = 7;
+  const ROWS = 12, COLS = 7;
   const myCurrentSeat = currentStudent.seat ? parseInt(currentStudent.seat) : 0;
 
   let html = `<style>
-    #sm-grid { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(11,44px); gap:3px; max-width:420px; }
-    .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:600; cursor:default; transition:transform 0.1s; }
-    .sm-taken { background:#E5E7EB; color:#9CA3AF; }
+    #sm-grid { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(12,44px); gap:3px; max-width:420px; }
+    .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:700; cursor:default; transition:transform 0.1s; }
+    .sm-taken { background:var(--surface); border:1px solid var(--border); color:var(--text3); }
     .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
     .sm-available:active { transform:scale(0.95); }
-    .sm-mine { background:#C8900A; color:#fff; border:2px solid #8B6010; }
-  
-/* ── 홈 메뉴 화면 ── */
-.home-screen{display:none;min-height:100vh;flex-direction:column}
-.home-screen.visible{display:flex}
-.home-header{background:linear-gradient(135deg,#C8900A 0%,#A87008 100%);padding:20px 20px 20px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,0.15)}
-.home-header-info{display:flex;align-items:center;gap:10px}
-.home-avatar{width:40px;height:40px;border-radius:50%;background:transparent;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.home-name{font-size:16px;font-weight:700;color:#fff}
-.home-seat{font-size:12px;color:rgba(255,255,255,0.85)}
-.menu-blocks{flex:1;display:flex;flex-direction:column;overflow:hidden}
-.menu-block{flex:1;display:flex;align-items:center;justify-content:space-between;padding:0 28px;cursor:pointer;position:relative;transition:filter 0.1s;min-height:80px}
-.menu-block:active{filter:brightness(0.9)}
-.menu-block-left{display:flex;align-items:center;gap:18px}
-.menu-block-icon{font-size:32px;opacity:0.9}
-.menu-block-label{font-size:22px;font-weight:800;color:#fff;letter-spacing:0.5px;text-shadow:0 1px 3px rgba(0,0,0,0.15)}
-.menu-block-sub{font-size:12px;color:rgba(255,255,255,0.75);margin-top:3px;font-weight:500}
-.menu-block-arrow{font-size:24px;color:rgba(255,255,255,0.6);font-weight:300}
-.menu-block-badge{position:absolute;top:16px;right:52px;background:rgba(255,255,255,0.3);color:#fff;border-radius:12px;font-size:11px;font-weight:700;padding:2px 8px}
-
-/* 섹션 헤더 (뒤로가기) */
-.section-header{display:flex;align-items:center;gap:12px;padding:16px 20px;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,0.12)}
-.back-btn{background:rgba(255,255,255,0.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.section-title{font-size:17px;font-weight:700;color:#fff;flex:1}
-.section-logout{background:rgba(255,255,255,0.25);border:1px solid rgba(255,255,255,0.5);color:#fff;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer}
-</style>
+    .sm-mine { background:var(--amber); color:#fff; border:2px solid var(--amber-dark); }
+  </style>
   <div id="sm-grid">`;
 
   // 빈 셀 채우기
@@ -1459,7 +2277,7 @@ function buildStudyroomPeriodBtns() {
   if (!el) return;
 
   if (isSun) {
-    el.innerHTML = '<div style="color:#aaa;font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
     return;
   }
 
@@ -1472,10 +2290,8 @@ function buildStudyroomPeriodBtns() {
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
 
   el.innerHTML = periods.map(p =>
-    `<button onclick="applyStudyroom(${p.n})"
-      style="padding:8px 14px;border:1.5px solid #E0B020;border-radius:10px;background:#FFFDF5;
-             color:#5C3D08;font-size:13px;font-weight:600;cursor:pointer;min-width:80px">
-      ${p.n}교시<br><span style="font-size:10px;color:#888;font-weight:400">${p.t}</span>
+    `<button class="pill-btn" onclick="applyStudyroom(${p.n})">
+      ${p.n}교시<small>${p.t}</small>
     </button>`
   ).join('');
 }
@@ -1506,17 +2322,17 @@ function showStudyroomModal(periodNum, totalCount, roomCounts) {
   overlay.id = 'studyroom-apply-modal';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   const countMsg = totalCount === 0 ? '현재 신청 인원이 없습니다.' : `현재 ${totalCount}명이 사용 대기중입니다.`;
-  overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:340px;box-shadow:0 8px 40px rgba(0,0,0,0.2)">
-    <div style="font-size:15px;font-weight:700;color:#1F2937;margin-bottom:4px">📚 스터디룸 신청</div>
-    <div style="font-size:13px;color:#7C3AED;font-weight:600;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
-    <div style="font-size:12px;color:#555;margin-bottom:6px">사용 사유 <span style="color:#C62828">*</span></div>
+  overlay.innerHTML = `<div style="background:var(--card);border-radius:var(--r-lg);padding:20px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)">
+    <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">📚 스터디룸 신청</div>
+    <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:12px">${periodNum}교시 · ${countMsg}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">사용 사유 <span style="color:var(--red)">*</span></div>
     <textarea id="studyroom-reason-input" placeholder="사용 사유를 입력하세요" rows="3"
-      style="width:100%;border:1.5px solid #E0B020;border-radius:10px;padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box"></textarea>
+      style="width:100%;border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></textarea>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="document.getElementById('studyroom-apply-modal').remove()"
-        style="flex:1;padding:10px;background:#F3F4F6;color:#374151;border:none;border-radius:10px;font-size:13px;cursor:pointer">취소</button>
+        style="flex:1;padding:10px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">취소</button>
       <button onclick="submitStudyroomReq(${periodNum},${JSON.stringify(roomCounts).replace(/"/g,'&quot;')})"
-        style="flex:2;padding:10px;background:#7C3AED;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
+        style="flex:2;padding:10px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
     </div>
   </div>`;
   document.body.appendChild(overlay);
@@ -1559,19 +2375,19 @@ function loadStudyroomData() {
       const myEl = document.getElementById('studyroom-my-requests');
       if (myEl) {
         myEl.innerHTML = myReqs.length === 0
-          ? '<div style="font-size:13px;color:#aaa">신청 내역 없음</div>'
+          ? '<div style="font-size:13px;color:var(--text3)">신청 내역 없음</div>'
           : myReqs.map(r => {
-              const sc = r.status==='approved'?'#2D7A4F':r.status==='rejected'?'#C62828':'#C8900A';
+              const sc = r.status==='approved'?'#1AB5A3':r.status==='rejected'?'var(--red)':'var(--amber)';
               const st = r.status==='approved'?'✅ 사용가능':r.status==='rejected'?'❌ 거절됨':'⏳ 대기중';
-              const bg = r.status==='approved'?'#F0FDF4':r.status==='rejected'?'#FFF0F0':'#FFFDF5';
-              const bd = r.status==='approved'?'#4CAF50':r.status==='rejected'?'#F09595':'#E0B020';
-              return `<div style="padding:10px 12px;background:${bg};border:1.5px solid ${bd};border-radius:10px;margin-bottom:6px">
+              const bg = r.status==='approved'?'#F0FBF7':r.status==='rejected'?'var(--red-pale)':'var(--amber-pale)';
+              const bd = r.status==='approved'?'#9BE0D3':r.status==='rejected'?'var(--red-border)':'rgba(108,93,211,0.3)';
+              return `<div style="padding:10px 12px;background:${bg};border:1px solid ${bd};border-radius:var(--r-md);margin-bottom:6px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-                  <span style="font-size:13px;font-weight:600">${r.period}교시 · 스터디룸 ${r.room}번</span>
+                  <span style="font-size:13px;font-weight:700;color:var(--text)">${r.period}교시 · 스터디룸 ${r.room}번</span>
                   <span style="font-size:11px;font-weight:700;color:${sc}">${st}</span>
                 </div>
-                ${r.reason?`<div style="font-size:11px;color:#666">📝 ${r.reason}</div>`:''}
-                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:#C62828;background:none;border:1px solid #F09595;border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
+                ${r.reason?`<div style="font-size:11px;color:var(--text2)">📝 ${r.reason}</div>`:''}
+                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:var(--red);background:none;border:1px solid var(--red-border);border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
               </div>`;
             }).join('');
       }
@@ -1580,10 +2396,10 @@ function loadStudyroomData() {
       const stEl = document.getElementById('studyroom-status');
       if (stEl) {
         stEl.innerHTML = [1,2,3].map(room =>
-          `<div style="background:#F3E8FF;border:1.5px solid #C084FC;border-radius:10px;padding:10px 14px">
-            <div style="font-size:12px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
-            ${rc[room].length===0?'<div style="font-size:12px;color:#aaa">신청자 없음</div>'
-              :rc[room].map(m=>`<div style="font-size:12px;color:#5C3D08">${m.period}교시 · 이용자</div>`).join('')}
+          `<div class="panel" style="margin-bottom:0">
+            <div style="font-size:12px;font-weight:700;color:var(--amber-dark);margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
+            ${rc[room].length===0?'<div style="font-size:12px;color:var(--text3)">신청자 없음</div>'
+              :rc[room].map(m=>`<div style="font-size:12px;color:var(--text2)">${m.period}교시 · 이용자</div>`).join('')}
           </div>`
         ).join('');
       }
@@ -1604,6 +2420,7 @@ window.cancelStudyroom = async function(reqId) {
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
   if (!currentStudent) return;
+  refreshStudentData();
   // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
   if (activeTab === 'seatmap') buildStudentSeatmap();
@@ -1635,7 +2452,7 @@ function restoreTab() {
   try {
     const tab = sessionStorage.getItem('saebom_active_tab_student');
     if (tab) {
-        setTimeout(() => openSection(tab, '#C8900A'), 500);
+        setTimeout(() => openSection(tab, '#6C5DD3'), 500);
     }
   } catch(e) {}
 }
@@ -1713,7 +2530,7 @@ function renderPlannerCalendar() {
   let html = '';
   // 요일 헤더
   days.forEach((d,i) => {
-    const color = i===0?'#C62828':i===6?'#1565C0':'#5C3D08';
+    const color = i===0?'var(--red)':i===6?'#1565C0':'var(--text2)';
     html += `<div style="text-align:center;font-size:11px;font-weight:700;color:${color};padding:4px 0">${d}</div>`;
   });
 
@@ -1728,9 +2545,9 @@ function renderPlannerCalendar() {
     const isToday = dateStr === todayStr;
     const hasPhoto = !!plannerUploadedDates[dateStr];
     const dow = new Date(plannerYear, plannerMonth, d).getDay();
-    const textColor = dow===0?'#C62828':dow===6?'#1565C0':'#333';
-    const bgColor = isToday ? '#C8900A' : hasPhoto ? '#FFF8DC' : '#f9f9f9';
-    const border = isToday ? '2px solid #C8900A' : hasPhoto ? '2px solid #E0B020' : '1.5px solid #eee';
+    const textColor = dow===0?'var(--red)':dow===6?'#1565C0':'var(--text)';
+    const bgColor = isToday ? 'var(--amber)' : hasPhoto ? 'var(--amber-pale)' : 'var(--surface)';
+    const border = isToday ? '2px solid var(--amber)' : hasPhoto ? '1.5px solid var(--amber-light)' : '1px solid var(--border-light)';
     const dateColor = isToday ? '#fff' : textColor;
     html += `<div onclick="plannerSelectDate('${dateStr}')"
       style="border-radius:10px;padding:6px 2px;text-align:center;cursor:pointer;background:${bgColor};border:${border};position:relative">
@@ -1786,9 +2603,9 @@ async function plannerLoadComments(dateStr) {
       if (comments.length > 0) {
         area.style.display = 'block';
         list.innerHTML = comments.map(c => `
-          <div style="background:#FFF8DC;border:1px solid #E0B020;border-radius:8px;padding:8px 10px">
-            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+          <div style="background:var(--amber-pale);border:1px solid rgba(108,93,211,0.25);border-radius:var(--r-sm);padding:8px 10px">
+            <div style="font-size:13px;color:var(--text);white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+            <div style="font-size:11px;color:var(--text3)">${c.time || ''}</div>
           </div>`).join('');
         return;
       }
@@ -1919,6 +2736,381 @@ function showToast(msg) {
   setTimeout(() => t.classList.remove('show'), 2500);
 }
 
+</script>
+
+<!-- ══ 집중 감지 스타일 ══ -->
+<style>
+.fm-note{font-size:12px;color:var(--text2);line-height:1.6;background:var(--amber-pale);border:1px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px}
+.fm-note b{color:var(--amber-dark);font-weight:700}
+/* ── SEE EYES 동의 게이트/모달 ── */
+.see-gate{border-radius:var(--r-md);padding:14px 16px;margin-bottom:14px;font-size:13px;line-height:1.6;border:1px solid var(--border)}
+.see-gate.need{background:var(--amber-pale);border-color:rgba(108,93,211,0.3);color:var(--text)}
+.see-gate.wait{background:#FFF6E5;border-color:#F0D28A;color:#7A5A10}
+.see-gate.ok{background:#E9F8EE;border-color:#A7DFB9;color:#1B6B37}
+.see-gate.rej{background:var(--red-pale);border-color:var(--red-border);color:var(--red)}
+.see-gate .see-gate-title{font-weight:800;margin-bottom:4px;display:flex;align-items:center;gap:6px}
+.see-gate .see-gate-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.see-gate button{border:none;border-radius:20px;padding:8px 16px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.see-gate .g-primary{background:var(--amber);color:#fff}
+.see-gate .g-ghost{background:#fff;color:var(--text2);border:1px solid var(--border)}
+.see-modal{position:fixed;inset:0;z-index:400;background:rgba(20,18,40,0.55);display:flex;align-items:center;justify-content:center;padding:18px;backdrop-filter:blur(3px)}
+.see-modal-card{background:var(--card);border-radius:var(--r-lg);max-width:400px;width:100%;max-height:86vh;overflow-y:auto;box-shadow:var(--shadow-lg);padding:20px}
+.see-modal-title{font-size:17px;font-weight:800;margin-bottom:12px;color:var(--text)}
+.see-modal-body{font-size:12.5px;line-height:1.7;color:var(--text2);max-height:44vh;overflow-y:auto;padding-right:4px;border:1px solid var(--border-light);border-radius:var(--r-sm);padding:12px;background:var(--surface)}
+.see-modal-body p{margin-bottom:9px}
+.see-modal-body b{color:var(--text)}
+.see-modal-body .see-minor{color:var(--red);font-weight:600}
+.see-check{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text);margin-top:12px;line-height:1.5;cursor:pointer}
+.see-check input{margin-top:2px;flex-shrink:0}
+.see-modal-btns{display:flex;gap:8px;margin-top:16px}
+.see-modal-btns button{flex:1;border:none;border-radius:var(--r-md);padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.see-btn-ghost{background:var(--surface);color:var(--text2);border:1px solid var(--border)}
+.see-btn-primary{background:var(--amber);color:#fff}
+.fm-seatbar{display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--text2)}
+.fm-seatbar b{color:var(--text);font-weight:700}
+.fm-conn{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text3)}
+.fm-conn-dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}
+.fm-conn-dot.on{background:#2E9E5B}
+.fm-conn-dot.err{background:var(--red)}
+.fm-video{position:relative;background:#0e1216;border-radius:var(--r-lg);overflow:hidden;aspect-ratio:4/3;margin-bottom:12px}
+.fm-video video,.fm-video canvas{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1)}
+.fm-badge{position:absolute;top:10px;left:10px;z-index:5;display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.5);color:#fff;font-size:12px;padding:5px 10px;border-radius:20px}
+/* 카메라 미리보기 가림 커버 (영상은 밑에서 계속 재생 → 감지 유지) */
+.fm-cover{position:absolute;inset:0;z-index:4;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px;background:linear-gradient(135deg,#1E1B4B 0%,#4338A8 60%,#33307E 100%)}
+.fm-video.preview-off .fm-cover{display:flex}
+.fm-cover-ico{font-size:38px;line-height:1}
+.fm-cover-txt{font-size:14px;font-weight:800;color:#fff;letter-spacing:-0.2px}
+.fm-cover-sub{font-size:11px;color:rgba(255,255,255,0.72)}
+.fm-badge .d{width:8px;height:8px;border-radius:50%;background:#bbb}
+.fm-badge .d.focus{background:#3ddc97}
+.fm-badge .d.drowsy{background:#f5b942}
+.fm-badge .d.away{background:#ef5b5b}
+.fm-state{text-align:center;padding:16px;border-radius:var(--r-md);background:var(--card);border:1px solid var(--border);margin-bottom:12px}
+.fm-state .lab{font-size:20px;font-weight:800;color:var(--text)}
+.fm-state .sub{font-size:12px;color:var(--text3);margin-top:4px}
+.fm-state .lab.focus{color:#2E9E5B}
+.fm-state .lab.drowsy{color:#C88A00}
+.fm-state .lab.away{color:var(--red)}
+.fm-metrics{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.fm-metric{flex:1 1 28%;min-width:88px;background:var(--card);border:1px solid var(--border);border-radius:var(--r-md);padding:10px;text-align:center}
+.fm-metric .v{font-size:16px;font-weight:800;color:var(--text)}
+.fm-metric .l{font-size:10px;color:var(--text3);margin-top:2px}
+.fm-controls{display:flex;gap:8px;margin-bottom:12px}
+.fm-controls button{flex:1;padding:13px;border-radius:var(--r-md);border:none;font-size:14px;font-weight:700;cursor:pointer}
+.fm-start{background:var(--amber);color:#fff}
+.fm-stop{background:var(--surface);color:var(--text);border:1px solid var(--border)}
+.fm-controls button:disabled{opacity:0.4;cursor:default}
+.fm-opt{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:10px}
+.fm-log{font-size:11px;color:var(--text3);max-height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;background:var(--surface);border-radius:var(--r-sm);padding:8px;min-height:32px}
+</style>
+
+<!-- ══ 집중 감지 로직 (학생앱 내장) ══
+     · 로그인한 학생의 좌석(currentStudent.seat)을 그대로 사용
+     · 기존 Firebase 인스턴스(window._db 등) 재사용
+     · 영상은 저장/전송하지 않고 상태값만 seat_status/{좌석}에 기록  -->
+<script>
+(function(){
+  const EAR_THRESHOLD=0.21, DROWSY_SECONDS=2.5, AWAY_PITCH_DEG=28, AWAY_SECONDS=2.0;
+  const AWAY_YAW_DEG=25, GAZE_OFF=0.20, LOOKAWAY_SECONDS=2.0; // 좌우 고개돌림·시선이탈 딴짓 판단
+  const TARGET_FPS=8, FRAME_INTERVAL=1000/TARGET_FPS;
+  const LEFT_EYE={top1:159,top2:158,bottom1:145,bottom2:153,left:33,right:133};
+  const RIGHT_EYE={top1:386,top2:385,bottom1:374,bottom2:380,left:362,right:263};
+
+  let libsLoaded=false, faceMesh=null, camera=null, running=false;
+  let eyesClosedSince=null, headDownSince=null, noFaceSince=null, lookAwaySince=null;
+  let curState='idle', lastSent=null, lastMeta={}, heartbeat=null, wakeLock=null, lastFrameSent=0;
+  let bgPaused=false; // 앱이 백그라운드로 나가 감지가 일시중지된 상태
+  let el={};
+
+  const $=id=>document.getElementById(id);
+  function cache(){
+    el.video=$('fm-video-el'); el.canvas=$('fm-canvas'); el.dot=$('fm-dot'); el.badge=$('fm-badge-text');
+    el.label=$('fm-label'); el.sub=$('fm-sub'); el.ear=$('fm-ear'); el.pitch=$('fm-pitch'); el.dur=$('fm-dur');
+    el.yaw=$('fm-yaw'); el.gaze=$('fm-gaze');
+    el.seat=$('fm-seat'); el.connDot=$('fm-conn-dot'); el.connText=$('fm-conn-text');
+    el.start=$('fm-start'); el.stop=$('fm-stop'); el.wake=$('fm-wake'); el.log=$('fm-log');
+    el.videoWrap=$('fm-video-wrap'); el.hidePreview=$('fm-hide-preview');
+  }
+  function seatNo(){
+    try{ if(typeof currentStudent!=='undefined' && currentStudent && currentStudent.seat){
+      const s=String(currentStudent.seat); return s.replace(/[^0-9]/g,'')||s; } }catch(e){}
+    return '';
+  }
+  function log(msg){
+    if(!el.log) return;
+    const t=new Date().toLocaleTimeString('ko-KR',{hour12:false});
+    const d=document.createElement('div'); d.textContent=t+'  '+msg; el.log.prepend(d);
+    while(el.log.children.length>30) el.log.removeChild(el.log.lastChild);
+  }
+  function conn(state,extra){
+    if(!el.connDot) return;
+    const seat=seatNo();
+    if(!seat){ el.connDot.className='fm-conn-dot'; el.connText.textContent='좌석 정보 없음'; return; }
+    if(state==='on'){ el.connDot.className='fm-conn-dot on'; el.connText.textContent='좌석 '+seat+' · 전송 중'; }
+    else if(state==='err'){ el.connDot.className='fm-conn-dot err'; el.connText.textContent='전송 오류'+(extra?': '+extra:''); }
+    else { el.connDot.className='fm-conn-dot'; el.connText.textContent='대기 중'; }
+  }
+  async function push(state,meta,force){
+    const seat=seatNo();
+    if(!seat || !window._db || !window._fsDoc || !window._fsSetDoc) return;
+    if(!force && state===lastSent) return;
+    lastSent=state;
+    try{
+      await window._fsSetDoc(window._fsDoc(window._db,'seat_status',seat),{
+        state,
+        ear:(meta&&meta.ear!=null)?Number(meta.ear.toFixed(4)):null,
+        pitch:(meta&&meta.pitch!=null)?Number(meta.pitch.toFixed(2)):null,
+        duration:(meta&&meta.duration!=null)?Number(meta.duration.toFixed(1)):null,
+        yaw:(meta&&meta.yaw!=null)?Number(meta.yaw.toFixed(1)):null,
+        gaze:(meta&&meta.gaze!=null)?Number(meta.gaze.toFixed(3)):null,
+        note:(meta&&meta.note)||null,
+        source:'student_app',
+        updatedAt:new Date().toISOString()
+      });
+      if(running) conn('on');
+    }catch(e){ conn('err',e.message); }
+  }
+  function startHeartbeat(){ stopHeartbeat(); heartbeat=setInterval(()=>{
+    if(bgPaused){ push('away',{note:'앱 백그라운드(일시중지)'},true); }
+    else { push(curState==='idle'?'empty':curState,lastMeta,true); }
+  },30000); }
+  function stopHeartbeat(){ if(heartbeat){ clearInterval(heartbeat); heartbeat=null; } }
+
+  const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y);
+  function earOf(lm,e){ const v1=dist(lm[e.top1],lm[e.bottom1]), v2=dist(lm[e.top2],lm[e.bottom2]), h=dist(lm[e.left],lm[e.right]); return h===0?0.3:(v1+v2)/(2.0*h); }
+  function pitchOf(lm){ const f=lm[10],n=lm[1],c=lm[152],fh=dist(f,c)||1,mid=(f.y+c.y)/2; return ((n.y-mid)/fh)*90; }
+  // 좌우 고개 회전(yaw): 코끝(1)이 좌·우 얼굴 윤곽(234/454) 중 어느 쪽에 가까운지 → 대략 도(°), 0=정면
+  function yawOf(lm){ const nose=lm[1],L=lm[234],R=lm[454]; const dL=Math.abs(nose.x-L.x),dR=Math.abs(R.x-nose.x); return ((dR-dL)/((dL+dR)||1))*90; }
+  // 시선(gaze): 홍채 중심(왼눈468/오른눈473)이 눈 코너 사이 어디에 있는지 → 0.5=중앙, mag=중앙에서 벗어난 정도
+  function gazeOf(lm){ if(lm.length<478) return {x:0.5,mag:0};
+    const gxL=(lm[468].x-lm[33].x)/((lm[133].x-lm[33].x)||1e-6);
+    const gxR=(lm[473].x-lm[263].x)/((lm[362].x-lm[263].x)||1e-6);
+    const gx=(gxL+gxR)/2; return {x:gx,mag:Math.abs(gx-0.5)}; }
+
+  function setState(state,sub,meta){
+    if(state===curState){ if(sub&&el.sub) el.sub.textContent=sub; return; }
+    curState=state;
+    const cls=state==='focus'?'focus':state==='drowsy'?'drowsy':state==='away'?'away':'';
+    if(el.dot) el.dot.className='d '+cls;
+    if(el.label) el.label.className='lab '+cls;
+    const map={ idle:['대기 중','시작을 누르면 감지가 시작됩니다'], focus:['집중','정상적으로 학습 중입니다'],
+      drowsy:['졸음 감지','눈 감김이 지속되고 있습니다'], away:['이탈/딴짓 의심','고개가 오래 숙여져 있습니다'] };
+    const pair=map[state]||map.idle;
+    if(el.badge) el.badge.textContent=pair[0];
+    if(el.label) el.label.textContent=pair[0];
+    if(el.sub) el.sub.textContent=sub||pair[1];
+    if(state==='drowsy') log('졸음 상태 진입');
+    if(state==='away') log('이탈/딴짓 의심');
+    if(state==='focus') log('집중 상태');
+    lastMeta=meta||{};
+    push(state,meta||{},false);
+  }
+  function onResults(res){
+    const v=el.video, cv=el.canvas; if(!cv||!v) return;
+    cv.width=v.videoWidth; cv.height=v.videoHeight;
+    const ctx=cv.getContext('2d'); ctx.clearRect(0,0,cv.width,cv.height);
+    if(!res.multiFaceLandmarks || res.multiFaceLandmarks.length===0){
+      if(!noFaceSince) noFaceSince=performance.now();
+      const elapsed=(performance.now()-noFaceSince)/1000;
+      if(elapsed>AWAY_SECONDS){ setState('away','얼굴이 감지되지 않습니다'); if(el.dur) el.dur.textContent=elapsed.toFixed(1)+'s'; }
+      if(el.ear) el.ear.textContent='--'; if(el.pitch) el.pitch.textContent='--';
+      if(el.yaw) el.yaw.textContent='--'; if(el.gaze) el.gaze.textContent='--';
+      lookAwaySince=null;
+      return;
+    }
+    noFaceSince=null;
+    const lm=res.multiFaceLandmarks[0];
+    const e=(earOf(lm,LEFT_EYE)+earOf(lm,RIGHT_EYE))/2, p=pitchOf(lm);
+    const yaw=yawOf(lm), gaze=gazeOf(lm);
+    if(el.ear) el.ear.textContent=e.toFixed(3);
+    if(el.pitch) el.pitch.textContent=p.toFixed(1)+'°';
+    if(el.yaw) el.yaw.textContent=yaw.toFixed(0)+'°';
+    if(el.gaze) el.gaze.textContent=gaze.mag.toFixed(2);
+    const now=performance.now();
+    if(e<EAR_THRESHOLD){ if(!eyesClosedSince) eyesClosedSince=now; } else eyesClosedSince=null;
+    if(p>AWAY_PITCH_DEG){ if(!headDownSince) headDownSince=now; } else headDownSince=null;
+    const lookAway=(Math.abs(yaw)>AWAY_YAW_DEG)||(gaze.mag>GAZE_OFF); // 고개 옆돌림 또는 시선 이탈
+    if(lookAway){ if(!lookAwaySince) lookAwaySince=now; } else lookAwaySince=null;
+    const closedDur=eyesClosedSince?(now-eyesClosedSince)/1000:0;
+    const downDur=headDownSince?(now-headDownSince)/1000:0;
+    const awayDur=lookAwaySince?(now-lookAwaySince)/1000:0;
+    if(downDur>AWAY_SECONDS){ setState('away','고개가 오래 숙여져 있습니다',{ear:e,pitch:p,yaw,gaze:gaze.mag,duration:downDur}); if(el.dur) el.dur.textContent=downDur.toFixed(1)+'s'; }
+    else if(awayDur>LOOKAWAY_SECONDS){ const why=Math.abs(yaw)>AWAY_YAW_DEG?'고개가 옆으로 돌아가 있습니다':'시선이 화면을 벗어나 있습니다'; setState('away',why,{ear:e,pitch:p,yaw,gaze:gaze.mag,duration:awayDur}); if(el.dur) el.dur.textContent=awayDur.toFixed(1)+'s'; }
+    else if(closedDur>DROWSY_SECONDS){ setState('drowsy',null,{ear:e,pitch:p,yaw,gaze:gaze.mag,duration:closedDur}); if(el.dur) el.dur.textContent=closedDur.toFixed(1)+'s'; }
+    else { setState('focus'); if(el.dur) el.dur.textContent=Math.max(closedDur,downDur,awayDur).toFixed(1)+'s'; }
+    ctx.fillStyle=e<EAR_THRESHOLD?'#f5b942':'#3ddc97';
+    [LEFT_EYE,RIGHT_EYE].forEach(eye=>{[eye.top1,eye.bottom1,eye.left,eye.right].forEach(i=>{
+      const pt=lm[i]; ctx.beginPath(); ctx.arc(pt.x*cv.width,pt.y*cv.height,2,0,Math.PI*2); ctx.fill();
+    });});
+  }
+  function loadScript(src){ return new Promise((res,rej)=>{ const s=document.createElement('script'); s.src=src; s.crossOrigin='anonymous'; s.onload=res; s.onerror=()=>rej(new Error('로드 실패')); document.head.appendChild(s); }); }
+  async function ensureLibs(){
+    if(libsLoaded) return;
+    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+    libsLoaded=true;
+  }
+  async function acquireWake(){ if(!el.wake||!el.wake.checked) return; try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release',()=>{wakeLock=null;}); } }catch(e){} }
+  async function releaseWake(){ try{ if(wakeLock){ await wakeLock.release(); wakeLock=null; } }catch(e){} }
+  // 앱이 백그라운드로 나가면 카메라·감지가 OS/브라우저에 의해 멈추므로
+  // 거짓 '집중' 대신 '이탈(일시중지)'로 정직하게 보고하고, 돌아오면 자동 재개.
+  document.addEventListener('visibilitychange',()=>{
+    if(document.hidden){
+      if(running && !bgPaused){
+        bgPaused=true;
+        push('away',{note:'앱 백그라운드(일시중지)'},true);
+        log('화면 이탈 — 감지 일시중지');
+        if(el.connText) el.connText.textContent='일시중지 (앱 이탈)';
+        if(el.connDot) el.connDot.className='fm-conn-dot err';
+      }
+    } else {
+      if(running){
+        acquireWake();
+        if(bgPaused){
+          bgPaused=false;
+          log('복귀 — 감지 재개');
+          conn('on');
+          push('focus',lastMeta,true);
+        }
+      }
+    }
+  });
+
+  async function start(){
+    cache();
+    if(!seatNo()){ alert('좌석 정보가 없습니다. 먼저 로그인/자리 선택을 완료해주세요.'); return; }
+    if(!window.__seeConsentOK){ alert('SEE EYES 사용에는 개인정보 수집·이용 동의가 필요합니다.\n아래 동의 절차를 완료해주세요.'); if(window.seeConsentOpenModal) window.seeConsentOpenModal(); return; }
+    if(running) return;
+    if(el.start) el.start.disabled=true;
+    try{
+      log('감지 라이브러리 로딩...');
+      await ensureLibs();
+      faceMesh=new FaceMesh({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/'+f});
+      faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+      faceMesh.onResults(onResults);
+      camera=new Camera(el.video,{
+        onFrame:async()=>{ const n=performance.now(); if(n-lastFrameSent<FRAME_INTERVAL) return; lastFrameSent=n; await faceMesh.send({image:el.video}); },
+        width:640,height:480,facingMode:'user'
+      });
+      await camera.start();
+      running=true; bgPaused=false;
+      if(el.stop) el.stop.disabled=false;
+      log('감지 시작'); setState('focus','분석을 시작합니다');
+      startHeartbeat(); acquireWake(); conn('on');
+    }catch(err){
+      log('시작 실패: '+(err&&err.message||err));
+      alert('카메라를 시작할 수 없습니다.\n· 카메라 권한을 허용했는지\n· https(GitHub Pages)에서 열었는지 확인해주세요.\n\n오류: '+(err&&err.message||err));
+      if(el.start) el.start.disabled=false; running=false;
+    }
+  }
+  function stop(){
+    if(camera){ try{camera.stop();}catch(e){} }
+    if(el.video && el.video.srcObject){ el.video.srcObject.getTracks().forEach(t=>t.stop()); el.video.srcObject=null; }
+    running=false; bgPaused=false;
+    if(el.start) el.start.disabled=false;
+    if(el.stop) el.stop.disabled=true;
+    eyesClosedSince=headDownSince=noFaceSince=lookAwaySince=null;
+    setState('idle');
+    if(el.canvas){ const c=el.canvas.getContext('2d'); if(c) c.clearRect(0,0,el.canvas.width,el.canvas.height); }
+    log('감지 중지'); stopHeartbeat(); releaseWake(); push('empty',{},true); conn('off');
+  }
+  window.fmStart=start;
+  window.fmStop=stop;
+  window.__fmRunning=()=>running;
+  // 미리보기(내 얼굴) 화면만 가림 — 카메라/감지는 그대로 유지
+  function applyPreview(hide){
+    if(el.videoWrap) el.videoWrap.classList.toggle('preview-off', !!hide);
+    if(el.hidePreview) el.hidePreview.checked=!!hide;
+    try{ localStorage.setItem('fm_hide_preview', hide?'1':'0'); }catch(e){}
+  }
+  window.fmTogglePreview=function(hide){ applyPreview(hide); };
+  window.fmOnOpen=function(){
+    cache();
+    if(el.seat) el.seat.textContent=seatNo()||'미설정';
+    conn(running?'on':'off');
+    let saved='0'; try{ saved=localStorage.getItem('fm_hide_preview')||'0'; }catch(e){}
+    applyPreview(saved==='1');
+    if(window.seeConsentOnOpen) window.seeConsentOnOpen();
+  };
+  window.fmOnLeave=function(){ if(running) stop(); };
+})();
+</script>
+
+<!-- ══ SEE EYES 법적 동의 게이트 (학생 본인 + 보호자앱 동의) ══ -->
+<script>
+(function(){
+  const CONSENT_VERSION='v1';
+  let unsub=null, state=null, prevOK=false;
+  const $=id=>document.getElementById(id);
+
+  function mySeat(){ try{ if(typeof currentStudent!=='undefined' && currentStudent && currentStudent.seat){ const s=String(currentStudent.seat); return s.replace(/[^0-9]/g,'')||s; } }catch(e){} return ''; }
+  function docRef(s){ return window._fsDoc(window._db,'see_eyes_consents',String(s)); }
+  function computeOK(){ return !!(state && state.studentConsent===true); }
+
+  function render(){
+    const gate=$('see-consent-gate'); if(!gate) return;
+    const OK=computeOK(); window.__seeConsentOK=OK;
+    const running = window.__fmRunning ? window.__fmRunning() : false;
+    // 동의 철회가 감지 도중 발생하면 안전하게 중단
+    if(prevOK && !OK && running){ try{ if(window.fmStop) window.fmStop(); }catch(e){} }
+    prevOK=OK;
+    const startBtn=$('fm-start'); if(startBtn && !running){ startBtn.disabled=!OK; }
+    gate.style.display='block';
+    if(!OK){
+      gate.className='see-gate need';
+      gate.innerHTML='<div class="see-gate-title">🔒 사용 전 동의가 필요합니다</div>'+
+        'SEE EYES는 카메라로 학습 집중 상태를 분석합니다. 개인정보 수집·이용에 동의하면 바로 사용할 수 있습니다.'+
+        '<div class="see-gate-actions"><button class="g-primary" onclick="seeConsentOpenModal()">동의 내용 보기 및 동의</button></div>';
+    } else {
+      gate.className='see-gate ok';
+      gate.innerHTML='<div class="see-gate-title">✔ 동의 완료</div>'+
+        '본인 동의가 확인되었습니다. SEE EYES를 사용할 수 있습니다.'+
+        '<div class="see-gate-actions"><button class="g-ghost" onclick="seeConsentWithdraw()">동의 철회</button></div>';
+    }
+  }
+
+  function subscribe(){
+    if(!window._db || !window._fsOnSnapshot){ render(); return; }
+    const seat=mySeat(); if(!seat){ state=null; render(); return; }
+    if(unsub){ try{unsub();}catch(e){} unsub=null; }
+    unsub=window._fsOnSnapshot(docRef(seat),(snap)=>{
+      state=(snap && snap.exists && snap.exists())?snap.data():null; render();
+    },(err)=>{ render(); });
+  }
+
+  window.seeConsentOnOpen=function(){ subscribe(); render(); };
+  window.seeConsentOpenModal=function(){ const m=$('see-consent-modal'); if(m){ const a1=$('see-agree-1'); if(a1)a1.checked=false; m.style.display='flex'; } };
+  window.seeConsentCloseModal=function(){ const m=$('see-consent-modal'); if(m) m.style.display='none'; };
+
+  window.seeConsentAgree=async function(skipCheck){
+    if(!skipCheck){ const a1=$('see-agree-1');
+      if(!a1||!a1.checked){ alert('필수 동의 항목에 체크해주세요.'); return; } }
+    const s=mySeat(); if(!s){ alert('좌석 정보가 없습니다.'); return; }
+    let name=''; try{ name=(currentStudent&&currentStudent.name)||''; }catch(e){}
+    try{
+      await window._fsSetDoc(docRef(s),{
+        seat:String(s), studentName:name,
+        studentConsent:true, studentConsentAt:new Date().toISOString(),
+        guardianStatus:'not_required', guardianConsentAt:null, guardianName:null,
+        version:CONSENT_VERSION, source:'student_app', updatedAt:new Date().toISOString()
+      });
+      window.seeConsentCloseModal();
+    }catch(e){ alert('동의 저장 중 오류가 발생했습니다: '+(e&&e.message||e)); }
+  };
+
+  window.seeConsentWithdraw=async function(){
+    if(!confirm('SEE EYES 동의를 철회하시겠습니까?\n철회 시 감지가 중단되고, 다시 사용하려면 동의 절차를 처음부터 진행해야 합니다.')) return;
+    const s=mySeat(); if(!s) return;
+    try{ if(window.fmStop) window.fmStop(); }catch(e){}
+    try{
+      await window._fsSetDoc(docRef(s),{
+        seat:String(s), studentConsent:false, guardianStatus:'withdrawn',
+        withdrawnAt:new Date().toISOString(), version:CONSENT_VERSION,
+        source:'student_app', updatedAt:new Date().toISOString()
+      },{merge:true});
+    }catch(e){ alert('철회 처리 중 오류: '+(e&&e.message||e)); }
+  };
+})();
 </script>
 </body>
 </html>
