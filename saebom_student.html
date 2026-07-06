@@ -311,6 +311,22 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .chart-bar.max{background:#6C5DD3}
 .chart-tag{font-size:9px;font-weight:700;color:#fff;background:#4A3FA8;border-radius:6px;padding:2px 5px;white-space:nowrap}
 .chart-day{font-size:10px;color:var(--text3)}
+/* ── 순위(랭킹) ── */
+.rank-metric-wrap{display:flex;gap:8px;margin-bottom:12px}
+.rank-metric-btn{flex:1;padding:10px 0;border:1.5px solid var(--border);border-radius:12px;background:var(--card);font-size:12.5px;font-weight:700;color:var(--text2);cursor:pointer;font-family:inherit;transition:all .15s}
+.rank-metric-btn.active{background:#6C5DD3;border-color:#6C5DD3;color:#fff;box-shadow:0 2px 8px rgba(108,93,211,0.3)}
+.rank-list{display:flex;flex-direction:column;gap:9px}
+.rank-row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-md);padding:10px 12px;box-shadow:var(--shadow-sm)}
+.rank-row.me{border-color:#6C5DD3;background:#F4F2FE;box-shadow:0 2px 10px rgba(108,93,211,0.18)}
+.rank-no{width:26px;flex-shrink:0;text-align:center;font-size:14px;font-weight:800;color:var(--text3)}
+.rank-no.top{color:#6C5DD3}
+.rank-medal{font-size:16px}
+.rank-main{flex:1;min-width:0}
+.rank-name{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rank-name .seat{font-size:10px;color:var(--text3);font-weight:600;margin-left:5px}
+.rank-bar-track{height:8px;background:#EDEBF6;border-radius:5px;margin-top:6px;overflow:hidden}
+.rank-bar-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,#8F82E4,#6C5DD3);min-width:3px}
+.rank-time{flex-shrink:0;font-size:12px;font-weight:800;color:#4A3FA8;min-width:62px;text-align:right}
 /* ── 이벤트 게이지바 (세그먼트형) ── */
 .ev-card{background:var(--card);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);margin-bottom:14px}
 .ev-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
@@ -1174,7 +1190,7 @@ function showTab(id, btn) {
   if (id === 'focus') { if (window.fmOnOpen) window.fmOnOpen(); }
   else { if (window.fmOnLeave) window.fmOnLeave(); }
   if (id === 'planner') { initPlannerCalendar(); }
-  if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); } // 탭 열 때마다 최신 기록으로 갱신
+  if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); if (statsView === 'rank') loadRankData(true); } // 탭 열 때마다 최신 기록으로 갱신
   if (id === 'quest') { buildQuest(); loadActualStudyData(); }
   if (id === 'events') { buildEvents(); loadActualStudyData(); }
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -1637,6 +1653,30 @@ function _timeToMin(t) { // '오후 10:30' / '22:30' → 분
 // 같은 분의 입실·퇴실이 섞이지 않도록 epoch ms(ts) 우선 정렬 (관리자앱 eventSortKey와 동일)
 function _evKey(x) { return (x && typeof x.ts === 'number') ? x.ts : (_timeToMin(x && x.time) ?? 0) * 60000; }
 
+// 하루치 입퇴실 이벤트 배열 → 공부시간(분) + 그날 최장 세션(분)
+function _sessionMinutes(evs, dateKey, todayKey) {
+  const sorted = evs.slice().sort((a,b) => _evKey(a) - _evKey(b));
+  let total = 0, best = 0, inMin = null;
+  sorted.forEach(ev => {
+    const t = _timeToMin(ev.time);
+    if (t === null) return;
+    if (ev.type === 'in') { if (inMin === null) inMin = t; }
+    else if (ev.type === 'out' && inMin !== null) {
+      let out = t; if (out < inMin) out += 1440; // 자정 넘김(11교시)은 전날 밤으로 이어붙임
+      total += out - inMin;
+      if (out - inMin > best) best = out - inMin;
+      inMin = null;
+    }
+  });
+  // 오늘 아직 퇴실 전이면 지금 시각까지 집계
+  if (inMin !== null && dateKey === todayKey) {
+    const n = new Date(); let cur = n.getHours()*60 + n.getMinutes();
+    if (cur < inMin) cur += 1440;
+    total += Math.max(0, cur - inMin);
+  }
+  return { total, best };
+}
+
 async function loadActualStudyData(force) {
   if (!window._firebaseReady || !currentStudent || _actualLoading) return;
   if (ACTUAL_MIN && !force) return;
@@ -1654,31 +1694,71 @@ async function loadActualStudyData(force) {
     const map = {}; let bestSession = 0;
     const todayKey = _dkey(new Date());
     Object.keys(byDate).forEach(dateKey => {
-      const evs = byDate[dateKey].sort((a,b) => _evKey(a) - _evKey(b));
-      let total = 0, inMin = null;
-      evs.forEach(ev => {
-        const t = _timeToMin(ev.time);
-        if (t === null) return;
-        if (ev.type === 'in') { if (inMin === null) inMin = t; }
-        else if (ev.type === 'out' && inMin !== null) {
-          let out = t; if (out < inMin) out += 1440; // 자정 넘김(11교시)은 전날 밤으로 이어붙임
-          total += out - inMin;
-          if (out - inMin > bestSession) bestSession = out - inMin;
-          inMin = null;
-        }
-      });
-      // 오늘 아직 퇴실 전이면 지금 시각까지 집계
-      if (inMin !== null && dateKey === todayKey) {
-        const n = new Date(); let cur = n.getHours()*60 + n.getMinutes();
-        if (cur < inMin) cur += 1440;
-        total += Math.max(0, cur - inMin);
-      }
+      const { total, best } = _sessionMinutes(byDate[dateKey], dateKey, todayKey);
+      if (best > bestSession) bestSession = best;
       map[dateKey] = total;
     });
     ACTUAL_MIN = map; actualBestSession = bestSession;
     buildMyStats(); buildQuest(); buildEvents();
   } catch(e) { console.error('학습현황 입퇴실 기록 로드 실패:', e); }
   _actualLoading = false;
+}
+
+// ── 순위(랭킹) 데이터: 전체 학생의 오늘/이번달 공부시간 집계 ──
+// 순위에서 영구 제외할 대상(관리자·비대상 학생). "(관리)" 등 괄호 표기는 무시하고 비교.
+const RANK_EXCLUDE = new Set(['정원혁','이새봄','이수연','김근우','손형준']);
+function _rankExcluded(name) {
+  const base = String(name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
+  return RANK_EXCLUDE.has(base);
+}
+// 개인정보 보호: 마지막 글자만 남기고 앞 글자는 'O'로 마스킹 (예: 김태현 → OO현)
+function _maskName(name) {
+  const s = String(name || '');
+  if (s.length <= 1) return s;
+  return 'O'.repeat(s.length - 1) + s.slice(-1);
+}
+let RANK_DATA = null;        // [{ name, seat, today(분), month(분) }]
+let _rankLoading = false;
+async function loadRankData(force) {
+  if (!window._firebaseReady || _rankLoading) return;
+  if (RANK_DATA && !force) return;
+  _rankLoading = true;
+  try {
+    const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    // 학생 명단 (이름 → 좌석)
+    const stuSnap = await getDocs(collection(window._db, 'students'));
+    const seatOf = {};
+    stuSnap.forEach(d => { const v = d.data(); if (v && v.name) seatOf[v.name] = v.seat || ''; });
+    // 전체 입퇴실 기록 → 학생·날짜별 그룹
+    const logSnap = await getDocs(collection(window._db, 'checkin_logs'));
+    const byStu = {}; // name → { dateKey → [ev] }
+    logSnap.forEach(d => {
+      const x = d.data();
+      if (!x || !x.studentName || !x.date || !x.time) return;
+      const s = (byStu[x.studentName] = byStu[x.studentName] || {});
+      (s[x.date] = s[x.date] || []).push(x);
+    });
+    const now = new Date();
+    const todayKey = _dkey(now);
+    const yr = now.getFullYear(), mo = now.getMonth() + 1;
+    const rows = [];
+    Object.keys(byStu).forEach(name => {
+      if (_rankExcluded(name)) return; // 순위 영구 제외 대상
+      let today = 0, month = 0;
+      const dates = byStu[name];
+      Object.keys(dates).forEach(dateKey => {
+        const { total } = _sessionMinutes(dates[dateKey], dateKey, todayKey);
+        if (dateKey === todayKey) today += total;
+        const p = String(dateKey).split('-').map(Number);
+        if (p[0] === yr && p[1] === mo) month += total;
+      });
+      rows.push({ name, seat: seatOf[name] || '', today, month });
+    });
+    RANK_DATA = rows;
+    const mystatsTab = document.getElementById('tab-mystats');
+    if (statsView === 'rank' && mystatsTab && mystatsTab.style.display !== 'none') buildMyStats();
+  } catch(e) { console.error('순위 데이터 로드 실패:', e); }
+  _rankLoading = false;
 }
 
 function _dateMinutes(d) {
@@ -1708,13 +1788,75 @@ function _streakDays() { // 매월 1일부터 집계 (퀘스트 기준)
   return streak;
 }
 
-function setStatsView(v) { statsView = v; buildMyStats(); }
+let rankMetric = 'today';   // 'today' | 'month' — 순위 기준
+function setStatsView(v) { statsView = v; buildMyStats(); if (v === 'rank') loadRankData(); }
+function setRankMetric(m) { rankMetric = m; buildMyStats(); }
+
+function _buildRankHtml() {
+  const mo = new Date().getMonth() + 1;
+  const monthLabel = mo + '월 누적시간';
+  const key = rankMetric;
+  const metricLabel = key === 'today' ? '오늘 공부시간' : monthLabel;
+  let body;
+  if (!RANK_DATA) {
+    body = `<div style="text-align:center;color:var(--text3);font-size:13px;padding:40px 0">순위를 불러오는 중...</div>`;
+  } else {
+    const rows = RANK_DATA.slice()
+      .filter(r => (r[key] || 0) > 0)
+      .sort((a,b) => (b[key] || 0) - (a[key] || 0));
+    if (rows.length === 0) {
+      body = `<div style="text-align:center;color:var(--text3);font-size:13px;padding:40px 0">아직 ${metricLabel} 기록이 없습니다.</div>`;
+    } else {
+      const maxV = Math.max(1, ...rows.map(r => r[key] || 0));
+      const meName = currentStudent && currentStudent.name;
+      body = '<div class="rank-list">' + rows.map((r,i) => {
+        const v = r[key] || 0;
+        const pct = Math.max(3, Math.round(v / maxV * 100));
+        const isMe = r.name === meName;
+        const dispName = isMe ? r.name : _maskName(r.name); // 본인은 실명, 타인은 마스킹
+        const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : '';
+        const noHtml = medal
+          ? `<div class="rank-no top"><span class="rank-medal">${medal}</span></div>`
+          : `<div class="rank-no">${i+1}</div>`;
+        return `<div class="rank-row${isMe ? ' me' : ''}">
+          ${noHtml}
+          <div class="rank-main">
+            <div class="rank-name">${dispName}${r.seat ? `<span class="seat">${r.seat}</span>` : ''}${isMe ? ' <span class="seat" style="color:#6C5DD3">나</span>' : ''}</div>
+            <div class="rank-bar-track"><div class="rank-bar-fill" style="width:${pct}%"></div></div>
+          </div>
+          <div class="rank-time">${_fmtHMtext(v)}</div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+  }
+  return `
+    <div class="rank-metric-wrap">
+      <button class="rank-metric-btn${rankMetric==='today' ? ' active' : ''}" onclick="setRankMetric('today')">오늘 공부시간</button>
+      <button class="rank-metric-btn${rankMetric==='month' ? ' active' : ''}" onclick="setRankMetric('month')">${monthLabel}</button>
+    </div>
+    <div style="text-align:center;font-size:11px;color:${RANK_DATA ? '#1AB5A3' : '#B9B9C4'};margin:-2px 0 12px">
+      ${RANK_DATA ? '✓ 실제 입퇴실 기록 기준 · 면학관 전체 순위' : '실제 기록 불러오는 중...'}
+    </div>
+    ${body}`;
+}
 
 function buildMyStats() {
   const el = document.getElementById('mystats-content');
   if (!el || !currentStudent) return;
   const s = currentStudent;
   const now = new Date();
+
+  // 순위 탭
+  if (statsView === 'rank') {
+    el.innerHTML = `
+    <div class="seg-wrap">
+      <button class="seg-btn" onclick="setStatsView('daily')">일간</button>
+      <button class="seg-btn" onclick="setStatsView('weekly')">주간</button>
+      <button class="seg-btn active" onclick="setStatsView('rank')">순위</button>
+    </div>
+    ${_buildRankHtml()}`;
+    return;
+  }
 
   // 일간: 그저께·어제·오늘
   const days = [2,1,0].map(off => { const d = new Date(); d.setDate(d.getDate()-off); return d; });
@@ -1814,6 +1956,7 @@ function buildMyStats() {
     <div class="seg-wrap">
       <button class="seg-btn${statsView==='daily'?' active':''}" onclick="setStatsView('daily')">일간</button>
       <button class="seg-btn${statsView==='weekly'?' active':''}" onclick="setStatsView('weekly')">주간</button>
+      <button class="seg-btn${statsView==='rank'?' active':''}" onclick="setStatsView('rank')">순위</button>
     </div>
     <div style="text-align:center;font-size:11px;color:${ACTUAL_MIN ? '#1AB5A3' : '#B9B9C4'};margin:-4px 0 8px">
       ${ACTUAL_MIN ? '✓ 실제 입퇴실 기록 기준' : '스케줄 기준 추정 · 실제 기록 불러오는 중...'}
