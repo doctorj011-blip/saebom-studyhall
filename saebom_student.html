@@ -8,23 +8,12 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="새봄 학생">
-<meta name="theme-color" content="#6C5DD3">
+<meta name="theme-color" content="#C8900A">
 <title>새봄 면학관 — 학생</title>
-<!-- 카톡 등 메신저에 링크 붙여넣을 때 미리보기 카드(이미지+제목)가 자동으로 뜨게 하는 태그 -->
-<meta property="og:title" content="새봄 면학관 학생 앱">
-<meta property="og:description" content="터치 한 번으로 접속 · 휴대폰 번호 뒷 4자리 로그인">
-<meta property="og:image" content="https://doctorj011-blip.github.io/saebom-studyhall/icons/og-student.png">
-<meta property="og:url" content="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html">
-<meta property="og:type" content="website">
-<!-- 홈 화면 아이콘 & PWA 매니페스트 (상대경로 → GitHub Pages 하위 폴더에서도 동작) -->
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
-<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
-<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp }
+import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -38,6 +27,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db  = getFirestore(app);
+// ── [테스트 전용] 로컬 Firestore 에뮬레이터 연결 (URL에 ?emu=1 일 때만) ──
+// 운영에서는 이 파라미터가 없으므로 절대 활성화되지 않는다(실데이터와 완전 격리).
+if (new URLSearchParams(location.search).get('emu') === '1') {
+  try {
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    console.log('🧪 [테스트] Firestore 에뮬레이터(127.0.0.1:8080)에 연결됨 — 실데이터와 격리');
+  } catch(e) { console.error('에뮬레이터 연결 실패:', e); }
+}
 
 // 전역 노출
 window._db = db;
@@ -173,11 +170,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .weekly-table tr:hover td{background:var(--amber-pale)}
 .wk-cell-attend{background:var(--amber-pale);color:var(--green);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-absent{background:var(--red-pale);color:var(--red);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
-.wk-cell-partial{background:#FFF3E0;color:#E67E22;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-empty{color:var(--border);font-size:14px;cursor:pointer;display:inline-block;min-width:32px}
-.wk-cell-input{margin-top:3px;width:100%;max-width:60px;box-sizing:border-box;border:1px solid var(--border-light);border-radius:5px;padding:2px 4px;font-size:10px;text-align:center;outline:none;color:var(--text)}
-.wk-cell-input:focus{border-color:#E67E22}
-.wk-cell-input.reason{max-width:64px}
 .wk-period-label{font-size:12px;color:var(--text);font-weight:600}
 .wk-period-time{font-size:10px;color:var(--text3)}
 
@@ -1079,10 +1072,10 @@ function parsePeriodStatus(sched, pNum) {
   if (!sched || sched === '-') return 'none';
   const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
 
-  // 0) 중간입실(세모): m8 또는 m8(7:30) — 교시 중간에 입실하는 별도 상태
+  // 0) 중간입실: m8 또는 m8(7:30) — 출석이면서 교시 중간 입실
   for (const t of tokens) {
     const m = t.match(/^m(\d+)(?:\(([^)]*)\))?$/i);
-    if (m && Number(m[1]) === pNum) return 'partial';
+    if (m && Number(m[1]) === pNum) return 'attend';
   }
   // 1) 명시적 결석: x10 또는 x10(사유)
   for (const t of tokens) {
@@ -1283,7 +1276,7 @@ function buildDailyPeriods() {
         </div>
       </div>
       <div class="period-toggle">
-        <button class="toggle-btn${(status==='attend'||status==='partial')?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
+        <button class="toggle-btn${status==='attend'?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
         <button class="toggle-btn${status==='absent'?' absent':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
       </div>
     </div>
@@ -1332,23 +1325,12 @@ function buildWeeklyTable() {
 
     DAYS.forEach(day => {
       const status = draftSchedule[day]?.periods[pNum] || 'none';
-      const editable = scheduleEditEnabled;
       let cell = '';
-      if (status === 'attend') {
-        cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
-      } else if (status === 'absent') {
-        // X(불참): 사유를 숫자·글자로 입력할 수 있는 입력칸을 함께 표시
-        const reason = ((draftSchedule[day]?.reasons&&draftSchedule[day].reasons[pNum])||'').replace(/"/g,'&quot;');
-        cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`
-          + `<input class="wk-cell-input reason" type="text" placeholder="사유" value="${reason}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetReason('${day}',${pNum},this.value)"`:'readonly'}>`;
-      } else if (status === 'partial') {
-        // 세모(△): 중간입실 — 입실 시간을 숫자만 입력(예: 730 → 7:30)
-        const t = ((draftSchedule[day]?.partials&&draftSchedule[day].partials[pNum])||'').replace(/"/g,'&quot;');
-        cell = `<span class="wk-cell-partial" onclick="wkToggle('${day}',${pNum})" title="중간입실">△</span>`
-          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="시간" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetPartialTime('${day}',${pNum},this)"`:'readonly'}>`;
-      } else {
-        cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
-      }
+      const pt = status === 'attend' ? draftSchedule[day]?.partials?.[pNum] : undefined;
+      if (pt !== undefined) cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})" title="교시 중간 입실">O</span><div style="font-size:8px;color:#E67E22;line-height:1.2">${pt ? pt+'~' : '중간'}</div>`;
+      else if (status === 'attend') cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
+      else if (status === 'absent') cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`;
+      else cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       html += `<td>${cell}</td>`;
     });
     html += `</tr>`;
@@ -1363,51 +1345,13 @@ function wkToggle(day, pNum) {
     showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
     return;
   }
-  // 터치 순환: 공란(·) → O(참여) → X(불참) → 세모(중간입실) → 공란
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
-  const order = { none:'attend', attend:'absent', absent:'partial', partial:'none' };
-  const next = order[cur] || 'attend';
+  const next = cur === 'none' ? 'attend' : cur === 'attend' ? 'absent' : 'none';
   draftSchedule[day].periods[pNum] = next;
-  // 중간입실(세모)로 바뀌면 시간 저장칸을 준비, 벗어나면 시간 제거
-  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
-  if (next === 'partial') {
-    if (draftSchedule[day].partials[pNum] === undefined) draftSchedule[day].partials[pNum] = '';
-  } else {
-    delete draftSchedule[day].partials[pNum];
-  }
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
   buildWeeklyTable();
   if (currentDayTab === day) buildDailyPeriods();
-}
-
-// 주간표 X(불참) 사유 입력
-function wkSetReason(day, pNum, val) {
-  if (!draftSchedule[day].reasons) draftSchedule[day].reasons = {};
-  draftSchedule[day].reasons[pNum] = val;
-  isDirty = true;
-  document.getElementById('save-fab').classList.add('show');
-}
-
-// 중간입실 시간 입력: 숫자만 받아 "시:분" 형식으로 정규화 (관리앱과 동일 규칙)
-// 예: "730"→"7:30", "1130"→"11:30", "900"→"9:00". 분(뒤 2자리) 60 이상이면 59로 보정
-function _normalizePartialTime(raw) {
-  let d = String(raw || '').replace(/[^0-9]/g, '').slice(0, 4);
-  if (d.length < 3) return d; // 입력 도중(1~2자리)엔 콜론 넣지 않음
-  let hh = d.slice(0, d.length - 2);
-  let mm = d.slice(d.length - 2);
-  if (Number(mm) > 59) mm = '59';
-  return hh + ':' + mm;
-}
-
-// 주간표 세모(중간입실) 시간 입력 — 숫자만 입력받아 정규화
-function wkSetPartialTime(day, pNum, el) {
-  const val = _normalizePartialTime(el.value);
-  el.value = val; // 입력창에 정규화된 값(시:분) 즉시 반영
-  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
-  draftSchedule[day].partials[pNum] = val;
-  isDirty = true;
-  document.getElementById('save-fab').classList.add('show');
 }
 
 // ── 저장 ──
@@ -1423,12 +1367,13 @@ async function saveSchedule() {
     periods.forEach(p => {
       const state = dd.periods[p.n];
       if (state === 'attend') {
-        tokens.push(String(p.n));
-        hasAny = true;
-      } else if (state === 'partial') {
-        // 세모(중간입실) → m교시(입실시간). 시간 미입력이면 m교시만 저장. (관리앱과 동일 형식)
-        const t = (dd.partials && dd.partials[p.n]) || '';
-        tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
+        // 관리자가 지정한 중간입실(m교시)은 그대로 보존해서 저장
+        if (dd.partials && dd.partials[p.n] !== undefined) {
+          const t = dd.partials[p.n];
+          tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
+        } else {
+          tokens.push(String(p.n));
+        }
         hasAny = true;
       } else if (state === 'absent') {
         const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
@@ -1668,11 +1613,8 @@ let statsView = 'daily';
 function _dayMinutes(dayName) {
   if (dayName === '일' || !draftSchedule[dayName]) return 0;
   const periods = dayName === '토' ? PERIODS_SAT : PERIODS_WEEK;
-  return periods.reduce((sum, p) => {
-    const st = draftSchedule[dayName].periods[p.n];
-    // 중간입실(partial)도 출석으로 집계
-    return sum + ((st === 'attend' || st === 'partial') ? (PERIOD_MIN[p.n] || 60) : 0);
-  }, 0);
+  return periods.reduce((sum, p) =>
+    sum + (draftSchedule[dayName].periods[p.n] === 'attend' ? (PERIOD_MIN[p.n] || 60) : 0), 0);
 }
 
 // ── 실제 입퇴실 기록 연동 (관리자앱이 저장하는 checkin_logs 컬렉션) ──
