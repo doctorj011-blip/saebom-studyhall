@@ -3,6 +3,8 @@
   "short_name": "새봄",
   "description": "새봄 면학관 학생 전용 앱",
   "start_url": "./saebom_student.html",
+  "id": "./saebom_student.html",
+  "scope": "./saebom_student.html",
   "display": "standalone",
   "background_color": "#F0D020",
   "theme_color": "#F0D020",
