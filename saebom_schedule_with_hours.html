@@ -7497,6 +7497,13 @@ window.adminForceCheckout = function(name) {
   // STUDENTS에 없어도 (관리자 등) todayRecords에서 seat 찾아서 Firebase 저장
   const seat = student?.seat || rec?.seat || '';
   const studentObj = student || { name, seat };
+  // 이월(어제 미퇴실) 기록을 강제 퇴실하는 경우: 원래 날짜에도 퇴실 로그를 남겨
+  // 다음 새로고침/새벽 리셋 때 어제 미퇴실 기록에서 다시 입실로 이월되지 않도록 마감한다.
+  // (키오스크 checkinConfirm 과 동일한 처리 — 이게 없으면 강제 퇴실이 되살아났음)
+  if (rec && rec.carriedOver && rec.carryFromDate) {
+    const closeTime = (rec.inTime && /\d/.test(rec.inTime)) ? rec.inTime : timeStr;
+    saveCheckinToFirebase(studentObj, true, closeTime, rec.carryFromDate).catch(console.error);
+  }
   saveCheckinToFirebase(studentObj, true, timeStr);
   buildDashboard();
   buildCheckinTodayList();
