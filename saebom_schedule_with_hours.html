@@ -5697,7 +5697,7 @@ window.clearAllScheduleAlerts = function() {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -5959,8 +5959,11 @@ async function loadStudentsFromFirebase() {
     snap.docChanges().forEach(change => {
       // 스케줄 알림 처리상태 메타 문서 — 학생이 아니므로 상태 반영 후 종료
       if (change.doc.id === '_meta_schedule_alerts') {
-        if (change.type !== 'removed' && window._applyRemoteAlertStates) {
-          window._applyRemoteAlertStates(change.doc.data().states || {});
+        if (change.type !== 'removed') {
+          const md = change.doc.data();
+          // 내용 먼저 병합 → 처리상태(닫힘·적용·발송) 적용 순서 유지
+          if (window._applyRemoteAlertContents) window._applyRemoteAlertContents(md.alerts || {});
+          if (window._applyRemoteAlertStates) window._applyRemoteAlertStates(md.states || {});
         }
         return;
       }
@@ -5971,6 +5974,22 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
+      // 스터디룸 알림 닫기상태 메타 문서 — 다른 기기의 닫기 반영
+      if (change.doc.id === '_meta_studyroom_alerts') {
+        if (change.type !== 'removed' && window._applyRemoteDismissedStudyroom) {
+          window._applyRemoteDismissedStudyroom(change.doc.data().dismissed || {});
+        }
+        return;
+      }
+      // 문자 발신내역 삭제상태 메타 문서 — 다른 기기의 삭제 반영
+      if (change.doc.id === '_meta_sms_deleted') {
+        if (change.type !== 'removed' && window._applyRemoteSmsDeleted) {
+          window._applyRemoteSmsDeleted(change.doc.data().ids || {});
+        }
+        return;
+      }
+      // 그 외 메타 문서(새벽 리셋 잠금 등)는 학생이 아니므로 무시
+      if (change.doc.id.startsWith('_meta_')) return;
       // added는 getDocs에서 이미 처리했으므로 완전히 무시
       if (change.type === 'added') return;
 
@@ -6290,6 +6309,37 @@ function _saveDismissedStudyroomIds() {
   try { localStorage.setItem('saebom_dismissedStudyroomIds', JSON.stringify([..._dismissedStudyroomIds])); } catch(e) {}
 }
 
+// ── 스터디룸 알림 닫기상태 기기 간 동기화 (students/_meta_studyroom_alerts) ──
+// 한 기기에서 알림을 닫으면 다른 키오스크·컴퓨터에서도 함께 사라진다.
+async function _syncDismissedStudyroomIds(idsMap) {
+  try {
+    await setDoc(doc(db, 'students', '_meta_studyroom_alerts'),
+      { name: '', dismissed: idsMap, updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('스터디룸 알림 닫기상태 동기화 실패:', e); }
+}
+
+// 다른 기기(또는 시작 시 Firebase)에서 받은 닫기상태 반영
+window._applyRemoteDismissedStudyroom = function(idsMap) {
+  if (!idsMap) return;
+  let changed = false;
+  Object.keys(idsMap).forEach(id => {
+    if (!idsMap[id] || _dismissedStudyroomIds.has(id)) return;
+    _dismissedStudyroomIds.add(id);
+    const idx = _studyroomReqAlerts.findIndex(a => a.id === id);
+    if (idx !== -1) _studyroomReqAlerts.splice(idx, 1);
+    changed = true;
+  });
+  if (changed) { _saveDismissedStudyroomIds(); renderStudyroomAlerts(); }
+};
+
+// 시작 시 저장된 닫기상태 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
+(async function _loadDismissedStudyroomOnce() {
+  try {
+    const snap = await getDoc(doc(db, 'students', '_meta_studyroom_alerts'));
+    if (snap.exists()) window._applyRemoteDismissedStudyroom(snap.data().dismissed || {});
+  } catch(e) { console.error('스터디룸 알림 닫기상태 로드 실패:', e); }
+})();
+
 function _syncStudyRoomStudents() {
   // studyRoomStudents 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
@@ -6397,11 +6447,16 @@ window.rejectStudyroomReq = async function(id) {
 };
 window.removeStudyroomAlert = function(id) {
   const idx = _studyroomReqAlerts.findIndex(a=>a.id===id);
-  if (idx!==-1) { _studyroomReqAlerts.splice(idx,1); _dismissedStudyroomIds.add(id); _saveDismissedStudyroomIds(); renderStudyroomAlerts(); }
+  if (idx!==-1) {
+    _studyroomReqAlerts.splice(idx,1); _dismissedStudyroomIds.add(id); _saveDismissedStudyroomIds(); renderStudyroomAlerts();
+    _syncDismissedStudyroomIds({ [id]: true }); // 다른 기기에도 닫기 전파
+  }
 };
 window.clearAllStudyroomAlerts = function() {
-  _studyroomReqAlerts.forEach(a=>_dismissedStudyroomIds.add(a.id));
+  const ids = {};
+  _studyroomReqAlerts.forEach(a=>{ _dismissedStudyroomIds.add(a.id); ids[a.id] = true; });
   _studyroomReqAlerts.length=0; _saveDismissedStudyroomIds(); renderStudyroomAlerts();
+  if (Object.keys(ids).length) _syncDismissedStudyroomIds(ids); // 다른 기기에도 닫기 전파
 };
 
 
@@ -6492,6 +6547,47 @@ window._applyRemoteAlertStates = function(states) {
   }
 };
 
+// ── 스케줄 알림 '내용' 기기 간 공유 ──
+// 알림을 감지한 기기가 내용을 _meta_schedule_alerts.alerts에 실어두면,
+// 변경 순간 꺼져 있던 기기(가끔 켜는 컴퓨터 등)도 시작 시 같은 알림을 받는다.
+window._syncScheduleAlertContent = async function(alertObj) {
+  try {
+    const id = _getScheduleAlertId(alertObj);
+    const ms = alertObj.updatedAt?.toDate ? alertObj.updatedAt.toDate().getTime()
+             : (alertObj.updatedAt?._ms != null ? alertObj.updatedAt._ms
+             : (alertObj.updatedAt?.seconds ? alertObj.updatedAt.seconds * 1000 : Date.now()));
+    const payload = {
+      seat: alertObj.seat, studentName: alertObj.studentName,
+      changes: alertObj.changes || [], _ms: ms,
+      _timeStr: new Date(ms).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'})
+    };
+    await setDoc(doc(db, 'students', '_meta_schedule_alerts'),
+      { name: '', alerts: { [id]: payload }, updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('스케줄 알림 내용 동기화 실패:', e); }
+};
+
+// 다른 기기가 공유한 알림 내용을 로컬 목록에 병합 (닫힌 알림·이미 있는 알림 제외)
+window._applyRemoteAlertContents = function(alerts) {
+  if (!alerts) return;
+  let changed = false;
+  const _msOf = a => a.updatedAt?.toDate ? a.updatedAt.toDate().getTime()
+    : (a.updatedAt?._ms != null ? a.updatedAt._ms : (a.updatedAt?.seconds ? a.updatedAt.seconds * 1000 : 0));
+  Object.entries(alerts).forEach(([id, p]) => {
+    if (!p || _dismissedScheduleAlertIds.has(id)) return;
+    if (scheduleAlerts.some(a => _getScheduleAlertId(a) === id)) return;
+    const a = { seat: p.seat, studentName: p.studentName, changes: p.changes || [],
+                updatedAt: { _ms: p._ms }, _timeStr: p._timeStr || null };
+    const rs = window._remoteAlertStates && window._remoteAlertStates[id];
+    if (rs) { if (rs.a) a.applied = true; if (rs.s) a.smsSent = true; }
+    // 같은 학생(seat)의 기존 알림은 더 최신일 때만 교체 (onSnapshot 로직과 동일한 좌석당 1건 유지)
+    const existIdx = scheduleAlerts.findIndex(x => x.seat === a.seat);
+    if (existIdx !== -1) {
+      if ((p._ms || 0) >= _msOf(scheduleAlerts[existIdx])) { scheduleAlerts[existIdx] = a; changed = true; }
+    } else { scheduleAlerts.unshift(a); changed = true; }
+  });
+  if (changed) { _saveScheduleAlerts(); renderScheduleAlerts(); }
+};
+
 // 시작 시 저장된 처리상태 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
 (async function _loadAlertStatesOnce() {
   try {
@@ -6503,7 +6599,11 @@ window._applyRemoteAlertStates = function(states) {
     if (!db) return;
     const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
     const snap = await getDoc(doc(db, 'students', '_meta_schedule_alerts'));
-    if (snap.exists()) window._applyRemoteAlertStates(snap.data().states || {});
+    if (snap.exists()) {
+      // 내용 먼저 병합 → 처리상태 적용 (꺼져 있는 동안 발생한 알림도 이 시점에 복원)
+      if (window._applyRemoteAlertContents) window._applyRemoteAlertContents(snap.data().alerts || {});
+      window._applyRemoteAlertStates(snap.data().states || {});
+    }
   } catch(e) { console.error('스케줄 알림 상태 로드 실패:', e); }
 })();
 
@@ -6587,9 +6687,31 @@ async function saveScheduleToFirebase(student, commitBase) {
 // (schedule_base)으로 되돌려, 학생이 앱을 다시 열지 않아도 고정 시간표로 초기화되게 한다.
 // 원칙: 관리자가 '적용'한 변경이나 주간 수정기간 저장은 이미 schedule_base에 반영되므로
 //       복구 후에도 유지된다(당일 임시변경만 사라짐).
+// ── 새벽 리셋 잠금: 오늘 날짜를 먼저 기록한 기기 1대만 Firestore 리셋을 실행 ──
+// 상시 켜진 키오스크 2대 + 가끔 켜는 컴퓨터가 같은 리셋 쓰기를 중복 실행하는 것을 방지.
+async function _claimDailyResetLock(dateStr) {
+  try {
+    const ref = doc(db, 'students', '_meta_daily_reset');
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (snap.exists() && snap.data().date === dateStr) return false; // 다른 기기가 이미 실행함
+      tx.set(ref, { name: '', date: dateStr, by: DOOR_DEVICE_ID, at: Date.now() });
+      return true;
+    });
+  } catch(e) {
+    // 잠금 확인 실패(일시적 오프라인 등) → 기존처럼 이 기기에서 실행 (리셋은 멱등이라 중복돼도 안전)
+    console.warn('리셋 잠금 확인 실패 — 이 기기에서 리셋 실행:', e);
+    return true;
+  }
+}
+
 window.resetSchedulesToBase = async function() {
   const RDAYS = ['월','화','수','목','금','토'];
   let count = 0;
+  // Firestore 전체 쓰기는 잠금을 얻은 기기 1대만 수행. 로컬 정리(알림 비우기·화면 갱신)는
+  // 아래에서 모든 기기가 각자 수행한다.
+  const isLeader = await _claimDailyResetLock(new Date().toLocaleDateString('ko-KR'));
+  if (!isLeader) { _resetLocalAfterDailyReset(0); return; }
   try {
     const baseSnap = await getDocs(collection(db, 'schedule_base'));
     const writes = [];
@@ -6619,6 +6741,15 @@ window.resetSchedulesToBase = async function() {
     console.error('스케줄 원본 복구 실패:', e);
     return;
   }
+  // 어제의 알림 내용·처리상태·미입실 발송기록을 메타 문서에서 정리 (무한 성장 방지 겸
+  // 하루 지난 알림이 새로 켜지는 기기에 다시 나타나지 않도록). 잠금 승자만 1회 수행.
+  try { await updateDoc(doc(db, 'students', '_meta_schedule_alerts'), { alerts: {}, states: {} }); } catch(e) {}
+  try { await updateDoc(doc(db, 'students', '_meta_absent_sms'), { keys: {} }); } catch(e) {}
+  _resetLocalAfterDailyReset(count);
+};
+
+// 리셋 후 로컬 정리 — Firestore 쓰기와 달리 켜져 있는 모든 기기가 각자 실행해야 한다.
+function _resetLocalAfterDailyReset(count) {
   // 어제의 변동 알림은 이제 원본으로 되돌려졌으므로 목록에서 정리한다.
   // (renderScheduleAlerts 내부에서 _saveScheduleAlerts()로 localStorage에도 반영됨)
   try {
@@ -6636,7 +6767,7 @@ window.resetSchedulesToBase = async function() {
   if (count > 0 && window.showAdminToast) {
     window.showAdminToast(`🔄 변동 스케줄 ${count}명을 고정 시간표로 초기화했습니다`);
   }
-};
+}
 
 onSnapshot(collection(db, 'schedules'), (snapshot) => {
   const DAYS = ['월','화','수','목','금','토'];
@@ -6700,6 +6831,8 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     if (existIdx !== -1) scheduleAlerts[existIdx] = alertObj;
     else scheduleAlerts.unshift(alertObj);
     changed = true;
+    // 알림 내용을 메타 문서에 공유 — 지금 꺼져 있는 기기도 켜질 때 받도록
+    if (window._syncScheduleAlertContent) window._syncScheduleAlertContent(alertObj);
   });
 
   _schedulesInitDone = true;  // 첫 콜백 이후 초기 로딩 완료 — 이후 added는 신규 저장으로 감지
@@ -6886,6 +7019,57 @@ async function saveSmsLogToFirebase(entry, logId) {
 let _smsLogData = []; // 현재 표시 중인 데이터
 let _deletedSmsIds = new Set(JSON.parse(localStorage.getItem('saebom_sms_deleted') || '[]'));
 
+// ── 문자 삭제상태 기기 간 동기화 (students/_meta_sms_deleted) ──
+// deleteSmsLog가 Firestore 문서는 지우지만 다른 기기 localStorage 사본에는 남아
+// 그 기기 발신내역에 계속 표시되는 문제를 막는다.
+async function _syncSmsDeleted(idsMap) {
+  try {
+    await setDoc(doc(db, 'students', '_meta_sms_deleted'),
+      { name: '', ids: idsMap, updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('문자 삭제상태 동기화 실패:', e); }
+}
+
+// 다른 기기(또는 시작 시 Firebase)에서 받은 삭제상태 반영
+window._applyRemoteSmsDeleted = function(idsMap) {
+  if (!idsMap) return;
+  let changed = false;
+  Object.keys(idsMap).forEach(id => {
+    if (!idsMap[id] || _deletedSmsIds.has(String(id))) return;
+    _deletedSmsIds.add(String(id));
+    changed = true;
+  });
+  if (!changed) return;
+  localStorage.setItem('saebom_sms_deleted', JSON.stringify([..._deletedSmsIds]));
+  _smsLogs = _smsLogs.filter(l => !_deletedSmsIds.has(String(l.id)));
+  localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
+  const before = _smsLogData.length;
+  _smsLogData = _smsLogData.filter(l => !_deletedSmsIds.has(String(l.id)));
+  // 발신내역 화면이 열려 있을 때만 다시 그림
+  if (_smsLogData.length !== before && document.getElementById('smslog-list')) renderSmsLog(_smsLogData);
+};
+
+// 시작 시 저장된 삭제상태 1회 로드 + 90일 지난 id 정리 (문서 무한 성장 방지)
+(async function _loadSmsDeletedOnce() {
+  try {
+    const snap = await getDoc(doc(db, 'students', '_meta_sms_deleted'));
+    if (!snap.exists()) return;
+    const ids = snap.data().ids || {};
+    window._applyRemoteSmsDeleted(ids);
+    // id 앞부분이 발송시각(Date.now())이므로 90일 이전 것은 버려도 로그가 이미 없다
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+    const recent = {};
+    let dropped = 0;
+    Object.keys(ids).forEach(id => {
+      const ts = parseInt(id, 10);
+      if (isNaN(ts) || ts >= cutoff) recent[id] = true; else dropped++;
+    });
+    if (dropped > 0) {
+      await setDoc(doc(db, 'students', '_meta_sms_deleted'),
+        { name: '', ids: recent, updatedAt: Date.now() }); // merge 없이 전체 교체
+    }
+  } catch(e) { console.error('문자 삭제상태 로드 실패:', e); }
+})();
+
 // 문자 로그 정렬 기준: id가 "1720000000000_이름_type" 형태이므로 앞의 타임스탬프 숫자를 추출.
 // (기존엔 문자열 id끼리 빼서 NaN → 정렬이 안 되고 순서가 뒤죽박죽이었음)
 function _smsTs(log) {
@@ -7017,6 +7201,7 @@ window.deleteSmsLog = async function(logId, idx) {
   if (logId) {
     _deletedSmsIds.add(String(logId));
     localStorage.setItem('saebom_sms_deleted', JSON.stringify([..._deletedSmsIds]));
+    _syncSmsDeleted({ [String(logId)]: true }); // 다른 기기 localStorage 사본도 정리되도록 전파
   }
 
   // localStorage에서 삭제
