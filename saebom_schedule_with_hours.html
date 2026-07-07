@@ -5697,7 +5697,7 @@ window.clearAllScheduleAlerts = function() {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -6132,7 +6132,7 @@ async function loadTodayCheckinFromFirebase() {
     // 이전 날짜(어제~3일 전) 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태로 이월.
     // 여러 날의 기록을 시간순으로 재생해 '마지막 이벤트가 열린 입실'인 경우만 이월한다.
     // (며칠에 걸친 연속 체류로 어제 로그가 비어 있어도, 그 이전 날의 미퇴실을 놓치지 않는다.)
-    const _priorOrder = {}; // 과거 날짜일수록 작은 값 (시간순 정렬용)
+    const _priorOrder = {}; // 과거 날짜일수록 작은 값 (시간순 정렬용). 오늘 날짜가 가장 큼(마지막).
     _recentDates.forEach((ds, i) => { _priorOrder[ds] = _recentDates.length - i; });
     const priorByStudent = {};
     priorDocs.forEach(d => {
@@ -6140,9 +6140,20 @@ async function loadTodayCheckinFromFirebase() {
       if (d.type !== 'in' && d.type !== 'out') return;
       (priorByStudent[d.studentName] = priorByStudent[d.studentName] || []).push(d);
     });
-    Object.entries(priorByStudent).forEach(([name, evs]) => {
+    // 오늘자 입퇴실 이벤트도 학생별로 모아둔다. 자정을 넘긴 세션(전날 입실 → 오늘 새벽 퇴실)은
+    // 전날 입실만 보면 '미퇴실'로 오인되지만, 오늘 퇴실을 같은 타임라인에 넣어 재생하면 정상적으로
+    // 닫혀 이월되지 않는다. (이게 빠져 있어 자정 넘겨 퇴실한 학생이 계속 '입실 중'으로 남았음)
+    const todayEvsByStudent = {};
+    todayDocs.forEach(d => {
+      if (!d.studentName || d.away === true) return;
+      if (d.type !== 'in' && d.type !== 'out') return;
+      (todayEvsByStudent[d.studentName] = todayEvsByStudent[d.studentName] || []).push(d);
+    });
+    Object.entries(priorByStudent).forEach(([name, prevEvs]) => {
       // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
       if (todayRecords.some(r => r.studentName === name)) return;
+      // 전날 기록 + 오늘 기록을 한 타임라인으로 재생 (오늘 퇴실이 전날 입실을 닫도록)
+      const evs = prevEvs.concat(todayEvsByStudent[name] || []);
       evs.sort((a, b) => {
         const oa = _priorOrder[a.date] || 0, ob = _priorOrder[b.date] || 0;
         if (oa !== ob) return oa - ob;
@@ -6155,6 +6166,9 @@ async function loadTodayCheckinFromFirebase() {
         if (d.type === 'in') { if (openIn == null) openIn = d; }
         else if (d.type === 'out') { if (openIn != null) openIn = null; }
       });
+      // 마지막까지 열린 입실이 '오늘' 것이면 이월이 아니라 정상 입실 → 여기서 만들지 않는다
+      // (todayDocs 처리 단계에서 이미 반영됐어야 하며, 이월은 전날 입실만 대상).
+      if (openIn && openIn.date === today) openIn = null;
       if (openIn) {
         todayRecords.push({ studentName: name, seat: openIn.seat || '', inTime: openIn.time || '?', outTime: null, inTs: (typeof openIn.ts === 'number' ? openIn.ts : null), carriedOver: true, carryFromDate: openIn.date });
         if (!PRESENT.includes(name)) PRESENT.push(name);
@@ -6552,10 +6566,15 @@ window._applyRemoteAlertStates = function(states) {
 // 변경 순간 꺼져 있던 기기(가끔 켜는 컴퓨터 등)도 시작 시 같은 알림을 받는다.
 window._syncScheduleAlertContent = async function(alertObj) {
   try {
+    // 타임스탬프가 없으면 id(=seat_x)와 복원 시 재계산 id가 어긋나 상태추적이 깨진다.
+    // 이 경우 공유를 생략한다(로컬 알림은 그대로 동작, 꺼진 기기로의 전파만 포기).
+    const u = alertObj.updatedAt;
+    const hasTs = u && (u.toDate || u._ms != null || u.seconds != null);
+    if (!hasTs) return;
     const id = _getScheduleAlertId(alertObj);
-    const ms = alertObj.updatedAt?.toDate ? alertObj.updatedAt.toDate().getTime()
-             : (alertObj.updatedAt?._ms != null ? alertObj.updatedAt._ms
-             : (alertObj.updatedAt?.seconds ? alertObj.updatedAt.seconds * 1000 : Date.now()));
+    const ms = u.toDate ? u.toDate().getTime()
+             : (u._ms != null ? u._ms
+             : (u.seconds ? u.seconds * 1000 : Date.now()));
     const payload = {
       seat: alertObj.seat, studentName: alertObj.studentName,
       changes: alertObj.changes || [], _ms: ms,
@@ -6687,31 +6706,33 @@ async function saveScheduleToFirebase(student, commitBase) {
 // (schedule_base)으로 되돌려, 학생이 앱을 다시 열지 않아도 고정 시간표로 초기화되게 한다.
 // 원칙: 관리자가 '적용'한 변경이나 주간 수정기간 저장은 이미 schedule_base에 반영되므로
 //       복구 후에도 유지된다(당일 임시변경만 사라짐).
-// ── 새벽 리셋 잠금: 오늘 날짜를 먼저 기록한 기기 1대만 Firestore 리셋을 실행 ──
-// 상시 켜진 키오스크 2대 + 가끔 켜는 컴퓨터가 같은 리셋 쓰기를 중복 실행하는 것을 방지.
-async function _claimDailyResetLock(dateStr) {
+// ── 새벽 리셋 중복 방지: '완료 표시'를 먼저 확인하고, 리셋을 끝낸 뒤에 표시 ──
+// 상시 켜진 키오스크 2대 + 가끔 켜는 컴퓨터가 같은 리셋 쓰기를 매번 중복 실행하는 것을 줄인다.
+// 일부러 '작업 후 표시' 순서로 둔다: 먼저 잠그면(작업 전 표시) 리더가 쓰기 도중 실패했을 때
+// 다른 기기가 스킵해 그날 리셋이 아예 안 되는 위험이 생긴다. 완료 후에만 표시하면,
+// 시차를 두고 도는 다른 기기가 '아직 미완료'로 보고 대신 실행해 준다(리셋은 멱등이라 안전).
+async function _dailyResetAlreadyDone(dateStr) {
   try {
-    const ref = doc(db, 'students', '_meta_daily_reset');
-    return await runTransaction(db, async (tx) => {
-      const snap = await tx.get(ref);
-      if (snap.exists() && snap.data().date === dateStr) return false; // 다른 기기가 이미 실행함
-      tx.set(ref, { name: '', date: dateStr, by: DOOR_DEVICE_ID, at: Date.now() });
-      return true;
-    });
+    const snap = await getDoc(doc(db, 'students', '_meta_daily_reset'));
+    return snap.exists() && snap.data().date === dateStr;
   } catch(e) {
-    // 잠금 확인 실패(일시적 오프라인 등) → 기존처럼 이 기기에서 실행 (리셋은 멱등이라 중복돼도 안전)
-    console.warn('리셋 잠금 확인 실패 — 이 기기에서 리셋 실행:', e);
-    return true;
+    console.warn('리셋 완료여부 확인 실패 — 이 기기에서 진행:', e);
+    return false; // 확인 실패 시 진행(멱등이라 중복돼도 안전)
   }
+}
+async function _markDailyResetDone(dateStr) {
+  try {
+    await setDoc(doc(db, 'students', '_meta_daily_reset'),
+      { name: '', date: dateStr, by: DOOR_DEVICE_ID, at: Date.now() });
+  } catch(e) { console.warn('리셋 완료 표시 실패:', e); }
 }
 
 window.resetSchedulesToBase = async function() {
   const RDAYS = ['월','화','수','목','금','토'];
   let count = 0;
-  // Firestore 전체 쓰기는 잠금을 얻은 기기 1대만 수행. 로컬 정리(알림 비우기·화면 갱신)는
-  // 아래에서 모든 기기가 각자 수행한다.
-  const isLeader = await _claimDailyResetLock(new Date().toLocaleDateString('ko-KR'));
-  if (!isLeader) { _resetLocalAfterDailyReset(0); return; }
+  const _dateStr = new Date().toLocaleDateString('ko-KR');
+  // 다른 기기가 이미 오늘 리셋을 끝냈으면 Firestore 쓰기는 건너뛰고 로컬 정리만 한다.
+  if (await _dailyResetAlreadyDone(_dateStr)) { _resetLocalAfterDailyReset(0); return; }
   try {
     const baseSnap = await getDocs(collection(db, 'schedule_base'));
     const writes = [];
@@ -6738,11 +6759,14 @@ window.resetSchedulesToBase = async function() {
     });
     await Promise.all(writes);
   } catch(e) {
+    // 쓰기 실패 시 완료 표시를 남기지 않는다 → 다른 기기(또는 다음 기회)가 다시 시도.
     console.error('스케줄 원본 복구 실패:', e);
     return;
   }
+  // 리셋을 끝냈으니 이제 완료 표시 → 시차 두고 도는 다른 기기는 중복 쓰기를 건너뛴다.
+  await _markDailyResetDone(_dateStr);
   // 어제의 알림 내용·처리상태·미입실 발송기록을 메타 문서에서 정리 (무한 성장 방지 겸
-  // 하루 지난 알림이 새로 켜지는 기기에 다시 나타나지 않도록). 잠금 승자만 1회 수행.
+  // 하루 지난 알림이 새로 켜지는 기기에 다시 나타나지 않도록).
   try { await updateDoc(doc(db, 'students', '_meta_schedule_alerts'), { alerts: {}, states: {} }); } catch(e) {}
   try { await updateDoc(doc(db, 'students', '_meta_absent_sms'), { keys: {} }); } catch(e) {}
   _resetLocalAfterDailyReset(count);
@@ -7048,25 +7072,14 @@ window._applyRemoteSmsDeleted = function(idsMap) {
   if (_smsLogData.length !== before && document.getElementById('smslog-list')) renderSmsLog(_smsLogData);
 };
 
-// 시작 시 저장된 삭제상태 1회 로드 + 90일 지난 id 정리 (문서 무한 성장 방지)
+// 시작 시 저장된 삭제상태 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
+// 정리(prune)는 하지 않는다: 문자 삭제는 관리자 수동 조작뿐이라 볼륨이 매우 낮아
+// 이 맵이 커질 일이 사실상 없고, 전체 교체식 정리는 다른 기기의 동시 삭제를
+// 덮어쓰는 경합 위험만 만든다(삭제 병합은 merge로만 안전하게 누적).
 (async function _loadSmsDeletedOnce() {
   try {
     const snap = await getDoc(doc(db, 'students', '_meta_sms_deleted'));
-    if (!snap.exists()) return;
-    const ids = snap.data().ids || {};
-    window._applyRemoteSmsDeleted(ids);
-    // id 앞부분이 발송시각(Date.now())이므로 90일 이전 것은 버려도 로그가 이미 없다
-    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
-    const recent = {};
-    let dropped = 0;
-    Object.keys(ids).forEach(id => {
-      const ts = parseInt(id, 10);
-      if (isNaN(ts) || ts >= cutoff) recent[id] = true; else dropped++;
-    });
-    if (dropped > 0) {
-      await setDoc(doc(db, 'students', '_meta_sms_deleted'),
-        { name: '', ids: recent, updatedAt: Date.now() }); // merge 없이 전체 교체
-    }
+    if (snap.exists()) window._applyRemoteSmsDeleted(snap.data().ids || {});
   } catch(e) { console.error('문자 삭제상태 로드 실패:', e); }
 })();
 
