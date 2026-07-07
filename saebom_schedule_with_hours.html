@@ -2045,38 +2045,57 @@ window.queryHoursRange = async function(){
     };
     const todayStr = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
 
-    Object.entries(byDate).forEach(([date, events]) => {
-      // loadTodayCheckinFromFirebase와 동일 규칙: ts 우선 정렬, 동시각이면 입실 먼저
-      events.sort((a, b) => {
-        const diff = eventSortKey(a) - eventSortKey(b);
-        if (diff !== 0) return diff;
-        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
+    // 날짜별 순번(0,1,2,…) — 날짜 경계를 넘긴 세션을 '절대 분(min)' 좌표로 환산해 짝짓기 위함.
+    const dateOrder = {};
+    dates.forEach((ds, i) => { dateOrder[ds] = i; });
+    const nowMinNow = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+    const nowAbs = (dateOrder[todayStr] != null && nowMinNow != null) ? dateOrder[todayStr] * 1440 + nowMinNow : null;
+
+    // 모든 입퇴실 이벤트를 날짜 경계를 넘어 시간순으로 정렬한다.
+    // (예: 7/6 저녁 입실 → 7/8 새벽 퇴실처럼 입실 date와 퇴실 date가 다른 세션도 하나로 이어 짝짓는다.)
+    const allEvents = [];
+    Object.entries(byDate).forEach(([date, evs]) => {
+      const ord = dateOrder[date];
+      if (ord == null) return;
+      evs.forEach(ev => {
+        if (ev.type !== 'in' && ev.type !== 'out') return;
+        const tmin = timeToMin(ev.time);
+        if (tmin == null) return;
+        allEvents.push({ ev, ord, abs: ord * 1440 + tmin, date });
       });
-      const open = {}; // 이름 → 입실 시각(분)
-      events.forEach(ev => {
-        const name = ev.studentName;
-        if (ev.seat) seatOf[name] = ev.seat;
-        if (ev.type === 'in') {
-          const inMin = timeToMin(ev.time);
-          if (open[name] == null && inMin != null) open[name] = inMin;
-        } else if (ev.type === 'out') {
-          const inMin = open[name];
-          if (inMin != null) {
-            let outMin = timeToMin(ev.time);
-            if (outMin != null) {
-              if (outMin < inMin) outMin += 1440; // 자정 넘김 (미퇴실 이월 퇴실 등)
-              addMin(name, date, outMin - inMin);
-            }
-            delete open[name];
-          }
-        }
-      });
-      // 미퇴실 세션: 오늘 날짜면 현재 시각까지 집계, 과거 날짜는 집계 제외
-      if (date === todayStr) {
-        const nowMin = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
-        if (nowMin != null) Object.entries(open).forEach(([name, inMin]) => addMin(name, date, nowMin - inMin));
+    });
+    allEvents.sort((a, b) => {
+      if (a.ord !== b.ord) return a.ord - b.ord;              // 날짜 순
+      const k = eventSortKey(a.ev) - eventSortKey(b.ev);      // 같은 날짜 안에서는 실제 발생시각(ts) 순
+      if (k !== 0) return k;
+      return (a.ev.type === 'in' ? 0 : 1) - (b.ev.type === 'in' ? 0 : 1); // 동시각이면 입실 먼저
+    });
+
+    const openS = {}; // 이름 → { absIn, ord, date }
+    allEvents.forEach(({ ev, ord, abs, date }) => {
+      const name = ev.studentName;
+      if (ev.seat) seatOf[name] = ev.seat;
+      if (ev.type === 'in') {
+        if (openS[name] == null) openS[name] = { absIn: abs, ord, date };
+      } else { // out
+        const o = openS[name];
+        if (o == null) return;                                   // 짝 없는 퇴실 무시
+        let outAbs = abs;
+        if (ord === o.ord && outAbs < o.absIn) outAbs += 1440;   // 같은 date로 기록된 자정 넘김
+        const crossedDay = outAbs >= (o.ord + 1) * 1440;         // 입실일 다음날 이후에 퇴실
+        const cap = crossedDay ? o.ord * 1440 + 25 * 60 : Infinity; // 이월 정산과 동일: 익일 01:00까지만 인정
+        const dur = Math.min(outAbs, cap) - o.absIn;
+        if (dur <= 0) return; // 0분(이월 마감용 기록·즉시퇴실) — 세션을 열어둔 채 실제 퇴실을 기다린다
+        addMin(name, o.date, dur);
+        delete openS[name];
       }
     });
+    // 미퇴실 세션: 입실일이 오늘이면 현재 시각까지 집계, 과거 날짜는 집계 제외
+    if (nowAbs != null) {
+      Object.entries(openS).forEach(([name, o]) => {
+        if (o.date === todayStr) { const d = nowAbs - o.absIn; if (d > 0) addMin(name, o.date, d); }
+      });
+    }
 
     window._hoursRangeMode = true;
     document.getElementById('hours-range-reset').style.display = '';
@@ -6017,17 +6036,20 @@ async function loadTodayCheckinFromFirebase() {
   if (_loadCheckinLock) return;
   _loadCheckinLock = true;
   try {
-    const today = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    const yd = new Date(Date.now() - 86400000);
-    const yesterday = yd.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    // 오늘·어제 기록만 조회 — 기록이 몇 달치 쌓여도 읽기량이 늘지 않도록 (비용·속도)
-    const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', [today, yesterday])));
+    const _fmtDate = dt => dt.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    const today = _fmtDate(new Date());
+    // 오늘 + 최근 3일치 조회 — 저녁 입실 후 여러 번의 새벽 리셋을 넘겨 며칠 뒤 새벽에
+    // 퇴실하는 미퇴실 세션도 이월 대상으로 인식해, 퇴실 탭이 '새벽 신규 입실'로 막히지 않게 한다.
+    // (어제 로그가 비어 있어도 그 이전 날의 미퇴실을 놓치지 않는다.)
+    const _recentDates = [];
+    for (let i = 0; i < 4; i++) _recentDates.push(_fmtDate(new Date(Date.now() - i * 86400000)));
+    const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', _recentDates)));
     const todayDocs = [];
-    const yesterdayDocs = [];
+    const priorDocs = []; // 오늘 이전(어제~3일 전) 기록 — 미퇴실 이월 판정용
     snap.forEach(d => {
       const data = d.data();
       if (data.date === today) todayDocs.push(data);
-      else if (data.date === yesterday) yesterdayDocs.push(data);
+      else if (_recentDates.includes(data.date)) priorDocs.push(data);
     });
 
     // todayRecords, PRESENT, 외출 상태 초기화 후 재구성
@@ -6088,26 +6110,35 @@ async function loadTodayCheckinFromFirebase() {
       }
     });
 
-    // 어제 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태 유지 (미퇴실 이월)
-    const ydByStudent = {};
-    yesterdayDocs.forEach(d => {
-      if (!d.studentName) return;
-      if (d.away === true) return; // 외출/복귀는 미퇴실 이월 판정에서 제외 (진짜 입퇴실만 카운트)
-      if (!ydByStudent[d.studentName]) ydByStudent[d.studentName] = { ins: [], outs: [] };
-      if (d.type === 'in') ydByStudent[d.studentName].ins.push(d);
-      else if (d.type === 'out') ydByStudent[d.studentName].outs.push(d);
+    // 이전 날짜(어제~3일 전) 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태로 이월.
+    // 여러 날의 기록을 시간순으로 재생해 '마지막 이벤트가 열린 입실'인 경우만 이월한다.
+    // (며칠에 걸친 연속 체류로 어제 로그가 비어 있어도, 그 이전 날의 미퇴실을 놓치지 않는다.)
+    const _priorOrder = {}; // 과거 날짜일수록 작은 값 (시간순 정렬용)
+    _recentDates.forEach((ds, i) => { _priorOrder[ds] = _recentDates.length - i; });
+    const priorByStudent = {};
+    priorDocs.forEach(d => {
+      if (!d.studentName || d.away === true) return; // 외출/복귀는 미퇴실 이월 판정에서 제외
+      if (d.type !== 'in' && d.type !== 'out') return;
+      (priorByStudent[d.studentName] = priorByStudent[d.studentName] || []).push(d);
     });
-    Object.entries(ydByStudent).forEach(([name, rec]) => {
-      if (rec.ins.length > 0 && rec.ins.length > rec.outs.length) {
-        // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
-        // ※ 예전에는 '아직 입실 중(!outTime)'인 기록만 검사해서, 오늘 퇴실 처리한 학생이
-        //   어제 미퇴실 기록으로부터 다시 입실로 되살아나는 버그가 있었다.
-        const hasTodayRecord = todayRecords.some(r => r.studentName === name);
-        if (!hasTodayRecord) {
-          const lastIn = rec.ins[rec.ins.length - 1];
-          todayRecords.push({ studentName: name, seat: lastIn.seat || '', inTime: lastIn.time || '?', outTime: null, inTs: (typeof lastIn.ts === 'number' ? lastIn.ts : null), carriedOver: true, carryFromDate: yesterday });
-          if (!PRESENT.includes(name)) PRESENT.push(name);
-        }
+    Object.entries(priorByStudent).forEach(([name, evs]) => {
+      // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
+      if (todayRecords.some(r => r.studentName === name)) return;
+      evs.sort((a, b) => {
+        const oa = _priorOrder[a.date] || 0, ob = _priorOrder[b.date] || 0;
+        if (oa !== ob) return oa - ob;
+        const k = eventSortKey(a) - eventSortKey(b);
+        if (k !== 0) return k;
+        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1); // 동시각이면 입실 먼저
+      });
+      let openIn = null;
+      evs.forEach(d => {
+        if (d.type === 'in') { if (openIn == null) openIn = d; }
+        else if (d.type === 'out') { if (openIn != null) openIn = null; }
+      });
+      if (openIn) {
+        todayRecords.push({ studentName: name, seat: openIn.seat || '', inTime: openIn.time || '?', outTime: null, inTs: (typeof openIn.ts === 'number' ? openIn.ts : null), carriedOver: true, carryFromDate: openIn.date });
+        if (!PRESENT.includes(name)) PRESENT.push(name);
       }
     });
 

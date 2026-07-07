@@ -877,6 +877,10 @@ let currentDayTab = '월';
 let draftSchedule = {}; // { 월: { 7: 'attend'|'absent'|'none', reason: '' }, ... }
 let isDirty = false;
 let scheduleEditEnabled = false;
+// 주간 표(wkToggle)로 실제 수정한 요일 집합 — base(고정 시간표) 저장 시,
+// '오늘' 요일은 주간 표로 고친 경우에만 새 값을 쓰고, 당일 변경만 있으면 기존 base 값을 보존한다.
+// (당일 변경이 고정 시간표에 영구 반영되던 버그 방지)
+let weeklyEditedDays = new Set();
 let todayDay = '';
 const DAY_NAMES = ['일','월','화','수','목','금','토'];
 
@@ -1364,6 +1368,7 @@ function wkToggle(day, pNum) {
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
   const next = cur === 'none' ? 'attend' : cur === 'attend' ? 'absent' : 'none';
   draftSchedule[day].periods[pNum] = next;
+  weeklyEditedDays.add(day); // 주간 표에서 고친 요일 → base 저장 대상
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
   buildWeeklyTable();
@@ -1438,16 +1443,28 @@ async function saveToFirebase() {
     await window._fsSetDoc(docRef, payload);
 
     // 원칙1: 주간 시간표 수정기간(관리자 허용) 저장은 '원본(base)'도 갱신 →
-    // 다음 수정기간까지 유지된다. (당일 변경은 scheduleEditEnabled=false 라 여기 안 탐)
+    // 다음 수정기간까지 유지된다.
+    // ※ '오늘 일정' 탭의 당일 변경은 수정기간과 무관하게 언제든 가능하고 같은 저장 경로를 타므로,
+    //   '오늘' 요일은 주간 표(wkToggle)로 실제 고친 경우에만 base에 반영하고,
+    //   당일 변경만 있으면 기존 base 값을 보존한다 (당일 변경이 고정 시간표에 영구 반영되는 것 방지).
     if (scheduleEditEnabled) {
       const baseRef = window._fsDoc(db, 'schedule_base', seatKey);
+      let prevBase = null;
+      try {
+        const bs = await window._fsGetDoc(baseRef);
+        if (bs.exists()) prevBase = bs.data();
+      } catch(e) {}
       const basePayload = {
         name: currentStudent.name,
         seat: currentStudent.seat,
         updatedAt: window._fsServerTimestamp(),
       };
-      DAYS.forEach(day => { basePayload[day] = currentStudent.schedule[day] || '-'; });
+      DAYS.forEach(day => {
+        const keepOldToday = day === todayDay && !weeklyEditedDays.has(day) && prevBase && prevBase[day] != null;
+        basePayload[day] = keepOldToday ? prevBase[day] : (currentStudent.schedule[day] || '-');
+      });
       await window._fsSetDoc(baseRef, basePayload);
+      weeklyEditedDays.clear(); // base에 반영 완료 → 추적 초기화
     }
 
     await saveDailyReportToFirebase(db, seatKey);
