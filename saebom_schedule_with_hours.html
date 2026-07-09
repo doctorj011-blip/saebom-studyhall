@@ -428,6 +428,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
     <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
+    <button class="tab-btn" onclick="showSection('billing',this)">💳 수납</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
   </div>
 </div>
@@ -674,6 +675,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
         <option value="in">입실 문자</option>
         <option value="out">퇴실 문자</option>
         <option value="absent">미입실 알림</option>
+        <option value="billing">수납 안내</option>
       </select>
       <button onclick="refreshSmsLog()" style="padding:6px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010;cursor:pointer;font-weight:600">🔄 새로고침</button>
       <button onclick="clearOldSmsLogs()" style="padding:6px 12px;background:#FCEBEB;border:1.5px solid #F09595;border-radius:8px;font-size:12px;color:#C62828;cursor:pointer;font-weight:600">🗑️ 오래된 내역 삭제</button>
@@ -703,6 +705,68 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
   <!-- 내역 목록 -->
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
     <div id="smslog-list" style="min-height:200px">
+      <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 수납관리 -->
+<div id="sec-billing" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="font-size:15px;font-weight:700;color:#5C3D08">💳 수납관리</div>
+      <button onclick="billingMoveMonth(-1)" style="padding:4px 10px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;color:#8B6010;cursor:pointer;font-weight:700">◀</button>
+      <span id="billing-month-label" style="font-size:15px;font-weight:700;color:#C8900A;min-width:96px;text-align:center"></span>
+      <button onclick="billingMoveMonth(1)" style="padding:4px 10px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:13px;color:#8B6010;cursor:pointer;font-weight:700">▶</button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:12px;color:#8B6010;font-weight:600">기본 이용료</label>
+      <input type="number" id="billing-default-fee" min="0" step="10000" placeholder="예: 300000"
+        style="width:110px;padding:6px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#FFFDF5;color:#5C3D08;outline:none">
+      <button onclick="saveBillingConfig()" style="padding:6px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;color:#8B6010;cursor:pointer;font-weight:600">저장</button>
+      <select id="billing-filter" onchange="renderBillingList()" style="padding:6px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:12px;background:#FFFDF5;color:#5C3D08">
+        <option value="all">전체</option>
+        <option value="unpaid">미납만</option>
+        <option value="paid">납부만</option>
+      </select>
+      <button onclick="sendBillingReminders()" style="padding:6px 12px;background:#FCEBEB;border:1.5px solid #F09595;border-radius:8px;font-size:12px;color:#C62828;cursor:pointer;font-weight:600">📨 미납 안내문자</button>
+    </div>
+  </div>
+
+  <!-- 수납 통계 카드 -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+    <div style="background:linear-gradient(135deg,#FFF8DC,#FFF3B0);border:1.5px solid #E0B020;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#8B6010;font-weight:700;margin-bottom:4px">대상 학생</div>
+      <div style="font-size:22px;font-weight:700;color:#C8900A" id="billing-stat-total">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">납부</div>
+      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="billing-stat-paid">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">미납</div>
+      <div style="font-size:22px;font-weight:700;color:#C62828" id="billing-stat-unpaid">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#F3E5F5,#E1BEE7);border:1.5px solid #CE93D8;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-bottom:4px">수납액</div>
+      <div style="font-size:22px;font-weight:700;color:#6A1B9A" id="billing-stat-sum">0원</div>
+    </div>
+  </div>
+
+  <!-- 미납 안내문자 문구 -->
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:10px 12px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <div style="font-size:11px;color:#8B6010;font-weight:700">📨 미납 안내문자 문구 <span style="font-weight:400;color:var(--color-text-tertiary)">— {이름} {월} {금액} 자리에 학생 이름·청구월·금액이 자동으로 들어갑니다</span></div>
+      <button onclick="saveBillingConfig()" style="padding:4px 10px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:11px;color:#8B6010;cursor:pointer;font-weight:600">문구 저장</button>
+    </div>
+    <textarea id="billing-reminder-text" rows="3"
+      style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--color-border-secondary);border-radius:8px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;resize:vertical;font-family:inherit"></textarea>
+    <div id="billing-config-status" style="font-size:11px;color:#2D7A4F;margin-top:4px"></div>
+  </div>
+
+  <!-- 학생별 수납 목록 -->
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+    <div id="billing-list" style="min-height:200px">
       <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>
     </div>
   </div>
@@ -1088,6 +1152,18 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
               style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
           </div>
         </div>
+        <div id="edit-fee-wrap" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">💳 월 이용료 <span style="color:var(--color-text-tertiary)">(비우면 기본요금)</span></div>
+            <input id="edit-fee" type="number" min="0" step="10000" placeholder="기본요금 적용"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">🏷️ 할인 메모</div>
+            <input id="edit-fee-memo" type="text" maxlength="30" placeholder="예: 형제 할인"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
+          </div>
+        </div>
       </div>
       <button class="sched-modal-close" onclick="closeScheduleModal()">✕</button>
     </div>
@@ -1403,7 +1479,7 @@ window.openPinModal = function(mode, onSuccess) {
 };
 
 window.showSection = function(id,btn){
-  if (id === 'settings' && !isSettingsUnlocked()) {
+  if ((id === 'settings' || id === 'billing') && !isSettingsUnlocked()) {
     openPinModal('unlock', function() { showSection(id, btn); });
     return;
   }
@@ -1415,6 +1491,7 @@ window.showSection = function(id,btn){
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
   if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
+  if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
@@ -4469,7 +4546,8 @@ function _studentDocData(student, ns) {
     월: student.schedule?.['월']||'-', 화: student.schedule?.['화']||'-',
     수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
     금: student.schedule?.['금']||'-', 토: student.schedule?.['토']||'-',
-    hours: student.hours||{}, updatedAt: window._fsServerTimestamp()
+    hours: student.hours||{}, fee: student.fee||0, feeMemo: student.feeMemo||'',
+    updatedAt: window._fsServerTimestamp()
   };
 }
 
@@ -4733,12 +4811,15 @@ function openScheduleModal(idx) {
   document.getElementById('edit-parent').value = stripPhone(s.parent);
   document.getElementById('edit-expiry').value = s.expiry || '';
   document.getElementById('edit-start-date').value = s.startDate || '';
+  document.getElementById('edit-fee').value = s.fee ? s.fee : '';
+  document.getElementById('edit-fee-memo').value = s.feeMemo || '';
   setEditGender(s.gender || 'f');
 
   // 관리자: 부모님번호·이용기간 숨기고, 전화번호 라벨을 '관리자 번호'로, 본문을 근무요일 편집으로 대체
   const isAdmin = parseInt(s.seat) >= 54;
   document.getElementById('edit-parent-wrap').style.display = isAdmin ? 'none' : '';
   document.getElementById('edit-dates-wrap').style.display = isAdmin ? 'none' : '';
+  document.getElementById('edit-fee-wrap').style.display = isAdmin ? 'none' : '';
   document.getElementById('edit-phone-label').textContent = isAdmin ? '📱 관리자 번호' : '📱 학생 번호';
   document.getElementById('edit-phone-grid').style.gridTemplateColumns = isAdmin ? '1fr' : '1fr 1fr';
   if (isAdmin) {
@@ -5163,6 +5244,8 @@ function saveSchedule(commitBase) {
   s.gender    = window._editGender || s.gender || 'f';
   s.expiry    = document.getElementById('edit-expiry').value || '';
   s.startDate = document.getElementById('edit-start-date').value || '';
+  s.fee       = parseInt(document.getElementById('edit-fee').value, 10) || 0;
+  s.feeMemo   = document.getElementById('edit-fee-memo').value.trim() || '';
 
   const isAdmin = parseInt(s.seat) >= 54;
   if (isAdmin) {
@@ -6013,6 +6096,8 @@ async function saveStudentToFirebase(student) {
     금: student.schedule['금'] || '-',
     토: student.schedule['토'] || '-',
     hours: student.hours || {},
+    fee: student.fee || 0,
+    feeMemo: student.feeMemo || '',
     awayAt: (window._awayStudents && window._awayStudents[student.name]) || '', // 외출 상태 보존
     updatedAt: serverTimestamp()
   });
@@ -6177,7 +6262,7 @@ function _parseStudentDoc(v) {
     phone: v.phone || '', parent: v.parent || '',
     gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
     schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-    hours: _normalizeHours(v.hours)
+    hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||''
   };
 }
 
@@ -6197,7 +6282,7 @@ async function loadStudentsFromFirebase() {
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-          hours: _normalizeHours(v.hours),
+          hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
           awayAt: v.awayAt || ''
         });
       });
@@ -6277,7 +6362,7 @@ async function loadStudentsFromFirebase() {
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-        hours: _normalizeHours(v.hours),
+        hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
         awayAt: v.awayAt || ''
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영
@@ -7322,6 +7407,201 @@ async function saveSmsLogToFirebase(entry, logId) {
   } catch(e) { console.error('SMS 로그 Firebase 저장 실패:', e); }
 }
 
+// ── 수납관리 (월별 이용료 납부 추적) ──
+// payments 컬렉션: 문서 id "{YYYY-MM}_{key}" (key = 학생 전화번호 숫자, 없으면 이름).
+// 좌석은 교환될 수 있어 문서 id로 쓰지 않고, 조회 시 전화번호/이름으로 학생과 매칭한다.
+let _billingYm = _curYm();
+let _billingPayments = {};   // key → 납부 문서
+let _billingConfig = null;   // settings/billing (기본요금·안내문구)
+const BILLING_DEFAULT_REMINDER = '[새봄면학관]\n{이름} 학생의 {월} 이용료 {금액}원이 아직 납부되지 않았습니다.\n\n아래 링크에서 카드로 바로 결제하실 수 있습니다.\nhttps://saebom-pay.web.app/pay.html';
+
+function _fmtWon(n){ return (n||0).toLocaleString('ko-KR') + '원'; }
+function _billingKey(s){ return (s.phone||'').replace(/\D/g,'') || (s.name||'').replace(/[^a-zA-Z0-9가-힣]/g,''); }
+function _billingStudents(){ return STUDENTS.filter(s => s.name && parseInt(s.seat) < 54).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)); }
+function _billingFee(s){ return (s.fee && s.fee > 0) ? s.fee : ((_billingConfig && _billingConfig.defaultFee) || 0); }
+function _billingMonthLabel(){ const p=_billingYm.split('-'); return parseInt(p[1],10)+'월'; }
+
+window.loadBillingTab = async function(){
+  const label = document.getElementById('billing-month-label');
+  if (label) { const p=_billingYm.split('-'); label.textContent = p[0]+'년 '+parseInt(p[1],10)+'월'; }
+  const db = window._adminDb;
+  if (!db) { setTimeout(window.loadBillingTab, 300); return; }
+  try {
+    const { doc, getDoc, getDocs, collection, query, where } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    if (!_billingConfig) {
+      const snap = await getDoc(doc(db, 'settings', 'billing'));
+      _billingConfig = snap.exists() ? (snap.data() || {}) : {};
+      const feeEl = document.getElementById('billing-default-fee');
+      if (feeEl && _billingConfig.defaultFee) feeEl.value = _billingConfig.defaultFee;
+      const txtEl = document.getElementById('billing-reminder-text');
+      if (txtEl) txtEl.value = _billingConfig.reminderText || BILLING_DEFAULT_REMINDER;
+    }
+    _billingPayments = {};
+    const ps = await getDocs(query(collection(db, 'payments'), where('ym', '==', _billingYm)));
+    ps.forEach(d => { const v = d.data(); if (v && v.key) _billingPayments[v.key] = { ...v, _id: d.id }; });
+    renderBillingList();
+  } catch(e) {
+    console.error('[수납] 로드 실패:', e);
+    const list = document.getElementById('billing-list');
+    if (list) list.innerHTML = '<div style="text-align:center;padding:48px;color:#C62828;font-size:13px">불러오기 실패: ' + e.message + '<br>Firestore 보안규칙에 payments 컬렉션 허용이 필요할 수 있습니다.</div>';
+  }
+};
+
+window.billingMoveMonth = function(delta){
+  const p = _billingYm.split('-').map(Number);
+  const d = new Date(p[0], p[1] - 1 + delta, 1);
+  _billingYm = _ymKey(d.getFullYear(), d.getMonth() + 1);
+  window.loadBillingTab();
+};
+
+window.saveBillingConfig = async function(){
+  const db = window._adminDb; if (!db) return;
+  try {
+    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const defaultFee = parseInt(document.getElementById('billing-default-fee').value, 10) || 0;
+    const reminderText = document.getElementById('billing-reminder-text').value.trim() || BILLING_DEFAULT_REMINDER;
+    _billingConfig = { ...(_billingConfig || {}), defaultFee, reminderText };
+    await setDoc(doc(db, 'settings', 'billing'), { defaultFee, reminderText, updatedAt: serverTimestamp() }, { merge: true });
+    const st = document.getElementById('billing-config-status');
+    if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(() => st.textContent = '', 2000); }
+    renderBillingList();
+  } catch(e) { showAdminToast('⚠️ 수납 설정 저장 실패: ' + e.message); }
+};
+
+window.renderBillingList = function(){
+  const list = document.getElementById('billing-list'); if (!list) return;
+  const filter = document.getElementById('billing-filter') ? document.getElementById('billing-filter').value : 'all';
+  const students = _billingStudents();
+  let paid = 0, sum = 0;
+  const rows = [];
+  students.forEach(s => {
+    const key = _billingKey(s);
+    const p = _billingPayments[key];
+    if (p) { paid++; sum += p.amount || 0; }
+    if (filter === 'paid' && !p) return;
+    if (filter === 'unpaid' && p) return;
+    const fee = _billingFee(s);
+    const feeHtml = (s.fee && s.fee > 0)
+      ? `<b style="color:#C8900A">${_fmtWon(s.fee)}</b>${s.feeMemo ? ` <span style="font-size:10px;color:#6A1B9A">🏷️ ${s.feeMemo}</span>` : ''}`
+      : `<span style="color:var(--color-text-secondary)">${_fmtWon(fee)}</span>`;
+    const stateHtml = p
+      ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#E8F5E9;color:#2D7A4F;font-weight:700;font-size:11px">납부</span>
+         <span style="font-size:11px;color:var(--color-text-secondary)">${p.paidDate || ''} · ${p.method || ''} · ${_fmtWon(p.amount)}${p.memo ? ' · ' + p.memo : ''}</span>`
+      : `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#FCEBEB;color:#C62828;font-weight:700;font-size:11px">미납</span>`;
+    const btn = p
+      ? `<button onclick="cancelBillingPayment('${key}')" style="padding:5px 10px;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:8px;font-size:11px;color:var(--color-text-secondary);cursor:pointer;white-space:nowrap">납부 취소</button>`
+      : `<button onclick="openBillingPayModal('${key}')" style="padding:5px 12px;background:#FFF8DC;border:1.5px solid #E0B020;border-radius:8px;font-size:11px;color:#8B6010;cursor:pointer;font-weight:700;white-space:nowrap">납부 처리</button>`;
+    rows.push(`<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px">
+      <span style="width:40px;font-weight:700;color:#C8900A;flex-shrink:0">${s.seat}번</span>
+      <span style="width:72px;font-weight:600;color:var(--color-text-primary);flex-shrink:0">${s.name}</span>
+      <span style="flex:1;min-width:120px">${feeHtml}</span>
+      <span style="flex:1.6;min-width:180px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${stateHtml}</span>
+      ${btn}
+    </div>`);
+  });
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('billing-stat-total', students.length);
+  set('billing-stat-paid', paid);
+  set('billing-stat-unpaid', students.length - paid);
+  set('billing-stat-sum', _fmtWon(sum));
+  list.innerHTML = rows.join('') || '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">표시할 학생이 없습니다</div>';
+};
+
+window.openBillingPayModal = function(key){
+  const s = _billingStudents().find(x => _billingKey(x) === key); if (!s) return;
+  const fee = _billingFee(s);
+  const old = document.getElementById('billing-pay-modal'); if (old) old.remove();
+  const d = new Date();
+  const todayStr = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  const m = document.createElement('div');
+  m.id = 'billing-pay-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  m.innerHTML = `<div style="background:var(--color-background-primary);border-radius:16px;padding:20px;width:320px;max-width:90vw;box-shadow:0 8px 32px rgba(0,0,0,0.25)">
+    <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:14px">💳 ${s.name} · ${_billingMonthLabel()} 이용료 납부</div>
+    <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">금액 (원)</div>
+    <input id="bp-amount" type="number" min="0" step="10000" value="${fee}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid #E0B020;border-radius:8px;font-size:14px;font-weight:700;color:#C8900A;background:var(--color-background-primary);outline:none;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">결제 수단</div>
+    <select id="bp-method" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--color-border-secondary);border-radius:8px;font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary);margin-bottom:10px">
+      <option value="카드단말기">카드단말기</option>
+      <option value="계좌이체">계좌이체</option>
+      <option value="현금">현금</option>
+      <option value="자동결제">자동결제</option>
+      <option value="기타">기타</option>
+    </select>
+    <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">납부일</div>
+    <input id="bp-date" type="date" value="${todayStr}" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--color-border-secondary);border-radius:8px;font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;margin-bottom:10px">
+    <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">메모 (선택)</div>
+    <input id="bp-memo" type="text" maxlength="40" placeholder="예: 부분 납부" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--color-border-secondary);border-radius:8px;font-size:13px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;margin-bottom:16px">
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button onclick="document.getElementById('billing-pay-modal').remove()" style="padding:8px 16px;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:8px;font-size:13px;color:var(--color-text-secondary);cursor:pointer">취소</button>
+      <button onclick="confirmBillingPayment('${key}')" style="padding:8px 18px;background:#C8900A;border:none;border-radius:8px;font-size:13px;color:#fff;cursor:pointer;font-weight:700">납부 저장</button>
+    </div>
+  </div>`;
+  m.onclick = e => { if (e.target === m) m.remove(); };
+  document.body.appendChild(m);
+  const amt = document.getElementById('bp-amount');
+  if (amt) { amt.focus(); amt.select(); }
+};
+
+window.confirmBillingPayment = async function(key){
+  const s = _billingStudents().find(x => _billingKey(x) === key); if (!s) return;
+  const db = window._adminDb; if (!db) return;
+  const amount = parseInt(document.getElementById('bp-amount').value, 10);
+  if (!amount || amount <= 0) { alert('금액을 입력해 주세요.'); return; }
+  const method = document.getElementById('bp-method').value;
+  const paidDate = document.getElementById('bp-date').value || '';
+  const memo = document.getElementById('bp-memo').value.trim();
+  try {
+    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const docId = _billingYm + '_' + key;
+    const data = { ym: _billingYm, key, seat: s.seat, name: s.name, phone: s.phone || '', parent: s.parent || '', amount, method, paidDate, memo, createdAt: serverTimestamp() };
+    await setDoc(doc(db, 'payments', docId), data);
+    _billingPayments[key] = { ...data, _id: docId };
+    const modal = document.getElementById('billing-pay-modal'); if (modal) modal.remove();
+    renderBillingList();
+    showAdminToast(`✅ ${s.name} ${_billingMonthLabel()} 이용료 ${_fmtWon(amount)} 납부 처리됐습니다`);
+  } catch(e) { showAdminToast('⚠️ 납부 저장 실패: ' + e.message); console.error('[수납] 저장 실패:', e); }
+};
+
+window.cancelBillingPayment = async function(key){
+  const p = _billingPayments[key]; if (!p) return;
+  const db = window._adminDb; if (!db) return;
+  if (!confirm(`${p.name} 학생의 ${_billingMonthLabel()} 납부 기록(${_fmtWon(p.amount)} · ${p.method})을 취소할까요?`)) return;
+  try {
+    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    await deleteDoc(doc(db, 'payments', p._id));
+    delete _billingPayments[key];
+    renderBillingList();
+    showAdminToast(`🗑️ ${p.name} 납부 기록을 취소했습니다`);
+  } catch(e) { showAdminToast('⚠️ 납부 취소 실패: ' + e.message); }
+};
+
+window.sendBillingReminders = async function(){
+  const unpaid = _billingStudents().filter(s => !_billingPayments[_billingKey(s)]);
+  if (!unpaid.length) { showAdminToast('✅ 미납 학생이 없습니다'); return; }
+  const targets = unpaid.filter(s => s.parent && s.parent.replace(/\D/g,'').length >= 10);
+  const noPhone = unpaid.length - targets.length;
+  if (!targets.length) { showAdminToast('⚠️ 학부모 번호가 등록된 미납 학생이 없습니다'); return; }
+  const mLabel = _billingMonthLabel();
+  if (!confirm(`미납 ${unpaid.length}명 중 학부모 번호가 있는 ${targets.length}명에게\n${mLabel} 이용료 안내문자(LMS)를 발송할까요?${noPhone ? `\n(번호 없는 ${noPhone}명은 제외됩니다)` : ''}`)) return;
+  const tpl = (document.getElementById('billing-reminder-text').value.trim()) || BILLING_DEFAULT_REMINDER;
+  let ok = 0, fail = 0;
+  for (const s of targets) {
+    const text = tpl.replaceAll('{이름}', s.name).replaceAll('{월}', mLabel).replaceAll('{금액}', _billingFee(s).toLocaleString('ko-KR'));
+    const time = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    try {
+      const r = await solapiSend(s.parent, text);
+      const success = r === true;
+      success ? ok++ : fail++;
+      saveSmsLog({ student: s.name, seat: s.seat, phone: s.parent, type: 'billing', typeLabel: '수납안내', text, success, error: success ? null : JSON.stringify(r), time });
+    } catch(e) {
+      fail++;
+      saveSmsLog({ student: s.name, seat: s.seat, phone: s.parent, type: 'billing', typeLabel: '수납안내', text, success: false, error: e.message, time });
+    }
+  }
+  showAdminToast(`📨 수납 안내문자: 성공 ${ok}건${fail ? ` · 실패 ${fail}건` : ''}${noPhone ? ` · 번호없음 ${noPhone}명 제외` : ''}`);
+};
+
 let _smsLogData = []; // 현재 표시 중인 데이터
 let _deletedSmsIds = new Set(JSON.parse(localStorage.getItem('saebom_sms_deleted') || '[]'));
 
@@ -7527,6 +7807,7 @@ window.filterSmsLog = function() {
   else if (f === 'in') filtered = _smsLogData.filter(l => l.type === 'in');
   else if (f === 'out') filtered = _smsLogData.filter(l => l.type === 'out');
   else if (f === 'absent') filtered = _smsLogData.filter(l => l.type === 'absent');
+  else if (f === 'billing') filtered = _smsLogData.filter(l => l.type === 'billing');
   renderSmsLog(filtered);
 }
 
@@ -7935,7 +8216,9 @@ window.confirmAddStudent = function(seatNum) {
     expiry,
     startDate,
     schedule,
-    hours: {}
+    hours: {},
+    fee: 0,
+    feeMemo: ''
   };
   STUDENTS.push(newStudent);
 
