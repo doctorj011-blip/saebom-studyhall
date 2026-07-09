@@ -1005,6 +1005,10 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
           style="padding:7px 16px;background:#FCEBEB;border:1.5px solid #F09595;color:#C62828;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
           🗑️ 60일 이전 기록 정리
         </button>
+        <button onclick="recalcHoursWithConfirm()"
+          style="padding:7px 16px;background:#FFF8DC;border:1.5px solid #E0B020;color:#7A5008;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+          ⚖️ 이번 달 누적시간 재계산
+        </button>
         <span id="log-purge-status" style="font-size:12px;color:#8B6010"></span>
       </div>
     </div>
@@ -1309,6 +1313,30 @@ function timeToMin(t) {
   if (/오전/.test(s) && h === 12) h = 0;      // 오전 12시(자정) → 0시
   return h * 60 + min;
 }
+
+// ── 세션(입실~퇴실) 시간 헬퍼 — attendance_sessions 공용 ──
+// 시간기록의 단일 원본: 입실~퇴실을 epoch ms 로 기록한 세션 문서 하나로 관리한다.
+// 공부시간 = (퇴실ts − 입실ts − 외출ms) 순수 뺄셈. 자정/오전오후/날짜경계 산수가 없다.
+function sessIsoDate(ts){ const d=new Date(ts); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function sessMonthKey(ts){ return sessIsoDate(ts).slice(0,7); } // "YYYY-MM" — students.hours key와 동일
+function sessLegacyDate(ts){ const d=new Date(ts); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); } // checkin_logs 호환(무패딩)
+// 세션 인정 상한: 입실일 다음날 01:00 (= 입실일 0시 + 25h).
+// 같은 날 세션은 절대 걸리지 않고, 자정 넘긴 세션만 01:00까지 인정(미퇴실 과대집계 방지).
+function sessCapTs(inTs){ const d=new Date(inTs); d.setHours(0,0,0,0); return d.getTime() + 25*3600*1000; }
+function sessDurationMin(inTs, outTs, awayMs){
+  const eff = Math.min(outTs, sessCapTs(inTs));
+  return Math.max(0, Math.round((eff - inTs - (awayMs||0)) / 60000));
+}
+function sessFmtKoTime(ts){ return new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}); }
+window._sessHelpers = { sessIsoDate, sessMonthKey, sessLegacyDate, sessCapTs, sessDurationMin, sessFmtKoTime };
+// 모듈 스크립트가 window._sessionApi 를 노출할 때까지 대기 (waitDb와 동일 패턴)
+function waitSessionApi(){
+  return new Promise(res => {
+    if (window._sessionApi) return res(window._sessionApi);
+    const t = setInterval(() => { if (window._sessionApi) { clearInterval(t); res(window._sessionApi); } }, 100);
+  });
+}
+
 // 입퇴실 이벤트 정렬 키: 같은 '분'에 발생한 입실·퇴실이 섞이지 않도록
 // epoch ms(ts)를 우선 사용하고, 없으면(구버전 기록) 분 단위 시각으로 대체한다.
 function eventSortKey(x) {
@@ -2113,6 +2141,17 @@ function _rangeDateStrings(startISO, endISO){
   }
   return out;
 }
+// ISO(YYYY-MM-DD) 날짜 목록 — attendance_sessions.inDate 형식(패딩 ISO)
+function _rangeDateStringsISO(startISO, endISO){
+  const out = [];
+  const d = new Date(startISO + 'T00:00:00');
+  const end = new Date(endISO + 'T00:00:00');
+  while (d <= end) {
+    out.push(sessIsoDate(d.getTime()));
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
 
 window.setHoursRangePreset = function(preset){
   const startEl = document.getElementById('hours-range-start');
@@ -2148,20 +2187,14 @@ window.queryHoursRange = async function(){
     const db = await waitDb();
     const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
-    // 'in' 쿼리는 최대 30개 값 → 30일씩 나눠 병렬 조회
-    const chunks = [];
-    for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i + 30));
+    // 세션 문서 기반 집계 — 입실~퇴실이 문서 하나이므로 짝짓기/자정경계 추론이 없다.
+    // durationMin(확정값)을 입실일(inDate)에 귀속해 더하면 끝.
+    const isoDates = _rangeDateStringsISO(startISO, endISO);
+    const chunks = []; // 'in' 쿼리는 최대 30개 값 → 30일씩 나눠 병렬 조회
+    for (let i = 0; i < isoDates.length; i += 30) chunks.push(isoDates.slice(i, i + 30));
     const snaps = await Promise.all(chunks.map(c =>
-      getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', c)))
+      getDocs(query(collection(db, 'attendance_sessions'), where('inDate', 'in', c)))
     ));
-
-    // 날짜별로 묶어 in/out 짝을 지어 분 단위 합산
-    const byDate = {};
-    snaps.forEach(snap => snap.forEach(doc => {
-      const d = doc.data();
-      if (!d.studentName || !d.type || !d.date) return;
-      (byDate[d.date] = byDate[d.date] || []).push(d);
-    }));
 
     const totalMin = {};   // 이름 → 총 사용시간(분)
     const daysSet = {};    // 이름 → 출석한 날짜 Set
@@ -2171,59 +2204,23 @@ window.queryHoursRange = async function(){
       totalMin[name] = (totalMin[name] || 0) + min;
       (daysSet[name] = daysSet[name] || new Set()).add(date);
     };
-    const todayStr = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
-
-    // 날짜별 순번(0,1,2,…) — 날짜 경계를 넘긴 세션을 '절대 분(min)' 좌표로 환산해 짝짓기 위함.
-    const dateOrder = {};
-    dates.forEach((ds, i) => { dateOrder[ds] = i; });
-    const nowMinNow = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
-    const nowAbs = (dateOrder[todayStr] != null && nowMinNow != null) ? dateOrder[todayStr] * 1440 + nowMinNow : null;
-
-    // 모든 입퇴실 이벤트를 날짜 경계를 넘어 시간순으로 정렬한다.
-    // (예: 7/6 저녁 입실 → 7/8 새벽 퇴실처럼 입실 date와 퇴실 date가 다른 세션도 하나로 이어 짝짓는다.)
-    const allEvents = [];
-    Object.entries(byDate).forEach(([date, evs]) => {
-      const ord = dateOrder[date];
-      if (ord == null) return;
-      evs.forEach(ev => {
-        if (ev.type !== 'in' && ev.type !== 'out') return;
-        const tmin = timeToMin(ev.time);
-        if (tmin == null) return;
-        allEvents.push({ ev, ord, abs: ord * 1440 + tmin, date });
-      });
-    });
-    allEvents.sort((a, b) => {
-      if (a.ord !== b.ord) return a.ord - b.ord;              // 날짜 순
-      const k = eventSortKey(a.ev) - eventSortKey(b.ev);      // 같은 날짜 안에서는 실제 발생시각(ts) 순
-      if (k !== 0) return k;
-      return (a.ev.type === 'in' ? 0 : 1) - (b.ev.type === 'in' ? 0 : 1); // 동시각이면 입실 먼저
-    });
-
-    const openS = {}; // 이름 → { absIn, ord, date }
-    allEvents.forEach(({ ev, ord, abs, date }) => {
-      const name = ev.studentName;
-      if (ev.seat) seatOf[name] = ev.seat;
-      if (ev.type === 'in') {
-        if (openS[name] == null) openS[name] = { absIn: abs, ord, date };
-      } else { // out
-        const o = openS[name];
-        if (o == null) return;                                   // 짝 없는 퇴실 무시
-        let outAbs = abs;
-        if (ord === o.ord && outAbs < o.absIn) outAbs += 1440;   // 같은 date로 기록된 자정 넘김
-        const crossedDay = outAbs >= (o.ord + 1) * 1440;         // 입실일 다음날 이후에 퇴실
-        const cap = crossedDay ? o.ord * 1440 + 25 * 60 : Infinity; // 이월 정산과 동일: 익일 01:00까지만 인정
-        const dur = Math.min(outAbs, cap) - o.absIn;
-        if (dur <= 0) return; // 0분(이월 마감용 기록·즉시퇴실) — 세션을 열어둔 채 실제 퇴실을 기다린다
-        addMin(name, o.date, dur);
-        delete openS[name];
+    const nowTs = Date.now();
+    snaps.forEach(snap => snap.forEach(docSnap => {
+      const s = docSnap.data();
+      if (!s.studentName || !s.inDate || typeof s.inTs !== 'number') return;
+      if (s.seat) seatOf[s.studentName] = s.seat;
+      let min = 0;
+      if (s.status === 'closed' && typeof s.durationMin === 'number') {
+        min = s.durationMin;
+      } else if (s.status === 'open') {
+        // 진행 중 세션: 현재 시각까지 잠정 집계(외출 제외·상한 동일 적용).
+        // 지난 날짜의 미퇴실도 상한(익일 01:00)이 자동 적용돼 과대집계가 없다.
+        let away = s.awayMs || 0;
+        if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, sessCapTs(s.inTs)) - s.awayStartTs);
+        min = sessDurationMin(s.inTs, nowTs, away);
       }
-    });
-    // 미퇴실 세션: 입실일이 오늘이면 현재 시각까지 집계, 과거 날짜는 집계 제외
-    if (nowAbs != null) {
-      Object.entries(openS).forEach(([name, o]) => {
-        if (o.date === todayStr) { const d = nowAbs - o.absIn; if (d > 0) addMin(name, o.date, d); }
-      });
-    }
+      addMin(s.studentName, s.inDate, min);
+    }));
 
     window._hoursRangeMode = true;
     document.getElementById('hours-range-reset').style.display = '';
@@ -2359,77 +2356,64 @@ window.showStudentSessionsModal = async function(name){
     const db = await waitDb();
     const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
 
-    const dates = _rangeDateStrings(startISO, endISO); // 무패딩 Y-M-D 목록
+    // 세션 문서 기반 — 자정을 넘긴 세션도 입실일에 한 건으로 붙는다(짝짓기 없음)
+    const isoDates = _rangeDateStringsISO(startISO, endISO);
     const chunks = [];
-    for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i + 30));
+    for (let i = 0; i < isoDates.length; i += 30) chunks.push(isoDates.slice(i, i + 30));
     const snaps = await Promise.all(chunks.map(c =>
-      getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', c)))
+      getDocs(query(collection(db, 'attendance_sessions'), where('inDate', 'in', c)))
     ));
 
-    // 이 학생의 이벤트만 날짜별로 모은다
+    // 이 학생의 세션만 입실일별로 모은다
     const byDate = {};
-    snaps.forEach(snap => snap.forEach(doc => {
-      const d = doc.data();
-      if (d.studentName !== name || !d.type || !d.date) return;
-      (byDate[d.date] = byDate[d.date] || []).push(d);
+    snaps.forEach(snap => snap.forEach(docSnap => {
+      const s = docSnap.data();
+      if (s.studentName !== name || typeof s.inTs !== 'number' || !s.inDate) return;
+      (byDate[s.inDate] = byDate[s.inDate] || []).push(s);
     }));
 
-    const fmtClock = t => {
-      const mm = timeToMin(t);
-      if (mm == null) return t || '?';
-      const h = Math.floor((mm % 1440) / 60), m = mm % 60;
-      return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+    const fmtClock = ts => {
+      const d = new Date(ts);
+      return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     };
-    const todayStr = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
-    const nowMin = timeToMin(new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}));
+    const todayIso = sessIsoDate(Date.now());
+    const nowTs = Date.now();
 
-    // 날짜별로 세션(입실→퇴실 짝) 구성. 미입실 규칙: 첫 입실만 열고 out으로 닫음.
     const dateKeys = Object.keys(byDate).sort((a, b) => new Date(b) - new Date(a)); // 최신일 먼저
     let grandMin = 0, dayCount = 0;
     const blocks = dateKeys.map(date => {
-      const events = byDate[date].slice().sort((a, b) => {
-        const diff = eventSortKey(a) - eventSortKey(b);
-        if (diff !== 0) return diff;
-        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
-      });
-      const sessions = [];
-      let openEv = null;
-      events.forEach(ev => {
-        if (ev.type === 'in') { if (!openEv) openEv = ev; }
-        else if (ev.type === 'out') { if (openEv) { sessions.push({ in: openEv, out: ev }); openEv = null; } }
-      });
-      if (openEv) sessions.push({ in: openEv, out: null });
+      const sessions = byDate[date].slice().sort((a, b) => a.inTs - b.inTs);
       if (!sessions.length) return '';
 
       let dayMin = 0;
       const rows = sessions.map((s, i) => {
-        const inMin = timeToMin(s.in.time);
-        // 세션 시작이 '복귀'(away in)면 복귀로, 끝이 '외출'(away out)이면 외출로 표기
-        const inLabel = s.in.away ? '복귀' : '입실';
+        const awayMin = Math.round((s.awayMs || 0) / 60000);
         let durTxt = '', outTxt;
-        if (s.out) {
-          let outMin = timeToMin(s.out.time);
-          const outLabel = s.out.away ? '외출' : '퇴실';
-          const outCls = s.out.away ? 'sess-open' : 'sess-out';
-          outTxt = `${outLabel} <span class="${outCls}">${fmtClock(s.out.time)}</span>`;
-          if (inMin != null && outMin != null) {
-            if (outMin < inMin) outMin += 1440;
-            const d = outMin - inMin; dayMin += d;
-            durTxt = _fmtRangeMin(d);
-          }
-        } else if (date === todayStr && inMin != null && nowMin != null) {
+        if (s.status === 'closed' && s.outTs) {
+          const nextDay = sessIsoDate(s.outTs) !== s.inDate; // 자정 넘긴 퇴실 표기
+          const outLabel = (s.closedBy === 'auto' || s.closedBy === 'stale-checkin') ? '자동마감' : '퇴실';
+          outTxt = `${outLabel} <span class="sess-out">${fmtClock(s.outTs)}${nextDay ? ' <span style="font-size:10px">(익일)</span>' : ''}</span>`;
+          const d = (typeof s.durationMin === 'number') ? s.durationMin : 0;
+          dayMin += d;
+          durTxt = _fmtRangeMin(d);
+        } else if (date === todayIso) {
           outTxt = `<span class="sess-open">재실 중</span>`;
-          const d = Math.max(0, nowMin - inMin); dayMin += d;
+          let away = s.awayMs || 0;
+          if (s.awayStartTs) away += Math.max(0, nowTs - s.awayStartTs);
+          const d = sessDurationMin(s.inTs, nowTs, away); dayMin += d;
           durTxt = _fmtRangeMin(d) + ' 경과';
         } else {
-          outTxt = `<span class="sess-open">미퇴실</span>`;
+          // 아직 자동마감 전인 지난 미퇴실 — 상한(익일 01:00)까지 잠정 집계
+          outTxt = `<span class="sess-open">미퇴실 · 01:00 상한</span>`;
+          const d = sessDurationMin(s.inTs, nowTs, s.awayMs || 0); dayMin += d;
+          durTxt = _fmtRangeMin(d);
         }
         return `<div class="sess-row">
           <span class="sess-idx">${i+1}</span>
-          <span class="sess-in">${inLabel} ${fmtClock(s.in.time)}</span>
+          <span class="sess-in">입실 ${fmtClock(s.inTs)}</span>
           <span class="sess-arrow">→</span>
           <span>${outTxt}</span>
-          <span class="sess-dur">${durTxt}</span>
+          <span class="sess-dur">${durTxt}${awayMin > 0 ? ` <span style="font-size:10px;color:#999">(외출 ${awayMin}분 제외)</span>` : ''}</span>
         </div>`;
       }).join('');
 
@@ -3459,18 +3443,16 @@ window.checkinConfirm = function() {
     }
     existing.awayMin = awayMinTotal; existing._awayStart = null; // 1일 사용시간 표와 월 누적을 일치시킴
     diffMin = Math.max(0, diffMin - awayMinTotal);
-    _checkoutTotalMin = diffMin;
-    const diffHr  = Math.round(diffMin / 60 * 10) / 10; // 소수점 1자리
+    _checkoutTotalMin = diffMin; // 문자·완료화면용 즉석 추정치 (저장은 아래 세션 엔진이 담당)
 
-    const monthKey = _curYm(); // "YYYY-MM"
-    if (!student.hours) student.hours = {};
-    student.hours[monthKey] = Math.round(((student.hours[monthKey] || 0) + diffHr) * 10) / 10;
-
-    // Firebase 저장
-    if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
+    // ── 누적시간 저장: 세션 엔진(트랜잭션) ──
+    // 세션 문서를 닫고 그 달 누적을 세션 합산으로 재계산(멱등)한다.
+    // 예전의 hours[월] += 증분 방식은 폐기 — 세션만 맞으면 hours는 항상 복구 가능.
+    waitSessionApi().then(api => api.checkout(student, 'student')).catch(console.error);
     buildHoursTable();
   } else {
     todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null, inTs: Date.now() });
+    waitSessionApi().then(api => api.checkin(student)).catch(console.error);
   }
 
   // 완료 패널
@@ -3589,7 +3571,9 @@ window.checkinAway = function() {
     student.awayAt = timeStr;
     _showAwayDone(student, '🚶', '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
     saveAwayToFirebase(student, false, timeStr);
-    // checkin_logs에 외출(out·away) 기록 — 사용시간 제외 계산(awayMin)은 실시간 리스너/재구성이 담당
+    // 세션 문서에 외출 시작(awayStartTs) 기록 — 사용시간 제외의 원본
+    waitSessionApi().then(api => api.away(student, false)).catch(console.error);
+    // checkin_logs에 외출(out·away) 감사 기록
     saveCheckinToFirebase(student, true, timeStr, null, true).catch(console.error);
     buildCheckinTodayList();
     // 🚪 자동문 열기
@@ -3613,7 +3597,9 @@ window.checkinAwayReturn = function() {
     student.awayAt = '';
     _showAwayDone(student, '✅', '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
     saveAwayToFirebase(student, true, timeStr);
-    // checkin_logs에 복귀(in·away) 기록 — 외출 구간(awayMin) 정산은 실시간 리스너/재구성이 담당
+    // 세션 문서에 외출 구간(awayMs) 정산 — 사용시간 제외의 원본
+    waitSessionApi().then(api => api.away(student, true)).catch(console.error);
+    // checkin_logs에 복귀(in·away) 감사 기록
     saveCheckinToFirebase(student, false, timeStr, null, true).catch(console.error);
     buildCheckinTodayList();
     // 🚪 자동문 열기
@@ -5231,6 +5217,8 @@ function saveSchedule(commitBase) {
     if (Array.isArray(todayRecords)) {
       todayRecords.forEach(r => { if (r.studentName === oldName) r.studentName = newName; });
     }
+    // 세션 문서(이번 달)와 열린 포인터의 studentName 이관 — 월 누적 재계산이 이름 기준이므로 필수
+    waitSessionApi().then(api => api.renameInSessions(oldName, newName)).catch(console.error);
     s.name = newName;
   }
 
@@ -6037,7 +6025,7 @@ window.clearAllScheduleAlerts = function() {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -6076,6 +6064,311 @@ window._fsGetDoc = getDoc;
 window._fsServerTimestamp = serverTimestamp;
 window._fsCollection = collection;
 window._fsDeleteDoc = deleteDoc;
+
+// ═══════════════════════════════════════════════════════════════
+// 세션 엔진 — 학생 시간기록의 단일 원본 (attendance_sessions)
+// ═══════════════════════════════════════════════════════════════
+// 원칙:
+//  1) 입실~퇴실 = 문서 1개. 공부시간 = (outTs − inTs − awayMs) epoch 뺄셈뿐.
+//  2) 입실/퇴실 상태 전환은 current_sessions/{학생이름} 포인터에 대한
+//     Firestore 트랜잭션 → 키오스크 2대가 동시에 눌러도 in-in/out-out 중복 불가.
+//  3) 월 누적(students.hours)은 증분(+=)이 아니라 그 달 세션 합산으로 SET(멱등).
+//     어떤 경로로든 세션만 맞으면 hours는 저절로 맞는다(재계산으로 항상 복구 가능).
+//  4) checkin_logs 는 감사(audit) 기록으로 계속 남기지만 어떤 계산에도 쓰지 않는다.
+const SESS_COL = 'attendance_sessions';
+const SESS_PTR_COL = 'current_sessions';
+const SH = window._sessHelpers; // sessIsoDate/sessMonthKey/sessCapTs/sessDurationMin/...
+const _sessCleanSeat = s => String(s == null ? '' : s).replace('번','').trim();
+
+// 열린 세션의 외출 정산: 마감 시점(endTs) 기준으로 awayMs 확정 (상한 이후 외출은 0 처리)
+function _sessFoldAway(sess, endTs){
+  let away = sess.awayMs || 0;
+  if (sess.awayStartTs) away += Math.max(0, Math.min(endTs, SH.sessCapTs(sess.inTs)) - sess.awayStartTs);
+  return away;
+}
+
+// 포인터 참조 해석: 기본은 이름 키. (이름이 곧 앱 전체의 학생 식별자 — todayRecords/PRESENT와 동일)
+function _sessPtrRef(name){ return doc(db, SESS_PTR_COL, String(name)); }
+
+// ── 입실 (트랜잭션) ──
+// 이미 오늘 열린 세션이 있으면 거부. 전날 미퇴실 세션이 남아 있으면
+// 같은 트랜잭션 안에서 01:00 상한으로 마감하고 새 세션을 연다("새로 입실"이 원자적).
+async function sessionCheckin(student){
+  const seat = _sessCleanSeat(student.seat), name = student.name;
+  const exec = async () => runTransaction(db, async tx => {
+    const now = Date.now();
+    const ptrRef = _sessPtrRef(name);
+    const ptrSnap = await tx.get(ptrRef);
+    let staleClosed = null;
+    if (ptrSnap.exists()) {
+      const ptr = ptrSnap.data();
+      if (SH.sessIsoDate(ptr.inTs) >= SH.sessIsoDate(now)) {
+        return { ok:false, reason:'already-open', inTs: ptr.inTs };
+      }
+      // 전날 미퇴실 → 상한 마감 후 새로 입실
+      const oldRef = doc(db, SESS_COL, ptr.sessionId);
+      const oldSnap = await tx.get(oldRef);
+      if (oldSnap.exists() && oldSnap.data().status === 'open') {
+        const o = oldSnap.data();
+        const away = _sessFoldAway(o, now);
+        tx.update(oldRef, {
+          outTs: Math.min(now, SH.sessCapTs(o.inTs)), awayMs: away, awayStartTs: null,
+          durationMin: SH.sessDurationMin(o.inTs, now, away),
+          status:'closed', closedBy:'stale-checkin', updatedAt: now
+        });
+        staleClosed = { monthKey: o.monthKey };
+      }
+    }
+    const sid = seat + '_' + now;
+    tx.set(doc(db, SESS_COL, sid), {
+      sid, seat, studentName: name,
+      inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
+      inDate: SH.sessIsoDate(now), monthKey: SH.sessMonthKey(now),
+      status:'open', closedBy: null, createdAt: serverTimestamp(), updatedAt: now
+    });
+    tx.set(ptrRef, { sessionId: sid, seat, studentName: name, inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now });
+    return { ok:true, sid, inTs: now, staleClosed };
+  });
+  let res;
+  try { res = await exec(); }
+  catch(e){
+    // 오프라인 등 트랜잭션 실패 → 최선노력 폴백(로컬 캐시에 기록, 재접속 시 동기화)
+    console.warn('[세션] 입실 트랜잭션 실패 — 폴백 기록:', e);
+    res = await _sessionCheckinFallback(student).catch(err => { console.error('[세션] 입실 폴백도 실패:', err); return { ok:false, reason:'error' }; });
+  }
+  if (res && res.staleClosed) recomputeMonthHours(student, res.staleClosed.monthKey).catch(console.error);
+  return res || { ok:false, reason:'error' };
+}
+async function _sessionCheckinFallback(student){
+  const seat = _sessCleanSeat(student.seat), name = student.name, now = Date.now();
+  let ptr = null;
+  try { const s = await getDoc(_sessPtrRef(name)); if (s.exists()) ptr = s.data(); } catch(e){}
+  if (ptr && SH.sessIsoDate(ptr.inTs) >= SH.sessIsoDate(now)) return { ok:false, reason:'already-open', inTs: ptr.inTs };
+  const sid = seat + '_' + now;
+  setDoc(doc(db, SESS_COL, sid), {
+    sid, seat, studentName: name, inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
+    inDate: SH.sessIsoDate(now), monthKey: SH.sessMonthKey(now), status:'open', closedBy: null,
+    createdAt: serverTimestamp(), updatedAt: now
+  }).catch(console.error);
+  setDoc(_sessPtrRef(name), { sessionId: sid, seat, studentName: name, inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now }).catch(console.error);
+  return { ok:true, sid, inTs: now, fallback:true };
+}
+
+// ── 퇴실 (트랜잭션) ──
+// 성공 여부와 무관하게 마지막에 그 달 누적을 재계산(멱등) → 어떤 꼬임도 self-heal.
+async function sessionCheckout(student, closedBy){
+  const name = student.name;
+  const exec = async () => runTransaction(db, async tx => {
+    const now = Date.now();
+    const ptrRef = _sessPtrRef(name);
+    const ptrSnap = await tx.get(ptrRef);
+    if (!ptrSnap.exists()) return { ok:false, reason:'not-open' };
+    const ptr = ptrSnap.data();
+    const sRef = doc(db, SESS_COL, ptr.sessionId);
+    const sSnap = await tx.get(sRef);
+    if (!sSnap.exists() || sSnap.data().status !== 'open') {
+      tx.delete(ptrRef); // 고아 포인터 정리(자가 치유)
+      return { ok:false, reason:'orphan-pointer' };
+    }
+    const o = sSnap.data();
+    const away = _sessFoldAway(o, now);
+    const dur = SH.sessDurationMin(o.inTs, now, away);
+    tx.update(sRef, { outTs: now, awayMs: away, awayStartTs: null, durationMin: dur,
+      status:'closed', closedBy: closedBy || 'student', updatedAt: now });
+    tx.delete(ptrRef);
+    return { ok:true, durationMin: dur, inTs: o.inTs, outTs: now, monthKey: o.monthKey };
+  });
+  let res;
+  try { res = await exec(); }
+  catch(e){
+    // 오프라인 등 트랜잭션 실패 → 캐시 기반 최선노력 폴백(쓰기는 큐에 남아 재접속 시 동기화)
+    console.warn('[세션] 퇴실 트랜잭션 실패 — 폴백 기록:', e);
+    res = await _sessionCheckoutFallback(student, closedBy).catch(err => { console.error('[세션] 퇴실 폴백도 실패:', err); return { ok:false, reason:'error' }; });
+  }
+  // 항상 이번 달(및 세션의 달) 재계산 — 실패했어도 세션 상태 기준으로 hours를 맞춘다
+  const mk = (res && res.monthKey) || SH.sessMonthKey(Date.now());
+  recomputeMonthHours(student, mk).catch(console.error);
+  return res;
+}
+async function _sessionCheckoutFallback(student, closedBy){
+  const name = student.name, now = Date.now();
+  let ptr = null;
+  try { const s = await getDoc(_sessPtrRef(name)); if (s.exists()) ptr = s.data(); } catch(e){}
+  if (!ptr) return { ok:false, reason:'not-open' };
+  let sess = null;
+  try { const s = await getDoc(doc(db, SESS_COL, ptr.sessionId)); if (s.exists()) sess = s.data(); } catch(e){}
+  if (!sess || sess.status !== 'open') {
+    deleteDoc(_sessPtrRef(name)).catch(console.error);
+    return { ok:false, reason:'orphan-pointer' };
+  }
+  const away = _sessFoldAway(sess, now);
+  const dur = SH.sessDurationMin(sess.inTs, now, away);
+  updateDoc(doc(db, SESS_COL, ptr.sessionId), { outTs: now, awayMs: away, awayStartTs: null,
+    durationMin: dur, status:'closed', closedBy: closedBy || 'student', updatedAt: now }).catch(console.error);
+  deleteDoc(_sessPtrRef(name)).catch(console.error);
+  return { ok:true, durationMin: dur, inTs: sess.inTs, outTs: now, monthKey: sess.monthKey, fallback: true };
+}
+
+// ── 외출/복귀 (트랜잭션) — 세션 문서의 awayStartTs/awayMs 가 외출 제외의 원본 ──
+async function sessionAway(student, isReturn){
+  const name = student.name;
+  try {
+    return await runTransaction(db, async tx => {
+      const now = Date.now();
+      const ptrSnap = await tx.get(_sessPtrRef(name));
+      if (!ptrSnap.exists()) return { ok:false, reason:'not-open' };
+      const sRef = doc(db, SESS_COL, ptrSnap.data().sessionId);
+      const sSnap = await tx.get(sRef);
+      if (!sSnap.exists() || sSnap.data().status !== 'open') return { ok:false, reason:'not-open' };
+      const o = sSnap.data();
+      if (isReturn) {
+        if (o.awayStartTs) {
+          tx.update(sRef, { awayMs: (o.awayMs||0) + Math.max(0, now - o.awayStartTs), awayStartTs: null, updatedAt: now });
+        }
+      } else {
+        if (!o.awayStartTs) tx.update(sRef, { awayStartTs: now, updatedAt: now });
+      }
+      return { ok:true };
+    });
+  } catch(e){
+    // 폴백: 캐시 기반 비원자 기록 (외출 상태는 저위험 — 최악의 경우 외출 미제외)
+    console.warn('[세션] 외출/복귀 트랜잭션 실패 — 폴백 기록:', e);
+    try {
+      const now = Date.now();
+      const ptrSnap = await getDoc(_sessPtrRef(name));
+      if (!ptrSnap.exists()) return { ok:false, reason:'not-open' };
+      const sRef = doc(db, SESS_COL, ptrSnap.data().sessionId);
+      const sSnap = await getDoc(sRef);
+      if (!sSnap.exists() || sSnap.data().status !== 'open') return { ok:false, reason:'not-open' };
+      const o = sSnap.data();
+      if (isReturn) {
+        if (o.awayStartTs) await updateDoc(sRef, { awayMs: (o.awayMs||0) + Math.max(0, now - o.awayStartTs), awayStartTs: null, updatedAt: now });
+      } else {
+        if (!o.awayStartTs) await updateDoc(sRef, { awayStartTs: now, updatedAt: now });
+      }
+      return { ok:true, fallback:true };
+    } catch(e2){ console.error('[세션] 외출/복귀 폴백도 실패:', e2); return { ok:false, reason:'error' }; }
+  }
+}
+
+// ── 월 누적 재계산 (멱등) — 그 달 닫힌 세션 합산 → students.hours[월] SET ──
+async function recomputeMonthHours(student, monthKey){
+  const name = student.name, seat = _sessCleanSeat(student.seat);
+  if (!name || !monthKey) return null;
+  const snap = await getDocs(query(collection(db, SESS_COL),
+    where('studentName','==', name), where('monthKey','==', monthKey)));
+  // 오프라인 캐시 결과는 불완전할 수 있음 → 과소집계 값을 쓰지 않도록 보류
+  // (다음 퇴실·재계산 버튼·자동마감 어디서든 온라인 상태에서 다시 맞춰진다)
+  if (snap.metadata && snap.metadata.fromCache) {
+    console.warn('[세션] 오프라인 캐시 조회 — hours 재계산 보류:', name, monthKey);
+    return null;
+  }
+  let totalMin = 0;
+  snap.forEach(d => { const v = d.data(); if (v.status === 'closed' && typeof v.durationMin === 'number') totalMin += v.durationMin; });
+  const hrs = Math.round(totalMin / 60 * 10) / 10;
+  try {
+    await updateDoc(doc(db, 'students', seat), { ['hours.' + monthKey]: hrs, updatedAt: serverTimestamp() });
+  } catch(e) {
+    console.warn('[세션] hours 저장 실패(문서 없음?):', seat, e);
+    return null;
+  }
+  // 로컬 즉시 반영 (students onSnapshot도 곧 같은 값을 전달)
+  if (!student.hours) student.hours = {};
+  student.hours[monthKey] = hrs;
+  const local = (window.STUDENTS || []).find(s => s.name === name);
+  if (local) { if (!local.hours) local.hours = {}; local.hours[monthKey] = hrs; }
+  try { if (typeof window.buildHoursTable === 'function') window.buildHoursTable(); } catch(e){}
+  return hrs;
+}
+
+// ── 지난 미퇴실 세션 자동 마감 (멱등·전 기기 안전) ──
+// 입실 다음날 02:00 이 지났는데 아직 열린 세션 → 01:00 상한으로 자동 마감.
+// (02:00 전에는 자정 넘겨 공부 중일 수 있으므로 건드리지 않는다)
+// status=='open' 전체 스캔이라 포인터가 유실된 고아 세션도 함께 치유된다.
+async function autoCloseStaleSessions(){
+  try {
+    const now = Date.now();
+    const snap = await getDocs(query(collection(db, SESS_COL), where('status','==','open')));
+    for (const d of snap.docs) {
+      const o = d.data();
+      if (now < SH.sessCapTs(o.inTs) + 3600*1000) continue; // 아직 입실 다음날 02:00 전
+      try {
+        await runTransaction(db, async tx => {
+          const ref = doc(db, SESS_COL, d.id);
+          const s = await tx.get(ref);
+          if (!s.exists() || s.data().status !== 'open') return; // 다른 기기가 먼저 마감
+          const v = s.data();
+          const ptrRef = _sessPtrRef(v.studentName);
+          const ptrSnap = await tx.get(ptrRef); // 읽기는 반드시 모든 쓰기보다 먼저
+          const cap = SH.sessCapTs(v.inTs);
+          const away = _sessFoldAway(v, cap);
+          tx.update(ref, { outTs: cap, awayMs: away, awayStartTs: null,
+            durationMin: SH.sessDurationMin(v.inTs, cap, away),
+            status:'closed', closedBy:'auto', updatedAt: now });
+          if (ptrSnap.exists() && ptrSnap.data().sessionId === d.id) tx.delete(ptrRef);
+        });
+        recomputeMonthHours({ name: o.studentName, seat: o.seat }, o.monthKey).catch(console.error);
+        console.log(`[세션] 미퇴실 자동 마감: ${o.studentName} (${o.inDate} 입실 → 01:00 상한)`);
+      } catch(e){ console.warn('[세션] 자동 마감 실패(다음 기회에 재시도):', o.studentName, e); }
+    }
+  } catch(e){ console.warn('[세션] 자동 마감 스캔 실패:', e); }
+}
+
+// ── 이름 변경 시 세션/포인터의 studentName 이관 (이번 달 + 열린 포인터) ──
+async function renameInSessions(oldName, newName){
+  try {
+    const mk = SH.sessMonthKey(Date.now());
+    const snap = await getDocs(query(collection(db, SESS_COL),
+      where('studentName','==', oldName), where('monthKey','==', mk)));
+    for (const d of snap.docs) await updateDoc(d.ref, { studentName: newName });
+    const ptrSnap = await getDoc(_sessPtrRef(oldName));
+    if (ptrSnap.exists()) {
+      const v = ptrSnap.data();
+      await setDoc(_sessPtrRef(newName), Object.assign({}, v, { studentName: newName }));
+      await deleteDoc(_sessPtrRef(oldName));
+    }
+  } catch(e){ console.warn('[세션] 이름 변경 이관 실패:', e); }
+}
+
+// ── 전체 학생 이번 달 누적 재계산 (설정 탭 정합성 점검 버튼용) ──
+async function recalcAllMonthHours(monthKey){
+  const mk = monthKey || SH.sessMonthKey(Date.now());
+  const list = (window.STUDENTS || []).slice();
+  const report = [];
+  for (const s of list) {
+    const before = (s.hours && s.hours[mk]) || 0;
+    const after = await recomputeMonthHours(s, mk);
+    if (after != null && Math.abs(after - before) >= 0.05) report.push({ name: s.name, seat: s.seat, before, after });
+  }
+  console.log(`[세션] ${mk} 전체 재계산 완료 — 값이 바뀐 학생 ${report.length}명`, report);
+  return report;
+}
+
+window._sessionApi = {
+  checkin: sessionCheckin,
+  checkout: sessionCheckout,
+  away: sessionAway,
+  recomputeMonthHours,
+  autoCloseStaleSessions,
+  renameInSessions,
+  recalcAllMonthHours
+};
+window.recalcAllMonthHours = recalcAllMonthHours;
+
+// 설정 탭 '⚖️ 이번 달 누적시간 재계산' 버튼 — 세션 합산으로 전원 hours 정합성 복구
+window.recalcHoursWithConfirm = async function(){
+  const st = document.getElementById('log-purge-status');
+  if (!confirm('전체 학생의 이번 달 누적시간을 세션 기록으로 다시 계산할까요?\n(표시값이 세션 기록과 어긋난 경우 바로잡습니다)')) return;
+  if (st) st.textContent = '⏳ 누적시간 재계산 중...';
+  try {
+    const report = await recalcAllMonthHours();
+    if (st) st.textContent = `✅ 재계산 완료 — 값이 바뀐 학생 ${report.length}명`;
+    if (window.showAdminToast) showAdminToast(`⚖️ 누적시간 재계산 완료 (${report.length}명 보정)`);
+    if (report.length) console.table(report);
+  } catch(e){
+    if (st) st.textContent = '❌ 재계산 실패: ' + (e.message || e);
+  }
+};
 
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
@@ -6171,6 +6464,14 @@ window.purgeStudentData = async function(seat, name, execute) {
       targets.push({ col:'studyroom_requests', id: d.id });
   });
 
+  // 5) attendance_sessions / current_sessions : 세션 기록·열린 포인터
+  (await getDocs(collection(db,'attendance_sessions'))).forEach(d => {
+    const v = d.data();
+    if (v.studentName === name || String(v.seat).replace('번','') === seat)
+      targets.push({ col:'attendance_sessions', id: d.id });
+  });
+  targets.push({ col:'current_sessions', id: name });
+
   console.log(`[삭제대상] ${name}(${seat}번) — 총 ${targets.length}건`);
   targets.forEach(t => console.log('   ' + t.col + '/' + t.id));
 
@@ -6218,6 +6519,15 @@ window.purgeOldLogs = async function(days = 60, execute = false) {
     snap.forEach(d => {
       const dt = parseDate(d.data().date);
       if (dt && dt < cutoff) targets.push({ col, id: d.id });
+    });
+  }
+  // 세션 기록도 함께 정리 (닫힌 것만 — 열린 세션은 상태의 원본이므로 보존)
+  {
+    const snap = await getDocs(collection(db, 'attendance_sessions'));
+    snap.forEach(d => {
+      const v = d.data();
+      const dt = parseDate(v.inDate);
+      if (dt && dt < cutoff && v.status === 'closed') targets.push({ col: 'attendance_sessions', id: d.id });
     });
   }
   console.log(`[로그정리] ${days}일 이전 대상: ${targets.length}건`);
@@ -6399,147 +6709,81 @@ window.saveScheduleToFirebase = saveScheduleToFirebase;
 window.deleteStudentFromFirebase = deleteStudentFromFirebase;
 window.loadStudentsFromFirebase = loadStudentsFromFirebase;
 
-// ── 오늘 입퇴실 기록 Firebase에서 로드 ──
+// ── 오늘 입퇴실 상태 로드/재구성 — attendance_sessions 기반 ──
+// checkin_logs 이벤트 재생(짝짓기/이월 추론)은 폐기. 세션 문서가 상태의 원본이므로
+// "오늘 입실일 세션 + 열린 포인터"를 그대로 그리면 끝난다. 상태 = f(세션 문서들).
 let _loadCheckinLock = false;
+let _sessTodayDocs = [];  // 오늘(입실일 기준) 세션 문서 캐시
+let _sessPtrDocs = [];    // 열린 세션 포인터(current_sessions) 캐시 — 이월 포함
+function _rebuildTodayFromSessions(){
+  const todayIso = SH.sessIsoDate(Date.now());
+  todayRecords.length = 0;
+  PRESENT.length = 0;
+  const awayMap = {};
+  const seen = new Set();
+  [..._sessTodayDocs].sort((a,b) => (a.inTs||0) - (b.inTs||0)).forEach(o => {
+    if (!o || !o.studentName || o.inDate !== todayIso) return; // 날짜 전환 직후 남은 전날 스냅샷 무시
+    seen.add(o.sid);
+    const closed = o.status === 'closed' && o.outTs;
+    const awayStartDt = (!closed && o.awayStartTs) ? new Date(o.awayStartTs) : null;
+    todayRecords.push({
+      studentName: o.studentName, seat: o.seat,
+      inTime: SH.sessFmtKoTime(o.inTs), outTime: closed ? SH.sessFmtKoTime(o.outTs) : null,
+      inTs: o.inTs, awayMin: Math.round((o.awayMs||0)/60000),
+      _awayStart: awayStartDt ? (awayStartDt.getHours()*60 + awayStartDt.getMinutes()) : null,
+      sessionId: o.sid
+    });
+    if (!closed) {
+      if (!PRESENT.includes(o.studentName)) PRESENT.push(o.studentName);
+      if (o.awayStartTs) awayMap[o.studentName] = SH.sessFmtKoTime(o.awayStartTs);
+    }
+  });
+  // 열린 포인터 중 오늘 스냅샷에 없는 것 — 이월(전날 입실 후 아직 열린 세션, 새벽 02시 전)
+  // 또는 날짜 전환 직후 아직 재구독 전인 새 입실.
+  _sessPtrDocs.forEach(p => {
+    if (!p || !p.studentName || seen.has(p.sessionId)) return;
+    if (todayRecords.some(r => r.studentName === p.studentName && !r.outTime)) return;
+    const carried = p.inDate !== todayIso;
+    const rec = {
+      studentName: p.studentName, seat: p.seat,
+      inTime: SH.sessFmtKoTime(p.inTs), outTime: null, inTs: p.inTs,
+      awayMin: 0, _awayStart: null, sessionId: p.sessionId
+    };
+    if (carried) { rec.carriedOver = true; rec.carryFromDate = SH.sessLegacyDate(p.inTs); }
+    todayRecords.push(rec);
+    if (!PRESENT.includes(p.studentName)) PRESENT.push(p.studentName);
+  });
+  // 외출 상태: 세션 awayStartTs 기준 + students.awayAt 보조(다기기 동기화 경로 유지)
+  window._awayStudents = awayMap;
+  (window.STUDENTS || []).forEach(s => {
+    if (s.awayAt && s.name && !awayMap[s.name] && todayRecords.some(r => r.studentName === s.name && !r.outTime)) {
+      awayMap[s.name] = s.awayAt;
+    }
+  });
+}
+function _refreshCheckinUI(){
+  buildDashboard();
+  buildCheckinTodayList();
+  if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
+  else if (document.getElementById('fp-room')) buildFloorplan();
+  try { buildHoursTable(); } catch(e){} // 1일 사용시간 표 갱신
+  if (window._todayModalRender) { try { window._todayModalRender(); } catch(e){} }
+}
 async function loadTodayCheckinFromFirebase() {
   if (_loadCheckinLock) return;
   _loadCheckinLock = true;
   try {
-    const _fmtDate = dt => dt.toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-    const today = _fmtDate(new Date());
-    // 오늘 + 최근 3일치 조회 — 저녁 입실 후 여러 번의 새벽 리셋을 넘겨 며칠 뒤 새벽에
-    // 퇴실하는 미퇴실 세션도 이월 대상으로 인식해, 퇴실 탭이 '새벽 신규 입실'로 막히지 않게 한다.
-    // (어제 로그가 비어 있어도 그 이전 날의 미퇴실을 놓치지 않는다.)
-    const _recentDates = [];
-    for (let i = 0; i < 4; i++) _recentDates.push(_fmtDate(new Date(Date.now() - i * 86400000)));
-    const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', 'in', _recentDates)));
-    const todayDocs = [];
-    const priorDocs = []; // 오늘 이전(어제~3일 전) 기록 — 미퇴실 이월 판정용
-    snap.forEach(d => {
-      const data = d.data();
-      if (data.date === today) todayDocs.push(data);
-      else if (_recentDates.includes(data.date)) priorDocs.push(data);
-    });
-
-    // todayRecords, PRESENT, 외출 상태 초기화 후 재구성
-    todayRecords.length = 0;
-    PRESENT.length = 0;
-    window._awayStudents = {};
-    if (window._awayAppliedTs) window._awayAppliedTs.clear(); // away 집계 상태도 재구성과 함께 초기화
-
-    // 시간순 정렬 후 순서대로 처리 (여러번 입퇴실 정확히 처리)
-    // ts(epoch ms)로 정렬하되, 같은 시각이면 입실(in)을 먼저 처리해
-    // 퇴실이 짝(열린 입실)을 찾도록 한다.
-    todayDocs.sort((a, b) => {
-      const diff = eventSortKey(a) - eventSortKey(b);
-      if (diff !== 0) return diff;
-      return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1);
-    });
-
-    todayDocs.forEach(d => {
-      if (!d.studentName || !d.type) return;
-      const name = d.studentName;
-      const seat = d.seat || '';
-      const time = d.time || '';
-      const isAway = d.away === true; // 외출(out)·복귀(in) 마커
-      if (isAway && typeof d.ts === 'number') window._awayAppliedTs.add(d.ts); // 스냅샷 중복집계 방지
-
-      if (d.type === 'in') {
-        if (isAway) {
-          // 복귀: 새 입실 아님 — 열린 기록에 외출 구간 누적하고 외출 상태만 해제
-          const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
-          if (rec && rec._awayStart != null) {
-            let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
-            rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
-          }
-          return;
-        }
-        const alreadyIn = todayRecords.find(r => r.studentName === name && !r.outTime);
-        if (!alreadyIn) {
-          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null, inTs: (typeof d.ts === 'number' ? d.ts : null), awayMin: 0, _awayStart: null });
-          if (!PRESENT.includes(name)) PRESENT.push(name);
-        }
-      } else if (d.type === 'out') {
-        const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
-        if (isAway) {
-          // 외출: 퇴실 아님 — 기록·PRESENT 유지, 외출 시작 시각만 표시
-          if (rec) rec._awayStart = timeToMin(time);
-          return;
-        }
-        if (rec) {
-          // 외출 중(미복귀) 퇴실이면 마지막 외출 구간도 정산
-          if (rec._awayStart != null) {
-            let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
-            rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
-          }
-          rec.outTime = time;
-          const idx = PRESENT.indexOf(name);
-          if (idx !== -1) PRESENT.splice(idx, 1);
-        }
-      }
-    });
-
-    // 이전 날짜(어제~3일 전) 입실 후 퇴실 안 한 학생 → 오늘도 입실 상태로 이월.
-    // 여러 날의 기록을 시간순으로 재생해 '마지막 이벤트가 열린 입실'인 경우만 이월한다.
-    // (며칠에 걸친 연속 체류로 어제 로그가 비어 있어도, 그 이전 날의 미퇴실을 놓치지 않는다.)
-    const _priorOrder = {}; // 과거 날짜일수록 작은 값 (시간순 정렬용). 오늘 날짜가 가장 큼(마지막).
-    _recentDates.forEach((ds, i) => { _priorOrder[ds] = _recentDates.length - i; });
-    const priorByStudent = {};
-    priorDocs.forEach(d => {
-      if (!d.studentName || d.away === true) return; // 외출/복귀는 미퇴실 이월 판정에서 제외
-      if (d.type !== 'in' && d.type !== 'out') return;
-      (priorByStudent[d.studentName] = priorByStudent[d.studentName] || []).push(d);
-    });
-    // 오늘자 입퇴실 이벤트도 학생별로 모아둔다. 자정을 넘긴 세션(전날 입실 → 오늘 새벽 퇴실)은
-    // 전날 입실만 보면 '미퇴실'로 오인되지만, 오늘 퇴실을 같은 타임라인에 넣어 재생하면 정상적으로
-    // 닫혀 이월되지 않는다. (이게 빠져 있어 자정 넘겨 퇴실한 학생이 계속 '입실 중'으로 남았음)
-    const todayEvsByStudent = {};
-    todayDocs.forEach(d => {
-      if (!d.studentName || d.away === true) return;
-      if (d.type !== 'in' && d.type !== 'out') return;
-      (todayEvsByStudent[d.studentName] = todayEvsByStudent[d.studentName] || []).push(d);
-    });
-    Object.entries(priorByStudent).forEach(([name, prevEvs]) => {
-      // 오늘 입퇴실 기록이 하나라도 있으면(입실 중이든, 이미 퇴실했든) 이월하지 않는다.
-      if (todayRecords.some(r => r.studentName === name)) return;
-      // 전날 기록 + 오늘 기록을 한 타임라인으로 재생 (오늘 퇴실이 전날 입실을 닫도록)
-      const evs = prevEvs.concat(todayEvsByStudent[name] || []);
-      evs.sort((a, b) => {
-        const oa = _priorOrder[a.date] || 0, ob = _priorOrder[b.date] || 0;
-        if (oa !== ob) return oa - ob;
-        const k = eventSortKey(a) - eventSortKey(b);
-        if (k !== 0) return k;
-        return (a.type === 'in' ? 0 : 1) - (b.type === 'in' ? 0 : 1); // 동시각이면 입실 먼저
-      });
-      let openIn = null;
-      evs.forEach(d => {
-        if (d.type === 'in') { if (openIn == null) openIn = d; }
-        else if (d.type === 'out') { if (openIn != null) openIn = null; }
-      });
-      // 마지막까지 열린 입실이 '오늘' 것이면 이월이 아니라 정상 입실 → 여기서 만들지 않는다
-      // (todayDocs 처리 단계에서 이미 반영됐어야 하며, 이월은 전날 입실만 대상).
-      if (openIn && openIn.date === today) openIn = null;
-      if (openIn) {
-        todayRecords.push({ studentName: name, seat: openIn.seat || '', inTime: openIn.time || '?', outTime: null, inTs: (typeof openIn.ts === 'number' ? openIn.ts : null), carriedOver: true, carryFromDate: openIn.date });
-        if (!PRESENT.includes(name)) PRESENT.push(name);
-      }
-    });
-
-    // 외출 상태 재구성: students 문서의 awayAt 기준, 현재 입실 중인 학생만 유지
-    // (퇴실·퇴원 후 남은 낡은 awayAt은 무시되어 자연 소멸)
-    window._awayStudents = {};
-    STUDENTS.forEach(s => {
-      if (s.awayAt && s.name && todayRecords.some(r => r.studentName === s.name && !r.outTime)) {
-        window._awayStudents[s.name] = s.awayAt;
-      }
-    });
-
-    buildDashboard();
-    buildCheckinTodayList();
-    if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
-    else if (document.getElementById('fp-room')) buildFloorplan();
-    try { buildHoursTable(); } catch(e){} // 입퇴실 기록 로드 완료 후 1일 사용시간 표 갱신
-    _checkinSnapshotReady = true; // 이제부터 onSnapshot 이벤트 처리
+    await autoCloseStaleSessions(); // 지난 미퇴실 먼저 정리(멱등·전 기기 안전)
+    const todayIso = SH.sessIsoDate(Date.now());
+    const [sSnap, pSnap] = await Promise.all([
+      getDocs(query(collection(db, SESS_COL), where('inDate','==', todayIso))),
+      getDocs(collection(db, SESS_PTR_COL))
+    ]);
+    _sessTodayDocs = sSnap.docs.map(d => d.data());
+    _sessPtrDocs = pSnap.docs.map(d => d.data());
+    _rebuildTodayFromSessions();
+    _refreshCheckinUI();
+    _checkinSnapshotReady = true; // 이제부터 실시간 스냅샷 재구성 허용
   } catch(e) { console.error('입퇴실 로드 실패:', e); }
   finally { _loadCheckinLock = false; }
 }
@@ -6549,116 +6793,32 @@ window.loadTodayCheckinFromFirebase = loadTodayCheckinFromFirebase;
 loadStudentsFromFirebase();
 loadTodayCheckinFromFirebase();
 
-// ── 입퇴실 기록 실시간 감시 (다중 기기 동기화) ──
-const _todayStr = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+// ── 입퇴실 실시간 감시 (다중 기기 동기화) — 세션 스냅샷 선언적 재구성 ──
+// 이벤트 증분 패치(구 checkin_logs 방식)는 폐기: 스냅샷이 올 때마다 캐시를 통째로
+// 바꾸고 전체를 다시 그린다. 순서/중복/재전달 문제가 구조적으로 없다.
 let _checkinSnapshotReady = false; // loadTodayCheckinFromFirebase 완료 후 true
-// 외출/복귀(away) 이벤트를 사용시간 계산에 '한 번만' 반영하기 위한 적용 완료 ts 집합.
-// 재구성(loadTodayCheckin)이 채워두면, 같은 이벤트를 실시간 스냅샷이 다시 전달해도 중복 집계하지 않는다.
-window._awayAppliedTs = window._awayAppliedTs || new Set();
-
-// 오늘·어제 날짜로 필터해 구독 — 기록이 쌓여도 초기 스냅샷 읽기량이 늘지 않는다.
-// 날짜가 바뀌면 새벽 리셋 로직이 window._resubscribeCheckinLogs 로 재구독한다.
-let _checkinLogsUnsub = null;
-function subscribeCheckinLogs() {
-  if (_checkinLogsUnsub) { try { _checkinLogsUnsub(); } catch(e) {} _checkinLogsUnsub = null; }
-  const _subToday = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-  const _subYd = new Date(Date.now() - 86400000).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-  _checkinLogsUnsub = onSnapshot(
-  query(collection(db, 'checkin_logs'), where('date', 'in', [_subToday, _subYd])),
-  (snapshot) => {
-    if (!_checkinSnapshotReady) return; // 초기 로드 전 이벤트 무시
-    let changed = false;
-    snapshot.docChanges().forEach(change => {
-      if (change.type === 'removed') return;
-      const d = change.doc.data();
-      // 오늘 날짜 기록만 처리
-      const _curDay = new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
-      if (!d.date || d.date !== _curDay) return;
-
-      const name = d.studentName;
-      const seat = d.seat;
-      const type = d.type; // 'in' or 'out'
-      const time = d.time;
-      if (!name || !type || !time) return;
-
-      // ── 외출/복귀(away) 이벤트 처리 ──
-      // 진짜 입퇴실과 달리 PRESENT/입실기록을 바꾸지 않고, 사용시간에서 뺄 외출구간(awayMin)만 정산.
-      // ts 기준 1회만 반영(스냅샷 재전달·재구독 대비).
-      if (d.away === true) {
-        const ts = (typeof d.ts === 'number') ? d.ts : null;
-        if (ts != null && window._awayAppliedTs.has(ts)) return; // 이미 반영됨
-        if (!window._awayStudents) window._awayStudents = {};
-        const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
-        if (type === 'out') {
-          // 외출: 현재 세션에 외출 시작 시각 표시(퇴실 아님)
-          if (rec) rec._awayStart = timeToMin(time);
-          if (!window._awayStudents[name]) window._awayStudents[name] = time;
-        } else {
-          // 복귀: 외출 구간을 awayMin에 누적하고 외출 상태 해제(새 입실 아님)
-          if (rec && rec._awayStart != null) {
-            let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
-            rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
-          }
-          if (window._awayStudents[name]) delete window._awayStudents[name];
-        }
-        if (ts != null) window._awayAppliedTs.add(ts);
-        changed = true;
-        return;
-      }
-
-      if (type === 'in') {
-        // 이미 로컬에 있으면 중복 추가 안 함
-        const exists = todayRecords.find(r => r.studentName === name && r.inTime === time);
-        if (!exists) {
-          todayRecords.push({ studentName: name, seat, inTime: time, outTime: null, inTs: (typeof d.ts === 'number' ? d.ts : null) });
-          if (!PRESENT.includes(name)) PRESENT.push(name);
-          changed = true;
-        }
-      } else if (type === 'out') {
-        // 재구독/스냅샷 재전달로 같은 퇴실 이벤트가 다시 와도 중복 반영 금지
-        // (예전엔 이미 닫힌 세션의 퇴실이 '다음 입실 기록'에 덮어써져
-        //  퇴실 < 입실 역전 기록과 24시간 오류가 발생했음)
-        const alreadyApplied = todayRecords.some(r => r.studentName === name && r.outTime === time);
-        if (!alreadyApplied) {
-          const outTs = (typeof d.ts === 'number') ? d.ts : null;
-          // 이 퇴실 이벤트보다 먼저 입실한(inTs <= outTs) 열린 기록만 닫는다
-          const rec = todayRecords.find(r => r.studentName === name && !r.outTime
-            && (outTs === null || r.inTs == null || r.inTs <= outTs));
-          if (rec) {
-            // 외출 중(미복귀) 퇴실이면 마지막 외출 구간도 사용시간에서 제외
-            if (rec._awayStart != null) {
-              let dd = timeToMin(time) - rec._awayStart; if (dd < 0) dd += 1440;
-              rec.awayMin = (rec.awayMin || 0) + Math.max(0, dd); rec._awayStart = null;
-            }
-            rec.outTime = time;
-            const idx = PRESENT.indexOf(name);
-            if (idx !== -1) PRESENT.splice(idx, 1);
-            changed = true;
-          } else if (!todayRecords.some(r => r.studentName === name && !r.outTime)) {
-            // 입실 기록 없이 퇴실만 온 경우 - 입실 기록 생성 후 퇴실 처리
-            todayRecords.push({ studentName: name, seat, inTime: '?', outTime: time });
-            const idx = PRESENT.indexOf(name);
-            if (idx !== -1) PRESENT.splice(idx, 1);
-            changed = true;
-          }
-        }
-        // 다른 기기에서 퇴실 처리된 학생은 외출 상태도 함께 해제
-        if (window._awayStudents && window._awayStudents[name]) { delete window._awayStudents[name]; changed = true; }
-      }
-    });
-
-    if (changed) {
-      buildDashboard();
-      buildCheckinTodayList();
-      if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
-      else if (document.getElementById('fp-room')) buildFloorplan();
-      try { buildHoursTable(); } catch(e){} // 입퇴실 변경 시 1일 사용시간 표도 갱신
-    }
-  }
-);
+let _sessUnsubs = [];
+function subscribeSessions() {
+  _sessUnsubs.forEach(u => { try { u(); } catch(e){} });
+  _sessUnsubs = [];
+  const todayIso = SH.sessIsoDate(Date.now());
+  // 오늘 입실 세션 (열림+닫힘) — 입실일로 필터해 읽기량 고정
+  _sessUnsubs.push(onSnapshot(query(collection(db, SESS_COL), where('inDate','==', todayIso)), snap => {
+    _sessTodayDocs = snap.docs.map(d => d.data());
+    if (!_checkinSnapshotReady) return;
+    _rebuildTodayFromSessions();
+    _refreshCheckinUI();
+  }, e => console.warn('[세션] 오늘 세션 구독 오류:', e)));
+  // 열린 세션 포인터 전체 (수십 개 이하) — 입실 중 표시·이월의 원본
+  _sessUnsubs.push(onSnapshot(collection(db, SESS_PTR_COL), snap => {
+    _sessPtrDocs = snap.docs.map(d => d.data());
+    if (!_checkinSnapshotReady) return;
+    _rebuildTodayFromSessions();
+    _refreshCheckinUI();
+  }, e => console.warn('[세션] 포인터 구독 오류:', e)));
 }
-subscribeCheckinLogs();
-window._resubscribeCheckinLogs = subscribeCheckinLogs;
+subscribeSessions();
+window._resubscribeCheckinLogs = subscribeSessions; // 새벽 리셋의 날짜 전환 재구독(기존 이름 유지)
 
 // ── 스터디룸 신청 실시간 감시 ──
 const _studyroomReqAlerts = [];
@@ -8299,6 +8459,8 @@ window.adminForceCheckout = function(name) {
     saveCheckinToFirebase(studentObj, true, closeTime, rec.carryFromDate).catch(console.error);
   }
   saveCheckinToFirebase(studentObj, true, timeStr);
+  // 세션 마감 + 월 누적 재계산 — 강제 퇴실도 이제 공부시간이 정확히 반영된다
+  waitSessionApi().then(api => api.checkout(studentObj, 'admin')).catch(console.error);
   buildDashboard();
   buildCheckinTodayList();
   if (document.getElementById('fp-room')) buildFloorplan();
@@ -8353,6 +8515,7 @@ window.adminForceCheckin = function(name) {
   }
 
   saveCheckinToFirebase(student, false, timeStr);
+  waitSessionApi().then(api => api.checkin(student)).catch(console.error);
   sendCheckinSMS(student, false, timeStr, 0);
   buildDashboard();
   buildCheckinTodayList();
