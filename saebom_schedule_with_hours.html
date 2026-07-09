@@ -945,6 +945,25 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
       </div>
     </div>
 
+    <!-- 퇴원생 보관함 -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-archive" style="font-size:15px;color:#C8900A"></i> 퇴원생 보관함
+      </div>
+      <div style="font-size:12px;color:#8B6010;margin-bottom:12px">
+        퇴원처리된 학생은 90일간 보관되며, 기간 안에는 시간표·누적시간을 포함해 그대로 복구할 수 있습니다.
+        90일이 지나면 자동으로 완전 삭제됩니다.
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">
+        <button onclick="loadWithdrawnStudents()"
+          style="padding:7px 16px;background:#FFF8DC;border:1.5px solid #E0B020;color:#8B6010;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">
+          📦 보관함 조회
+        </button>
+        <span id="withdrawn-status" style="font-size:12px;color:#8B6010"></span>
+      </div>
+      <div id="withdrawn-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+
     <!-- 자리선택 허용 -->
     <div class="card">
       <div class="card-title" style="margin-bottom:8px">
@@ -6188,6 +6207,7 @@ async function loadStudentsFromFirebase() {
     console.error('Firebase 로드 실패:', e);
   }
   migrateHoursKeys(); // 구형식 hours key 영구 정리 (백그라운드·멱등)
+  cleanupWithdrawnStudents(); // 90일 지난 퇴원 보관 데이터 정리 (백그라운드·하루1회)
   if (window.initApp) window.initApp();
 
   // students 컬렉션 실시간 감시 - added 무시, modified/removed만 처리
@@ -8102,7 +8122,7 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
     </div>` : ''}
     <div onclick="fpWithdrawStudent(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#fff;background:#B91C1C;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
       onmouseover="this.style.background='#991B1B'" onmouseout="this.style.background='#B91C1C'">
-      🗑️ 퇴원처리 (완전 삭제)
+      📦 퇴원처리 (90일 보관)
     </div>
   `;
   document.body.appendChild(menu);
@@ -8154,7 +8174,35 @@ window.fpUnassignSeat = function(seatNum) {
   showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
 };
 
-// ── 퇴원처리: 학생의 모든 데이터를 완전 삭제 (되돌릴 수 없음) ──
+// ── 퇴원처리(soft delete): 학생 데이터를 보관함으로 이동, 90일 내 복구 가능 ──
+// 입퇴실 기록·플래너·스터디룸 이력은 삭제하지 않고 그대로 둔다(오래된 것은 '기록 정리'가 처리).
+// 완전 삭제가 정말 필요하면 콘솔 도구 purgeStudentData 사용.
+const WITHDRAWN_KEEP_DAYS = 90;
+
+async function _getDocData(col, id) {
+  try { const s = await getDoc(doc(db, col, id)); return s.exists() ? s.data() : null; } catch(e) { return null; }
+}
+
+// students/schedules/schedule_base를 withdrawn_students/{seat}_{ts}로 묶어 보관 후 원본 삭제
+async function archiveAndRemoveStudent(seat, name, sid) {
+  let stu = await _getDocData('students', seat);
+  if (!stu && sid && sid !== seat) stu = await _getDocData('students', sid);
+  const base = await _getDocData('schedule_base', seat);
+  const cur  = await _getDocData('schedules', seat);
+  if (!stu && !base) throw new Error('보관할 학생 데이터를 찾을 수 없습니다');
+  const archiveId = `${seat}_${Date.now()}`; // 좌석 재사용 대비 타임스탬프 포함
+  await setDoc(doc(db, 'withdrawn_students', archiveId), {
+    seat, name,
+    withdrawnAt: serverTimestamp(),
+    student: stu || null, base: base || null, current: cur || null
+  });
+  await deleteDoc(doc(db, 'students', seat));
+  try { await deleteDoc(doc(db, 'schedules', seat)); } catch(e) {}
+  try { await deleteDoc(doc(db, 'schedule_base', seat)); } catch(e) {}
+  if (sid && sid !== seat) { try { await deleteDoc(doc(db, 'students', sid)); } catch(e) {} }
+  return archiveId;
+}
+
 window.fpWithdrawStudent = async function(seatNum) {
   document.getElementById('fp-ctx-menu')?.remove();
   const student = getFpStudentBySeat(seatNum);
@@ -8162,33 +8210,145 @@ window.fpWithdrawStudent = async function(seatNum) {
   const seat = String(student.seat).replace('번','').trim();
   const name = student.name;
 
+  // 입실 중이면 열린 입실 기록이 남아 표시가 꼬이므로 먼저 퇴실 처리
+  if (PRESENT.includes(name)) { alert(`${name} 학생이 입실 중입니다.\n먼저 퇴실 처리한 뒤 퇴원처리해주세요.`); return; }
+
   // 1단계: 경고 확인
   if (!confirm(
     `⚠️ ${name}(${seatNum}번) 퇴원처리\n\n` +
-    `이 학생의 모든 데이터를 완전히 삭제합니다:\n` +
-    `· 학생 정보 / 시간표\n· 출석·입퇴실 기록\n· 이용시간 통계\n· 스터디룸 신청·이용 이력\n· 플래너 코멘트\n\n` +
-    `❌ 되돌릴 수 없습니다. 계속할까요?`
+    `학생 정보·시간표·누적시간을 보관함으로 옮기고 좌석을 비웁니다.\n` +
+    `설정 탭 '퇴원생 보관함'에서 ${WITHDRAWN_KEEP_DAYS}일 안에 복구할 수 있고,\n` +
+    `기간이 지나면 자동으로 완전 삭제됩니다.\n\n계속할까요?`
   )) return;
 
   // 2단계: 이름 확인 입력 (오삭제 방지)
-  const typed = prompt(`정말 삭제하려면 학생 이름을 정확히 입력하세요:\n"${name}"`);
+  const typed = prompt(`퇴원처리하려면 학생 이름을 정확히 입력하세요:\n"${name}"`);
   if (typed === null) return;
   if (typed.trim() !== name) { alert('이름이 일치하지 않아 취소되었습니다.'); return; }
 
   try {
-    if (!window.purgeStudentData) { alert('삭제 도구를 찾을 수 없습니다.'); return; }
-    const result = await window.purgeStudentData(seat, name, true);
-    // purgeStudentData 내부에서 로컬 상태 정리 + 화면 갱신 + 토스트까지 처리함
-    // 미배정 상태로 보관돼 있던 문서(u_...)가 있으면 함께 정리
-    if (student.sid && student.sid !== seat && window._fsDeleteDoc) {
-      try { await window._fsDeleteDoc(window._fsDoc(window._adminDb, 'students', student.sid)); } catch(e) {}
+    await archiveAndRemoveStudent(seat, name, student.sid);
+    // 로컬(화면) 상태 정리
+    const si = STUDENTS.findIndex(s => String(s.seat).replace('번','') === seat);
+    if (si !== -1) STUDENTS.splice(si, 1);
+    for (let i = todayRecords.length - 1; i >= 0; i--) {
+      const r = todayRecords[i];
+      if (r.studentName === name || String(r.seat).replace('번','') === seat) todayRecords.splice(i, 1);
     }
-    console.log(`[퇴원처리] ${name}(${seat}번) 완료`, result);
+    try { buildDashboard(); buildCheckinTodayList(); if (document.getElementById('fp-room')) buildFloorplan(); } catch(e) {}
+    try { if (typeof buildHoursTable === 'function') buildHoursTable(); } catch(e) {}
+    if (window.showAdminToast) showAdminToast(`📦 ${name}(${seat}번) 퇴원처리 완료 — 보관함에서 ${WITHDRAWN_KEEP_DAYS}일간 복구 가능`);
+    console.log(`[퇴원처리] ${name}(${seat}번) 보관함 이동 완료`);
   } catch(e) {
     console.error('퇴원처리 실패:', e);
     alert('퇴원처리 중 오류: ' + e.message);
   }
 };
+
+// ── 퇴원생 보관함: 조회 / 복구 / 영구삭제 / 90일 자동정리 (설정 탭) ──
+window.loadWithdrawnStudents = async function() {
+  const st = document.getElementById('withdrawn-status');
+  const list = document.getElementById('withdrawn-list');
+  if (st) st.textContent = '⏳ 조회 중...';
+  try {
+    const snap = await getDocs(collection(db, 'withdrawn_students'));
+    const items = [];
+    snap.forEach(d => items.push({ id: d.id, ...d.data() }));
+    items.sort((a, b) => (b.withdrawnAt?.seconds || 0) - (a.withdrawnAt?.seconds || 0));
+    if (st) st.textContent = items.length ? `${items.length}명 보관 중` : '';
+    if (!list) return;
+    list.innerHTML = items.length ? items.map(it => {
+      const d = it.withdrawnAt?.toDate ? it.withdrawnAt.toDate() : null;
+      const dateStr = d ? `${d.getFullYear()}. ${d.getMonth()+1}. ${d.getDate()}.` : '-';
+      const left = d ? Math.max(0, WITHDRAWN_KEEP_DAYS - Math.floor((Date.now() - d.getTime()) / 86400000)) : '?';
+      const safeName = String(it.name || '').replace(/'/g, "\\'").replace(/</g, '&lt;');
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;background:#FFFDF5;border:1px solid #E8C840;border-radius:8px">
+        <span style="font-size:13px;font-weight:700;color:#5C4A08">${safeName} <span style="font-weight:500;color:#8B6010">(${it.seat}번)</span></span>
+        <span style="font-size:11px;color:#8B6010;flex:1">퇴원 ${dateStr} · ${left}일 남음</span>
+        <button onclick="restoreWithdrawnStudent('${it.id}')" style="padding:5px 12px;background:#E8F5E9;border:1.5px solid #A5D6A7;color:#2D7A4F;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">복구</button>
+        <button onclick="purgeWithdrawnStudent('${it.id}','${safeName}')" style="padding:5px 12px;background:#FCEBEB;border:1.5px solid #F09595;color:#C62828;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">영구삭제</button>
+      </div>`;
+    }).join('') : '<div style="font-size:12px;color:#8B6010">보관 중인 퇴원생이 없습니다</div>';
+  } catch(e) {
+    console.error('[퇴원보관함] 조회 실패:', e);
+    if (st) st.textContent = '조회 실패: ' + e.message;
+  }
+};
+
+window.restoreWithdrawnStudent = async function(archiveId) {
+  try {
+    const snap = await getDoc(doc(db, 'withdrawn_students', archiveId));
+    if (!snap.exists()) { alert('보관 데이터를 찾을 수 없습니다.'); return; }
+    const a = snap.data();
+    let seat = String(a.seat).replace('번','').trim();
+    const taken = s => (window.STUDENTS || []).some(x => String(x.seat).replace('번','') === s);
+    if (taken(seat)) {
+      const input = prompt(`${seat}번 좌석은 이미 사용 중입니다.\n복구할 빈 좌석 번호를 입력하세요:`);
+      if (input === null) return;
+      seat = String(input).replace('번','').trim();
+      if (!seat || !/^\d+$/.test(seat) || taken(seat)) { alert('사용할 수 없는 좌석입니다. 취소되었습니다.'); return; }
+    }
+    if (!confirm(`${a.name} 학생을 ${seat}번 좌석으로 복구할까요?`)) return;
+    // student 문서가 없이 base만 보관된 경우에도 최소 정보로 복구
+    const stu = a.student || {
+      phone:'', parent:'', gender:'f', expiry:'', startDate:'', hours:{}, awayAt:'',
+      월:a.base?.['월']||'-', 화:a.base?.['화']||'-', 수:a.base?.['수']||'-',
+      목:a.base?.['목']||'-', 금:a.base?.['금']||'-', 토:a.base?.['토']||'-'
+    };
+    await setDoc(doc(db, 'students', seat), { ...stu, seat, name: a.name, updatedAt: serverTimestamp() });
+    if (a.base) await setDoc(doc(db, 'schedule_base', seat), { ...a.base, seat, updatedAt: serverTimestamp() });
+    const cur = a.current || a.base;
+    if (cur) await setDoc(doc(db, 'schedules', seat), { ...cur, seat, changedBy: 'admin', updatedAt: serverTimestamp() });
+    await deleteDoc(doc(db, 'withdrawn_students', archiveId));
+    // students onSnapshot은 added를 무시하므로 이 기기 화면엔 직접 반영 (다른 기기는 새로고침 시 반영 — 신규등록과 동일)
+    STUDENTS.push({
+      seat, name: a.name,
+      phone: stu.phone || '', parent: stu.parent || '',
+      gender: stu.gender || 'f', expiry: stu.expiry || '', startDate: stu.startDate || '',
+      schedule: { 월:stu['월']||'-', 화:stu['화']||'-', 수:stu['수']||'-', 목:stu['목']||'-', 금:stu['금']||'-', 토:stu['토']||'-' },
+      hours: _normalizeHours(stu.hours),
+      awayAt: ''
+    });
+    try {
+      if (window.buildStudentList) buildStudentList(document.getElementById('student-search')?.value || '');
+      if (window.buildDashboard) buildDashboard();
+      if (document.getElementById('fp-room') && window.buildFloorplan) buildFloorplan();
+      if (window.buildScheduleTable) buildScheduleTable();
+    } catch(e) {}
+    if (window.showAdminToast) showAdminToast(`✅ ${a.name}(${seat}번) 복구 완료`);
+    loadWithdrawnStudents();
+  } catch(e) {
+    console.error('[퇴원보관함] 복구 실패:', e);
+    alert('복구 중 오류: ' + e.message);
+  }
+};
+
+window.purgeWithdrawnStudent = async function(archiveId, name) {
+  if (!confirm(`${name} 학생의 보관 데이터를 영구 삭제할까요?\n삭제 후에는 복구할 수 없습니다.`)) return;
+  try {
+    await deleteDoc(doc(db, 'withdrawn_students', archiveId));
+    if (window.showAdminToast) showAdminToast(`🗑️ ${name} 보관 데이터를 영구 삭제했습니다`);
+    loadWithdrawnStudents();
+  } catch(e) { alert('삭제 중 오류: ' + e.message); }
+};
+
+// 90일 지난 보관 데이터 자동 정리 (하루 1회, 멱등 — 실패해도 다음날 재시도)
+async function cleanupWithdrawnStudents() {
+  try {
+    const today = new Date().toDateString();
+    if (localStorage.getItem('saebom_withdrawn_cleanup') === today) return;
+    const cutoff = Date.now() - WITHDRAWN_KEEP_DAYS * 86400000;
+    const snap = await getDocs(collection(db, 'withdrawn_students'));
+    for (const d of snap.docs) {
+      const w = d.data().withdrawnAt;
+      const t = w?.toDate ? w.toDate().getTime() : null;
+      if (t && t < cutoff) {
+        try { await deleteDoc(doc(db, 'withdrawn_students', d.id)); console.log('[퇴원보관함] 90일 경과 정리:', d.id); } catch(e) {}
+      }
+    }
+    localStorage.setItem('saebom_withdrawn_cleanup', today);
+  } catch(e) { console.warn('[퇴원보관함] 자동정리 실패:', e); }
+}
 
 // ── 스터디룸 초과 경고 ──
 const studyroomOverflowAlerts = [];
