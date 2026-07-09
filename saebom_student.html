@@ -1575,13 +1575,14 @@ async function applyBaseAndRevert(db, seatKey, liveData) {
     DAYS.forEach(day => { currentStudent.schedule[day] = rebuilt[day]; });
 
     // 4) Firebase schedules가 재구성값과 다르면 되돌려 씀 (지난 당일변경 복구).
-    //    원칙3: 이 되돌림도 관리앱 감지 로직이 정상 감지 — 감지 로직은 건드리지 않음.
+    //    changedBy:'restore' — 원본 복구는 학생의 새 변경이 아니므로 관리앱이 변경알림을 만들지 않는다.
     if (liveData) {
       const diff = DAYS.some(day => (liveData[day] || '-') !== (rebuilt[day] || '-'));
       if (diff) {
         const payload = {
           name: currentStudent.name, seat: currentStudent.seat,
           phone: currentStudent.phone || '', updatedAt: window._fsServerTimestamp(),
+          changedBy: 'restore',
         };
         DAYS.forEach(day => { payload[day] = rebuilt[day] || '-'; });
         try { await window._fsSetDoc(window._fsDoc(db, 'schedules', seatKey), payload); } catch(e) {}

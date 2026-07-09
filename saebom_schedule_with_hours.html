@@ -7336,9 +7336,10 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
       return;
     }
 
-    // 관리자가 직접 수정·저장한 변경은 알림 대상이 아님 — 기준값만 갱신하고 종료
+    // 관리자가 직접 수정·저장한 변경('admin')과 학생앱의 원본 자동복구('restore')는
+    // 알림 대상이 아님 — 기준값만 갱신하고 종료
     // (다음 학생발 변경은 이 값과 비교되므로 정상 감지됨)
-    if (data.changedBy === 'admin') {
+    if (data.changedBy === 'admin' || data.changedBy === 'restore') {
       knownSchedules[seat] = data;
       return;
     }
