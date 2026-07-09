@@ -34,6 +34,34 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .schedule-table td{padding:6px 8px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px;text-align:center;vertical-align:middle}
 .schedule-table tr:last-child td{border-bottom:none}
 .schedule-table tr:hover td{background:var(--color-background-secondary)}
+/* ── 반(수업 블록) 기능 ── */
+.sched-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
+.sched-toolbar .class-edit-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid #C8900A;background:#fff;color:#C8900A;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.sched-toolbar .class-edit-btn.on{background:#C8900A;color:#fff}
+.sched-toolbar .class-edit-hint{font-size:12px;color:#8B6010}
+.schedule-table td.class-block{font-weight:700;color:#3a2a00;cursor:default;position:relative;white-space:normal;word-break:keep-all;line-height:1.3}
+.schedule-table tr:hover td.class-block{background:inherit}
+.sched-editing .schedule-table td.class-block{cursor:pointer;outline:1.5px dashed rgba(0,0,0,.25);outline-offset:-3px}
+.sched-editing .schedule-table td.sched-cell{cursor:cell;-webkit-user-select:none;user-select:none}
+.sched-editing{ -webkit-user-select:none;user-select:none}
+.schedule-table td.cell-sel{background:rgba(200,144,10,.28)!important;box-shadow:inset 0 0 0 1.5px #C8900A}
+/* 반 생성/편집 팝업 */
+.class-pop-overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:3000;display:flex;align-items:center;justify-content:center}
+.class-pop{background:#fff;border-radius:16px;width:min(92vw,360px);box-shadow:0 10px 40px rgba(0,0,0,.25);overflow:hidden}
+.class-pop-head{padding:15px 18px;background:#FFF8DC;font-size:15px;font-weight:700;color:#5C3D08;border-bottom:.5px solid #eee}
+.class-pop-body{padding:16px 18px}
+.class-pop-body label{display:block;font-size:12px;font-weight:600;color:#8B6010;margin:0 0 6px}
+.class-pop-body input.cls-name{width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid #E0C060;border-radius:10px;font-size:14px;outline:none}
+.class-pop-body input.cls-name:focus{border-color:#C8900A}
+.cls-swatches{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.cls-swatch{width:30px;height:30px;border-radius:8px;cursor:pointer;border:2px solid transparent}
+.cls-swatch.sel{border-color:#333;box-shadow:0 0 0 2px #fff inset}
+.cls-range-info{font-size:12px;color:#999;margin-top:10px}
+.class-pop-foot{display:flex;gap:8px;padding:12px 18px 16px;justify-content:flex-end}
+.class-pop-foot button{padding:9px 16px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;border:none}
+.class-pop-foot .cbtn-cancel{background:#eee;color:#555}
+.class-pop-foot .cbtn-ok{background:#C8900A;color:#fff}
+.class-pop-foot .cbtn-del{background:#E5484D;color:#fff;margin-right:auto}
 .name-cell{text-align:left!important;font-weight:500;white-space:nowrap}
 .seat-badge{display:inline-block;background:#FFF8DC;color:#8B6010;border-radius:4px;padding:1px 5px;font-size:10px}
 .cell-attend{background:#FFF8DC;color:#27500A;border-radius:4px;padding:2px 6px;font-size:11px;display:inline-block}
@@ -564,7 +592,11 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
 <!-- 스케줄 -->
 <div id="sec-schedule" class="section">
   <div class="day-tabs" id="day-tabs"></div>
-  <div style="overflow-x:auto">
+  <div class="sched-toolbar">
+    <button id="class-edit-btn" class="class-edit-btn" onclick="toggleClassEdit()"><i class="ti ti-layout-grid-add" aria-hidden="true"></i> 반 편집</button>
+    <span id="class-edit-hint" class="class-edit-hint" style="display:none">셀을 드래그해 묶으면 반이 생성됩니다 · 반을 누르면 수정/삭제</span>
+  </div>
+  <div id="schedule-scroll" style="overflow-x:auto">
     <table class="schedule-table" id="schedule-table"></table>
   </div>
 </div>
@@ -620,7 +652,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
   <div class="search-bar">
     <div class="student-search-box">
       <i class="ti ti-search" aria-hidden="true"></i>
-      <input type="text" id="student-search" name="student-search-q" autocomplete="off" placeholder="이름(초성 가능) · 좌석번호 · 전화번호로 검색..." oninput="filterStudents()">
+      <input type="text" id="student-search" name="student-search-q" autocomplete="off" placeholder="이름(초성 가능) · 좌석번호 · 학생/학부모 전화번호로 검색..." oninput="filterStudents()">
       <button id="student-search-clear" onclick="clearStudentSearch()" aria-label="검색어 지우기">✕</button>
     </div>
     <span id="student-search-count"></span>
@@ -2404,17 +2436,223 @@ function buildScheduleTable(day){
     PERIODS=PERIODS_WEEKDAY; PERIOD_OFFSET=6;
   }
   const tbl=document.getElementById('schedule-table');
+  const display=[...STUDENTS].filter(s=>parseInt(s.seat)<54).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)); // 관리자(54번~) 제외
+  _scheduleDisplay=display; // 반 편집(드래그 선택)에서 행 인덱스→좌석 매핑에 사용
+  const {skip,anchor}=computeClassLayout(day,display);
   let html='<thead><tr><th style="text-align:left;padding-left:12px">좌석</th><th>이름</th>';
   PERIODS.forEach(p=>{html+=`<th><div class="period-header">${p.n}<br><span style="font-weight:400;opacity:0.8;font-size:9px">${p.t}</span></div></th>`;});
   html+='</tr></thead><tbody>';
-  [...STUDENTS].filter(s=>parseInt(s.seat)<54).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)).forEach(s=>{ // 관리자(54번~) 제외
+  display.forEach((s,r)=>{
     html+=`<tr><td class="name-cell" style="padding-left:12px"><span class="seat-badge">${s.seat}</span></td><td>${s.name}</td>`;
-    PERIODS.forEach((_,i)=>{html+=`<td>${getCellContent(s.schedule[day],i)}</td>`;});
+    PERIODS.forEach((_,c)=>{
+      const key=r+'_'+c;
+      if(skip[key]) return; // 병합된 반에 가려진 셀 → 렌더 안 함
+      const a=anchor[key];
+      if(a){
+        const b=a.block;
+        html+=`<td class="class-block" rowspan="${a.rowspan}" colspan="${a.colspan}" style="background:${b.color||'#FDE8B0'}" data-class-id="${b.id}" onclick="onClassBlockClick('${b.id}')">${escapeClassHtml(b.name)}</td>`;
+      } else {
+        html+=`<td class="sched-cell" data-r="${r}" data-c="${c}">${getCellContent(s.schedule[day],c)}</td>`;
+      }
+    });
     html+='</tr>';
   });
   html+='</tbody>';
   tbl.innerHTML=html;
+  _initScheduleDragOnce();
 }
+
+/* ══════════════ 반(수업 블록) 기능 ══════════════
+   전체 시간표에서 셀(학생×교시)을 드래그로 묶어 '반'을 만든다(구글시트 셀 합치기와 유사).
+   저장은 Firestore students/_meta_schedule_classes (모듈 스크립트의 _syncScheduleClasses).
+   블록 = { id, day, name, color, seats:[좌석문자열...], periods:[교시번호...] } (직사각형 영역) */
+window.SCHEDULE_CLASSES = window.SCHEDULE_CLASSES || [];
+let _scheduleDisplay = [];         // 마지막 렌더의 학생 표시순서(행)
+let _classEditMode = false;        // 반 편집 모드 on/off
+const CLASS_COLORS = ['#FDE8B0','#BFE3C6','#BFD8F2','#E7CBEF','#F7C6C2','#CFE9E6','#F2DFAF','#D6D2F0'];
+
+function escapeClassHtml(s){
+  return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// 현재 요일의 블록들을 표시순서 기준 rowspan/colspan 정보로 변환
+function computeClassLayout(day,display){
+  const skip={}, anchor={};
+  const seatToRow=new Map(display.map((s,i)=>[String(s.seat),i]));
+  const periodToCol=new Map(PERIODS.map((p,i)=>[parseInt(p.n),i])); // p.n='7교시' → 숫자 7
+  (window.SCHEDULE_CLASSES||[]).filter(b=>b.day===day).forEach(b=>{
+    const rows=(b.seats||[]).map(s=>seatToRow.get(String(s))).filter(v=>v!=null);
+    const cols=(b.periods||[]).map(p=>periodToCol.get(p)).filter(v=>v!=null);
+    if(!rows.length||!cols.length) return; // 이 요일 표에 해당 좌석/교시가 없으면 건너뜀
+    const r0=Math.min(...rows),r1=Math.max(...rows),c0=Math.min(...cols),c1=Math.max(...cols);
+    for(let r=r0;r<=r1;r++) for(let c=c0;c<=c1;c++){
+      if(r===r0&&c===c0) anchor[r+'_'+c]={block:b,rowspan:r1-r0+1,colspan:c1-c0+1};
+      else skip[r+'_'+c]=true;
+    }
+  });
+  return {skip,anchor};
+}
+
+window.toggleClassEdit = function(){
+  _classEditMode=!_classEditMode;
+  const btn=document.getElementById('class-edit-btn');
+  const hint=document.getElementById('class-edit-hint');
+  const sec=document.getElementById('sec-schedule');
+  if(btn) btn.classList.toggle('on',_classEditMode);
+  if(hint) hint.style.display=_classEditMode?'inline':'none';
+  if(sec) sec.classList.toggle('sched-editing',_classEditMode);
+  _clearCellSelection();
+};
+
+// ── 드래그 선택 (마우스+터치 공용: Pointer 이벤트) ──
+let _selAnchor=null;   // {r,c}
+let _selCur=null;      // {r,c}
+function _cellFromPoint(x,y){
+  const el=document.elementFromPoint(x,y);
+  if(!el) return null;
+  const td=el.closest && el.closest('td.sched-cell');
+  if(!td) return null;
+  const r=parseInt(td.dataset.r), c=parseInt(td.dataset.c);
+  if(isNaN(r)||isNaN(c)) return null;
+  return {r,c};
+}
+function _paintSelection(){
+  document.querySelectorAll('#schedule-table td.cell-sel').forEach(td=>td.classList.remove('cell-sel'));
+  if(!_selAnchor||!_selCur) return;
+  const r0=Math.min(_selAnchor.r,_selCur.r),r1=Math.max(_selAnchor.r,_selCur.r);
+  const c0=Math.min(_selAnchor.c,_selCur.c),c1=Math.max(_selAnchor.c,_selCur.c);
+  document.querySelectorAll('#schedule-table td.sched-cell').forEach(td=>{
+    const r=parseInt(td.dataset.r),c=parseInt(td.dataset.c);
+    if(r>=r0&&r<=r1&&c>=c0&&c<=c1) td.classList.add('cell-sel');
+  });
+}
+function _clearCellSelection(){
+  _selAnchor=_selCur=null;
+  document.querySelectorAll('#schedule-table td.cell-sel').forEach(td=>td.classList.remove('cell-sel'));
+}
+function _initScheduleDragOnce(){
+  const tbl=document.getElementById('schedule-table');
+  if(!tbl||tbl._dragBound) return;
+  tbl._dragBound=true;
+  tbl.addEventListener('pointerdown',e=>{
+    if(!_classEditMode) return;
+    const td=e.target.closest && e.target.closest('td.sched-cell');
+    if(!td) return;
+    e.preventDefault();
+    _selAnchor={r:parseInt(td.dataset.r),c:parseInt(td.dataset.c)};
+    _selCur={..._selAnchor};
+    _paintSelection();
+  });
+  document.addEventListener('pointermove',e=>{
+    if(!_classEditMode||!_selAnchor) return;
+    const cell=_cellFromPoint(e.clientX,e.clientY);
+    if(cell){ _selCur=cell; _paintSelection(); }
+  });
+  document.addEventListener('pointerup',()=>{
+    if(!_classEditMode||!_selAnchor) return;
+    const a=_selAnchor,cur=_selCur; _selAnchor=null;
+    if(!cur){ _clearCellSelection(); return; }
+    const r0=Math.min(a.r,cur.r),r1=Math.max(a.r,cur.r),c0=Math.min(a.c,cur.c),c1=Math.max(a.c,cur.c);
+    openClassCreatePanel({r0,r1,c0,c1});
+  });
+}
+
+// 선택 영역 → 반 생성 팝업
+function openClassCreatePanel(sel){
+  const seats=[]; for(let r=sel.r0;r<=sel.r1;r++){ if(_scheduleDisplay[r]) seats.push(String(_scheduleDisplay[r].seat)); }
+  const periods=[]; for(let c=sel.c0;c<=sel.c1;c++){ if(PERIODS[c]) periods.push(parseInt(PERIODS[c].n)); }
+  if(!seats.length||!periods.length){ _clearCellSelection(); return; }
+  // 기존 반과 겹치면(같은 좌석 AND 같은 교시) 생성 불가 — 표 병합 충돌 방지
+  const overlap=(window.SCHEDULE_CLASSES||[]).some(b=>b.day===currentDay
+    && b.seats.some(s=>seats.includes(String(s)))
+    && b.periods.some(p=>periods.includes(Number(p))));
+  if(overlap){ alert('이미 반이 있는 칸과 겹칩니다. 기존 반을 삭제한 뒤 다시 묶어주세요.'); _clearCellSelection(); return; }
+  const rangeTxt=`${seats[0]}~${seats[seats.length-1]}번 · ${periods[0]}${periods.length>1?'~'+periods[periods.length-1]:''}교시`;
+  _showClassPop({
+    title:'반 만들기', name:'', color:CLASS_COLORS[(window.SCHEDULE_CLASSES.length)%CLASS_COLORS.length],
+    rangeTxt, showDelete:false,
+    onOk:(name,color)=>{
+      const block={id:'cls_'+Date.now()+'_'+Math.random().toString(36).slice(2,6),day:currentDay,name:name||'반',color,seats,periods};
+      window.SCHEDULE_CLASSES.push(block);
+      _persistClasses();
+      _clearCellSelection();
+      buildScheduleTable(currentDay);
+    },
+    onCancel:()=>_clearCellSelection()
+  });
+}
+
+// 기존 반 클릭(편집 모드에서만) → 수정/삭제
+window.onClassBlockClick = function(id){
+  if(!_classEditMode) return;
+  const b=(window.SCHEDULE_CLASSES||[]).find(x=>x.id===id);
+  if(!b) return;
+  const rangeTxt=`${b.seats[0]}~${b.seats[b.seats.length-1]}번 · ${b.periods[0]}${b.periods.length>1?'~'+b.periods[b.periods.length-1]:''}교시`;
+  _showClassPop({
+    title:'반 수정', name:b.name, color:b.color||CLASS_COLORS[0], rangeTxt, showDelete:true,
+    onOk:(name,color)=>{ b.name=name||'반'; b.color=color; _persistClasses(); buildScheduleTable(currentDay); },
+    onDelete:()=>{
+      const i=window.SCHEDULE_CLASSES.indexOf(b);
+      if(i>-1) window.SCHEDULE_CLASSES.splice(i,1);
+      _persistClasses(); buildScheduleTable(currentDay);
+    },
+    onCancel:()=>{}
+  });
+};
+
+// 공용 팝업 (생성/수정 겸용)
+function _showClassPop(opt){
+  document.getElementById('class-pop-overlay')?.remove();
+  let color=opt.color;
+  const ov=document.createElement('div');
+  ov.id='class-pop-overlay'; ov.className='class-pop-overlay';
+  ov.innerHTML=`
+    <div class="class-pop">
+      <div class="class-pop-head">${opt.title}</div>
+      <div class="class-pop-body">
+        <label>반 이름</label>
+        <input class="cls-name" type="text" placeholder="예: 수학 특강" value="${escapeClassHtml(opt.name)}" maxlength="20">
+        <label style="margin-top:14px">색상</label>
+        <div class="cls-swatches">${CLASS_COLORS.map(c=>`<div class="cls-swatch${c===color?' sel':''}" data-c="${c}" style="background:${c}"></div>`).join('')}</div>
+        <div class="cls-range-info">${escapeClassHtml(opt.rangeTxt)}</div>
+      </div>
+      <div class="class-pop-foot">
+        ${opt.showDelete?'<button class="cbtn-del">삭제</button>':''}
+        <button class="cbtn-cancel">취소</button>
+        <button class="cbtn-ok">${opt.showDelete?'저장':'만들기'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const input=ov.querySelector('.cls-name');
+  setTimeout(()=>input.focus(),30);
+  ov.querySelectorAll('.cls-swatch').forEach(sw=>sw.addEventListener('click',()=>{
+    color=sw.dataset.c;
+    ov.querySelectorAll('.cls-swatch').forEach(s=>s.classList.remove('sel'));
+    sw.classList.add('sel');
+  }));
+  const close=()=>ov.remove();
+  ov.addEventListener('click',e=>{ if(e.target===ov){ close(); opt.onCancel&&opt.onCancel(); } });
+  ov.querySelector('.cbtn-cancel').addEventListener('click',()=>{ close(); opt.onCancel&&opt.onCancel(); });
+  ov.querySelector('.cbtn-ok').addEventListener('click',()=>{ const n=input.value.trim(); close(); opt.onOk&&opt.onOk(n,color); });
+  input.addEventListener('keydown',e=>{ if(e.key==='Enter'){ const n=input.value.trim(); close(); opt.onOk&&opt.onOk(n,color); } });
+  const del=ov.querySelector('.cbtn-del');
+  if(del) del.addEventListener('click',()=>{ if(confirm('이 반을 삭제할까요? (합치기 해제)')){ close(); opt.onDelete&&opt.onDelete(); } });
+}
+
+// Firestore 저장 (모듈 스크립트에서 노출한 _syncScheduleClasses 사용)
+function _persistClasses(){
+  try{ if(window._syncScheduleClasses) window._syncScheduleClasses(window.SCHEDULE_CLASSES); }
+  catch(e){ console.error('반 저장 실패:',e); }
+}
+
+// 다른 기기(또는 시작 시 Firebase)에서 받은 반 목록 반영 — 모듈 스크립트가 호출
+window._applyRemoteScheduleClasses = function(arr){
+  if(!Array.isArray(arr)) return;
+  window.SCHEDULE_CLASSES = arr;
+  if(document.getElementById('schedule-table') && typeof currentDay!=='undefined'){
+    try{ buildScheduleTable(currentDay); }catch(e){}
+  }
+};
 
 function buildDayTabs(){
   document.getElementById('day-tabs').innerHTML=DAYS.map(d=>
@@ -2695,7 +2933,7 @@ function buildStudentList(filter=''){
   // 전화번호는 검색어에 숫자가 있을 때만 매칭 (''.includes('')는 항상 true라 전체 학생이 매칭됨)
   const fDigits=filter.replace(/\D/g,'');
   const matched=[...STUDENTS]
-    .filter(s=>!filter||matchesChoseong(s.name,filter)||s.seat.includes(filter)||(fDigits&&s.phone&&s.phone.replace(/\D/g,'').includes(fDigits)))
+    .filter(s=>!filter||matchesChoseong(s.name,filter)||s.seat.includes(filter)||(fDigits&&(s.phone&&s.phone.replace(/\D/g,'').includes(fDigits)||s.parent&&s.parent.replace(/\D/g,'').includes(fDigits))))
     .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
   const box=document.querySelector('.student-search-box');
   if(box) box.classList.toggle('has-text',!!filter);
@@ -5988,6 +6226,13 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
+      // 전체 시간표 '반'(수업 블록) 메타 문서 — 다른 기기의 반 생성/삭제 반영
+      if (change.doc.id === '_meta_schedule_classes') {
+        if (change.type !== 'removed' && window._applyRemoteScheduleClasses) {
+          window._applyRemoteScheduleClasses(change.doc.data().classes || []);
+        }
+        return;
+      }
       // 그 외 메타 문서(새벽 리셋 잠금 등)는 학생이 아니므로 무시
       if (change.doc.id.startsWith('_meta_')) return;
       // added는 getDocs에서 이미 처리했으므로 완전히 무시
@@ -6352,6 +6597,23 @@ window._applyRemoteDismissedStudyroom = function(idsMap) {
     const snap = await getDoc(doc(db, 'students', '_meta_studyroom_alerts'));
     if (snap.exists()) window._applyRemoteDismissedStudyroom(snap.data().dismissed || {});
   } catch(e) { console.error('스터디룸 알림 닫기상태 로드 실패:', e); }
+})();
+
+// ── 전체 시간표 '반'(수업 블록) 기기 간 동기화 (students/_meta_schedule_classes) ──
+// classic 스크립트(buildScheduleTable 쪽)에서 반 생성/삭제 시 이 함수를 호출한다.
+window._syncScheduleClasses = async function(classesArr) {
+  try {
+    await setDoc(doc(db, 'students', '_meta_schedule_classes'),
+      { name: '', classes: Array.isArray(classesArr) ? classesArr : [], updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('반(수업 블록) 동기화 실패:', e); }
+};
+
+// 시작 시 저장된 반 목록 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
+(async function _loadScheduleClassesOnce() {
+  try {
+    const snap = await getDoc(doc(db, 'students', '_meta_schedule_classes'));
+    if (snap.exists() && window._applyRemoteScheduleClasses) window._applyRemoteScheduleClasses(snap.data().classes || []);
+  } catch(e) { console.error('반(수업 블록) 로드 실패:', e); }
 })();
 
 function _syncStudyRoomStudents() {
