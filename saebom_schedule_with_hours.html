@@ -7432,6 +7432,7 @@ window.resetSchedulesToBase = async function() {
   // 하루 지난 알림이 새로 켜지는 기기에 다시 나타나지 않도록).
   try { await updateDoc(doc(db, 'students', '_meta_schedule_alerts'), { alerts: {}, states: {} }); } catch(e) {}
   try { await updateDoc(doc(db, 'students', '_meta_absent_sms'), { keys: {} }); } catch(e) {}
+  try { await updateDoc(doc(db, 'students', '_meta_auto_sms'), { keys: {} }); } catch(e) {}
   _resetLocalAfterDailyReset(count);
 };
 
@@ -7607,9 +7608,77 @@ function _resetLocalAfterDailyReset(count) {
   }
 }
 
+// ── 학생 스케줄 변경 자동 처리 (2026-07-10: 확인 카드 폐지 → 자동 적용 + 알림톡 자동 발송) ──
+// 정책: 학생이 앱에서 스케줄을 바꾸면 관리자 확인 없이 (1)즉시 관리자 표(students)에 적용하고
+//       (2)90초 안에 추가 변경이 없으면 학부모 알림톡을 1회 발송한다(연속 수정은 최종 상태로 병합 —
+//       메시지가 diff가 아니라 '그날 현재 전체 일정' 형식이라 자연스럽게 합쳐진다).
+// 벌점은 여기서 관여하지 않는다: 늦은 변경 벌점은 학생앱이 저장 시점에 기록하고,
+// 무단결석 벌점은 schedule_base+daily_reports 기준으로 별도 판정된다(assessNoShowPenalties).
+// 기기 중복 방지: 발송 직전 students/_meta_auto_sms.keys[알림ID]를 트랜잭션으로 선점 —
+//       상시 키오스크 2대가 같은 변경을 동시에 감지해도 한 대만 발송한다. keys는 새벽 2시
+//       리셋 때 비움(알림ID에 저장시각이 들어가 재사용되지 않으므로 안전).
+//       선점 후 발송이 실패하면 자동 재시도는 없다 — sms_logs 발신내역에 실패로 남고,
+//       솔라피 콘솔의 '대체발송 설정'이 있으면 그쪽 폴백이 동작한다.
+const AUTO_SMS_DEBOUNCE_MS = 90 * 1000;
+const _autoSmsTimers = {}; // { seat: timeoutId }
+
+async function _claimAutoSms(alertId) {
+  const ref = doc(db, 'students', '_meta_auto_sms');
+  try {
+    return await runTransaction(db, async tx => {
+      const snap = await tx.get(ref);
+      const keys = snap.exists() ? (snap.data().keys || {}) : {};
+      if (keys[alertId]) return false; // 다른 기기가 이미 선점
+      tx.set(ref, { name: '', keys: { [alertId]: Date.now() }, updatedAt: Date.now() }, { merge: true });
+      return true;
+    });
+  } catch(e) {
+    console.warn('[자동문자] 선점 실패 — 이 기기는 발송 건너뜀:', e);
+    return false;
+  }
+}
+
+function _autoHandleScheduleChange(alertObj) {
+  const student = (window.STUDENTS || []).find(s => s.seat === alertObj.seat);
+  if (!student) return;
+  // 1) 즉시 적용 — 켜져 있는 모든 기기가 각자 실행(같은 값 저장이라 멱등), 관리자 표 즉시 갱신.
+  //    '변동'으로 저장되므로(base 유지) 다음날 새벽 2시에 고정 시간표로 자동 복구된다.
+  alertObj.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
+  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student).catch(console.error);
+  try {
+    const day = window.getTodayDayName ? window.getTodayDayName() : (window.currentDay || '월');
+    if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || day);
+    if (window.buildStudentList) window.buildStudentList(document.getElementById('student-search')?.value || '');
+  } catch(e) {}
+  // 2) 알림톡 — 좌석별 디바운스: 마지막 변경 후 90초 뒤 최종 상태로 1회 발송
+  const alertId = _getScheduleAlertId(alertObj);
+  if (_autoSmsTimers[alertObj.seat]) clearTimeout(_autoSmsTimers[alertObj.seat]);
+  _autoSmsTimers[alertObj.seat] = setTimeout(async () => {
+    delete _autoSmsTimers[alertObj.seat];
+    try {
+      // 솔라피 키가 없는 기기(키는 키오스크 localStorage에만 있음)는 선점하지 않는다 —
+      // 키 없는 기기가 선점하면 발송이 실패한 채 끝나므로, 키 있는 키오스크에 양보.
+      if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
+        console.warn(`[자동문자] 솔라피 키 미설정 — 이 기기는 발송하지 않음 (${student.name})`);
+        return;
+      }
+      if (!(await _claimAutoSms(alertId))) return;
+      const r = await _sendScheduleAlimtalk(student, alertObj.changes);
+      if (r.success) {
+        console.log(`[자동문자] ${student.name} 스케줄 변경 알림톡 발송 완료`);
+        if (window.showAdminToast) window.showAdminToast(`📨 ${student.name} 스케줄 변경 알림톡 자동 발송`);
+      } else if (r.error === 'no-phone') {
+        console.warn(`[자동문자] ${student.name}: 학부모 번호 없음 — 발송 생략`);
+      } else {
+        console.error(`[자동문자] ${student.name} 발송 실패:`, r.error);
+        if (window.showAdminToast) window.showAdminToast(`⚠️ ${student.name} 알림톡 자동발송 실패 — 문자 발신내역 확인`);
+      }
+    } catch(e) { console.error('[자동문자] 발송 오류:', e); }
+  }, window._autoSmsDebounceMs || AUTO_SMS_DEBOUNCE_MS); // window 값은 테스트용 오버라이드
+}
+
 onSnapshot(collection(db, 'schedules'), (snapshot) => {
   const DAYS = ['월','화','수','목','금','토'];
-  let changed = false;
 
   snapshot.docChanges().forEach(change => {
     if (change.type === 'removed') return;
@@ -7654,28 +7723,13 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
 
     if (dayChanges.length === 0) return;
 
-    const alertObj = { seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt };
-    const alertId = _getScheduleAlertId(alertObj);
-    if (_dismissedScheduleAlertIds.has(alertId)) return;
-
-    // 다른 기기에서 이미 처리(닫기/적용/문자)한 알림이면 그 상태를 반영해서 생성
-    const rs = window._remoteAlertStates && window._remoteAlertStates[alertId];
-    if (rs) {
-      if (rs.d) { _dismissedScheduleAlertIds.add(alertId); _saveDismissedScheduleAlertIds(); return; }
-      if (rs.a) alertObj.applied = true;
-      if (rs.s) alertObj.smsSent = true;
-    }
-
-    const existIdx = scheduleAlerts.findIndex(a => a.seat === seat);
-    if (existIdx !== -1) scheduleAlerts[existIdx] = alertObj;
-    else scheduleAlerts.unshift(alertObj);
-    changed = true;
-    // 알림 내용을 메타 문서에 공유 — 지금 꺼져 있는 기기도 켜질 때 받도록
-    if (window._syncScheduleAlertContent) window._syncScheduleAlertContent(alertObj);
+    // 2026-07-10: 알림 카드를 만들지 않고 곧바로 자동 적용 + 알림톡 자동 발송
+    // (구 카드 파이프라인 — scheduleAlerts/_meta_schedule_alerts 공유/적용·문자 버튼 — 은
+    //  배포 전 남은 알림 표시·처리를 위해 코드만 유지한다. 새 알림은 더 이상 생성되지 않는다.)
+    _autoHandleScheduleChange({ seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt });
   });
 
   _schedulesInitDone = true;  // 첫 콜백 이후 초기 로딩 완료 — 이후 added는 신규 저장으로 감지
-  if (changed) renderScheduleAlerts();
 }, (error) => {
   console.error('❌ onSnapshot 에러:', error);
 });
@@ -8404,24 +8458,14 @@ window.saveSolapiSettings = function() {
   showAdminToast('✅ 솔라피 설정이 저장됐습니다');
 };
 
-window.sendKakaoSMS = async function(studentName, seat, idx) {
-  // API 키 미설정 시 설정창 열기
-  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
-    openSolapiSettings();
-    return;
-  }
-
-  const student = STUDENTS.find(s => s.seat === seat);
-  if (!student) return;
+// 스케줄 변경 알림톡 발송부 — 수동(sendKakaoSMS, 구 알림 카드)과 자동(_autoHandleScheduleChange) 공용.
+// changes = [{day, oldVal, newVal}] — 메시지는 변경분(diff)이 아니라 "그날 현재 전체 일정"을 보여준다.
+// 반환: { success, error } (error: 'no-phone' | 'module-not-ready' | 발송실패 상세)
+async function _sendScheduleAlimtalk(student, changes) {
+  const studentName = student.name;
+  const seat = student.seat;
   const parentPhone = student.parent?.replace(/-/g,'');
-
-  if (!parentPhone) {
-    showAdminToast('⚠️ 부모님 번호가 등록되지 않았습니다');
-    return;
-  }
-
-  const alert = scheduleAlerts[idx];
-  if (!alert) return;
+  if (!parentPhone || parentPhone.length < 10) return { success: false, error: 'no-phone' };
 
   const dayMap = {월:'월요일',화:'화요일',수:'수요일',목:'목요일',금:'금요일',토:'토요일'};
   const periodTimes = {
@@ -8433,7 +8477,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
 
   // 요일별로 변경사항 그룹핑
   const byDay = {};
-  alert.changes.forEach(c => {
+  changes.forEach(c => {
     if (!byDay[c.day]) byDay[c.day] = [];
     byDay[c.day].push(c);
   });
@@ -8473,26 +8517,43 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   try {
     const sendFn = window.solapiAlimtalkSend;
-    if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
+    if (!sendFn) return { success: false, error: 'module-not-ready' };
     const result = await sendFn(parentPhone, KAKAO_PF_ID, KAKAO_TPL_SCHEDULE, variables);
     const success = !!(result?.errorCount === 0 || (result?.groupId && !result?.errorCount));
     saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: messageText, success, error: success ? null : JSON.stringify(result), time: timeStr });
-    if (success) {
-      showAdminToast(`✅ ${studentName} 학부모님께 알림톡을 발송했습니다`);
-      const alertObj = scheduleAlerts[idx];
-      if (alertObj) {
-        alertObj.smsSent = true;
-        renderScheduleAlerts();
-        // 문자발송됨 상태를 다른 기기에도 전파
-        window._syncScheduleAlertStates({ [_getScheduleAlertId(alertObj)]: { s: true } });
-      }
-    } else {
-      showAdminToast(`⚠️ 발송 실패: ${JSON.stringify(result)}`);
-    }
+    return { success, error: success ? null : JSON.stringify(result) };
   } catch(e) {
     saveSmsLog({ student: studentName, seat, phone: parentPhone, type: 'schedule', typeLabel: '스케줄확인', text: messageText, success: false, error: e.message, time: timeStr });
-    showAdminToast('⚠️ 알림톡 발송 중 오류가 발생했습니다');
     console.error(e);
+    return { success: false, error: e.message };
+  }
+}
+
+// 수동 발송 (구 알림 카드의 '확인문자' 버튼 — 카드가 남아 있을 때만 쓰임)
+window.sendKakaoSMS = async function(studentName, seat, idx) {
+  // API 키 미설정 시 설정창 열기
+  if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
+    openSolapiSettings();
+    return;
+  }
+  const student = STUDENTS.find(s => s.seat === seat);
+  if (!student) return;
+  const alert = scheduleAlerts[idx];
+  if (!alert) return;
+
+  const r = await _sendScheduleAlimtalk(student, alert.changes);
+  if (r.success) {
+    showAdminToast(`✅ ${studentName} 학부모님께 알림톡을 발송했습니다`);
+    alert.smsSent = true;
+    renderScheduleAlerts();
+    // 문자발송됨 상태를 다른 기기에도 전파
+    window._syncScheduleAlertStates({ [_getScheduleAlertId(alert)]: { s: true } });
+  } else if (r.error === 'no-phone') {
+    showAdminToast('⚠️ 부모님 번호가 등록되지 않았습니다');
+  } else if (r.error === 'module-not-ready') {
+    showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요');
+  } else {
+    showAdminToast(`⚠️ 발송 실패: ${r.error}`);
   }
 };
 
