@@ -549,71 +549,36 @@ async function startStatusRealtime() {
   }
   if (!currentStudent) { buildMyStats(); return; }
   try {
-    // 관리자앱이 기록하는 'checkin_logs' 컬렉션을 구독한다.
-    // (이벤트 단위 문서: { studentName, seat, type:'in'|'out', time, date })
+    // 관리자앱이 기록하는 세션 문서(attendance_sessions)를 구독한다.
+    // 세션 하나 = 입실~퇴실 문서 1개({ inTs, outTs, awayMs, durationMin, inDate, status }).
+    // 자정을 넘긴 세션도 durationMin 전체가 입실일(inDate)에 귀속되므로 날짜별 짝짓기가 필요 없다.
+    // (구 checkin_logs 짝짓기 방식은 자정 넘긴 밤샘 세션이 어느 날에도 안 잡히는 버그로 폐기)
     _statusUnsub = window._onSnapshot(
-      window._query(window._collection(window._db, 'checkin_logs'), window._where('studentName','==', currentStudent.name)),
+      window._query(window._collection(window._db, 'attendance_sessions'), window._where('studentName','==', currentStudent.name)),
       snap => {
-        // 학생앱 학습현황과 동일 로직: 날짜별로 입/퇴실을 짝지어 실제 공부시간(분)을 집계한다.
-        // 문서 형식: { studentName, seat, type:'in'|'out', time, date, ts }
-        const byDate = {};
-        snap.forEach(d => {
-          const x = d.data();
-          if (!x.date || !x.time) return;
-          const k = _normDkey(x.date);           // 0패딩/시간대 차이 무관하게 정규화
-          (byDate[k] = byDate[k] || []).push(x);
-        });
         const map = {}; let bestSession = 0;
-        const todayKey = _dkey(new Date());
-        Object.keys(byDate).forEach(dateKey => {
-          // ts(epoch ms) 우선 정렬 — 같은 분의 입/퇴실 순서가 뒤집히지 않도록 (관리자앱과 동일)
-          const evs = byDate[dateKey].sort((a,b) => _evKey(a) - _evKey(b));
-          let total = 0, inMin = null;
-          evs.forEach(ev => {
-            const t = timeToMin(ev.time);
-            if (t === null) return;
-            if (ev.type === 'in') { if (inMin === null) inMin = t; }
-            else if (ev.type === 'out' && inMin !== null) {
-              let out = t; if (out < inMin) out += 1440; // 자정 넘김(11교시)은 전날 밤으로 이어붙임
-              total += out - inMin;
-              if (out - inMin > bestSession) bestSession = out - inMin;
-              inMin = null;
-            }
-          });
-          // 오늘 아직 퇴실 전이면 지금 시각까지 집계
-          if (inMin !== null && dateKey === todayKey) {
-            const n = new Date(); let cur = n.getHours()*60 + n.getMinutes();
-            if (cur < inMin) cur += 1440;
-            total += Math.max(0, cur - inMin);
-          }
-          map[dateKey] = total;
+        const nowTs = Date.now();
+        snap.forEach(d => {
+          const s = d.data();
+          if (!s || !s.inDate || typeof s.inTs !== 'number') return;
+          const min = _sessionDocMin(s, nowTs);
+          if (min <= 0) return;
+          const k = _normDkey(s.inDate);          // '2026-07-09' → '2026-7-9' (기존 키 형식 유지)
+          map[k] = (map[k] || 0) + min;
+          if (min > bestSession) bestSession = min;
         });
         ACTUAL_MIN = map; actualBestSession = bestSession;
         buildMyStats();
         try { buildEvents(); } catch(e){} // 실제 공부시간 반영되면 이벤트 달성률도 갱신
       },
       err => {
-        // onSnapshot 의 오류(예: Firestore 보안규칙이 checkin_logs 읽기를 막는 경우)는
+        // onSnapshot 의 오류(예: Firestore 보안규칙이 attendance_sessions 읽기를 막는 경우)는
         // 여기 비동기 에러 콜백으로 온다. 조용히 실패하지 않도록 로그를 남기고 스케줄 기준 추정치로 폴백한다.
-        console.error('[학습현황] checkin_logs 실시간 구독 실패:', err && err.code, err && err.message, err);
+        console.error('[학습현황] attendance_sessions 실시간 구독 실패:', err && err.code, err && err.message, err);
         buildMyStats();
       }
     );
   } catch(e) { console.error('[학습현황] 구독 설정 오류:', e); buildMyStats(); }
-}
-
-// "오후 02:35" / "오전 9:05" / "14:30" 등을 자정 기준 분(minute)으로 변환
-// (관리자 앱의 timeToMin 과 동일 로직 — 시간순 정렬에 사용)
-function timeToMin(t) {
-  if (t === null || t === undefined) return null;
-  const s = String(t);
-  const m = s.match(/(\d{1,2}):(\d{2})/);
-  if (!m) return null;
-  let h = parseInt(m[1], 10);
-  const min = parseInt(m[2], 10);
-  if (/오후/.test(s) && h !== 12) h += 12;   // 오후 1~11시 → +12
-  if (/오전/.test(s) && h === 12) h = 0;      // 오전 12시(자정) → 0시
-  return h * 60 + min;
 }
 
 // 두 날짜 문자열이 같은 날인지 포맷/0패딩 무관하게 비교
@@ -648,8 +613,17 @@ let actualBestSession = 0;
 function _dkey(d) { return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
 function _normDkey(s) { const m = String(s).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? `${+m[1]}-${+m[2]}-${+m[3]}` : String(s).trim(); }
 function _parseDkey(k) { const p = String(k).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
-// 같은 분의 입·퇴실이 섞이지 않도록 epoch ms(ts) 우선 정렬 (관리자앱 eventSortKey와 동일)
-function _evKey(x) { return (x && typeof x.ts === 'number') ? x.ts : (timeToMin(x && x.time) ?? 0) * 60000; }
+// 세션 인정 상한: 입실일 다음날 01:00 (미퇴실 과대집계 방지 — 관리자앱 sessCapTs와 동일)
+function _sessCapTs(inTs) { const d = new Date(inTs); d.setHours(0,0,0,0); return d.getTime() + 25*3600*1000; }
+// 세션 문서의 공부시간(분): 닫힌 세션은 확정값(durationMin), 열린 세션은 지금까지 잠정 집계(외출 제외·상한 적용)
+function _sessionDocMin(s, nowTs) {
+  if (s.status === 'closed') return (typeof s.durationMin === 'number') ? s.durationMin : 0;
+  if (s.status !== 'open' || typeof s.inTs !== 'number') return 0;
+  let away = s.awayMs || 0;
+  if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, _sessCapTs(s.inTs)) - s.awayStartTs);
+  const eff = Math.min(nowTs, _sessCapTs(s.inTs));
+  return Math.max(0, Math.round((eff - s.inTs - away) / 60000));
+}
 
 // 스케줄(요일 문자열) 기준 추정 공부시간(분) — 실제 기록 로드 전 폴백
 function _dayMinutes(dayName) {
