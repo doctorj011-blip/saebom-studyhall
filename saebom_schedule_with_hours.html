@@ -1175,7 +1175,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
     <div class="sched-modal-body" id="sched-modal-body"></div>
     <div class="sched-modal-footer">
       <button class="sched-cancel-btn" onclick="closeScheduleModal()">취소</button>
-      <button class="sched-save-btn" style="background:#6C5DD3" onclick="fixScheduleAsBase()" title="이 시간표를 고정(원본)으로 저장합니다. '주간 시간표 수정 허용'이 켜져 있을 때만 가능하며, 매일 새벽 2시에 이 값으로 리셋됩니다.">🔒 고정</button>
+      <button class="sched-save-btn" style="background:#6C5DD3" onclick="fixScheduleAsBase()" title="이 시간표를 고정(원본)으로 저장합니다. 매일 새벽 2시에 이 값으로 리셋됩니다.">🔒 고정</button>
       <button class="sched-save-btn" onclick="saveSchedule(false)" title="오늘 하루만 적용되는 변동 저장. 다음날 새벽 2시에 고정 시간표로 리셋됩니다.">저장(당일)</button>
     </div>
   </div>
@@ -5403,23 +5403,12 @@ function saveSchedule(commitBase) {
 }
 
 // ── '고정' 버튼: 현재 모달의 스케줄을 고정 시간표(schedule_base)로 확정 ──
-// '주간 시간표 수정 허용'(settings/schedule_edit.enabled)이 켜져 있을 때만 가능하다.
+// 관리자는 '주간 시간표 수정 허용' 설정과 무관하게 언제든 고정할 수 있다.
+// (해당 설정은 학생앱의 주간 시간표 자가 수정 허용 여부만 제어한다.)
 // 확정하면 saveSchedule(true) → saveScheduleToFirebase(s, true)가 base까지 덮어써
 // 다음날 새벽 2시 리셋의 기준값이 이 시간표로 바뀐다.
 window.fixScheduleAsBase = async function() {
   if (_schedEditIdx < 0) return;
-  let allowed = false;
-  try {
-    const db = window._adminDb;
-    if (db) {
-      const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'schedule_edit'));
-      allowed = snap.exists() ? !!snap.data().enabled : false;
-    }
-  } catch(e) { allowed = false; }
-  if (!allowed) {
-    showAdminToast('🔒 고정하려면 먼저 설정 탭에서 "주간 시간표 수정 허용"을 켜주세요');
-    return;
-  }
   if (!confirm('현재 스케줄을 고정 시간표(원본)로 저장할까요?\n\n앞으로 매일 새벽 2시에 이 시간표로 리셋됩니다.')) return;
   saveSchedule(true);
 };
