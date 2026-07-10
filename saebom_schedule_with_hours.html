@@ -7516,6 +7516,29 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
   console.error('❌ onSnapshot 에러:', error);
 });
 
+// 알림 카드용: 원시 스케줄 문자열("7,m8(8:30),x9(학원)")을 교시별 읽기 쉬운 표기로 변환
+// 예: "7, 8(중간입실 8:30~), 9(불참·학원), 10" — 숫자만 있으면 참여
+window._fmtSchedAlertVal =
+function _fmtSchedAlertVal(s) {
+  if (!s || s === '-') return '-';
+  try {
+    const parsed = window.parseScheduleStr(s);
+    const all = [...new Set([...parsed.periods, ...parsed.absentPeriods])].sort((a, b) => a - b);
+    if (!all.length) return s;
+    return all.map(p => {
+      if (parsed.absentPeriods.has(p)) {
+        const r = parsed.absentReasons[p];
+        return `${p}(불참${r ? '·' + r : ''})`;
+      }
+      if (parsed.partials.has(p)) {
+        const t = parsed.partialTimes[p];
+        return `${p}(중간입실${t ? ' ' + t + '~' : ''})`;
+      }
+      return String(p);
+    }).join(', ');
+  } catch (e) { return s; }
+}
+
 window.renderScheduleAlerts =
 function renderScheduleAlerts() {
   const section = document.getElementById('schedule-change-section');
@@ -7533,7 +7556,7 @@ function renderScheduleAlerts() {
   list.innerHTML = scheduleAlerts.map((a, idx) => {
     const alertId = _getScheduleAlertId(a);
     const changeTexts = a.changes.map(c =>
-      `<span style="color:#A87008;font-weight:600">${dayMap[c.day]||c.day}</span>: ${c.oldVal||'-'} → <span style="color:#C8900A;font-weight:600">${c.newVal||'-'}</span>`
+      `<span style="color:#A87008;font-weight:600">${dayMap[c.day]||c.day}</span>: ${_fmtSchedAlertVal(c.oldVal)} → <span style="color:#C8900A;font-weight:600">${_fmtSchedAlertVal(c.newVal)}</span>`
     ).join('<br>');
 
     const time = a.updatedAt?.toDate
