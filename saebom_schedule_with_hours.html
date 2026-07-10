@@ -2448,7 +2448,10 @@ window.showStudentSessionsModal = async function(name){
 };
 
 // ── 스케줄 변경 벌점 현황 모달 ──
-// 학생앱이 penalties/{YYYY-MM-DD}_{seatKey} 문서에 기록(교시 시작 5시간 전 마감 이후의 출석 취소, 교시당 1점).
+// penalties/{YYYY-MM-DD}_{seatKey} 문서 — 두 종류의 벌점이 교시별로 병합 기록된다:
+//  (1) 늦은 변경 1점: 학생앱이 기록 (교시 시작 5시간 전 마감 이후의 출석 취소)
+//  (2) 무단결석 2점: 관리자앱 assessNoShowPenalties가 기록 (type:'noshow', points:2 —
+//      스케줄 변경 없이 출석 예정 교시에 입실 기록이 전혀 없는 경우)
 // 여기서는 전체/학생별 조회와 교시별 취소·복구를 제공한다.
 let _penaltyModalFilter = null; // 열려 있는 모달의 학생 필터(seatKey) — 취소/복구 후 재렌더용
 
@@ -2463,7 +2466,7 @@ window.showPenaltyModal = async function(filterSeatKey) {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;width:min(94vw,520px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FEF0F0">
-        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 스케줄 변경 벌점 <span style="font-size:12px;font-weight:500;color:#B05555">교시 시작 5시간 전 마감 · 교시당 1점</span></div>
+        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 벌점 현황 <span style="font-size:12px;font-weight:500;color:#B05555">늦은 변경 교시당 1점 · 무단결석 교시당 2점</span></div>
         <button onclick="document.getElementById('penalty-modal-overlay').remove()"
           style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
       </div>
@@ -2511,17 +2514,21 @@ window.showPenaltyModal = async function(filterSeatKey) {
       list.forEach(doc => {
         Object.keys(doc.periods || {}).sort((a, b) => a - b).forEach(pn => {
           const p = doc.periods[pn];
-          if (!p.canceled) { total += 1; if (doc.date.slice(0,7) === curYm) monthTotal += 1; }
+          const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
+          const isNoShow = p.type === 'noshow';
+          if (!p.canceled) { total += pts; if (doc.date.slice(0,7) === curYm) monthTotal += pts; }
           const dl = p.deadline ? new Date(p.deadline) : null;
           const ch = p.changedAt ? new Date(p.changedAt) : null;
           const fmt = d => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '?';
+          const label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)` : `${p.to==='absent'?'불참':'해제'} 변경`;
+          const meta = isNoShow ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
           rows.push(`
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid #F3F4F6;${p.canceled?'opacity:0.5':''}">
               <span style="flex:1;${p.canceled?'text-decoration:line-through':''}">
-                ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) <b>${pn}교시</b> ${p.to==='absent'?'불참':'해제'} 변경
-                <span style="color:#9CA3AF">· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}</span>
+                ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) <b>${pn}교시</b> ${label}
+                <span style="color:#9CA3AF">${meta}</span>
               </span>
-              <span style="font-weight:700;color:${p.canceled?'#9CA3AF':'#C62828'};flex:0 0 auto">${p.canceled?'취소됨':'1점'}</span>
+              <span style="font-weight:700;color:${p.canceled?'#9CA3AF':'#C62828'};flex:0 0 auto">${p.canceled?'취소됨':pts+'점'}</span>
               <button onclick="togglePenaltyCancel('${doc.id}','${pn}')"
                 style="flex:0 0 auto;padding:3px 8px;border:1px solid ${p.canceled?'#C8900A':'#D1D5DB'};background:#fff;color:${p.canceled?'#C8900A':'#6B7280'};border-radius:6px;font-size:11px;cursor:pointer">${p.canceled?'복구':'취소'}</button>
             </div>`);
@@ -5524,6 +5531,8 @@ setInterval(() => {
     if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
     // 변동 스케줄(학생 당일변경)을 고정 시간표(schedule_base)로 자동 복구
     if (window.resetSchedulesToBase) window.resetSchedulesToBase();
+    // 어제(및 놓친 날짜) 무단결석 벌점 판정 — 11교시 종료(01:00) 이후라 판정 가능
+    if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
   }
 }, 60000);
@@ -6917,6 +6926,8 @@ window.loadTodayCheckinFromFirebase = loadTodayCheckinFromFirebase;
 // 앱 시작
 loadStudentsFromFirebase();
 loadTodayCheckinFromFirebase();
+// 무단결석 벌점 판정 — 지난 날짜분 소급(멱등·기기간 완료표시 공유). 학생 로드가 끝난 뒤 여유를 두고 실행.
+setTimeout(() => { try { window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e)); } catch(e) {} }, 20000);
 
 // ── 입퇴실 실시간 감시 (다중 기기 동기화) — 세션 스냅샷 선언적 재구성 ──
 // 이벤트 증분 패치(구 checkin_logs 방식)는 폐기: 스냅샷이 올 때마다 캐시를 통째로
@@ -7423,6 +7434,157 @@ window.resetSchedulesToBase = async function() {
   try { await updateDoc(doc(db, 'students', '_meta_absent_sms'), { keys: {} }); } catch(e) {}
   _resetLocalAfterDailyReset(count);
 };
+
+// ── 무단결석 벌점 판정 (교시당 2점) ──
+// 규칙: 그날 유효 스케줄(고정 base + 당일변경 daily_reports)에서 출석 예정(o/△)이던 교시에
+//       입실 세션(attendance_sessions)이 전혀 겹치지 않으면 교시당 2점.
+//       스케줄을 x로 바꿔 둔 교시(늦은 변경 벌점 1점 대상 포함)는 '통보한 것'이므로 제외된다.
+// 판정 시점: 그 날짜 D의 11교시(익일 01:00)가 끝난 D+1 02:00 이후. 앱 시작 시 + 새벽 2시
+//            리셋 때 지난 3일치를 소급 판정한다(키오스크가 꺼져 있던 날 보완).
+// 멱등성: 판정 자체가 재계산이라 중복 안전 + students/_meta_noshow_done 날짜별 완료표시로
+//         기기 간 중복 실행을 줄인다(리셋과 동일한 '작업 후 표시' 순서 — 실패 시 재시도됨).
+// 안전장치: 그날 세션이 0건이면 휴관일/키오스크 미가동으로 보고 판정을 건너뛴다
+//           (입실 자체가 불가능했던 날 전원을 무단결석으로 오판하는 것을 방지).
+const NOSHOW_POINTS = 2;
+const NOSHOW_LOOKBACK_DAYS = 3;
+// 교시 시작·종료(그날 자정 기준 분). getCurrentPeriod()의 PERIOD_TIMES와 동일 값.
+// 11교시는 익일 00:00~01:00 = 1440~1500분.
+const NOSHOW_PERIOD_TIMES = {
+  1:[540,600], 2:[610,670], 3:[680,750], 4:[810,870], 5:[880,940], 6:[950,1020],
+  7:[1080,1130], 8:[1140,1220], 9:[1230,1320], 10:[1350,1430], 11:[1440,1500]
+};
+
+async function _noshowDoneMap() {
+  try {
+    const snap = await getDoc(doc(db, 'students', '_meta_noshow_done'));
+    return snap.exists() ? (snap.data().dates || {}) : {};
+  } catch(e) { return {}; } // 확인 실패 시 진행(멱등이라 중복돼도 안전)
+}
+async function _markNoshowDone(dateIso, info) {
+  // merge:true 중첩 병합 — 다른 기기가 다른 날짜를 동시에 기록해도 서로 덮어쓰지 않는다.
+  try {
+    await setDoc(doc(db, 'students', '_meta_noshow_done'),
+      { name: '', dates: { [dateIso]: info } }, { merge: true });
+  } catch(e) { console.warn('무단결석 완료표시 실패:', e); }
+}
+
+window.assessNoShowPenalties = async function() {
+  // 학생 목록·parseScheduleStr(classic 스크립트)이 준비될 때까지 대기 (최대 30초)
+  for (let i = 0; i < 100 && !(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr); i++) {
+    await new Promise(r => setTimeout(r, 300));
+  }
+  if (!(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr)) return;
+  const now = Date.now();
+  const done = await _noshowDoneMap();
+  for (let ago = NOSHOW_LOOKBACK_DAYS; ago >= 1; ago--) {
+    const d = new Date(); d.setDate(d.getDate() - ago); d.setHours(0, 0, 0, 0);
+    const d0 = d.getTime();
+    const dIso = SH.sessIsoDate(d0);
+    if (done[dIso]) continue;
+    if (now < d0 + 26 * 3600 * 1000) continue; // D+1 02:00 이전 — 11교시가 아직 안 끝났을 수 있음
+    const dayName = ['일','월','화','수','목','금','토'][d.getDay()];
+    if (dayName === '일') {
+      await _markNoshowDone(dIso, { skipped: '일요일', at: now, by: DOOR_DEVICE_ID });
+      continue;
+    }
+    await _assessNoShowForDate(dIso, d0, dayName);
+  }
+};
+
+async function _assessNoShowForDate(dIso, d0, dayName) {
+  try {
+    // 1) 그날 입실 세션 (11교시가 익일 새벽에 걸치므로 다음날 inDate도 함께 조회)
+    const nextIso = SH.sessIsoDate(d0 + 24 * 3600 * 1000);
+    const sessSnap = await getDocs(query(collection(db, SESS_COL), where('inDate', 'in', [dIso, nextIso])));
+    let dayCount = 0;
+    const sessByName = {};
+    sessSnap.forEach(x => {
+      const s = x.data();
+      if (!s.studentName || typeof s.inTs !== 'number') return;
+      if (s.inDate === dIso) dayCount++;
+      (sessByName[s.studentName] = sessByName[s.studentName] || [])
+        .push([s.inTs, typeof s.outTs === 'number' ? s.outTs : Date.now()]);
+    });
+    if (dayCount === 0) {
+      console.log(`[무단결석] ${dIso}: 입실 세션 없음(휴관/미가동 추정) — 판정 건너뜀`);
+      await _markNoshowDone(dIso, { skipped: '세션 없음', at: Date.now(), by: DOOR_DEVICE_ID });
+      return;
+    }
+
+    // 2) 그날 유효 스케줄 = 고정 시간표(base)에 그날의 당일변경(daily_reports)을 덮어쓴 값
+    const [baseSnap, rptSnap] = await Promise.all([
+      getDocs(collection(db, 'schedule_base')),
+      getDocs(query(collection(db, 'daily_reports'), where('date', '==', dIso)))
+    ]);
+    const rptBySeat = {};
+    rptSnap.forEach(x => {
+      const r = x.data();
+      if (typeof r.schedule !== 'string') return;
+      const sk = x.id.slice(x.id.lastIndexOf('_') + 1);
+      rptBySeat[sk] = r.schedule;
+    });
+
+    // 3) 학생별로 출석 예정 교시 vs 세션 겹침 검사
+    const writes = [];
+    baseSnap.forEach(bdoc => {
+      const seatKey = bdoc.id;
+      const bd = bdoc.data();
+      if ((parseInt(seatKey) || 0) >= 54) return; // 관리자석
+      const st = (window.STUDENTS || []).find(s => (s.seat || '').replace(/[^0-9]/g, '') === seatKey);
+      if (!st) return; // 실재 학생만(퇴원 잔재·유령 문서 방지)
+      const schedStr = (rptBySeat[seatKey] !== undefined) ? rptBySeat[seatKey] : (bd[dayName] || '-');
+      const parsed = window.parseScheduleStr(schedStr);
+      if (!parsed || !parsed.periods || !parsed.periods.size) return; // 출석 예정 교시 없음(전일 불참·'-'·근무 등)
+      const name = bd.name || st.name;
+      const sessions = sessByName[name] || [];
+      const missed = [];
+      parsed.periods.forEach(pn => { // periods = o + △(중간입실) 모두 '출석 예정'
+        const w = NOSHOW_PERIOD_TIMES[pn];
+        if (!w) return;
+        const ps = d0 + w[0] * 60000, pe = d0 + w[1] * 60000;
+        const came = sessions.some(iv => iv[0] < pe && iv[1] > ps); // 일부라도 겹치면 출석
+        if (!came) missed.push(pn);
+      });
+      if (missed.length) writes.push(_writeNoShowPenalty(dIso, dayName, seatKey, bd.seat || st.seat, name, missed));
+    });
+    await Promise.all(writes);
+    await _markNoshowDone(dIso, { at: Date.now(), by: DOOR_DEVICE_ID, students: writes.length });
+    console.log(`[무단결석] ${dIso}(${dayName}) 판정 완료 — 벌점 대상 ${writes.length}명`);
+  } catch(e) {
+    // 완료표시를 남기지 않는다 → 다음 시작/리셋 때 재시도(판정은 멱등)
+    console.error('무단결석 판정 실패:', dIso, e);
+  }
+}
+
+// penalties/{날짜}_{좌석} 문서에 교시별 병합 — 기존 늦은변경(1점) 기록과 같은 형식을 공유하며
+// type:'noshow', points:2 로 구분한다. 관리자가 취소(canceled)한 교시는 재판정에도 보존된다.
+async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
+  const ref = doc(db, 'penalties', `${dIso}_${seatKey}`);
+  let prevData = {};
+  try {
+    const s = await getDoc(ref);
+    if (s.exists()) prevData = s.data();
+  } catch(e) {}
+  const periods = { ...(prevData.periods || {}) };
+  const at = Date.now();
+  missed.forEach(pn => {
+    const k = String(pn);
+    const prev = periods[k];
+    if (prev && prev.type === 'noshow') return; // 이미 기록됨 — 취소 상태 포함 그대로 유지
+    // (드문 경우) 늦은변경 1점 기록 후 다시 출석으로 되돌리고 안 온 학생은
+    // 최종 상태가 '통보 없는 결석'이므로 무단결석 2점으로 대체한다.
+    periods[k] = {
+      type: 'noshow', points: NOSHOW_POINTS,
+      from: 'attend', to: 'noshow', reason: '',
+      changedAt: at, canceled: !!(prev && prev.canceled)
+    };
+  });
+  await setDoc(ref, {
+    name: name, seat: seat, seatKey: seatKey,
+    date: dIso, day: dayName, periods: periods,
+    updatedAt: serverTimestamp()
+  });
+}
 
 // 리셋 후 로컬 정리 — Firestore 쓰기와 달리 켜져 있는 모든 기기가 각자 실행해야 한다.
 function _resetLocalAfterDailyReset(count) {

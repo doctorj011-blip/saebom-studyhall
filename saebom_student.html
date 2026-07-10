@@ -1483,8 +1483,8 @@ function renderPenaltyCard() {
     Object.keys(doc.periods || {}).sort((a,b) => a-b).forEach(k => {
       const p = doc.periods[k];
       if (!p.canceled) {
-        total += 1;
-        if (doc.date.slice(0,7) === curYm) monthTotal += 1;
+        total += (p.points || 1); // 무단결석=2점, 늦은 변경(구 기록 포함)=1점
+        if (doc.date.slice(0,7) === curYm) monthTotal += (p.points || 1);
       }
       rows.push({ date: doc.date, day: doc.day, n: k, p: p });
     });
@@ -1492,17 +1492,17 @@ function renderPenaltyCard() {
   if (!rows.length) { el.innerHTML = ''; return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
-      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 늦은 ${r.p.to==='absent'?'불참':'해제'} 변경${r.p.canceled?' · 관리자 취소':''}</span>
-      <span style="font-weight:700;color:var(--red);flex:0 0 auto">${r.p.canceled?'0':'1'}점</span>
+      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 ${r.p.type==='noshow' ? '무단결석' : `늦은 ${r.p.to==='absent'?'불참':'해제'} 변경`}${r.p.canceled?' · 관리자 취소':''}</span>
+      <span style="font-weight:700;color:var(--red);flex:0 0 auto">${r.p.canceled?0:(r.p.points||1)}점</span>
     </div>`).join('');
   el.innerHTML = `
     <div style="background:var(--red-pale);border:1.5px solid var(--red-border);border-radius:10px;padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:13px;font-weight:700;color:var(--red)">⚠️ 스케줄 변경 벌점</span>
+        <span style="font-size:13px;font-weight:700;color:var(--red)">⚠️ 벌점</span>
         <span style="font-size:12px;font-weight:700;color:var(--red)">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
       </div>
       <div style="margin-top:4px">${list}</div>
-      <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전까지 변경하면 벌점이 없습니다.</div>
+      <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전까지 변경하면 벌점이 없습니다. 늦은 변경은 교시당 1점, 변경 없이 안 오면(무단결석) 교시당 2점입니다.</div>
     </div>`;
 }
 

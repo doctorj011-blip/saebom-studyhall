@@ -489,8 +489,9 @@ async function loadAllData() {
   loadParentPenalties();        // 스케줄 변경 벌점 내역
 }
 
-// ── 스케줄 변경 벌점 (학생앱이 penalties/{날짜}_{좌석}에 기록, 교시당 1점) ──
-// 학생이 교시 시작 5시간 전 마감 이후에 출석을 취소하면 자동 기록된다.
+// ── 벌점 (penalties/{날짜}_{좌석} 문서) ──
+// 늦은 변경(교시 시작 5시간 전 마감 이후 출석 취소) = 교시당 1점 — 학생앱이 기록.
+// 무단결석(변경 없이 출석 예정 교시 미입실, type:'noshow') = 교시당 2점 — 관리자앱이 자동 판정.
 async function loadParentPenalties() {
   const el = document.getElementById('penalty-card');
   if (!el || !currentStudent) return;
@@ -511,8 +512,8 @@ async function loadParentPenalties() {
       Object.keys(doc.periods || {}).sort((a, b) => a - b).forEach(k => {
         const p = doc.periods[k];
         if (!p.canceled) {
-          total += 1;
-          if (doc.date.slice(0, 7) === curYm) monthTotal += 1;
+          total += (p.points || 1); // 무단결석=2점, 늦은 변경(구 기록 포함)=1점
+          if (doc.date.slice(0, 7) === curYm) monthTotal += (p.points || 1);
         }
         rows.push({ date: doc.date, day: doc.day, n: k, p: p });
       });
@@ -520,17 +521,17 @@ async function loadParentPenalties() {
     if (!rows.length) { el.innerHTML = ''; return; }
     const list = rows.slice(0, 15).map(r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
-        <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 늦은 ${r.p.to==='absent'?'불참':'해제'} 변경${r.p.canceled?' · 관리자 취소':''}</span>
-        <span style="font-weight:700;color:#C62828;flex:0 0 auto">${r.p.canceled?'0':'1'}점</span>
+        <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 ${r.p.type==='noshow' ? '무단결석 (변경 없이 미입실)' : `늦은 ${r.p.to==='absent'?'불참':'해제'} 변경`}${r.p.canceled?' · 관리자 취소':''}</span>
+        <span style="font-weight:700;color:#C62828;flex:0 0 auto">${r.p.canceled?0:(r.p.points||1)}점</span>
       </div>`).join('');
     el.innerHTML = `
       <div class="card" style="border:1.5px solid #F5BABA;background:#FEF0F0">
         <div style="display:flex;justify-content:space-between;align-items:center">
-          <span style="font-size:13px;font-weight:700;color:#C62828">⚠️ 스케줄 변경 벌점</span>
+          <span style="font-size:13px;font-weight:700;color:#C62828">⚠️ 벌점</span>
           <span style="font-size:12px;font-weight:700;color:#C62828">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
         </div>
         <div style="margin-top:4px">${list}</div>
-        <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전 마감 이후에 출석을 취소하면 교시당 벌점 1점이 부여됩니다.</div>
+        <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전 마감 이후의 출석 취소는 교시당 1점, 변경 없이 오지 않으면(무단결석) 교시당 2점이 부여됩니다.</div>
       </div>`;
   } catch(e) { console.warn('벌점 조회 실패:', e); }
 }
