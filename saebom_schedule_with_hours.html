@@ -1223,6 +1223,16 @@ let currentView='table';
 let ALERTS = []; // 동적으로 계산됨
 const PRESENT=[];
 
+// ── 테스트 계정 (실제 학생 아님) ──
+// 미입실 알림·입퇴실/스케줄 알림톡·무단결석 벌점·사용시간 집계에서 전부 제외한다.
+// 좌석 배치도·학생 목록·입퇴실 동작 자체는 그대로 둔다(기기 테스트용).
+// "(관리)" 등 괄호 표기는 무시하고 이름만 비교. (학생앱 순위의 RANK_EXCLUDE와 별개)
+const TEST_STUDENTS = new Set(['이새봄', '정원혁']);
+window.isTestStudent = function(name) {
+  const base = String(name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
+  return TEST_STUDENTS.has(base);
+};
+
 // ── 미입실 문자 발송완료 상태 (오늘 날짜·교시별, 기기 간 공유) ──
 // 키: "YYYY-M-D_이름_N교시" — 날짜가 포함되어 다음날 자동 초기화되고,
 // 같은 학생이 다음 교시에도 미입실이면 그 교시의 발송 버튼은 다시 활성화된다.
@@ -2040,7 +2050,7 @@ function getTrend(s,m){
 function buildHoursTable(){
   // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
   if (window._hoursRangeMode) return;
-  const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
+  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   if (!sorted.length) return;
   const vals=sorted.map(s=>_readHour(s.hours,currentMonth));
   const maxH=Math.max(...vals,1);
@@ -2238,9 +2248,10 @@ window.queryHoursRange = async function(){
 function renderHoursRangeTable(result, startISO, endISO, dayCount){
   const { totalMin, daysSet, seatOf } = result;
   // 현재 학생 전원 + 기간 내 기록이 있는 퇴원생을 합쳐 목록 구성
-  const rows = STUDENTS.map(s => ({ name: s.name, seat: s.seat, min: totalMin[s.name] || 0, days: daysSet[s.name] ? daysSet[s.name].size : 0 }));
+  const rows = STUDENTS.filter(s => !window.isTestStudent(s.name)).map(s => ({ name: s.name, seat: s.seat, min: totalMin[s.name] || 0, days: daysSet[s.name] ? daysSet[s.name].size : 0 }));
   const known = new Set(STUDENTS.map(s => s.name));
   Object.keys(totalMin).forEach(name => {
+    if (window.isTestStudent(name)) return; // 테스트 계정 — 기간 집계 제외
     if (!known.has(name)) rows.push({ name, seat: seatOf[name] || '—', min: totalMin[name], days: daysSet[name] ? daysSet[name].size : 0, former: true });
   });
   rows.sort((a, b) => b.min - a.min);
@@ -2571,7 +2582,7 @@ window.togglePenaltyCancel = async function(docId, pn) {
 };
 
 function buildHoursChart(){
-  const sorted=[...STUDENTS].sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
+  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   const maxH=Math.max(...sorted.map(s=>_readHour(s.hours,currentMonth)), 1);
   const chartH=120;
   document.getElementById('chart-month-label').textContent=`— ${_ymLabel(currentMonth)}`;
@@ -2977,6 +2988,8 @@ function calcAlerts() {
   const day = getTodayDayName(); // 화면에서 보고 있는 요일 탭(currentDay)이 아닌 '실제 오늘' 기준
 
   STUDENTS.forEach(s => {
+    // 테스트 계정은 미입실 알림 대상 아님
+    if (window.isTestStudent(s.name)) return;
     // 이미 입실 중이면 제외
     if (PRESENT.includes(s.name)) return;
 
@@ -3014,14 +3027,14 @@ function buildDashboard(){
   ALERTS = calcAlerts();
   // 오늘 등원수 동적 업데이트
   const todayEl = document.getElementById('stat-today');
-  if (todayEl) todayEl.textContent = PRESENT.length;
+  if (todayEl) todayEl.textContent = PRESENT.filter(n => !window.isTestStudent(n)).length;
   // 미입실 알림대상 수 동적 업데이트
   const alertsEl = document.getElementById('stat-alerts');
   if (alertsEl) alertsEl.textContent = ALERTS.length;
   // 이번달 평균 누적시간 계산
   const avgEl = document.getElementById('stat-avg-hours');
   if (avgEl && STUDENTS.length > 0) {
-    const validStudents = STUDENTS.filter(s => parseInt(s.seat) < 54); // 관리자 제외
+    const validStudents = STUDENTS.filter(s => parseInt(s.seat) < 54 && !window.isTestStudent(s.name)); // 관리자·테스트 계정 제외
     const vals = validStudents.map(s => _readHour(s.hours, currentMonth));
     const avg = vals.length > 0 ? Math.round(vals.reduce((a,b) => a+b, 0) / vals.length) : 0;
     avgEl.innerHTML = `${avg}<span style="font-size:13px">h</span>`;
@@ -3818,6 +3831,8 @@ const KAKAO_TPL_SCHEDULE = 'KA01TP260709121409976QtDWcbbbT51';
 const KAKAO_TPL_ABSENT  = 'KA01TP260709121315474MwHiN8I4BEU';
 
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
+  // 테스트 계정은 입퇴실 알림톡을 보내지 않는다
+  if (window.isTestStudent(student.name)) return;
   const parentPhone = (student.parent || '').replace(/-/g, '');
   // 유효한 휴대폰 번호(010+8자리)만 발송. 미등록('010'만 있거나 미완성)이면 조용히 생략
   // → 학부모 번호가 없는 관리자 등도 알림톡 실패 토스트 없이 입퇴실 처리된다.
@@ -7526,6 +7541,7 @@ async function _assessNoShowForDate(dIso, d0, dayName) {
       const parsed = window.parseScheduleStr(schedStr);
       if (!parsed || !parsed.periods || !parsed.periods.size) return; // 출석 예정 교시 없음(전일 불참·'-'·근무 등)
       const name = bd.name || st.name;
+      if (window.isTestStudent && window.isTestStudent(name)) return; // 테스트 계정 — 무단결석 벌점 없음
       const sessions = sessByName[name] || [];
       const missed = [];
       parsed.periods.forEach(pn => { // periods = o + △(중간입실) 모두 '출석 예정'
@@ -7639,6 +7655,8 @@ function _autoHandleScheduleChange(alertObj) {
     if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || day);
     if (window.buildStudentList) window.buildStudentList(document.getElementById('student-search')?.value || '');
   } catch(e) {}
+  // 테스트 계정: 스케줄 적용까지만 하고 알림톡은 보내지 않는다
+  if (window.isTestStudent && window.isTestStudent(student.name)) return;
   // 2) 알림톡 — 좌석별 디바운스: 마지막 변경 후 90초 뒤 최종 상태로 1회 발송
   const alertId = _getScheduleAlertId(alertObj);
   if (_autoSmsTimers[alertObj.seat]) clearTimeout(_autoSmsTimers[alertObj.seat]);
@@ -7864,6 +7882,7 @@ window.solapiAlimtalkSend = solapiAlimtalkSend;
 window.sendAbsentAlert = async function(idx) {
   const a = ALERTS[idx];
   if (!a) return;
+  if (window.isTestStudent(a.name)) return; // 테스트 계정 — 발송 안 함 (calcAlerts에서 이미 걸러지지만 이중 방어)
   const student = STUDENTS.find(s => s.seat === a.seat);
   const parentPhone = (student?.parent || '').replace(/-/g, '');
   if (parentPhone.length < 10) {
@@ -8527,6 +8546,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   }
   const student = STUDENTS.find(s => s.seat === seat);
   if (!student) return;
+  if (window.isTestStudent && window.isTestStudent(student.name)) { showAdminToast('테스트 계정은 알림톡을 보내지 않습니다'); return; }
   const alert = scheduleAlerts[idx];
   if (!alert) return;
 
