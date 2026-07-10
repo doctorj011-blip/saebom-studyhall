@@ -193,6 +193,8 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .save-fab{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#8F82E4 0%,#6C5DD3 100%);color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:15px;font-weight:700;box-shadow:0 6px 20px rgba(108,93,211,0.45),0 2px 8px rgba(0,0,0,0.15);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;letter-spacing:0.2px}
 .save-fab.show{display:flex}
 .save-fab:active{transform:translateX(-50%) scale(0.97)}
+/* 저장 버튼이 떠 있는 동안 콘텐츠 하단 여백 확보 — 마지막 불참 사유 입력칸이 버튼에 가려지지 않게 */
+body:has(.save-fab.show) .app-content{padding-bottom:170px}
 
 /* 저장 완료 토스트 */
 .toast{position:fixed;bottom:140px;left:50%;transform:translateX(-50%);background:rgba(28,26,22,0.92);color:#fff;padding:11px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:300;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap;backdrop-filter:blur(8px)}
@@ -1932,6 +1934,11 @@ function setPeriod(day, pNum, status) {
   document.getElementById('save-fab').classList.add('show');
   buildDailyPeriods();
   buildWeeklyTable();
+  // 불참 선택 시 사유 입력칸이 저장 버튼에 가려지지 않게 화면 중앙으로 스크롤
+  if (draftSchedule[day].periods[pNum] === 'absent') {
+    const reasonEl = document.getElementById(`reason-${day}-${pNum}`);
+    if (reasonEl) reasonEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
 }
 
 function setReason(day, pNum, val) {
