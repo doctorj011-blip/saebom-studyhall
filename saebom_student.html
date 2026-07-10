@@ -8,8 +8,19 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="새봄 학생">
-<meta name="theme-color" content="#C8900A">
+<meta name="theme-color" content="#6C5DD3">
 <title>새봄 면학관 — 학생</title>
+<!-- 카톡 등 메신저에 링크 붙여넣을 때 미리보기 카드(이미지+제목)가 자동으로 뜨게 하는 태그 -->
+<meta property="og:title" content="새봄 면학관 학생 앱">
+<meta property="og:description" content="터치 한 번으로 접속 · 휴대폰 번호 뒷 4자리 로그인">
+<meta property="og:image" content="https://doctorj011-blip.github.io/saebom-studyhall/icons/og-student.png">
+<meta property="og:url" content="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html">
+<meta property="og:type" content="website">
+<!-- 홈 화면 아이콘 & PWA 매니페스트 (상대경로 → GitHub Pages 하위 폴더에서도 동작) -->
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.json">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
@@ -170,7 +181,11 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .weekly-table tr:hover td{background:var(--amber-pale)}
 .wk-cell-attend{background:var(--amber-pale);color:var(--green);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-absent{background:var(--red-pale);color:var(--red);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
+.wk-cell-partial{background:#FFF3E0;color:#E67E22;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-empty{color:var(--border);font-size:14px;cursor:pointer;display:inline-block;min-width:32px}
+.wk-cell-input{margin-top:3px;width:100%;max-width:60px;box-sizing:border-box;border:1px solid var(--border-light);border-radius:5px;padding:2px 4px;font-size:10px;text-align:center;outline:none;color:var(--text)}
+.wk-cell-input:focus{border-color:#E67E22}
+.wk-cell-input.reason{max-width:64px}
 .wk-period-label{font-size:12px;color:var(--text);font-weight:600}
 .wk-period-time{font-size:10px;color:var(--text3)}
 
@@ -421,6 +436,464 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
   .home-header-info{max-width:820px}
   .bottom-nav{max-width:820px}
 }
+
+/* Modern interface refresh: visual-only overrides */
+:root{
+  --amber:#5B5FEF;
+  --amber-dark:#3730A3;
+  --amber-light:#8B8EF8;
+  --amber-pale:#EEF2FF;
+  --green:#0F766E;
+  --green-deep:#115E59;
+  --bg:#F6F7FB;
+  --card:#FFFFFF;
+  --surface:#F1F5F9;
+  --text:#0F172A;
+  --text2:#475569;
+  --text3:#94A3B8;
+  --border:#E2E8F0;
+  --border-light:#EEF2F7;
+  --red:#E11D48;
+  --red-pale:#FFF1F2;
+  --red-border:#FDA4AF;
+  --shadow-sm:0 8px 22px rgba(15,23,42,0.06);
+  --shadow-md:0 16px 34px rgba(15,23,42,0.10);
+  --shadow-lg:0 24px 60px rgba(15,23,42,0.16);
+  --r-sm:12px;
+  --r-md:16px;
+  --r-lg:20px;
+  --r-xl:28px;
+}
+
+html{background:var(--bg)}
+body{
+  background:
+    radial-gradient(circle at 14% -10%,rgba(91,95,239,0.14),transparent 32%),
+    radial-gradient(circle at 92% 0%,rgba(20,184,166,0.10),transparent 30%),
+    linear-gradient(180deg,#FBFCFF 0%,#F6F7FB 46%,#F1F5F9 100%);
+  color:var(--text);
+}
+button,input{font-family:inherit}
+button{touch-action:manipulation}
+
+.login-screen{
+  padding:28px 22px;
+  background:
+    radial-gradient(circle at 18% 16%,rgba(45,212,191,0.28),transparent 28%),
+    radial-gradient(circle at 86% 18%,rgba(129,140,248,0.34),transparent 28%),
+    linear-gradient(145deg,#0F172A 0%,#1E1B4B 48%,#312E81 100%);
+}
+.login-logo{
+  width:96px;
+  height:96px;
+  margin-bottom:16px;
+  border-radius:24px;
+  background:rgba(255,255,255,0.12);
+  border:1px solid rgba(255,255,255,0.20);
+  box-shadow:0 18px 50px rgba(0,0,0,0.22);
+  backdrop-filter:blur(18px);
+}
+.login-logo{background:transparent;border-color:transparent;box-shadow:none;backdrop-filter:none}
+.login-logo img{width:82px!important;height:82px!important;object-fit:contain}
+.login-title{font-size:27px;letter-spacing:-0.7px}
+.login-sub{margin-bottom:26px;color:rgba(226,232,240,0.78);font-weight:600}
+.login-card{
+  max-width:360px;
+  padding:24px;
+  border-radius:28px;
+  background:rgba(255,255,255,0.92);
+  border:1px solid rgba(255,255,255,0.72);
+  box-shadow:0 30px 80px rgba(2,6,23,0.34);
+}
+.login-label{color:var(--text);font-size:13px;letter-spacing:0;text-transform:none}
+.login-hint{color:var(--text3)}
+.pin-display{gap:12px;margin:18px 0 24px}
+.pin-dot{
+  width:13px;
+  height:13px;
+  border:0;
+  background:#CBD5E1;
+  box-shadow:inset 0 0 0 1px rgba(15,23,42,0.05);
+}
+.pin-dot.filled{
+  background:linear-gradient(135deg,#14B8A6,#5B5FEF);
+  box-shadow:0 5px 16px rgba(91,95,239,0.34);
+}
+.numpad{gap:10px}
+.np-btn{
+  min-height:58px;
+  border-radius:18px;
+  background:#F8FAFC;
+  border:1px solid #E2E8F0;
+  box-shadow:0 6px 16px rgba(15,23,42,0.05);
+  color:#0F172A;
+}
+.np-btn:active{background:#EEF2FF;transform:scale(0.97)}
+.np-clear{background:#FFF1F2;color:var(--red);border-color:#FFE4E6}
+
+.home-screen,.app-screen{background:transparent}
+.home-header,.app-topbar{
+  background:rgba(255,255,255,0.86);
+  border-bottom:1px solid rgba(226,232,240,0.82);
+  box-shadow:0 12px 32px rgba(15,23,42,0.06);
+  backdrop-filter:blur(18px);
+}
+.home-header{padding:18px 20px 14px}
+.home-header-info{gap:12px}
+.home-avatar,.header-avatar{
+  background:linear-gradient(135deg,#EEF2FF,#CCFBF1);
+  border:1px solid rgba(91,95,239,0.18);
+  box-shadow:0 10px 26px rgba(15,23,42,0.10);
+}
+.home-name,.topbar-title{color:var(--text);letter-spacing:-0.5px}
+.home-name{font-size:18px}
+.home-seat,.topbar-sub{color:var(--text3);font-weight:600}
+.topbar-logout{
+  height:34px;
+  padding:0 13px;
+  border-radius:999px;
+  background:#F8FAFC;
+  border:1px solid var(--border);
+  color:var(--text2);
+}
+.topbar-back-avatar-btn{
+  width:38px;
+  height:38px;
+  border-radius:14px;
+  background:#F8FAFC;
+  border:1px solid var(--border);
+}
+
+.home-content{padding:18px 16px 94px}
+.quick-grid{gap:12px}
+.quick-card{
+  min-height:132px;
+  padding:18px 16px;
+  border-radius:22px;
+  background:
+    linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,255,255,0.86)),
+    radial-gradient(circle at 100% 0%,rgba(91,95,239,0.12),transparent 42%);
+  border:1px solid rgba(226,232,240,0.92);
+  box-shadow:0 12px 30px rgba(15,23,42,0.07);
+  overflow:hidden;
+}
+.quick-card:nth-child(3n+2){background:linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,255,255,0.88)),radial-gradient(circle at 100% 0%,rgba(20,184,166,0.13),transparent 42%)}
+.quick-card:nth-child(3n){background:linear-gradient(180deg,rgba(255,255,255,0.96),rgba(255,255,255,0.88)),radial-gradient(circle at 100% 0%,rgba(249,115,22,0.12),transparent 42%)}
+.quick-card:active{transform:translateY(1px) scale(0.985)}
+.quick-card-icon{
+  width:42px;
+  height:42px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:16px;
+  background:#F8FAFC;
+  border:1px solid var(--border-light);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,0.85);
+  font-size:23px;
+}
+.quick-card-title{margin-top:15px;font-size:15px;color:var(--text);letter-spacing:-0.3px}
+.quick-card-sub{font-size:12px;color:var(--text3);line-height:1.45}
+.quick-card-bg{right:-10px;bottom:-16px;font-size:64px;opacity:0.055}
+.quick-card-wide{grid-column:1/-1;min-height:104px}
+
+.app-topbar{padding:14px 18px}
+.app-content{max-width:680px;padding:18px 16px 92px}
+.section-label{
+  color:#64748B;
+  letter-spacing:0.5px;
+  font-size:11px;
+  margin:4px 2px 12px;
+}
+
+.notice-card,.period-card,.stat-card,.this-week-card,.avg-card,.ev-card,.ps-card,.record-card,.panel,.quest-grid{
+  border:1px solid rgba(226,232,240,0.92);
+  border-radius:20px;
+  box-shadow:0 10px 28px rgba(15,23,42,0.06);
+}
+.notice-card,.period-card,.stat-card,.this-week-card,.avg-card,.ev-card,.ps-card,.record-card,.panel{
+  background:rgba(255,255,255,0.94);
+}
+.notice-card{margin-bottom:12px}
+.notice-header{padding:17px 18px}
+.notice-title{font-size:15px;letter-spacing:-0.25px}
+.notice-body,.notice-detail p{color:#475569}
+.notice-badge,.ev-badge{
+  border-radius:999px;
+  padding:4px 9px;
+}
+
+.day-tabs{gap:8px;margin-bottom:16px}
+.day-tab,.toggle-btn,.pill-btn{
+  border-radius:999px;
+  border:1px solid var(--border);
+  background:rgba(255,255,255,0.88);
+  box-shadow:0 6px 16px rgba(15,23,42,0.05);
+}
+.day-tab.active,.pill-btn.active{
+  background:linear-gradient(135deg,#5B5FEF,#14B8A6);
+  border-color:transparent;
+  color:#fff;
+  box-shadow:0 10px 24px rgba(91,95,239,0.26);
+}
+.period-card{
+  align-items:flex-start;
+  padding:15px 16px;
+  margin-bottom:10px;
+}
+.period-num{color:var(--amber-dark);font-size:13px}
+.period-time{color:var(--text3)}
+.toggle-btn.attend{
+  background:#ECFDF5;
+  color:#047857;
+  border-color:#A7F3D0;
+}
+.toggle-btn.absent{
+  background:#FFF1F2;
+  color:#BE123C;
+  border-color:#FDA4AF;
+}
+.reason-input{
+  background:#fff;
+  border-radius:12px;
+  min-height:34px;
+}
+
+.weekly-table-wrap{
+  border-radius:20px;
+  border:1px solid rgba(226,232,240,0.92);
+  box-shadow:0 12px 30px rgba(15,23,42,0.06);
+}
+.weekly-table th{
+  background:#0F172A;
+  color:#F8FAFC;
+  padding:11px 8px;
+}
+.weekly-table td{padding:10px 6px}
+.wk-cell-attend{background:#ECFDF5;color:#047857}
+.wk-cell-absent{background:#FFF1F2;color:#BE123C}
+.wk-cell-partial{background:#FFF7ED;color:#C2410C}
+
+.stat-row{gap:12px}
+.stat-card{padding:17px}
+.stat-card-label{color:#64748B;font-weight:700}
+.stat-card-val{
+  color:var(--text);
+  font-size:27px;
+}
+.stat-card-val.blue{color:var(--green)}
+.chart-bar{background:#CBD5E1}
+.chart-bar.max{background:linear-gradient(180deg,#14B8A6,#5B5FEF)}
+.quest-banner{
+  background:linear-gradient(135deg,#0F172A,#334155);
+  border-radius:20px;
+  box-shadow:0 14px 34px rgba(15,23,42,0.20);
+}
+
+.save-fab{
+  bottom:78px;
+  border-radius:999px;
+  background:linear-gradient(135deg,#5B5FEF,#14B8A6);
+  box-shadow:0 18px 38px rgba(91,95,239,0.28);
+}
+.toast{
+  background:rgba(15,23,42,0.92);
+  box-shadow:0 14px 32px rgba(15,23,42,0.18);
+}
+
+.bottom-nav{
+  left:12px;
+  right:12px;
+  bottom:10px;
+  height:64px;
+  border-radius:24px;
+  border:1px solid rgba(226,232,240,0.92);
+  background:rgba(255,255,255,0.92);
+  box-shadow:0 18px 42px rgba(15,23,42,0.14);
+  backdrop-filter:blur(18px);
+  padding:0 8px env(safe-area-inset-bottom,0px);
+}
+.bn-item{
+  border-radius:18px;
+  margin:8px 2px;
+}
+.bn-item.active{
+  color:#3730A3;
+  background:#EEF2FF;
+}
+.bn-item i{font-size:22px}
+.bn-label{font-size:10px;font-weight:800}
+
+.fm-note,.see-gate{
+  border-radius:18px;
+  border:1px solid rgba(226,232,240,0.92);
+  box-shadow:0 10px 26px rgba(15,23,42,0.05);
+}
+.fm-note{background:#F8FAFC}
+.fm-video{border-radius:22px;box-shadow:0 16px 38px rgba(15,23,42,0.15)}
+.fm-state,.fm-metric{
+  border-radius:18px;
+  background:rgba(255,255,255,0.94);
+  border:1px solid rgba(226,232,240,0.92);
+  box-shadow:0 8px 22px rgba(15,23,42,0.05);
+}
+.fm-controls button{border-radius:16px}
+.fm-start{background:linear-gradient(135deg,#5B5FEF,#14B8A6)}
+.fm-stop{background:#F8FAFC;border:1px solid var(--border)}
+
+@media (min-width:700px){
+  .home-content{padding:24px 24px 104px}
+  .quick-grid{gap:16px}
+  .quick-card{min-height:138px}
+  .app-content{padding:24px 24px 104px}
+  .bottom-nav{bottom:14px;border-radius:26px}
+}
+
+/* iOS-inspired visual layer: vivid color, translucent materials, and motion */
+:root{
+  --amber:#0A84FF;
+  --amber-dark:#0066CC;
+  --amber-light:#64B5FF;
+  --amber-pale:#EAF4FF;
+  --green:#30D158;
+  --green-deep:#16883A;
+  --bg:#F2F2F7;
+  --surface:#FFFFFF;
+  --text:#1C1C1E;
+  --text2:#3A3A3C;
+  --text3:#8E8E93;
+  --border:#D1D1D6;
+  --border-light:rgba(60,60,67,0.12);
+  --r-sm:14px;
+  --r-md:18px;
+  --r-lg:24px;
+  --r-xl:30px;
+}
+
+body{
+  background:
+    radial-gradient(ellipse 105% 46% at 8% -8%,rgba(10,132,255,.25),transparent 63%),
+    radial-gradient(ellipse 82% 38% at 102% 8%,rgba(255,55,95,.18),transparent 64%),
+    linear-gradient(180deg,#F9FBFF 0%,#F2F2F7 42%,#F2F2F7 100%);
+  -webkit-font-smoothing:antialiased;
+}
+
+.login-screen{
+  overflow:hidden;
+  position:relative;
+  background:
+    radial-gradient(circle at 12% 10%,rgba(90,200,250,.82),transparent 22%),
+    radial-gradient(circle at 91% 12%,rgba(255,55,95,.72),transparent 25%),
+    radial-gradient(circle at 50% 108%,rgba(94,92,230,.75),transparent 42%),
+    linear-gradient(145deg,#131B47 0%,#263D9B 47%,#5E5CE6 100%);
+}
+.login-screen:before,.login-screen:after{
+  content:"";position:absolute;pointer-events:none;border-radius:50%;filter:blur(1px);opacity:.72;
+  animation:ambientFloat 10s ease-in-out infinite alternate;
+}
+.login-screen:before{width:300px;height:300px;right:-160px;bottom:6%;background:rgba(255,214,10,.3)}
+.login-screen:after{width:240px;height:240px;left:-140px;bottom:18%;background:rgba(48,209,88,.32);animation-delay:-5s}
+.login-logo,.login-title,.login-sub,.login-card{position:relative;z-index:1}
+.login-logo{animation:logoArrival .8s cubic-bezier(.2,.85,.25,1.18) both}
+.login-title,.login-sub{animation:riseIn .65s .12s both}
+.login-card{
+  background:rgba(255,255,255,.82);
+  border:1px solid rgba(255,255,255,.62);
+  box-shadow:0 34px 90px rgba(4,10,42,.36),inset 0 1px 0 rgba(255,255,255,.86);
+  backdrop-filter:blur(30px) saturate(160%);
+  animation:riseIn .75s .2s both;
+}
+.np-btn{background:rgba(255,255,255,.82);box-shadow:0 5px 13px rgba(45,48,74,.10),inset 0 1px 0 #fff}
+.np-btn:active{background:#DCEEFF;transform:scale(.92);transition-duration:.08s}
+
+.home-header,.app-topbar{
+  background:rgba(255,255,255,.68);
+  border-bottom:1px solid rgba(255,255,255,.76);
+  box-shadow:0 10px 28px rgba(42,42,48,.08),inset 0 -1px 0 rgba(60,60,67,.08);
+  backdrop-filter:blur(28px) saturate(180%);
+}
+.home-header{padding:20px 20px 15px}
+.home-avatar,.header-avatar{
+  background:linear-gradient(145deg,#FFFFFF 8%,#C7E6FF 58%,#E4D7FF 100%);
+  border:2px solid rgba(255,255,255,.85);
+  box-shadow:0 7px 20px rgba(10,132,255,.22);
+}
+.home-name{font-size:20px;font-weight:800}
+.home-content{padding-top:20px}
+
+.quick-card{
+  min-height:144px;
+  border:1px solid rgba(255,255,255,.72);
+  box-shadow:0 14px 26px rgba(28,28,30,.09),inset 0 1px 0 rgba(255,255,255,.82);
+  transition:transform .32s cubic-bezier(.2,.8,.2,1),box-shadow .32s ease,filter .32s ease;
+  animation:cardArrival .65s cubic-bezier(.2,.82,.25,1) both;
+}
+.quick-card:nth-child(1){background:linear-gradient(145deg,#EAF4FF,#D3E9FF 100%)}
+.quick-card:nth-child(2){background:linear-gradient(145deg,#FFF1F4,#FFDDE6 100%);animation-delay:.05s}
+.quick-card:nth-child(3){background:linear-gradient(145deg,#EFFFF6,#D7F9E3 100%);animation-delay:.10s}
+.quick-card:nth-child(4){background:linear-gradient(145deg,#F0EEFF,#E0DCFF 100%);animation-delay:.15s}
+.quick-card:nth-child(5){background:linear-gradient(145deg,#FFF7E7,#FFEBBF 100%);animation-delay:.20s}
+.quick-card:nth-child(6){background:linear-gradient(145deg,#EAFBFF,#CCF3FA 100%);animation-delay:.25s}
+.quick-card:nth-child(7){background:linear-gradient(145deg,#FDEFFF,#F6D9FB 100%);animation-delay:.30s}
+.quick-card:nth-child(8){background:linear-gradient(145deg,#F0F1F8,#E0E2EC 100%);animation-delay:.35s}
+.quick-card:nth-child(9){background:linear-gradient(145deg,#EAF4FF,#D6E7FF 100%);animation-delay:.40s}
+.quick-card:hover{transform:translateY(-5px) scale(1.012);box-shadow:0 22px 38px rgba(28,28,30,.16);filter:saturate(1.12)}
+.quick-card:active{transform:scale(.955);box-shadow:0 5px 12px rgba(28,28,30,.10)}
+.quick-card-icon{
+  width:48px;height:48px;border-radius:17px;background:rgba(255,255,255,.72);
+  border:1px solid rgba(255,255,255,.90);box-shadow:0 7px 15px rgba(28,28,30,.10),inset 0 1px 0 #fff;
+  font-size:25px;
+}
+.quick-card-title{margin-top:14px;font-size:16px;font-weight:800;letter-spacing:-.45px}
+.quick-card-sub{color:rgba(28,28,30,.60);font-weight:600}
+.quick-card-bg{opacity:.12;filter:saturate(1.25);transform:rotate(-9deg)}
+
+.app-screen.visible .app-topbar{animation:headerDrop .44s cubic-bezier(.2,.8,.2,1) both}
+.app-screen.visible .app-content{animation:riseIn .5s .06s both}
+.notice-card,.period-card,.stat-card,.this-week-card,.avg-card,.ev-card,.ps-card,.record-card,.panel,.quest-grid{
+  border-color:rgba(255,255,255,.72);
+  box-shadow:0 10px 24px rgba(28,28,30,.07),inset 0 1px 0 rgba(255,255,255,.88);
+}
+.notice-card,.period-card,.stat-card,.this-week-card,.avg-card,.ev-card,.ps-card,.record-card,.panel{background:rgba(255,255,255,.82);backdrop-filter:blur(18px)}
+.day-tab,.toggle-btn,.pill-btn{background:rgba(255,255,255,.72);border-color:rgba(60,60,67,.14);box-shadow:0 4px 10px rgba(28,28,30,.06)}
+.day-tab.active,.pill-btn.active,.save-fab,.fm-start{
+  background:linear-gradient(135deg,#0A84FF 0%,#5E5CE6 58%,#BF5AF2 100%);
+  box-shadow:0 12px 24px rgba(10,132,255,.30),inset 0 1px 0 rgba(255,255,255,.34);
+}
+.weekly-table th{background:linear-gradient(115deg,#0A84FF,#5E5CE6);}
+
+.bottom-nav{
+  height:68px;left:14px;right:14px;bottom:12px;padding:0 7px env(safe-area-inset-bottom,0px);
+  background:rgba(255,255,255,.72);border:1px solid rgba(255,255,255,.78);
+  box-shadow:0 16px 42px rgba(28,28,30,.18),inset 0 1px 0 rgba(255,255,255,.90);
+  backdrop-filter:blur(28px) saturate(190%);
+}
+.bn-item{margin:7px 1px;border-radius:17px;transition:transform .22s ease,background .22s ease,color .22s ease}
+.bn-item.active{color:#007AFF;background:rgba(10,132,255,.13)}
+.bn-item.active i{transform:translateY(-1px) scale(1.12)}
+.bn-item:active{transform:scale(.84)}
+
+.see-modal{background:rgba(20,20,24,.34);backdrop-filter:blur(16px) saturate(120%)}
+.see-modal-card{border:1px solid rgba(255,255,255,.78);background:rgba(255,255,255,.86);box-shadow:0 28px 70px rgba(0,0,0,.22);backdrop-filter:blur(28px)}
+
+.login-title{position:relative;display:inline-block}
+.login-title .login-logo{
+  position:absolute;z-index:3;left:-38px;top:-28px;width:52px;height:52px;margin:0;
+  overflow:hidden;pointer-events:none;animation:none;background:transparent;
+}
+.login-title .login-logo img{
+  width:48px!important;height:48px!important;display:block;object-fit:contain;
+  filter:drop-shadow(0 5px 6px rgba(0,0,0,.24));
+  animation:butterflyHover 3.2s ease-in-out infinite;
+}
+
+@keyframes ambientFloat{to{transform:translate3d(24px,-18px,0) scale(1.1)}}
+@keyframes logoArrival{from{opacity:0;transform:translateY(18px) scale(.72) rotate(-8deg)}to{opacity:1;transform:none}}
+@keyframes riseIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes cardArrival{from{opacity:0;transform:translateY(20px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes headerDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes butterflyHover{0%,100%{transform:translate3d(0,1px,0) rotate(-8deg)}50%{transform:translate3d(2px,-4px,0) rotate(-3deg)}}
+@media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 </head>
 <body>
@@ -449,7 +922,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
       <button class="np-btn" onclick="pinInput('7')">7</button>
       <button class="np-btn" onclick="pinInput('8')">8</button>
       <button class="np-btn" onclick="pinInput('9')">9</button>
-      <button class="np-btn np-clear" onclick="pinClear()">전체삭제</button>
+      <button class="np-btn np-clear" onclick="pinClear()">Reset</button>
       <button class="np-btn" onclick="pinInput('0')">0</button>
       <button class="np-btn np-del" onclick="pinDel()">←</button>
     </div>
@@ -916,14 +1389,17 @@ function computeLatePenalties() {
   periods.forEach(p => {
     const oldSt = parsePeriodStatus(oldSched, p.n);
     const newSt = dd.periods[p.n] || 'none';
-    if (oldSt !== 'attend' || newSt === 'attend') return; // 출석이던 교시를 취소한 경우만
+    // 출석(O)·중간입실(△) 모두 '출석 예정'으로 취급 — 이를 취소한 경우만 벌점 대상
+    const wasIn = oldSt === 'attend' || oldSt === 'partial';
+    const stillIn = newSt === 'attend' || newSt === 'partial';
+    if (!wasIn || stillIn) return;
     const start = periodStartMs(p.n, todayDay);
     if (start == null) return;
     const deadline = start - PENALTY_LEAD_HOURS * 3600000;
     if (now <= deadline) return; // 마감 전 통보 → 벌점 없음
     out.push({
       n: p.n,
-      from: 'attend',
+      from: oldSt,
       to: newSt === 'absent' ? 'absent' : 'none',
       reason: (dd.reasons && dd.reasons[p.n]) || '',
       deadline: deadline,
@@ -1230,10 +1706,10 @@ function parsePeriodStatus(sched, pNum) {
   if (!sched || sched === '-') return 'none';
   const tokens = sched.split(',').map(t => t.trim()).filter(Boolean);
 
-  // 0) 중간입실: m8 또는 m8(7:30) — 출석이면서 교시 중간 입실
+  // 0) 중간입실(세모): m8 또는 m8(7:30) — 교시 중간에 입실하는 별도 상태
   for (const t of tokens) {
     const m = t.match(/^m(\d+)(?:\(([^)]*)\))?$/i);
-    if (m && Number(m[1]) === pNum) return 'attend';
+    if (m && Number(m[1]) === pNum) return 'partial';
   }
   // 1) 명시적 결석: x10 또는 x10(사유)
   for (const t of tokens) {
@@ -1434,7 +1910,7 @@ function buildDailyPeriods() {
         </div>
       </div>
       <div class="period-toggle">
-        <button class="toggle-btn${status==='attend'?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
+        <button class="toggle-btn${(status==='attend'||status==='partial')?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
         <button class="toggle-btn${status==='absent'?' absent':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
       </div>
     </div>
@@ -1483,12 +1959,23 @@ function buildWeeklyTable() {
 
     DAYS.forEach(day => {
       const status = draftSchedule[day]?.periods[pNum] || 'none';
+      const editable = scheduleEditEnabled;
       let cell = '';
-      const pt = status === 'attend' ? draftSchedule[day]?.partials?.[pNum] : undefined;
-      if (pt !== undefined) cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})" title="교시 중간 입실">O</span><div style="font-size:8px;color:#E67E22;line-height:1.2">${pt ? pt+'~' : '중간'}</div>`;
-      else if (status === 'attend') cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
-      else if (status === 'absent') cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`;
-      else cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
+      if (status === 'attend') {
+        cell = `<span class="wk-cell-attend" onclick="wkToggle('${day}',${pNum})">O</span>`;
+      } else if (status === 'absent') {
+        // X(불참): 사유를 숫자·글자로 입력할 수 있는 입력칸을 함께 표시
+        const reason = ((draftSchedule[day]?.reasons&&draftSchedule[day].reasons[pNum])||'').replace(/"/g,'&quot;');
+        cell = `<span class="wk-cell-absent" onclick="wkToggle('${day}',${pNum})">X</span>`
+          + `<input class="wk-cell-input reason" type="text" placeholder="사유" value="${reason}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetReason('${day}',${pNum},this.value)"`:'readonly'}>`;
+      } else if (status === 'partial') {
+        // 세모(△): 중간입실 — 입실 시간을 숫자만 입력(예: 730 → 7:30)
+        const t = ((draftSchedule[day]?.partials&&draftSchedule[day].partials[pNum])||'').replace(/"/g,'&quot;');
+        cell = `<span class="wk-cell-partial" onclick="wkToggle('${day}',${pNum})" title="중간입실">△</span>`
+          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="시간" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetPartialTime('${day}',${pNum},this)"`:'readonly'}>`;
+      } else {
+        cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
+      }
       html += `<td>${cell}</td>`;
     });
     html += `</tr>`;
@@ -1503,14 +1990,54 @@ function wkToggle(day, pNum) {
     showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
     return;
   }
+  // 터치 순환: 공란(·) → O(참여) → X(불참) → 세모(중간입실) → 공란
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
-  const next = cur === 'none' ? 'attend' : cur === 'attend' ? 'absent' : 'none';
+  const order = { none:'attend', attend:'absent', absent:'partial', partial:'none' };
+  const next = order[cur] || 'attend';
   draftSchedule[day].periods[pNum] = next;
   weeklyEditedDays.add(day); // 주간 표에서 고친 요일 → base 저장 대상
+  // 중간입실(세모)로 바뀌면 시간 저장칸을 준비, 벗어나면 시간 제거
+  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
+  if (next === 'partial') {
+    if (draftSchedule[day].partials[pNum] === undefined) draftSchedule[day].partials[pNum] = '';
+  } else {
+    delete draftSchedule[day].partials[pNum];
+  }
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
   buildWeeklyTable();
   if (currentDayTab === day) buildDailyPeriods();
+}
+
+// 주간표 X(불참) 사유 입력
+function wkSetReason(day, pNum, val) {
+  if (!draftSchedule[day].reasons) draftSchedule[day].reasons = {};
+  draftSchedule[day].reasons[pNum] = val;
+  weeklyEditedDays.add(day); // 주간 표에서 고친 요일 → base 저장 대상
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
+}
+
+// 중간입실 시간 입력: 숫자만 받아 "시:분" 형식으로 정규화 (관리앱과 동일 규칙)
+// 예: "730"→"7:30", "1130"→"11:30", "900"→"9:00". 분(뒤 2자리) 60 이상이면 59로 보정
+function _normalizePartialTime(raw) {
+  let d = String(raw || '').replace(/[^0-9]/g, '').slice(0, 4);
+  if (d.length < 3) return d; // 입력 도중(1~2자리)엔 콜론 넣지 않음
+  let hh = d.slice(0, d.length - 2);
+  let mm = d.slice(d.length - 2);
+  if (Number(mm) > 59) mm = '59';
+  return hh + ':' + mm;
+}
+
+// 주간표 세모(중간입실) 시간 입력 — 숫자만 입력받아 정규화
+function wkSetPartialTime(day, pNum, el) {
+  const val = _normalizePartialTime(el.value);
+  el.value = val; // 입력창에 정규화된 값(시:분) 즉시 반영
+  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
+  draftSchedule[day].partials[pNum] = val;
+  weeklyEditedDays.add(day); // 주간 표에서 고친 요일 → base 저장 대상
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
 }
 
 // ── 저장 ──
@@ -1536,13 +2063,12 @@ async function saveSchedule() {
     periods.forEach(p => {
       const state = dd.periods[p.n];
       if (state === 'attend') {
-        // 관리자가 지정한 중간입실(m교시)은 그대로 보존해서 저장
-        if (dd.partials && dd.partials[p.n] !== undefined) {
-          const t = dd.partials[p.n];
-          tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
-        } else {
-          tokens.push(String(p.n));
-        }
+        tokens.push(String(p.n));
+        hasAny = true;
+      } else if (state === 'partial') {
+        // 세모(중간입실) → m교시(입실시간). 시간 미입력이면 m교시만 저장. (관리앱과 동일 형식)
+        const t = (dd.partials && dd.partials[p.n]) || '';
+        tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
         hasAny = true;
       } else if (state === 'absent') {
         const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
@@ -1800,8 +2326,11 @@ let statsView = 'daily';
 function _dayMinutes(dayName) {
   if (dayName === '일' || !draftSchedule[dayName]) return 0;
   const periods = dayName === '토' ? PERIODS_SAT : PERIODS_WEEK;
-  return periods.reduce((sum, p) =>
-    sum + (draftSchedule[dayName].periods[p.n] === 'attend' ? (PERIOD_MIN[p.n] || 60) : 0), 0);
+  return periods.reduce((sum, p) => {
+    const st = draftSchedule[dayName].periods[p.n];
+    // 중간입실(partial)도 출석으로 집계
+    return sum + ((st === 'attend' || st === 'partial') ? (PERIOD_MIN[p.n] || 60) : 0);
+  }, 0);
 }
 
 // ── 실제 입퇴실 기록 연동 (관리자앱이 저장하는 checkin_logs 컬렉션) ──
@@ -3058,6 +3587,39 @@ function showToast(msg) {
 .fm-controls button:disabled{opacity:0.4;cursor:default}
 .fm-opt{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);margin-bottom:10px}
 .fm-log{font-size:11px;color:var(--text3);max-height:110px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;background:var(--surface);border-radius:var(--r-sm);padding:8px;min-height:32px}
+
+/* Final visual layer for styles declared after the main theme */
+.see-modal-card,.see-gate,.fm-note,.fm-state,.fm-metric{
+  border-radius:18px;
+  border:1px solid rgba(226,232,240,0.92);
+  box-shadow:0 10px 26px rgba(15,23,42,0.06);
+}
+.see-modal-card,.fm-state,.fm-metric{background:rgba(255,255,255,0.95)}
+.see-gate.need,.fm-note{background:#F8FAFC;color:var(--text2)}
+.see-gate.ok{background:#ECFDF5;color:#047857;border-color:#A7F3D0}
+.see-gate button,.see-btn-primary,.see-btn-ghost{border-radius:999px}
+.see-gate .g-primary,.see-btn-primary,.fm-start{
+  background:linear-gradient(135deg,#5B5FEF,#14B8A6);
+  color:#fff;
+}
+.see-gate .g-ghost,.see-btn-ghost,.fm-stop{
+  background:#F8FAFC;
+  color:var(--text2);
+  border:1px solid var(--border);
+}
+.fm-video{
+  border-radius:22px;
+  box-shadow:0 16px 38px rgba(15,23,42,0.15);
+}
+.fm-badge{
+  border-radius:999px;
+  background:rgba(15,23,42,0.72);
+  backdrop-filter:blur(12px);
+}
+.fm-metric{padding:12px}
+.fm-metric .v{font-size:17px;color:var(--text)}
+.fm-controls button{border-radius:16px;box-shadow:0 8px 20px rgba(15,23,42,0.07)}
+.fm-log{border:1px solid var(--border-light);background:#F8FAFC;border-radius:16px}
 </style>
 
 <!-- ══ 집중 감지 로직 (학생앱 내장) ══
@@ -3366,6 +3928,35 @@ function showToast(msg) {
       },{merge:true});
     }catch(e){ alert('철회 처리 중 오류: '+(e&&e.message||e)); }
   };
+})();
+</script>
+
+<script>
+/* Keep the butterfly illustration while making its legacy blue icon background transparent. */
+(function(){
+  const img=document.querySelector('.login-logo img');
+  if(!img) return;
+  const logo=img.parentElement, title=document.querySelector('.login-title');
+  if(title&&logo&&logo.parentElement!==title) title.prepend(logo);
+  function cleanButterfly(){
+    if(!img.naturalWidth || img.dataset.transparentLogo) return;
+    const canvas=document.createElement('canvas');
+    canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
+    const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0);
+    const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
+    for(let i=0;i<pixels.data.length;i+=4){
+      const r=pixels.data[i],g=pixels.data[i+1],b=pixels.data[i+2];
+      const max=Math.max(r,g,b),min=Math.min(r,g,b);
+      const warm=r>118&&g>72&&b<178&&r>b*1.18&&g>b*.72;
+      const paleWing=r>188&&g>174&&b<208&&r>b*1.12;
+      const outline=max<132&&b<r*1.42;
+      if(!(warm||paleWing||outline)) pixels.data[i+3]=0;
+    }
+    ctx.putImageData(pixels,0,0);
+    img.dataset.transparentLogo='true';
+    img.src=canvas.toDataURL('image/png');
+  }
+  if(img.complete) cleanButterfly(); else img.addEventListener('load',cleanButterfly,{once:true});
 })();
 </script>
 </body>
