@@ -1250,6 +1250,8 @@ window.isTestStudent = function(name) {
 // 키: "YYYY-M-D_이름_N교시" — 날짜가 포함되어 다음날 자동 초기화되고,
 // 같은 학생이 다음 교시에도 미입실이면 그 교시의 발송 버튼은 다시 활성화된다.
 // 기기 간 공유는 students/_meta_absent_sms 메타 문서(스케줄 알림과 동일 패턴) 사용.
+// ⚠️ localStorage에 이미 이 포맷으로 키가 저장돼 있어 형식 변경 시 당일 중복발송 위험 — 유지.
+//    새로 만드는 날짜 키는 이 포맷 대신 sessIsoDate()를 쓸 것.
 function _todayKeyStr() { return new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.',''); }
 window._absentSmsKey = function(name, period) { return `${_todayKeyStr()}_${name}_${period}`; }
 window._absentSmsSent = (() => {
@@ -5339,6 +5341,12 @@ function saveSchedule(commitBase) {
   }
   const oldName = s.name;
   if (newName !== oldName) {
+    // 이름이 세션 엔진(current_sessions)·오늘기록·외출상태의 식별자이므로 중복 이름은 입퇴실이 서로 엉킨다
+    if (STUDENTS.some((st, i) => i !== _schedEditIdx && st.name === newName)) {
+      alert(`'${newName}'은(는) 이미 등록된 이름입니다.\n동명이인은 이름 뒤에 구분자를 붙여 주세요 (예: 김민준A)`);
+      document.getElementById('edit-name').focus();
+      return;
+    }
     // 외출 상태는 이름을 key로 관리하므로 이름 변경 시 함께 이관 (안 하면 외출 배지가 어긋남)
     if (window._awayStudents && window._awayStudents[oldName]) {
       window._awayStudents[newName] = window._awayStudents[oldName];
@@ -5486,7 +5494,8 @@ function showPeriodStudents(periodIdx) {
 }
 
 // ── 대시보드 1분마다 자동 갱신 (교시 변경 반영) ──
-let _lastResetDate = new Date().toLocaleDateString('ko-KR');
+// 날짜 변경 감지 키는 로케일 포맷이 아닌 ISO(sessIsoDate) 사용 — 메모리 비교 전용이라 저장 호환 문제 없음
+let _lastResetDate = sessIsoDate(Date.now());
 setInterval(() => {
   if (document.getElementById('sec-dashboard').classList.contains('active')) {
     buildDashboard();
@@ -5495,7 +5504,7 @@ setInterval(() => {
   // 오전 2시 이후 날짜가 바뀌면 입퇴실 기록 초기화 (11교시 종료 후 여유 시간)
   const now = new Date();
   const hour = now.getHours();
-  const todayStr = now.toLocaleDateString('ko-KR');
+  const todayStr = sessIsoDate(now.getTime());
   if (hour >= 2 && hour < 6 && todayStr !== _lastResetDate) {
     _lastResetDate = todayStr;
     todayRecords.length = 0;
@@ -6264,9 +6273,17 @@ async function sessionCheckin(student){
   let res;
   try { res = await exec(); }
   catch(e){
-    // 오프라인 등 트랜잭션 실패 → 최선노력 폴백(로컬 캐시에 기록, 재접속 시 동기화)
-    console.warn('[세션] 입실 트랜잭션 실패 — 폴백 기록:', e);
-    res = await _sessionCheckinFallback(student).catch(err => { console.error('[세션] 입실 폴백도 실패:', err); return { ok:false, reason:'error' }; });
+    // 폴백은 진짜 오프라인(unavailable)일 때만. 경합/규칙 오류까지 폴백하면
+    // 키오스크 2대가 같은 학생의 세션을 2건 만들 수 있다(비원자 경로).
+    // 그 외 오류는 실패를 삼키지 않고 토스트로 드러낸다(7/10 규칙 사고 재발 방지).
+    if (e && e.code === 'unavailable') {
+      console.warn('[세션] 입실 트랜잭션 실패(오프라인) — 폴백 기록:', e);
+      res = await _sessionCheckinFallback(student).catch(err => { console.error('[세션] 입실 폴백도 실패:', err); return { ok:false, reason:'error' }; });
+    } else {
+      console.error('[세션] 입실 트랜잭션 실패(폴백 안 함):', e && e.code, e);
+      if (window.showAdminToast) window.showAdminToast(`⚠️ ${name} 입실 세션 기록 실패 — 잠시 후 다시 입실해 주세요`);
+      res = { ok:false, reason:'error' };
+    }
   }
   if (res && res.staleClosed) recomputeMonthHours(student, res.staleClosed.monthKey).catch(console.error);
   return res || { ok:false, reason:'error' };
@@ -8745,7 +8762,8 @@ window.confirmAddStudent = function(seatNum) {
   const err       = document.getElementById('new-st-err');
 
   if (!name) { err.textContent = '이름을 입력해주세요'; return; }
-  if (STUDENTS.find(s => s.name === name)) { err.textContent = '이미 등록된 이름입니다'; return; }
+  // 이름이 세션 엔진(current_sessions)의 식별자라 중복 이름은 입퇴실이 서로 엉킨다 → 동명이인은 구분자 필수
+  if (STUDENTS.find(s => s.name === name)) { err.textContent = '이미 등록된 이름입니다 — 동명이인은 이름 뒤에 구분자를 붙여 주세요 (예: 김민준A)'; return; }
 
   // 근무요일(관리자) → schedule에 '근무'로 저장, 학생은 시작일/만료일/부모님번호 사용
   const schedule = { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' };

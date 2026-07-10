@@ -749,8 +749,13 @@ async function startStatusRealtime() {
     // 세션 하나 = 입실~퇴실 문서 1개({ inTs, outTs, awayMs, durationMin, inDate, status }).
     // 자정을 넘긴 세션도 durationMin 전체가 입실일(inDate)에 귀속되므로 날짜별 짝짓기가 필요 없다.
     // (구 checkin_logs 짝짓기 방식은 자정 넘긴 밤샘 세션이 어느 날에도 안 잡히는 버그로 폐기)
+    // 읽기 비용 절감: 전 기간이 아니라 최근 3개월 세션만 구독한다(일간·주간·이벤트 집계에 충분).
+    // (색인 문제로 결합 쿼리가 거부되면 아래 오류 콜백에서 1회 전체 구독으로 폴백)
+    const _m0 = _curYm(), _m1 = _prevYm(_m0), _m2 = _prevYm(_m1);
+    const _conds = [window._where('studentName','==', currentStudent.name)];
+    if (!startStatusRealtime._noMonthFilter) _conds.push(window._where('monthKey','in', [_m2, _m1, _m0]));
     _statusUnsub = window._onSnapshot(
-      window._query(window._collection(window._db, 'attendance_sessions'), window._where('studentName','==', currentStudent.name)),
+      window._query(window._collection(window._db, 'attendance_sessions'), ..._conds),
       snap => {
         const map = {}; let bestSession = 0;
         const nowTs = Date.now();
@@ -771,6 +776,12 @@ async function startStatusRealtime() {
         // onSnapshot 의 오류(예: Firestore 보안규칙이 attendance_sessions 읽기를 막는 경우)는
         // 여기 비동기 에러 콜백으로 온다. 조용히 실패하지 않도록 로그를 남기고 스케줄 기준 추정치로 폴백한다.
         console.error('[학습현황] attendance_sessions 실시간 구독 실패:', err && err.code, err && err.message, err);
+        if (err && err.code === 'failed-precondition' && !startStatusRealtime._noMonthFilter) {
+          // monthKey 결합 쿼리가 색인 문제로 거부된 경우 — 기존 전체 구독으로 1회 재시도(기능 우선)
+          startStatusRealtime._noMonthFilter = true;
+          startStatusRealtime();
+          return;
+        }
         buildMyStats();
       }
     );
@@ -898,7 +909,7 @@ function buildMyStats() {
   });
   const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,1)) / 86400000) + 1;
 
-  // 최고 기록 — 실제 기록이 로드되면 전체 이력 기준으로 계산
+  // 최고 기록 — 실제 기록이 로드되면 그 기준으로 계산 (세션은 최근 3개월만 구독하므로 그 범위 내 최고)
   let bestDay, bestWeek, bestSession;
   if (ACTUAL_MIN) {
     bestDay = Math.max(0, ...Object.values(ACTUAL_MIN));
@@ -1016,6 +1027,7 @@ function buildMyStats() {
     </div>
 
     <div class="section-label">최고 기록</div>
+    <div style="font-size:10px;color:var(--text3);margin:-4px 0 8px">일일·주간·연속 기록은 최근 3개월 기준</div>
     <div class="record-grid">
       <div class="record-card"><div class="record-lbl">일일 최고</div><div class="record-val">${_fmtHM(bestDay)}</div></div>
       <div class="record-card"><div class="record-lbl">주간 최고</div><div class="record-val">${_fmtHM(bestWeek)}</div></div>

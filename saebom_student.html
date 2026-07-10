@@ -2422,8 +2422,21 @@ async function loadActualStudyData(force) {
   _actualLoading = true;
   try {
     const { collection, query, where, getDocs } = window._fs;
-    const snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
-      where('studentName','==', currentStudent.name)));
+    // 읽기 비용 절감: 전 기간이 아니라 최근 3개월 세션만 읽는다.
+    // 일간·주간·퀘스트·이벤트 집계에 충분하고, 월간/연간/총누적은 students.hours로 계산.
+    // (일일·주간·연속 '최고 기록'만 최근 3개월 범위 기준이 된다)
+    const m0 = _curYm(), m1 = _prevYm(m0), m2 = _prevYm(m1);
+    let snap;
+    try {
+      snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
+        where('studentName','==', currentStudent.name),
+        where('monthKey','in', [m2, m1, m0])));
+    } catch(qe) {
+      // monthKey 색인 문제 등으로 결합 쿼리가 막히면 기존 전체 조회로 폴백(기능 우선)
+      console.warn('[학습현황] 최근 3개월 쿼리 실패 — 전체 조회로 폴백:', qe && qe.code, qe);
+      snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
+        where('studentName','==', currentStudent.name)));
+    }
     const map = {}; let bestSession = 0;
     const nowTs = Date.now();
     snap.forEach(docu => {
@@ -2462,30 +2475,35 @@ async function loadRankData(force) {
   _rankLoading = true;
   try {
     const { collection, query, where, getDocs } = window._fs;
-    // 학생 명단 (이름 → 좌석)
-    const stuSnap = await getDocs(collection(window._db, 'students'));
-    const seatOf = {};
-    stuSnap.forEach(d => { const v = d.data(); if (v && v.name) seatOf[v.name] = v.seat || ''; });
-    // 이번 달 세션 문서 → 학생별 오늘/이번달 공부시간 (자정 넘긴 세션도 입실일 기준 귀속)
     const now = new Date();
     const todayISO = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
-    const sessSnap = await getDocs(query(collection(window._db, 'attendance_sessions'),
-      where('monthKey','==', todayISO.slice(0,7))));
+    const monthKey = todayISO.slice(0,7);
+    // 읽기 비용 절감: 이번 달 세션 전체(월말 1,000건+) 대신
+    //  1) students 명단(~45건) — 월 누적은 hours[이번달] 사용(관리자앱이 퇴실 때마다 세션 합산으로 SET하는 정합값, 닫힌 세션 기준)
+    //  2) 오늘 세션만(~수십 건) — 오늘 공부시간 + 아직 hours에 반영 전인 열린 세션의 잠정치
+    const [stuSnap, sessSnap] = await Promise.all([
+      getDocs(collection(window._db, 'students')),
+      getDocs(query(collection(window._db, 'attendance_sessions'), where('inDate','==', todayISO)))
+    ]);
     const nowTs = Date.now();
-    const agg = {}; // name → { today(분), month(분) }
+    const todayMin = {}; // name → 오늘 공부시간(분)
+    const openMin = {};  // name → 열린 세션 잠정치(분) — hours 미반영분이라 월간에 더해준다
     sessSnap.forEach(d => {
       const s = d.data();
-      if (!s || !s.studentName || !s.inDate) return;
+      if (!s || !s.studentName) return;
       const min = _sessionDocMin(s, nowTs);
       if (min <= 0) return;
-      const a = (agg[s.studentName] = agg[s.studentName] || { today: 0, month: 0 });
-      a.month += min;
-      if (s.inDate === todayISO) a.today += min;
+      todayMin[s.studentName] = (todayMin[s.studentName] || 0) + min;
+      if (s.status === 'open') openMin[s.studentName] = (openMin[s.studentName] || 0) + min;
     });
     const rows = [];
-    Object.keys(agg).forEach(name => {
-      if (_rankExcluded(name)) return; // 순위 영구 제외 대상
-      rows.push({ name, seat: seatOf[name] || '', today: agg[name].today, month: agg[name].month });
+    stuSnap.forEach(d => {
+      const v = d.data();
+      if (!v || !v.name || _rankExcluded(v.name)) return; // 순위 영구 제외 대상
+      const month = _readHour(v.hours, monthKey) * 60 + (openMin[v.name] || 0);
+      const today = todayMin[v.name] || 0;
+      if (month <= 0 && today <= 0) return;
+      rows.push({ name: v.name, seat: v.seat || '', today, month });
     });
     RANK_DATA = rows;
     const mystatsTab = document.getElementById('tab-mystats');
@@ -2625,7 +2643,7 @@ function buildMyStats() {
   });
   const dayOfYear = Math.floor((now - new Date(now.getFullYear(),0,1)) / 86400000) + 1;
 
-  // 최고 기록 — 실제 기록이 로드되면 전체 이력 기준으로 계산
+  // 최고 기록 — 실제 기록이 로드되면 그 기준으로 계산 (세션은 최근 3개월만 읽으므로 그 범위 내 최고)
   let bestDay, bestWeek, bestSession;
   if (ACTUAL_MIN) {
     bestDay = Math.max(0, ...Object.values(ACTUAL_MIN));
@@ -2744,6 +2762,7 @@ function buildMyStats() {
     </div>
 
     <div class="section-label">최고 기록</div>
+    <div style="font-size:10px;color:var(--text3);margin:-4px 0 8px">일일·주간·연속 기록은 최근 3개월 기준</div>
     <div class="record-grid">
       <div class="record-card"><div class="record-lbl">일일 최고</div><div class="record-val">${_fmtHM(bestDay)}</div></div>
       <div class="record-card"><div class="record-lbl">주간 최고</div><div class="record-val">${_fmtHM(bestWeek)}</div></div>
