@@ -188,6 +188,10 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .wk-cell-input.reason{max-width:64px}
 .wk-period-label{font-size:12px;color:var(--text);font-weight:600}
 .wk-period-time{font-size:10px;color:var(--text3)}
+/* '오늘만' 임시변경 표시 — 오늘 요일 셀이 고정 시간표(base)와 다를 때 */
+.weekly-table td.wk-today-diff{background:#FFF8EC}
+.wk-today-badge{display:block;width:max-content;margin:4px auto 0;font-size:9px;font-weight:700;color:#B45309;background:#FDEBD0;border:1px dashed #E0A94F;border-radius:6px;padding:1px 6px;line-height:1.5;white-space:nowrap}
+.wk-th-today{display:block;font-size:8px;font-weight:700;opacity:0.9;letter-spacing:1px;margin-top:1px}
 
 /* 저장 버튼 */
 .save-fab{position:fixed;bottom:74px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,#8F82E4 0%,#6C5DD3 100%);color:#fff;border:none;border-radius:24px;padding:14px 36px;font-size:15px;font-weight:700;box-shadow:0 6px 20px rgba(108,93,211,0.45),0 2px 8px rgba(0,0,0,0.15);cursor:pointer;z-index:200;display:none;align-items:center;gap:8px;transition:transform 0.1s;letter-spacing:0.2px}
@@ -1070,6 +1074,7 @@ body{
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
+      <div id="weekly-today-note" style="display:none;font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #F3D9A4;background:#FFF8EC;color:#8A5A00;margin-top:10px">🟡 <b>오늘만</b> 표시는 ‘오늘 일정’에서 임시로 변경된 교시입니다. 고정 시간표는 그대로 유지되며, 내일이 되면 자동으로 원래 시간표로 돌아갑니다.</div>
       <div style="height:80px"></div>
     </div>
 
@@ -1357,6 +1362,9 @@ let scheduleEditEnabled = false;
 // '오늘' 요일은 주간 표로 고친 경우에만 새 값을 쓰고, 당일 변경만 있으면 기존 base 값을 보존한다.
 // (당일 변경이 고정 시간표에 영구 반영되던 버그 방지)
 let weeklyEditedDays = new Set();
+// 고정 시간표(schedule_base) 요일 문자열 맵 — 주간표 '오늘만' 임시변경 배지의 비교 기준.
+// applyBaseAndRevert()에서 채워지고, 주간 수정기간 base 커밋 시 갱신된다. null이면 배지 생략.
+let baseScheduleRaw = null;
 let todayDay = '';
 const DAY_NAMES = ['일','월','화','수','목','금','토'];
 
@@ -1558,7 +1566,7 @@ async function tryLogin() {
 }
 
 function logout() {
-  currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false;
+  currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false; baseScheduleRaw = null;
   ACTUAL_MIN = null; actualBestSession = 0;
   try { sessionStorage.removeItem('saebom_student'); sessionStorage.removeItem('saebom_active_tab_student'); } catch(e) {}
   updatePinDisplay();
@@ -1954,7 +1962,15 @@ function buildWeeklyTable() {
   // 모든 교시 (1~11)
   const allPeriods = [1,2,3,4,5,6,7,8,9,10,11];
 
-  let html = `<thead><tr><th>교시</th>${DAYS.map(d=>`<th>${d}</th>`).join('')}</tr></thead><tbody>`;
+  // '오늘만' 임시변경 배지: 오늘 요일 셀이 고정 시간표(base)와 다르면 표시.
+  // 주간 수정모드에서 오늘 요일을 직접 고친 경우는 base에 반영될 값이므로 제외.
+  const badgeDay = (baseScheduleRaw && DAYS.includes(todayDay)
+    && !(scheduleEditEnabled && weeklyEditedDays.has(todayDay))) ? todayDay : null;
+  const baseStr = badgeDay ? (baseScheduleRaw[badgeDay] || '-') : '-';
+  const basePartials = badgeDay ? parsePartials(baseStr) : {};
+  let todayDiffCount = 0;
+
+  let html = `<thead><tr><th>교시</th>${DAYS.map(d=>`<th>${d}${d===todayDay?'<span class="wk-th-today">오늘</span>':''}</th>`).join('')}</tr></thead><tbody>`;
 
   allPeriods.forEach(pNum => {
     const isSatOnly = pNum <= 6;
@@ -1983,13 +1999,33 @@ function buildWeeklyTable() {
       } else {
         cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       }
-      html += `<td>${cell}</td>`;
+
+      // 오늘 요일: 고정 시간표(base)와 다른 셀에 '오늘만' 배지
+      let tdCls = '';
+      if (day === badgeDay) {
+        const bSt = parsePeriodStatus(baseStr, pNum);
+        const dReason = (draftSchedule[day]?.reasons && draftSchedule[day].reasons[pNum]) || '';
+        const dTime = (draftSchedule[day]?.partials && draftSchedule[day].partials[pNum]) || '';
+        const diff = bSt !== status
+          || (status === 'absent' && (parsePeriodReason(baseStr, pNum) || '') !== dReason)
+          || (status === 'partial' && (basePartials[pNum] || '') !== dTime);
+        if (diff) {
+          todayDiffCount++;
+          tdCls = ' class="wk-today-diff"';
+          cell += `<div class="wk-today-badge">오늘만</div>`;
+        }
+      }
+      html += `<td${tdCls}>${cell}</td>`;
     });
     html += `</tr>`;
   });
 
   html += '</tbody>';
   el.innerHTML = html;
+
+  // 임시변경이 있을 때만 표 아래 안내문 표시
+  const note = document.getElementById('weekly-today-note');
+  if (note) note.style.display = todayDiffCount ? 'block' : 'none';
 }
 
 function wkToggle(day, pNum) {
@@ -2098,6 +2134,7 @@ async function saveSchedule() {
 
   // Firebase에 저장
   const ok = await saveToFirebase();
+  buildWeeklyTable(); // base 커밋/당일변경 반영 후 '오늘만' 배지 상태 갱신
   if (ok) {
     try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {}
     if (latePenalties.length) {
@@ -2150,6 +2187,10 @@ async function saveToFirebase() {
         basePayload[day] = keepOldToday ? prevBase[day] : (currentStudent.schedule[day] || '-');
       });
       await window._fsSetDoc(baseRef, basePayload);
+      // '오늘만' 배지 비교 기준도 새 base로 갱신
+      const newBase = {};
+      DAYS.forEach(day => { newBase[day] = basePayload[day] || '-'; });
+      baseScheduleRaw = newBase;
       weeklyEditedDays.clear(); // base에 반영 완료 → 추적 초기화
     }
 
@@ -2241,6 +2282,7 @@ async function applyBaseAndRevert(db, seatKey, liveData) {
       DAYS.forEach(day => { basePayload[day] = base[day]; });
       try { await window._fsSetDoc(baseRef, basePayload); } catch(e) {}
     }
+    baseScheduleRaw = Object.assign({}, base); // 주간표 '오늘만' 배지 비교 기준
 
     // 2) '오늘 날짜'의 당일변경(daily_reports)만 오늘 요일에 유지
     const now = new Date();
