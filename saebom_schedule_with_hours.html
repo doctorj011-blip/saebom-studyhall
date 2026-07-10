@@ -595,6 +595,7 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
   <div class="day-tabs" id="day-tabs"></div>
   <div class="sched-toolbar">
     <button id="class-edit-btn" class="class-edit-btn" onclick="toggleClassEdit()"><i class="ti ti-layout-grid-add" aria-hidden="true"></i> 반 편집</button>
+    <button class="class-edit-btn" style="border-color:#C62828;color:#C62828" onclick="showPenaltyModal()">⚠️ 벌점 현황</button>
     <span id="class-edit-hint" class="class-edit-hint" style="display:none">셀을 드래그해 묶으면 반이 생성됩니다 · 반을 누르면 수정/삭제</span>
   </div>
   <div id="schedule-scroll" style="overflow-x:auto">
@@ -2443,6 +2444,122 @@ window.showStudentSessionsModal = async function(name){
   } catch(e) {
     console.error('입·퇴실 상세 조회 실패:', e);
     bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`;
+  }
+};
+
+// ── 스케줄 변경 벌점 현황 모달 ──
+// 학생앱이 penalties/{YYYY-MM-DD}_{seatKey} 문서에 기록(교시 시작 5시간 전 마감 이후의 출석 취소, 교시당 1점).
+// 여기서는 전체/학생별 조회와 교시별 취소·복구를 제공한다.
+let _penaltyModalFilter = null; // 열려 있는 모달의 학생 필터(seatKey) — 취소/복구 후 재렌더용
+
+window.showPenaltyModal = async function(filterSeatKey) {
+  _penaltyModalFilter = filterSeatKey || null;
+  const old = document.getElementById('penalty-modal-overlay');
+  if (old) old.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'penalty-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(94vw,520px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FEF0F0">
+        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 스케줄 변경 벌점 <span style="font-size:12px;font-weight:500;color:#B05555">교시 시작 5시간 전 마감 · 교시당 1점</span></div>
+        <button onclick="document.getElementById('penalty-modal-overlay').remove()"
+          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+      </div>
+      <div id="penalty-modal-body" style="overflow-y:auto;padding:14px 16px">
+        <div style="text-align:center;padding:32px;color:#aaa;font-size:13px">불러오는 중...</div>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  const bodyEl = overlay.querySelector('#penalty-modal-body');
+
+  try {
+    const waitDb = () => new Promise(res => {
+      if (window._adminDb) return res(window._adminDb);
+      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
+    });
+    const db = await waitDb();
+    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+
+    const snap = filterSeatKey
+      ? await getDocs(query(collection(db, 'penalties'), where('seatKey', '==', String(filterSeatKey))))
+      : await getDocs(collection(db, 'penalties'));
+
+    const docs = [];
+    snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
+    if (!docs.length) {
+      bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#aaa;font-size:13px">벌점 기록이 없습니다</div>`;
+      return;
+    }
+
+    // 학생별로 묶고 좌석 번호순 정렬, 학생 안에서는 최신 날짜 먼저
+    const byStudent = {};
+    docs.forEach(doc => {
+      const k = doc.seatKey || doc.seat || '?';
+      (byStudent[k] = byStudent[k] || []).push(doc);
+    });
+    const t = new Date();
+    const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+
+    const blocks = Object.keys(byStudent).sort((a, b) => (parseInt(a)||999) - (parseInt(b)||999)).map(sk => {
+      const list = byStudent[sk].sort((a, b) => a.date < b.date ? 1 : -1);
+      const name = list[0].name || '?';
+      let total = 0, monthTotal = 0;
+      const rows = [];
+      list.forEach(doc => {
+        Object.keys(doc.periods || {}).sort((a, b) => a - b).forEach(pn => {
+          const p = doc.periods[pn];
+          if (!p.canceled) { total += 1; if (doc.date.slice(0,7) === curYm) monthTotal += 1; }
+          const dl = p.deadline ? new Date(p.deadline) : null;
+          const ch = p.changedAt ? new Date(p.changedAt) : null;
+          const fmt = d => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '?';
+          rows.push(`
+            <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid #F3F4F6;${p.canceled?'opacity:0.5':''}">
+              <span style="flex:1;${p.canceled?'text-decoration:line-through':''}">
+                ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) <b>${pn}교시</b> ${p.to==='absent'?'불참':'해제'} 변경
+                <span style="color:#9CA3AF">· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}</span>
+              </span>
+              <span style="font-weight:700;color:${p.canceled?'#9CA3AF':'#C62828'};flex:0 0 auto">${p.canceled?'취소됨':'1점'}</span>
+              <button onclick="togglePenaltyCancel('${doc.id}','${pn}')"
+                style="flex:0 0 auto;padding:3px 8px;border:1px solid ${p.canceled?'#C8900A':'#D1D5DB'};background:#fff;color:${p.canceled?'#C8900A':'#6B7280'};border-radius:6px;font-size:11px;cursor:pointer">${p.canceled?'복구':'취소'}</button>
+            </div>`);
+        });
+      });
+      return `<div style="border:1px solid #eee;border-radius:12px;padding:10px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-size:13.5px;font-weight:700;color:#1F2937">${name} <span style="font-size:11px;font-weight:500;color:#9CA3AF">${sk}번</span></span>
+          <span style="font-size:12px;font-weight:700;color:#C62828">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+        </div>${rows.join('')}
+      </div>`;
+    });
+
+    bodyEl.innerHTML = blocks.join('');
+  } catch(e) {
+    console.error('벌점 조회 실패:', e);
+    bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`;
+  }
+};
+
+// 교시별 벌점 취소 ↔ 복구 토글 (문서는 남기고 canceled 플래그만 변경)
+window.togglePenaltyCancel = async function(docId, pn) {
+  try {
+    const db = window._adminDb;
+    if (!db) return;
+    const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const ref = doc(db, 'penalties', docId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) { alert('벌점 문서를 찾을 수 없습니다'); return; }
+    const data = snap.data();
+    const periods = { ...(data.periods || {}) };
+    if (!periods[pn]) return;
+    periods[pn] = { ...periods[pn], canceled: !periods[pn].canceled };
+    await setDoc(ref, { ...data, periods: periods });
+    showPenaltyModal(_penaltyModalFilter); // 재렌더
+  } catch(e) {
+    console.error('벌점 취소/복구 실패:', e);
+    alert('처리 실패: ' + (e.message || e));
   }
 };
 
@@ -4641,6 +4758,11 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     : '';
   // 정보 수정 버튼 — 관리석·학생 모두 팝업에서 바로 상세 수정 모달을 열 수 있게
   const editBtn = `<button onclick="fpEditFromPopup('${name}')" style="width:100%;padding:10px;background:#C8900A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">✏️ 정보 수정</button>`;
+  // 스케줄 변경 벌점 조회 (학생별 필터로 벌점 모달 열기)
+  const penSeatKey = String(seat || '').replace(/[^0-9]/g, '');
+  const penaltyBtn = penSeatKey
+    ? `<button onclick="document.getElementById('fp-popup-overlay').remove();showPenaltyModal('${penSeatKey}')" style="width:100%;padding:10px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">⚠️ 벌점 확인</button>`
+    : '';
   popup.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
       <div style="width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#F0D020,#C8900A);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff">${name[0]}</div>
@@ -4655,6 +4777,7 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     </div>
     <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#FFF8DC':'#F3F4F6'};border-radius:8px">${status}</div>
     ${editBtn}
+    ${penaltyBtn}
     ${checkoutBtn}
     <button onclick="document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer">닫기</button>
   `;

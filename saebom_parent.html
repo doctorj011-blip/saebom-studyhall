@@ -272,6 +272,7 @@
         <div class="card-title"><i class="ti ti-calendar-event"></i> 주간 스케줄</div>
         <div id="schedule-content" style="overflow-x:auto">불러오는 중...</div>
       </div>
+      <div id="penalty-card"></div>
     </div>
 
     <!-- 플래너 탭 -->
@@ -485,6 +486,53 @@ async function loadAllData() {
   startScheduleRealtime();      // 스케줄도 실시간 구독
   loadNotices();
   refreshParentData();          // 최신 hours 재조회 (캐시 갱신)
+  loadParentPenalties();        // 스케줄 변경 벌점 내역
+}
+
+// ── 스케줄 변경 벌점 (학생앱이 penalties/{날짜}_{좌석}에 기록, 교시당 1점) ──
+// 학생이 교시 시작 5시간 전 마감 이후에 출석을 취소하면 자동 기록된다.
+async function loadParentPenalties() {
+  const el = document.getElementById('penalty-card');
+  if (!el || !currentStudent) return;
+  if (!window._firebaseReady || !window._getDocs || !window._query) return;
+  try {
+    const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
+    const snap = await window._getDocs(window._query(
+      window._collection(window._db, 'penalties'), window._where('seatKey', '==', seatKey)));
+    const docs = [];
+    snap.forEach(d => docs.push(d.data()));
+    docs.sort((a, b) => a.date < b.date ? 1 : -1);
+
+    const t = new Date();
+    const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+    let total = 0, monthTotal = 0;
+    const rows = [];
+    docs.forEach(doc => {
+      Object.keys(doc.periods || {}).sort((a, b) => a - b).forEach(k => {
+        const p = doc.periods[k];
+        if (!p.canceled) {
+          total += 1;
+          if (doc.date.slice(0, 7) === curYm) monthTotal += 1;
+        }
+        rows.push({ date: doc.date, day: doc.day, n: k, p: p });
+      });
+    });
+    if (!rows.length) { el.innerHTML = ''; return; }
+    const list = rows.slice(0, 15).map(r => `
+      <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
+        <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 늦은 ${r.p.to==='absent'?'불참':'해제'} 변경${r.p.canceled?' · 관리자 취소':''}</span>
+        <span style="font-weight:700;color:#C62828;flex:0 0 auto">${r.p.canceled?'0':'1'}점</span>
+      </div>`).join('');
+    el.innerHTML = `
+      <div class="card" style="border:1.5px solid #F5BABA;background:#FEF0F0">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:700;color:#C62828">⚠️ 스케줄 변경 벌점</span>
+          <span style="font-size:12px;font-weight:700;color:#C62828">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+        </div>
+        <div style="margin-top:4px">${list}</div>
+        <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전 마감 이후에 출석을 취소하면 교시당 벌점 1점이 부여됩니다.</div>
+      </div>`;
+  } catch(e) { console.warn('벌점 조회 실패:', e); }
 }
 
 // 입퇴실 실시간 감지 - Firebase 준비될 때까지 대기 후 연결
@@ -1402,7 +1450,7 @@ document.addEventListener('visibilitychange', function() {
 <!-- Firebase -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, getDocs, collection, getDoc, doc, query, where, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+import { getFirestore, connectFirestoreEmulator, getDocs, collection, getDoc, doc, query, where, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
 
 const firebaseConfig = {
@@ -1416,6 +1464,14 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+// ── [테스트 전용] 로컬 Firestore 에뮬레이터 연결 (URL에 ?emu=1 일 때만) ──
+// 운영에서는 이 파라미터가 없으므로 절대 활성화되지 않는다(실데이터와 완전 격리).
+if (new URLSearchParams(location.search).get('emu') === '1') {
+  try {
+    connectFirestoreEmulator(db, '127.0.0.1', 8080);
+    console.log('🧪 [테스트] Firestore 에뮬레이터(127.0.0.1:8080)에 연결됨 — 실데이터와 격리');
+  } catch(e) { console.error('에뮬레이터 연결 실패:', e); }
+}
 const storage = getStorage(app);
 window._db = db;
 window._storage = storage;

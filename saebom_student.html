@@ -583,6 +583,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
     <div id="tab-daily" style="display:none">
       <div class="section-label">TODAY · 오늘 일정</div>
       <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
+      <div id="penalty-card"></div>
       <div class="day-tabs" id="student-day-tabs"></div>
       <div id="daily-periods"></div>
     </div>
@@ -884,6 +885,141 @@ let weeklyEditedDays = new Set();
 let todayDay = '';
 const DAY_NAMES = ['일','월','화','수','목','금','토'];
 
+// ── 스케줄 변경 벌점 (교시 시작 5시간 전 마감) ──
+// 오늘 출석 예정(o/m)이던 교시를 마감 이후에 불참/해제로 바꾸면 교시당 벌점 1점.
+// 기록: penalties/{YYYY-MM-DD}_{seatKey} 문서, periods 맵에 교시별 병합(같은 교시 재변경 시 중복 없음).
+const PENALTY_LEAD_HOURS = 5;
+
+// 오늘 기준 교시 시작 시각(epoch ms). 11교시(00:00~01:00)는 익일 자정 시작.
+function periodStartMs(pNum, dayName) {
+  const periods = dayName === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const p = periods.find(q => q.n === pNum);
+  if (!p) return null;
+  const parts = p.t.split('~')[0].split(':').map(Number);
+  const d = new Date();
+  d.setHours(parts[0], parts[1] || 0, 0, 0);
+  if (pNum === 11) d.setDate(d.getDate() + 1);
+  return d.getTime();
+}
+
+// 저장 직전 호출 — 오늘 요일에서 '마감 이후의 출석 취소'만 골라낸다.
+function computeLatePenalties() {
+  if (!currentStudent || !todayDay || todayDay === '일') return [];
+  // 주간설정(관리자 허용 수정기간) 표에서 오늘 요일을 고친 경우는 정식 수정 → 벌점 제외
+  if (scheduleEditEnabled && weeklyEditedDays.has(todayDay)) return [];
+  const oldSched = currentStudent.schedule[todayDay] || '-';
+  const dd = draftSchedule[todayDay];
+  if (!dd) return [];
+  const periods = todayDay === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const now = Date.now();
+  const out = [];
+  periods.forEach(p => {
+    const oldSt = parsePeriodStatus(oldSched, p.n);
+    const newSt = dd.periods[p.n] || 'none';
+    if (oldSt !== 'attend' || newSt === 'attend') return; // 출석이던 교시를 취소한 경우만
+    const start = periodStartMs(p.n, todayDay);
+    if (start == null) return;
+    const deadline = start - PENALTY_LEAD_HOURS * 3600000;
+    if (now <= deadline) return; // 마감 전 통보 → 벌점 없음
+    out.push({
+      n: p.n,
+      from: 'attend',
+      to: newSt === 'absent' ? 'absent' : 'none',
+      reason: (dd.reasons && dd.reasons[p.n]) || '',
+      deadline: deadline,
+      changedAt: now
+    });
+  });
+  return out;
+}
+
+// 벌점 기록 저장 — 교시별 병합이라 같은 날 같은 교시는 1점으로 유지된다.
+// 관리자가 이미 취소(canceled)한 교시는 취소 상태를 보존한다.
+async function recordPenalties(list) {
+  if (!list.length || !window._firebaseReady || !currentStudent) return;
+  try {
+    const db = window._db;
+    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
+    const t = new Date();
+    const dateStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    const ref = window._fsDoc(db, 'penalties', `${dateStr}_${seatKey}`);
+    let prev = {};
+    try {
+      const s = await window._fsGetDoc(ref);
+      if (s.exists()) prev = s.data().periods || {};
+    } catch(e) {}
+    const periods = { ...prev };
+    list.forEach(c => {
+      const k = String(c.n);
+      periods[k] = {
+        from: c.from, to: c.to, reason: c.reason,
+        deadline: c.deadline, changedAt: c.changedAt,
+        canceled: !!(prev[k] && prev[k].canceled)
+      };
+    });
+    await window._fsSetDoc(ref, {
+      name: currentStudent.name,
+      seat: currentStudent.seat,
+      seatKey: seatKey,
+      date: dateStr,
+      day: todayDay,
+      periods: periods,
+      updatedAt: window._fsServerTimestamp()
+    });
+    loadMyPenalties(); // 벌점 카드 갱신
+  } catch(e) { console.warn('벌점 기록 실패:', e); }
+}
+
+// ── 내 벌점 조회/표시 (오늘 일정 탭 상단 카드) ──
+let _penaltyDocs = null;
+async function loadMyPenalties() {
+  if (!window._firebaseReady || !currentStudent) return;
+  try {
+    const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
+    const snap = await getDocs(query(collection(window._db, 'penalties'), where('seatKey','==',seatKey)));
+    const docs = [];
+    snap.forEach(d => docs.push(d.data()));
+    docs.sort((a,b) => a.date < b.date ? 1 : -1);
+    _penaltyDocs = docs;
+    renderPenaltyCard();
+  } catch(e) { console.warn('벌점 조회 실패:', e); }
+}
+
+function renderPenaltyCard() {
+  const el = document.getElementById('penalty-card');
+  if (!el || !_penaltyDocs) return;
+  const t = new Date();
+  const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+  let total = 0, monthTotal = 0;
+  const rows = [];
+  _penaltyDocs.forEach(doc => {
+    Object.keys(doc.periods || {}).sort((a,b) => a-b).forEach(k => {
+      const p = doc.periods[k];
+      if (!p.canceled) {
+        total += 1;
+        if (doc.date.slice(0,7) === curYm) monthTotal += 1;
+      }
+      rows.push({ date: doc.date, day: doc.day, n: k, p: p });
+    });
+  });
+  if (!rows.length) { el.innerHTML = ''; return; }
+  const list = rows.slice(0, 10).map(r => `
+    <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
+      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 늦은 ${r.p.to==='absent'?'불참':'해제'} 변경${r.p.canceled?' · 관리자 취소':''}</span>
+      <span style="font-weight:700;color:var(--red);flex:0 0 auto">${r.p.canceled?'0':'1'}점</span>
+    </div>`).join('');
+  el.innerHTML = `
+    <div style="background:var(--red-pale);border:1.5px solid var(--red-border);border-radius:10px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:700;color:var(--red)">⚠️ 스케줄 변경 벌점</span>
+        <span style="font-size:12px;font-weight:700;color:var(--red)">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+      </div>
+      <div style="margin-top:4px">${list}</div>
+      <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전까지 변경하면 벌점이 없습니다.</div>
+    </div>`;
+}
+
 // ── 로그인 ──
 let pinBuffer = '';
 
@@ -986,6 +1122,7 @@ function enterApp() {
     refreshStudentData();
     loadActualStudyData();
     loadEventsList();
+    loadMyPenalties();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
@@ -995,6 +1132,7 @@ function enterApp() {
       refreshStudentData();
       loadActualStudyData();
       loadEventsList();
+      loadMyPenalties();
     }, { once: true });
   }
 }
@@ -1377,6 +1515,16 @@ function wkToggle(day, pNum) {
 
 // ── 저장 ──
 async function saveSchedule() {
+  // 마감(교시 시작 5시간 전) 이후의 출석 취소 → 벌점 경고 후 진행
+  const latePenalties = computeLatePenalties();
+  if (latePenalties.length) {
+    const lines = latePenalties.map(c => ` · ${c.n}교시 (참여 → ${c.to==='absent'?'불참':'해제'})`).join('\n');
+    const ok = confirm(
+      `⚠️ 변경 마감이 지났습니다 (교시 시작 5시간 전 마감)\n\n` +
+      `지금 저장하면 벌점 ${latePenalties.length}점이 부여됩니다:\n${lines}\n\n그래도 저장할까요?`);
+    if (!ok) return; // 저장 취소 — 수정 내용은 화면에 그대로 유지
+  }
+
   // draft → 스케줄 문자열로 변환 (새 형식: 토큰 순서 = validPeriods 순서)
   // 예: 7교시 출석, 8교시 결석(사유), 9교시 출석 → "7,x(사유),9"
   DAYS.forEach(day => {
@@ -1419,7 +1567,12 @@ async function saveSchedule() {
   const ok = await saveToFirebase();
   if (ok) {
     try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {}
-    showToast('✅ 스케줄이 저장됐습니다');
+    if (latePenalties.length) {
+      recordPenalties(latePenalties);
+      showToast(`✅ 저장됐습니다 · 늦은 변경으로 벌점 ${latePenalties.length}점이 부여됐습니다`);
+    } else {
+      showToast('✅ 스케줄이 저장됐습니다');
+    }
   } else {
     // 서버 동기화 실패 → 미동기화 표시(새로고침 시 옛 서버 데이터가 로컬을 덮어쓰지 않도록)
     try { sessionStorage.setItem('saebom_pending_sync', '1'); } catch(e) {}
