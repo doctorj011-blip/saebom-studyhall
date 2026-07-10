@@ -1181,6 +1181,8 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
   </div>
 </div>
 
+<!-- 3앱 공용 유틸 (_ymKey/_normalizeHours/_phoneLast4 등) — 반드시 같은 폴더에 함께 배포 -->
+<script src="saebom-common.js"></script>
 <script>
 const DAYS=['월','화','수','목','금','토'];
 const PERIODS_WEEKDAY=[
@@ -1198,22 +1200,33 @@ let PERIOD_OFFSET = 6;
 
 let STUDENTS=[];
 
-// ── 누적시간 key 헬퍼 (YYYY-MM) ──
-// hours 객체의 key를 "월번호(1~12)"에서 "연-월(YYYY-MM)"로 전환.
-// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
-function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
-function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
-function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
-function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
-function _ymLabel(key){ return parseInt(String(key).split('-')[1],10)+'월'; }
-function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
-// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)
-function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={};
-  // 신형식(YYYY-MM) 우선 복사
-  for(const k of Object.keys(hours)){ if(/^\d{4}-\d{2}$/.test(k)) out[k]=Number(hours[k])||0; }
-  // 구형식 숫자키(1~12)는 같은 달의 신형식이 없을 때만 보완 (중복 합산 방지)
-  for(const k of Object.keys(hours)){ if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12){ const nk=_ymKey(2026,m); if(out[nk]==null) out[nk]=Number(hours[k])||0; } } }
-  return out; }
+// ── 누적시간 key 헬퍼 (YYYY-MM) — 정의는 saebom-common.js 한 곳에만 둔다 ──
+// 아래 폴백은 common.js 로드 실패(배포 누락) 시 앱이 통째로 죽는 것만 막는 비상용.
+// ⚠️ 내용 수정은 반드시 saebom-common.js 에서 (세 앱 동작 불일치 방지).
+if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백 사용');
+  window._ymKey=(y,m)=>y+'-'+String(m).padStart(2,'0');
+  window._curYm=()=>{const d=new Date();return _ymKey(d.getFullYear(),d.getMonth()+1);};
+  window._prevYm=(key)=>{const p=String(key).split('-').map(Number);const d=new Date(p[0],p[1]-2,1);return _ymKey(d.getFullYear(),d.getMonth()+1);};
+  window._recentMonths=(n)=>{const out=[],d=new Date();for(let i=n-1;i>=0;i--){const t=new Date(d.getFullYear(),d.getMonth()-i,1);const key=_ymKey(t.getFullYear(),t.getMonth()+1);out.push({k:key,key:key,label:(t.getMonth()+1)+'월',y:t.getFullYear(),m:t.getMonth()+1});}return out;};
+  window._ymLabel=(key)=>parseInt(String(key).split('-')[1],10)+'월';
+  window._readHour=(hours,key)=>(hours&&hours[key]!=null)?hours[key]:0;
+  window._normalizeHours=(hours)=>{if(!hours||typeof hours!=='object')return{};const out={};for(const k of Object.keys(hours)){if(/^\d{4}-\d{2}$/.test(k))out[k]=Number(hours[k])||0;}for(const k of Object.keys(hours)){if(/^\d{1,2}$/.test(k)){const m=parseInt(k,10);if(m>=1&&m<=12){const nk=_ymKey(2026,m);if(out[nk]==null)out[nk]=Number(hours[k])||0;}}}return out;};
+  window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
+}
+
+// ── Firebase DB 준비 대기 (전 화면 공용) ──
+// 모듈 스크립트가 window._adminDb 를 세팅할 때까지 폴링.
+// timeoutMs 초과 시 null 반환 → 호출부 try/catch 또는 if(!db) 가드가 처리 (무한 대기 방지).
+window.waitDb = function(timeoutMs = 15000) {
+  return new Promise(res => {
+    if (window._adminDb) return res(window._adminDb);
+    const t0 = Date.now();
+    const t = setInterval(() => {
+      if (window._adminDb) { clearInterval(t); return res(window._adminDb); }
+      if (Date.now() - t0 >= timeoutMs) { clearInterval(t); res(null); }
+    }, 100);
+  });
+};
 
 const MONTHS=_recentMonths(5);
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
@@ -1251,13 +1264,9 @@ function _saveAbsentSmsSent() {
 
 async function _syncAbsentSmsToFirebase(keysMap) {
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, setDoc } = window._fs;
     await setDoc(doc(db, 'students', '_meta_absent_sms'),
       { name: '', keys: keysMap, updatedAt: Date.now() }, { merge: true });
   } catch(e) { console.error('미입실 발송상태 동기화 실패:', e); }
@@ -1289,13 +1298,9 @@ window._applyRemoteAbsentSms = function(keysMap) {
 // 시작 시 저장된 발송상태 1회 로드 + 지난 날짜 키 정리
 (async function _loadAbsentSmsOnce() {
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, getDoc, setDoc } = window._fs;
     const snap = await getDoc(doc(db, 'students', '_meta_absent_sms'));
     if (!snap.exists()) return;
     const keys = snap.data().keys || {};
@@ -2191,12 +2196,8 @@ window.queryHoursRange = async function(){
   _rangeQueryLock = true;
   statusEl.textContent = '조회 중...';
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
-    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const db = await window.waitDb();
+    const { collection, getDocs, query, where } = window._fs;
 
     // 세션 문서 기반 집계 — 입실~퇴실이 문서 하나이므로 짝짓기/자정경계 추론이 없다.
     // durationMin(확정값)을 입실일(inDate)에 귀속해 더하면 끝.
@@ -2361,12 +2362,8 @@ window.showStudentSessionsModal = async function(name){
   const bodyEl = overlay.querySelector('#sess-modal-body');
 
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
-    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const db = await window.waitDb();
+    const { collection, getDocs, query, where } = window._fs;
 
     // 세션 문서 기반 — 자정을 넘긴 세션도 입실일에 한 건으로 붙는다(짝짓기 없음)
     const isoDates = _rangeDateStringsISO(startISO, endISO);
@@ -2490,12 +2487,8 @@ window.showPenaltyModal = async function(filterSeatKey) {
   const bodyEl = overlay.querySelector('#penalty-modal-body');
 
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
-    const { collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const db = await window.waitDb();
+    const { collection, getDocs, query, where } = window._fs;
 
     const snap = filterSeatKey
       ? await getDocs(query(collection(db, 'penalties'), where('seatKey', '==', String(filterSeatKey))))
@@ -2565,7 +2558,7 @@ window.togglePenaltyCancel = async function(docId, pn) {
   try {
     const db = window._adminDb;
     if (!db) return;
-    const { doc, getDoc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, getDoc, setDoc } = window._fs;
     const ref = doc(db, 'penalties', docId);
     const snap = await getDoc(ref);
     if (!snap.exists()) { alert('벌점 문서를 찾을 수 없습니다'); return; }
@@ -3311,8 +3304,11 @@ async function processCheckin() {
     _searchingEl.textContent = '⏳ 확인 중...';
     _searchingEl.style.display = 'block';
     try {
-      const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      const snap = await getDocs(collection(window._adminDb, 'students'));
+      const { getDocs, collection, query, where } = window._fs;
+      // phoneLast4 색인 필드로 1회 조회 (전체 다운로드 방지).
+      // 구 문서(phoneLast4 미저장) 대비: 결과가 없으면 기존 방식(전체 스캔)으로 폴백.
+      let snap = await getDocs(query(collection(window._adminDb, 'students'), where('phoneLast4', '==', last4)));
+      if (snap.empty) snap = await getDocs(collection(window._adminDb, 'students'));
       snap.forEach(doc => {
         const v = doc.data();
         if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === last4) {
@@ -3775,13 +3771,9 @@ window.checkinBreakReentry = function() {
 //   students 문서 변경은 기존 실시간 리스너가 모든 기기에 전파하므로 동기화도 함께 해결된다.
 async function saveAwayToFirebase(student, isBack, timeStr) {
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, updateDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, updateDoc } = window._fs;
     const cleanSeat = String(student.seat).replace('번','');
     await updateDoc(doc(db, 'students', cleanSeat), { awayAt: isBack ? '' : timeStr });
   } catch(e) { console.error('외출 상태 저장 실패:', e); }
@@ -3888,13 +3880,9 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
     const nowMs = Date.now();
     const logId = `${today}_${student.seat}_${type}${awayFlag ? '_away' : ''}_${timeStr.replace(/[:\s]/g,'')}_${nowMs}`;
     // Firebase가 준비될 때까지 대기
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, setDoc, serverTimestamp, collection, getDocs, query, where } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, setDoc, serverTimestamp, collection, getDocs, query, where } = window._fs;
 
     // ── 다기기 동시 사용 시 중복 이벤트 방지 (쓰기 직전 서버 상태 확인) ──
     // 같은 학생의 같은 날짜 '마지막' 이벤트가 지금 쓰려는 것과 동일 type이면 기록하지 않는다.
@@ -3945,13 +3933,9 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
 // 자동배정도 approved 신청 문서로 남겨 스냅샷 재구성 후에도 유지·표시되게 한다.
 async function saveAutoStudyroomAssignment(student, room, period) {
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, setDoc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, setDoc, serverTimestamp } = window._fs;
     // _syncStudyRoomStudents 와 동일한 날짜 형식(ISO YYYY-MM-DD) 사용
     const date = new Date().toISOString().slice(0,10);
     const seatNum = String(student.seat).replace('번','').trim();
@@ -4668,7 +4652,7 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
 function _studentDocData(student, ns) {
   return {
     seat: ns, name: student.name,
-    phone: student.phone||'', parent: student.parent||'',
+    phone: student.phone||'', phoneLast4: window._phoneLast4(student.phone), parent: student.parent||'',
     gender: student.gender||'f', expiry: student.expiry||'', startDate: student.startDate||'',
     월: student.schedule?.['월']||'-', 화: student.schedule?.['화']||'-',
     수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
@@ -5648,7 +5632,7 @@ async function uploadNoticeImage(dataURL, noticeId, idx) {
 async function loadNoticesAdmin() {
   if (!window._adminDb) return;
   try {
-    const { doc, getDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, getDoc } = window._fs;
     const snap = await getDoc(doc(window._adminDb, 'notices', 'list'));
     const items = snap.exists() && snap.data().items ? snap.data().items : [];
     const el = document.getElementById('notice-list-admin');
@@ -5708,7 +5692,7 @@ window.publishNotice = async function() {
   btn.textContent = '업로드 중...';
 
   try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc } = window._fs;
     const isEdit = window._noticeEditIdx !== null;
     const noticeId = isEdit ? (window._adminNotices[window._noticeEditIdx].id || Date.now()) : Date.now();
     const today = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'.').replace('.','');
@@ -5762,7 +5746,7 @@ window.deleteNotice = async function(i) {
   if (!window._adminDb) return;
   if (!confirm('이 공지를 삭제할까요?')) return;
   try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc } = window._fs;
     const items = (window._adminNotices || []).filter((_,idx) => idx !== i);
     await setDoc(doc(window._adminDb, 'notices', 'list'), { items }, { merge: true });
     window._adminNotices = items;
@@ -5792,7 +5776,7 @@ const DEFAULT_ADMIN_EVENTS = [{
 async function loadEventsAdmin() {
   if (!window._adminDb) return;
   try {
-    const { doc, getDoc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, getDoc, setDoc } = window._fs;
     // 보안규칙상 쓰기 가능한 문서가 notices/list뿐이므로 events 필드에 함께 저장
     const snap = await getDoc(doc(window._adminDb, 'notices', 'list'));
     let items = snap.exists() && Array.isArray(snap.data().events) ? snap.data().events : [];
@@ -5908,7 +5892,7 @@ window.toggleEventActive = async function(i) {
   const nowActive = items[i].active !== false;
   items[i] = Object.assign({}, items[i], { active: !nowActive });
   try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc } = window._fs;
     await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
     window._adminEvents = items;
     showAdminToast(nowActive ? '⏸️ 이벤트가 비활성화됐습니다 (학생앱에서 숨김)' : '✅ 이벤트가 활성화됐습니다');
@@ -5930,7 +5914,7 @@ window.publishEvent = async function() {
   const btn = document.getElementById('event-submit-btn');
   btn.disabled = true;
   try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc } = window._fs;
     const isEdit = window._eventEditIdx !== null;
     const prev = isEdit ? window._adminEvents[window._eventEditIdx] : null;
     const evObj = {
@@ -5959,7 +5943,7 @@ window.deleteEvent = async function(i) {
   if (!window._adminDb) return;
   if (!confirm('이 이벤트를 삭제할까요?')) return;
   try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc } = window._fs;
     const items = (window._adminEvents || []).filter((_, idx) => idx !== i);
     await setDoc(doc(window._adminDb, 'notices', 'list'), { events: items }, { merge: true });
     window._adminEvents = items;
@@ -5969,9 +5953,16 @@ window.deleteEvent = async function(i) {
   } catch(e) { console.error('이벤트 삭제 실패:', e); }
 };
 
+// 관리자 토스트 — 유일한 정의 (모듈 블록에서도 전역으로 이 함수를 호출한다)
 function showAdminToast(msg) {
   const t = document.getElementById('admin-toast');
-  if (t) { t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); }
+  if (t) { t.textContent = msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2200); return; }
+  // #admin-toast 요소가 없을 때 폴백 — 떠 있는 토스트를 직접 생성
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);white-space:nowrap';
+  d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 2500);
 }
 
 // ══════════════════════════════════════
@@ -6186,6 +6177,9 @@ try {
   console.warn('오프라인 캐시 활성화 실패 — 기본 모드 사용:', e);
   db = getFirestore(app);
 }
+// Firestore 함수 일괄 노출 — classic 스크립트에서 매번 동적 import 하지 않도록.
+// (_adminDb 보다 먼저 세팅: _adminDb 가 보이면 _fs 도 반드시 존재)
+window._fs = { doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, runTransaction };
 window._adminDb = db;
 window._adminApp = app;
 // ── [테스트 전용] 로컬 Firestore 에뮬레이터 연결 (URL에 ?emu=1 일 때만) ──
@@ -6516,6 +6510,7 @@ async function saveStudentToFirebase(student) {
     seat: cleanSeat,
     name: student.name,
     phone: student.phone || '',
+    phoneLast4: window._phoneLast4(student.phone), // 입실/로그인 where 검색용 색인
     parent: student.parent || '',
     gender: student.gender || 'f',
     expiry: student.expiry || '',
@@ -6556,6 +6551,28 @@ async function migrateHoursKeys() {
     if (migrated > 0) console.log(`[마이그레이션] 누적시간 key 변환 완료: ${migrated}개 학생`);
   } catch(e) {
     console.error('[마이그레이션] 실패:', e);
+  }
+}
+
+// ── phoneLast4 백필 (일회성·멱등) ──
+// 입실 키오스크/학생앱 로그인이 전체 다운로드 대신 where('phoneLast4','==',...) 로 검색하도록
+// 기존 학생 문서에 색인 필드를 채운다. 신규/수정 저장은 저장 시점에 항상 함께 기록됨.
+async function migratePhoneLast4() {
+  try {
+    if (localStorage.getItem('saebom_phoneLast4_migrated') === 'done') return;
+    const snap = await getDocs(collection(db, 'students'));
+    let n = 0;
+    for (const d of snap.docs) {
+      const v = d.data();
+      const want = window._phoneLast4(v.phone);
+      if (!want || v.phoneLast4 === want) continue; // 전화번호 없음(메타 문서 포함)·이미 최신이면 건너뜀
+      await updateDoc(doc(db, 'students', d.id), { phoneLast4: want });
+      n++;
+    }
+    localStorage.setItem('saebom_phoneLast4_migrated', 'done');
+    if (n > 0) console.log(`[마이그레이션] phoneLast4 백필 완료: ${n}개 학생`);
+  } catch(e) {
+    console.error('[마이그레이션] phoneLast4 실패:', e);
   }
 }
 
@@ -6740,6 +6757,7 @@ async function loadStudentsFromFirebase() {
     console.error('Firebase 로드 실패:', e);
   }
   migrateHoursKeys(); // 구형식 hours key 영구 정리 (백그라운드·멱등)
+  migratePhoneLast4(); // 입실/로그인 검색용 phoneLast4 색인 백필 (백그라운드·멱등)
   cleanupWithdrawnStudents(); // 90일 지난 퇴원 보관 데이터 정리 (백그라운드·하루1회)
   if (window.initApp) window.initApp();
 
@@ -7190,13 +7208,9 @@ window._remoteAlertStates = {}; // 최근 수신한 원격 상태 캐시 (신규
 
 window._syncScheduleAlertStates = async function(statesMap) {
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, setDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, setDoc } = window._fs;
     await setDoc(doc(db, 'students', '_meta_schedule_alerts'),
       { name: '', states: statesMap, updatedAt: Date.now() }, { merge: true });
   } catch(e) { console.error('스케줄 알림 상태 동기화 실패:', e); }
@@ -7277,13 +7291,9 @@ window._applyRemoteAlertContents = function(alerts) {
 // 시작 시 저장된 처리상태 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
 (async function _loadAlertStatesOnce() {
   try {
-    const waitDb = () => new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
-    const db = await waitDb();
+    const db = await window.waitDb();
     if (!db) return;
-    const { doc, getDoc } = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+    const { doc, getDoc } = window._fs;
     const snap = await getDoc(doc(db, 'students', '_meta_schedule_alerts'));
     if (snap.exists()) {
       // 내용 먼저 병합 → 처리상태 적용 (꺼져 있는 동안 발생한 알림도 이 시점에 복원)
@@ -7934,7 +7944,7 @@ window.saveSmsLog = saveSmsLog;
 async function saveSmsLogToFirebase(entry, logId) {
   if (!window._adminDb) return;
   try {
-    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc, serverTimestamp } = window._fs;
     const id = logId || entry.id || `${Date.now()}_${entry.type||'sms'}`;
     await setDoc(doc(window._adminDb, 'sms_logs', id), {
       ...entry,
@@ -7963,7 +7973,7 @@ window.loadBillingTab = async function(){
   const db = window._adminDb;
   if (!db) { setTimeout(window.loadBillingTab, 300); return; }
   try {
-    const { doc, getDoc, getDocs, collection, query, where } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, getDoc, getDocs, collection, query, where } = window._fs;
     if (!_billingConfig) {
       const snap = await getDoc(doc(db, 'settings', 'billing'));
       _billingConfig = snap.exists() ? (snap.data() || {}) : {};
@@ -7993,7 +8003,7 @@ window.billingMoveMonth = function(delta){
 window.saveBillingConfig = async function(){
   const db = window._adminDb; if (!db) return;
   try {
-    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc, serverTimestamp } = window._fs;
     const defaultFee = parseInt(document.getElementById('billing-default-fee').value, 10) || 0;
     const reminderText = document.getElementById('billing-reminder-text').value.trim() || BILLING_DEFAULT_REMINDER;
     _billingConfig = { ...(_billingConfig || {}), defaultFee, reminderText };
@@ -8088,7 +8098,7 @@ window.confirmBillingPayment = async function(key){
   const paidDate = document.getElementById('bp-date').value || '';
   const memo = document.getElementById('bp-memo').value.trim();
   try {
-    const { doc, setDoc, serverTimestamp } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, setDoc, serverTimestamp } = window._fs;
     const docId = _billingYm + '_' + key;
     const data = { ym: _billingYm, key, seat: s.seat, name: s.name, phone: s.phone || '', parent: s.parent || '', amount, method, paidDate, memo, createdAt: serverTimestamp() };
     await setDoc(doc(db, 'payments', docId), data);
@@ -8104,7 +8114,7 @@ window.cancelBillingPayment = async function(key){
   const db = window._adminDb; if (!db) return;
   if (!confirm(`${p.name} 학생의 ${_billingMonthLabel()} 납부 기록(${_fmtWon(p.amount)} · ${p.method})을 취소할까요?`)) return;
   try {
-    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { doc, deleteDoc } = window._fs;
     await deleteDoc(doc(db, 'payments', p._id));
     delete _billingPayments[key];
     renderBillingList();
@@ -8204,7 +8214,7 @@ window.loadSmsLog = async function() {
   // Firebase에서 추가 로드 후 병합
   if (window._adminDb) {
     try {
-      const { collection, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+      const { collection, getDocs } = window._fs;
       const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
       const fbLogs = [];
       snap.forEach(d => {
@@ -8378,10 +8388,8 @@ let SOLAPI_SENDER = (function() {
 // 솔라피 설정을 Firestore에도 저장/복원 — localStorage가 유지 안 되는 환경(임베드/개인정보보호) 대비
 window.loadSolapiConfigFromCloud = async function() {
   try {
-    const db = await new Promise(res => {
-      if (window._adminDb) return res(window._adminDb);
-      const t = setInterval(() => { if (window._adminDb) { clearInterval(t); res(window._adminDb); } }, 100);
-    });
+    const db = await window.waitDb();
+    if (!db) return;
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'solapi'));
     if (!snap.exists()) return;
     const d = snap.data() || {};
@@ -9125,7 +9133,7 @@ window.restoreWithdrawnStudent = async function(archiveId) {
       월:a.base?.['월']||'-', 화:a.base?.['화']||'-', 수:a.base?.['수']||'-',
       목:a.base?.['목']||'-', 금:a.base?.['금']||'-', 토:a.base?.['토']||'-'
     };
-    await setDoc(doc(db, 'students', seat), { ...stu, seat, name: a.name, updatedAt: serverTimestamp() });
+    await setDoc(doc(db, 'students', seat), { ...stu, seat, name: a.name, phoneLast4: window._phoneLast4(stu.phone), updatedAt: serverTimestamp() });
     if (a.base) await setDoc(doc(db, 'schedule_base', seat), { ...a.base, seat, updatedAt: serverTimestamp() });
     const cur = a.current || a.base;
     if (cur) await setDoc(doc(db, 'schedules', seat), { ...cur, seat, changedBy: 'admin', updatedAt: serverTimestamp() });
@@ -9446,13 +9454,7 @@ onSnapshot(doc(db, 'door_commands', 'current'), (snap) => {
   showAdminToast('🚪 다른 기기에서 입퇴실 — 문 자동 개방');
 }, (err) => console.warn('🚪 door_commands 구독 에러:', err));
 
-function showAdminToast(msg) {
-  const t = document.createElement('div');
-  t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.2);white-space:nowrap';
-  t.textContent = msg;
-  document.body.appendChild(t);
-  setTimeout(() => t.remove(), 2500);
-}
+// (showAdminToast 는 classic 스크립트의 전역 정의 하나만 사용 — 중복 정의 제거됨)
 
 
 // ══════════════════════════════════════

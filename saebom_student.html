@@ -24,7 +24,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, onSnapshot, serverTimestamp }
+import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, query, where, onSnapshot, serverTimestamp }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -48,6 +48,8 @@ if (new URLSearchParams(location.search).get('emu') === '1') {
 }
 
 // 전역 노출
+// Firestore 함수 일괄 노출 — classic 스크립트에서 매번 동적 import 하지 않도록 (_db 보다 먼저 세팅)
+window._fs = { doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, query, where, onSnapshot, serverTimestamp, getFirestore };
 window._db = db;
 window._fsDoc = doc;
 window._fsSetDoc = setDoc;
@@ -1261,6 +1263,8 @@ body{
 <!-- 토스트 -->
 <div class="toast" id="toast"></div>
 
+<!-- 3앱 공용 유틸 (_ymKey/_normalizeHours/_phoneLast4 등) — 반드시 같은 폴더에 함께 배포 -->
+<script src="saebom-common.js"></script>
 <script>
 // ── 학생 데이터 ──
 const STUDENTS = [
@@ -1321,18 +1325,19 @@ const NOTICES = [
   },
 ];
 
-// ── 누적시간 key 헬퍼 (YYYY-MM) ──
-// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
-function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
-function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
-function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
-function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
-function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
-// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로그인 시 1회 적용)
-function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={};
-  for(const k of Object.keys(hours)){ if(/^\d{4}-\d{2}$/.test(k)) out[k]=Number(hours[k])||0; }
-  for(const k of Object.keys(hours)){ if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12){ const nk=_ymKey(2026,m); if(out[nk]==null) out[nk]=Number(hours[k])||0; } } }
-  return out; }
+// ── 누적시간 key 헬퍼 (YYYY-MM) — 정의는 saebom-common.js 한 곳에만 둔다 ──
+// 아래 폴백은 common.js 로드 실패(배포 누락) 시 앱이 통째로 죽는 것만 막는 비상용.
+// ⚠️ 내용 수정은 반드시 saebom-common.js 에서 (세 앱 동작 불일치 방지).
+if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백 사용');
+  window._ymKey=(y,m)=>y+'-'+String(m).padStart(2,'0');
+  window._curYm=()=>{const d=new Date();return _ymKey(d.getFullYear(),d.getMonth()+1);};
+  window._prevYm=(key)=>{const p=String(key).split('-').map(Number);const d=new Date(p[0],p[1]-2,1);return _ymKey(d.getFullYear(),d.getMonth()+1);};
+  window._recentMonths=(n)=>{const out=[],d=new Date();for(let i=n-1;i>=0;i--){const t=new Date(d.getFullYear(),d.getMonth()-i,1);const key=_ymKey(t.getFullYear(),t.getMonth()+1);out.push({k:key,key:key,label:(t.getMonth()+1)+'월',y:t.getFullYear(),m:t.getMonth()+1});}return out;};
+  window._ymLabel=(key)=>parseInt(String(key).split('-')[1],10)+'월';
+  window._readHour=(hours,key)=>(hours&&hours[key]!=null)?hours[key]:0;
+  window._normalizeHours=(hours)=>{if(!hours||typeof hours!=='object')return{};const out={};for(const k of Object.keys(hours)){if(/^\d{4}-\d{2}$/.test(k))out[k]=Number(hours[k])||0;}for(const k of Object.keys(hours)){if(/^\d{1,2}$/.test(k)){const m=parseInt(k,10);if(m>=1&&m<=12){const nk=_ymKey(2026,m);if(out[nk]==null)out[nk]=Number(hours[k])||0;}}}return out;};
+  window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
+}
 
 // ── 교시 데이터 ──
 const DAYS = ['월','화','수','목','금','토'];
@@ -1463,7 +1468,7 @@ let _penaltyDocs = null;
 async function loadMyPenalties() {
   if (!window._firebaseReady || !currentStudent) return;
   try {
-    const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { collection, query, where, getDocs } = window._fs;
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
     const snap = await getDocs(query(collection(window._db, 'penalties'), where('seatKey','==',seatKey)));
     const docs = [];
@@ -1540,8 +1545,11 @@ async function tryLogin() {
   // 2) 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._db) {
     try {
-      const { getDocs, collection } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      const snap = await getDocs(collection(window._db, 'students'));
+      const { getDocs, collection, query, where } = window._fs;
+      // phoneLast4 색인 필드로 1회 조회 (전체 다운로드 방지).
+      // 구 문서(phoneLast4 미저장) 대비: 결과가 없으면 기존 방식(전체 스캔)으로 폴백.
+      let snap = await getDocs(query(collection(window._db, 'students'), where('phoneLast4', '==', pinBuffer)));
+      if (snap.empty) snap = await getDocs(collection(window._db, 'students'));
       snap.forEach(doc => {
         const v = doc.data();
         if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === pinBuffer) {
@@ -2413,7 +2421,7 @@ async function loadActualStudyData(force) {
   if (ACTUAL_MIN && !force) return;
   _actualLoading = true;
   try {
-    const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { collection, query, where, getDocs } = window._fs;
     const snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
       where('studentName','==', currentStudent.name)));
     const map = {}; let bestSession = 0;
@@ -2453,7 +2461,7 @@ async function loadRankData(force) {
   if (RANK_DATA && !force) return;
   _rankLoading = true;
   try {
-    const { collection, query, where, getDocs } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
+    const { collection, query, where, getDocs } = window._fs;
     // 학생 명단 (이름 → 좌석)
     const stuSnap = await getDocs(collection(window._db, 'students'));
     const seatOf = {};
@@ -3050,6 +3058,7 @@ window.selectSeat = async function(seatNum) {
       seat: String(seatNum),
       name: currentStudent.name,
       phone: currentStudent.phone || '',
+      phoneLast4: window._phoneLast4(currentStudent.phone), // 입실/로그인 where 검색용 색인
       parent: currentStudent.parent || '',
       gender: currentStudent.gender || 'f',
       expiry: currentStudent.expiry || '',
@@ -3476,11 +3485,8 @@ async function plannerUploadPhoto(input) {
 // Firestore에 플래너 메타 저장
 async function savePlannerMeta(seat, dateStr, url) {
   try {
-    const { doc, setDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-    const db = window._adminDb || (await (async()=>{
-      const {getFirestore} = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      return getFirestore();
-    })());
+    const { doc, setDoc } = window._fs;
+    const db = window._db || window._fs.getFirestore();
     const ref = doc(db, 'planners', `${seat}_${dateStr}`);
     await setDoc(ref, {
       seat,
@@ -3507,11 +3513,8 @@ async function plannerDeletePhoto() {
     renderPlannerCalendar();
     plannerSelectDate(plannerSelectedDate);
     // Firestore 메타 삭제
-    const { doc, deleteDoc } = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-    const db = window._adminDb || (await (async()=>{
-      const {getFirestore} = await import('https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js');
-      return getFirestore();
-    })());
+    const { doc, deleteDoc } = window._fs;
+    const db = window._db || window._fs.getFirestore();
     await deleteDoc(doc(db, 'planners', `${seat}_${plannerSelectedDate}`));
     showToast('사진이 삭제되었습니다');
   } catch(e) {

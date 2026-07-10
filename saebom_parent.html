@@ -509,6 +509,8 @@ body{
 
 <div class="toast" id="toast"></div>
 
+<!-- 3앱 공용 유틸 (_ymKey/_normalizeHours/_phoneLast4 등) — 반드시 같은 폴더에 함께 배포 -->
+<script src="saebom-common.js"></script>
 <script>
 const DAYS = ['월','화','수','목','금','토'];
 const PERIODS_WEEK = [
@@ -526,18 +528,19 @@ const PERIODS_SAT = [
   {n:9,label:'9교시',t:'20:30~22:00'},{n:10,label:'10교시',t:'22:30~23:50'},
   {n:11,label:'11교시',t:'00:00~01:00'},
 ];
-// ── 누적시간 key 헬퍼 (YYYY-MM) ──
-// 이번달/미래 달은 신형식만 읽어 매달 자동 0부터 시작(리셋 보장), 과거 달은 구형식(2026 숫자키)도 폴백 표시.
-function _ymKey(y,m){ return y+'-'+String(m).padStart(2,'0'); }
-function _curYm(){ const d=new Date(); return _ymKey(d.getFullYear(), d.getMonth()+1); }
-function _prevYm(key){ const p=String(key).split('-').map(Number); const d=new Date(p[0], p[1]-2, 1); return _ymKey(d.getFullYear(), d.getMonth()+1); }
-function _recentMonths(n){ const out=[], d=new Date(); for(let i=n-1;i>=0;i--){ const t=new Date(d.getFullYear(), d.getMonth()-i, 1); const key=_ymKey(t.getFullYear(), t.getMonth()+1); out.push({k:key, key:key, label:(t.getMonth()+1)+'월', y:t.getFullYear(), m:t.getMonth()+1}); } return out; }
-function _readHour(hours, key){ return (hours && hours[key]!=null) ? hours[key] : 0; }
-// 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로그인 시 1회 적용)
-function _normalizeHours(hours){ if(!hours||typeof hours!=='object') return {}; const out={};
-  for(const k of Object.keys(hours)){ if(/^\d{4}-\d{2}$/.test(k)) out[k]=Number(hours[k])||0; }
-  for(const k of Object.keys(hours)){ if(/^\d{1,2}$/.test(k)){ const m=parseInt(k,10); if(m>=1&&m<=12){ const nk=_ymKey(2026,m); if(out[nk]==null) out[nk]=Number(hours[k])||0; } } }
-  return out; }
+// ── 누적시간 key 헬퍼 (YYYY-MM) — 정의는 saebom-common.js 한 곳에만 둔다 ──
+// 아래 폴백은 common.js 로드 실패(배포 누락) 시 앱이 통째로 죽는 것만 막는 비상용.
+// ⚠️ 내용 수정은 반드시 saebom-common.js 에서 (세 앱 동작 불일치 방지).
+if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백 사용');
+  window._ymKey=(y,m)=>y+'-'+String(m).padStart(2,'0');
+  window._curYm=()=>{const d=new Date();return _ymKey(d.getFullYear(),d.getMonth()+1);};
+  window._prevYm=(key)=>{const p=String(key).split('-').map(Number);const d=new Date(p[0],p[1]-2,1);return _ymKey(d.getFullYear(),d.getMonth()+1);};
+  window._recentMonths=(n)=>{const out=[],d=new Date();for(let i=n-1;i>=0;i--){const t=new Date(d.getFullYear(),d.getMonth()-i,1);const key=_ymKey(t.getFullYear(),t.getMonth()+1);out.push({k:key,key:key,label:(t.getMonth()+1)+'월',y:t.getFullYear(),m:t.getMonth()+1});}return out;};
+  window._ymLabel=(key)=>parseInt(String(key).split('-')[1],10)+'월';
+  window._readHour=(hours,key)=>(hours&&hours[key]!=null)?hours[key]:0;
+  window._normalizeHours=(hours)=>{if(!hours||typeof hours!=='object')return{};const out={};for(const k of Object.keys(hours)){if(/^\d{4}-\d{2}$/.test(k))out[k]=Number(hours[k])||0;}for(const k of Object.keys(hours)){if(/^\d{1,2}$/.test(k)){const m=parseInt(k,10);if(m>=1&&m<=12){const nk=_ymKey(2026,m);if(out[nk]==null)out[nk]=Number(hours[k])||0;}}}return out;};
+  window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
+}
 
 const MONTHS = _recentMonths(6);
 
