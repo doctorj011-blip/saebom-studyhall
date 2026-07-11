@@ -8,6 +8,51 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 </head>
 <style>
+/* ===================================================================
+   새봄 디자인 시스템 — Apple 스타일 토큰 (2026 리디자인)
+   =================================================================== */
+:root{
+  /* 타이포 : Pretendard → SF Pro → 시스템 폰트 */
+  --font-sans:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Segoe UI","Malgun Gothic","맑은 고딕",system-ui,sans-serif;
+
+  /* 표면 : 애플 특유의 맑은 뉴트럴 캔버스 */
+  --color-background-primary:#ffffff;      /* 카드/패널 */
+  --color-background-secondary:#f5f5f7;    /* 은은한 회색 (애플 시그니처) */
+  --color-background-tertiary:#f9f9fb;     /* 페이지 배경 */
+
+  /* 텍스트 : 4단계 위계 */
+  --color-text-primary:#1d1d1f;
+  --color-text-secondary:#6e6e73;
+  --color-text-tertiary:#a1a1a6;
+
+  /* 보더 : 헤어라인 */
+  --color-border-primary:#d2d2d7;
+  --color-border-secondary:#e3e3e8;
+  --color-border-tertiary:#eeeef1;
+
+  /* 라운딩 스케일 */
+  --border-radius-sm:8px;
+  --border-radius-md:11px;
+  --border-radius-lg:18px;
+  --border-radius-xl:24px;
+
+  /* 새봄 골드 브랜드 팔레트 */
+  --sb-gold:#C8900A;
+  --sb-gold-light:#EFC24B;
+  --sb-gold-dark:#9A6D06;
+  --sb-yellow:#FFDA47;
+
+  /* 그림자 : 여러 겹의 부드러운 레이어 */
+  --shadow-xs:0 1px 2px rgba(30,25,10,.05);
+  --shadow-sm:0 1px 2px rgba(30,25,10,.05),0 2px 6px rgba(30,25,10,.05);
+  --shadow-md:0 2px 6px rgba(30,25,10,.05),0 8px 20px rgba(30,25,10,.07);
+  --shadow-lg:0 12px 34px rgba(30,25,10,.12),0 4px 10px rgba(30,25,10,.06);
+  --shadow-gold:0 6px 18px rgba(200,144,10,.28);
+
+  /* 이징 : 스프링 & 부드러운 감속 */
+  --ease-spring:cubic-bezier(.34,1.56,.64,1);
+  --ease-out:cubic-bezier(.16,1,.3,1);
+}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
 .topbar{background:#F0D020;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:48px}
@@ -407,6 +452,110 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
 .pbfly.perched .hr{animation:bflyPerchR 3.2s ease-in-out infinite}
 @keyframes bflyPerchL{0%,48%{transform:rotateY(73deg)}60%{transform:rotateY(24deg)}72%,80%{transform:rotateY(70deg)}90%{transform:rotateY(44deg)}100%{transform:rotateY(73deg)}}
 @keyframes bflyPerchR{0%,48%{transform:rotateY(-73deg)}60%{transform:rotateY(-24deg)}72%,80%{transform:rotateY(-70deg)}90%{transform:rotateY(-44deg)}100%{transform:rotateY(-73deg)}}
+
+/* ===================================================================
+   ✦ 새봄 Apple 스타일 폴리시 레이어 (2026)
+   기존 규칙 뒤에 얹어 톤·모션·질감만 고급화 — 기능/구조는 그대로
+   =================================================================== */
+html{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+body{background:var(--color-background-tertiary);letter-spacing:-0.012em}
+
+/* ── 진입 모션 : 섹션이 활성화될 때 부드럽게 페이드-업 ── */
+@keyframes sbSectionIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.section.active{animation:sbSectionIn .5s var(--ease-out) both}
+@keyframes sbPopIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+
+/* ── 상단바 : 프로스티드 글래스 + 세련된 골드 그라데이션 ── */
+.topbar{
+  background:linear-gradient(115deg,#FFE476 0%,#FFD23E 55%,#F5C518 100%);
+  backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);
+  position:sticky;top:0;z-index:200;height:52px;
+  box-shadow:0 1px 0 rgba(0,0,0,.04),0 6px 20px rgba(200,144,10,.14);
+  border-bottom:.5px solid rgba(120,80,0,.10);
+}
+.topbar-title{font-size:15.5px;font-weight:700;letter-spacing:-0.02em;color:#5C3D08;text-shadow:0 1px 0 rgba(255,255,255,.35)}
+.tab-btn{background:rgba(255,255,255,.32);color:#6B4A0A;border-radius:9px;padding:6px 15px;font-weight:600;
+  transition:background .25s var(--ease-out),color .25s var(--ease-out),transform .2s var(--ease-spring),box-shadow .25s}
+.tab-btn:hover{background:rgba(255,255,255,.55)}
+.tab-btn:active{transform:scale(.95)}
+.tab-btn.active{background:#fff;color:var(--sb-gold-dark);box-shadow:0 3px 10px rgba(120,80,0,.22);transform:translateY(-.5px)}
+
+/* ── 카드/패널 공통 : 헤어라인 + 부드러운 그림자 + 부드러운 라운딩 ── */
+.card,.chart-area,.range-bar,.checkin-wrap,.checkin-today-wrap,.fp-area,.hours-table,.schedule-table{
+  border-color:var(--color-border-tertiary)!important;box-shadow:var(--shadow-sm);
+}
+.card,.chart-area,.range-bar,.checkin-wrap,.checkin-today-wrap{transition:box-shadow .3s var(--ease-out),transform .3s var(--ease-out)}
+
+/* ── 통계 카드 : 화사한 크림 → 정갈한 화이트 + 골드 포인트 ── */
+.stat-card{
+  background:linear-gradient(160deg,#FFFDF5 0%,#FFF8E4 100%);
+  border:.5px solid rgba(224,176,32,.35);border-radius:var(--border-radius-lg);
+  box-shadow:var(--shadow-sm);padding:16px 16px;position:relative;overflow:hidden;
+  transition:transform .35s var(--ease-spring),box-shadow .35s var(--ease-out)}
+.stat-card::before{content:"";position:absolute;top:0;left:0;right:0;height:3px;
+  background:linear-gradient(90deg,var(--sb-gold-light),var(--sb-gold))}
+.stat-card:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
+.stat-val{font-size:26px;font-weight:800;letter-spacing:-0.03em}
+.stat-label{color:#96701A;letter-spacing:.2px}
+
+/* ── 학생 카드 : 스프링 호버 리프트 ── */
+.student-card{border-radius:var(--border-radius-lg);box-shadow:var(--shadow-sm);
+  transition:transform .35s var(--ease-spring),box-shadow .35s var(--ease-out),border-color .3s}
+.student-card:hover{transform:translateY(-3px) scale(1.012);box-shadow:var(--shadow-md)}
+.student-avatar{border-radius:13px;box-shadow:var(--shadow-gold)}
+.student-name{font-weight:600;letter-spacing:-0.01em}
+
+/* ── 요일/월 탭 : 골드 그라데이션 필 ── */
+.day-tab,.month-tab,.range-preset{transition:all .25s var(--ease-out)}
+.day-tab:hover,.month-tab:hover{border-color:var(--sb-gold-light);color:var(--sb-gold-dark)}
+.day-tab.active{background:linear-gradient(135deg,var(--sb-gold-light),var(--sb-gold));border-color:transparent;color:#fff;box-shadow:0 3px 10px rgba(200,144,10,.30)}
+.month-tab.active{background:linear-gradient(135deg,#C89A28,#A87008);border-color:transparent;box-shadow:0 3px 10px rgba(168,112,8,.28)}
+
+/* ── 버튼 : 그라데이션 + 그림자 + 눌림 피드백 ── */
+.add-btn,.sched-save-btn,.range-btn-primary,.cbtn-ok,.confirm-ok,.sc-apply-btn,.class-pop-foot .cbtn-ok{
+  background:linear-gradient(135deg,var(--sb-gold-light) 0%,var(--sb-gold) 100%)!important;
+  border:none!important;box-shadow:0 3px 10px rgba(200,144,10,.26);letter-spacing:-0.01em;
+  transition:transform .2s var(--ease-spring),box-shadow .25s var(--ease-out),filter .2s}
+.add-btn:hover,.sched-save-btn:hover,.range-btn-primary:hover,.cbtn-ok:hover,.confirm-ok:hover,.sc-apply-btn:hover{
+  filter:brightness(1.05);box-shadow:var(--shadow-gold);transform:translateY(-1px)}
+.add-btn:active,.sched-save-btn:active,.range-btn-primary:active,.cbtn-ok:active,.confirm-ok:active,.sc-apply-btn:active{transform:scale(.96)}
+.send-btn{background:linear-gradient(135deg,#F0575C,#D93B41)!important;box-shadow:0 3px 10px rgba(217,59,65,.28)!important;transition:transform .2s var(--ease-spring),filter .2s}
+.send-btn:hover{filter:brightness(1.05);transform:translateY(-1px)}
+.send-btn:active{transform:scale(.96)}
+
+/* ── 검색창 : 부드러운 포커스 링 ── */
+.student-search-box{border-radius:14px;transition:border-color .25s,box-shadow .25s var(--ease-out)}
+
+/* ── 테이블 : 헤더 그라데이션 + 라운딩 + 행 호버 ── */
+.schedule-table th{background:linear-gradient(135deg,#D19E1C,#C8900A);font-weight:600;letter-spacing:.2px}
+.hours-table th{background:linear-gradient(135deg,#B27C10,#A87008);font-weight:600;letter-spacing:.2px}
+.schedule-table tr td,.hours-table tr td{transition:background .18s ease}
+.hours-table tr:hover td,.schedule-table tr:hover td{background:#FFFBEE}
+
+/* ── 좌석 배치도 : 부드러운 상호작용 ── */
+.fp-seat{border-radius:10px;transition:transform .22s var(--ease-spring),box-shadow .25s var(--ease-out)}
+.fp-seat.fp-in{background:linear-gradient(160deg,#FFFCEC,#FFF3C4)}
+
+/* ── 모달/팝업 : 강한 블러 배경 + 스케일-인 등장 ── */
+.class-pop-overlay{background:rgba(20,16,6,.42);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+.class-pop,.sched-modal{animation:sbPopIn .32s var(--ease-out) both;box-shadow:var(--shadow-lg)!important}
+.class-pop{border-radius:var(--border-radius-xl)}
+.sched-modal{border-radius:var(--border-radius-xl)}
+.sched-modal-title,.sched-modal-sub{letter-spacing:-0.01em}
+.class-pop-head{background:linear-gradient(135deg,#FFFBEC,#FFF3C4);font-weight:700}
+input:focus,select:focus,textarea:focus{outline:none}
+.sched-absent-input:focus,.range-input:focus{border-color:var(--sb-gold)!important;box-shadow:0 0 0 3px rgba(200,144,10,.14)}
+
+/* ── 토스트 : 다크 글래스 필 ── */
+.admin-toast{background:rgba(28,25,20,.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  border-radius:26px;box-shadow:0 10px 30px rgba(0,0,0,.28);letter-spacing:-0.01em;font-weight:600}
+
+/* ── 커스텀 스크롤바 (웹킷) ── */
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:rgba(120,90,20,.22);border-radius:10px;border:2px solid transparent;background-clip:padding-box}
+*::-webkit-scrollbar-thumb:hover{background:rgba(120,90,20,.38);background-clip:padding-box}
+*::-webkit-scrollbar-track{background:transparent}
 </style>
 
 
@@ -1379,6 +1528,7 @@ function getTodayDayName() {
 }
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
+let studyRoomWaiting  = { 1: [], 2: [], 3: [] };
 
 // ── F5 새로고침 가로채기 ──
 document.addEventListener('keydown', function(e) {
@@ -4172,12 +4322,25 @@ function studio(label) {
   const m = label.match(/(\d+)/);
   const roomNum = m ? parseInt(m[1]) : 0;
   const students = (studyRoomStudents && studyRoomStudents[roomNum]) || [];
+  const waiting  = (typeof studyRoomWaiting !== 'undefined' && studyRoomWaiting[roomNum]) || [];
+
+  // 방 안: 현재 교시 사용자
   const studentHtml = students.length > 0
     ? students.map(n => `<div style="font-size:9px;background:#FFF8DC;color:#7A5008;border-radius:4px;padding:1px 5px;margin-top:2px;font-weight:600">${n}</div>`).join('')
     : `<div style="font-size:9px;color:#ccc;margin-top:2px">비어있음</div>`;
+
+  // 방 밖: 다음 교시 대기자 (문 앞에서 대기하는 느낌 — 점선 테두리)
+  const waitingHtml = waiting.length > 0
+    ? `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:2px;align-items:center">
+        <span style="font-size:8px;font-weight:700;color:#7C3AED">🚶다음교시</span>
+        ${waiting.map(n => `<span style="font-size:9px;background:#F3E8FF;color:#7C3AED;border:1px dashed #C084FC;border-radius:4px;padding:1px 5px">${n}</span>`).join('')}
+      </div>`
+    : '';
+
   return `<div class="fp-studio" style="height:100%;min-height:0;flex-direction:column;align-items:flex-start;padding:6px 8px">
     <div class="fp-studio-label" style="font-size:11px">🚪 ${label}</div>
-    ${studentHtml}
+    <div style="width:100%;border:1px dashed #E4D08A;border-radius:6px;padding:2px 4px;box-sizing:border-box">${studentHtml}</div>
+    ${waitingHtml}
   </div>`;
 }
 
@@ -4343,17 +4506,25 @@ function buildFloorplan() {
           const roomNum = Math.abs(seatNum);
           // 나머지 1칸 studioSpan에 등록 (2행×1열)
           studioSpan[`r${r+1}_c${c}`] = true;
-          const waiting = (studyRoomStudents[roomNum]||[]);
+          const inRoom  = (studyRoomStudents[roomNum]||[]);   // 현재 교시 사용자 (방 안)
+          const waiting = (studyRoomWaiting[roomNum]||[]);     // 다음 교시 대기자 (방 밖)
           const cols = ['#7C3AED','#9F5AE0','#C084FC'];
-          const waitHtml = waiting.length
-            ? waiting.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
-            : `<div style="font-size:10px;color:#C4A4E0;margin-top:4px">비어있음</div>`;
+          const inRoomHtml = inRoom.length
+            ? inRoom.map((n,i)=>`<div style="font-size:10px;color:${cols[i]||'#7C3AED'};font-weight:600;padding:2px 0">${n}</div>`).join('')
+            : `<div style="font-size:10px;color:#C4A4E0;margin-top:2px">비어있음</div>`;
+          const waitingHtml = waiting.length
+            ? `<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:3px;align-items:center">
+                <span style="font-size:9px;font-weight:700;color:#7C3AED">🚶다음교시</span>
+                ${waiting.map(n=>`<span style="font-size:10px;color:#7C3AED;background:#F3E8FF;border:1px dashed #C084FC;border-radius:5px;padding:1px 6px">${n}</span>`).join('')}
+              </div>`
+            : '';
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : '';
           html += `<div class="fp-cell fp-cell-studio${fpEditMode?' fp-cell-edit':''}${selClass}"
             style="grid-row:${r}/span 2;grid-column:${c};flex-direction:column;align-items:flex-start;padding:8px 10px"
             data-slot-key="${key}" ${editAttr}>
             <div style="font-size:11px;font-weight:700;color:#7C3AED;margin-bottom:4px">🚪 스터디룸 ${roomNum}</div>
-            ${waitHtml}
+            <div style="width:100%;border:1px solid #D8B4FE;border-radius:6px;padding:3px 5px;box-sizing:border-box">${inRoomHtml}</div>
+            ${waitingHtml}
           </div>`;
         } else if (seatNum > 0) {
           const student = getFpStudentBySeat(seatNum);
@@ -7218,8 +7389,9 @@ window._syncScheduleClasses = async function(classesArr) {
 })();
 
 function _syncStudyRoomStudents() {
-  // studyRoomStudents 초기화 후 approved 항목으로 재구성
+  // studyRoomStudents(현재 사용자)·studyRoomWaiting(다음 교시 대기자) 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
+  studyRoomWaiting  = { 1: [], 2: [], 3: [] };
   const today = new Date().toISOString().slice(0,10);
   const now = new Date();
   const curMin = now.getHours() * 60 + now.getMinutes();
@@ -7229,6 +7401,10 @@ function _syncStudyRoomStudents() {
   const PERIOD_START = {1:540,2:610,3:680,4:810,5:880,6:950,7:1080,8:1140,9:1230,10:1350,11:1440};
   const PERIOD_END   = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
 
+  // 다음 교시 = 시작시각이 현재 시각 이후인 가장 이른 교시
+  let nextP = null;
+  for (let p = 1; p <= 11; p++) { if (PERIOD_START[p] > adjMin) { nextP = p; break; } }
+
   Object.values(_knownStudyroomReqs).forEach(data => {
     if (data.status !== 'approved') return;
     if (data.date !== today) return;
@@ -7236,23 +7412,32 @@ function _syncStudyRoomStudents() {
     const p = data.period;
     const start = PERIOD_START[p] || 0;
     const end   = PERIOD_END[p]   || 0;
-
-    // 교시 시작 전이거나 종료 후면 표시 안 함
-    if (adjMin < start || adjMin > end) return;
+    const room  = data.room;
 
     // 이미 퇴실한 학생은 제외
     const isCheckedOut = todayRecords.some(r => r.studentName === data.name && r.outTime);
     const isPresent    = todayRecords.some(r => r.studentName === data.name && !r.outTime);
     if (isCheckedOut && !isPresent) return;
 
-    const room = data.room;
-    if (studyRoomStudents[room] && !studyRoomStudents[room].includes(data.name)) {
-      studyRoomStudents[room].push(data.name);
+    // 현재 교시 진행 중 → 방 안(사용자)
+    if (adjMin >= start && adjMin <= end) {
+      if (studyRoomStudents[room] && !studyRoomStudents[room].includes(data.name)) {
+        studyRoomStudents[room].push(data.name);
+      }
+    }
+    // 다음 교시 신청 → 방 밖(대기자)
+    else if (nextP && p === nextP) {
+      if (studyRoomWaiting[room] && !studyRoomWaiting[room].includes(data.name)) {
+        studyRoomWaiting[room].push(data.name);
+      }
     }
   });
   if (document.getElementById('fp-room')) buildFloorplan();
 }
 window._syncStudyRoomStudents = _syncStudyRoomStudents;
+
+// 교시 전환에 맞춰 매분 배치도(현재/대기) 갱신
+setInterval(() => { if (window._syncStudyRoomStudents) window._syncStudyRoomStudents(); }, 60000);
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;
