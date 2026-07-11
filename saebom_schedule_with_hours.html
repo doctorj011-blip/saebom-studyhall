@@ -2114,7 +2114,7 @@ function getTrend(s,m){
 function buildHoursTable(){
   // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
   if (window._hoursRangeMode) return;
-  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
+  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name) && !window.isAdminSeat(s.seat)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   if (!sorted.length) return;
   const vals=sorted.map(s=>_readHour(s.hours,currentMonth));
   const maxH=Math.max(...vals,1);
@@ -2308,10 +2308,11 @@ window.queryHoursRange = async function(){
 function renderHoursRangeTable(result, startISO, endISO, dayCount){
   const { totalMin, daysSet, seatOf } = result;
   // 현재 학생 전원 + 기간 내 기록이 있는 퇴원생을 합쳐 목록 구성
-  const rows = STUDENTS.filter(s => !window.isTestStudent(s.name)).map(s => ({ name: s.name, seat: s.seat, min: totalMin[s.name] || 0, days: daysSet[s.name] ? daysSet[s.name].size : 0 }));
+  const rows = STUDENTS.filter(s => !window.isTestStudent(s.name) && !window.isAdminSeat(s.seat)).map(s => ({ name: s.name, seat: s.seat, min: totalMin[s.name] || 0, days: daysSet[s.name] ? daysSet[s.name].size : 0 }));
   const known = new Set(STUDENTS.map(s => s.name));
   Object.keys(totalMin).forEach(name => {
     if (window.isTestStudent(name)) return; // 테스트 계정 — 기간 집계 제외
+    if (window.isAdminSeat(seatOf[name])) return; // 관리자석(54번~) — 기간 집계 제외
     if (!known.has(name)) rows.push({ name, seat: seatOf[name] || '—', min: totalMin[name], days: daysSet[name] ? daysSet[name].size : 0, former: true });
   });
   rows.sort((a, b) => b.min - a.min);
@@ -2634,7 +2635,7 @@ window.togglePenaltyCancel = async function(docId, pn) {
 };
 
 function buildHoursChart(){
-  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
+  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name) && !window.isAdminSeat(s.seat)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
   const maxH=Math.max(...sorted.map(s=>_readHour(s.hours,currentMonth)), 1);
   const chartH=120;
   document.getElementById('chart-month-label').textContent=`— ${_ymLabel(currentMonth)}`;
@@ -6080,6 +6081,7 @@ window.showEventAchievers = async function(i){
 
     const seatFor = name => (STUDENTS.find(s => s.name === name) || {}).seat || seatOf[name] || '—';
     const rows = Object.keys(totalMin)
+      .filter(name => !window.isAdminSeat(seatFor(name))) // 관리자석(54번~) 제외
       .map(name => ({ name, seat: seatFor(name), min: totalMin[name] }))
       .sort((a, b) => b.min - a.min);
     const achievers = rows.filter(r => r.min >= goalMin);
