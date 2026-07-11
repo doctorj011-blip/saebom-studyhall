@@ -568,6 +568,13 @@ input:focus,select:focus,textarea:focus{outline:none}
 *::-webkit-scrollbar-thumb:hover{background:rgba(108,93,211,.45);background-clip:padding-box}
 *::-webkit-scrollbar-track{background:transparent}
 
+/* ── 키패드 입력 → 날씨 컨셉 이모지 슬롯 ── */
+#checkin-display{letter-spacing:0;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;min-height:52px}
+.ci-slot{display:inline-flex;align-items:center;justify-content:center;width:46px;font-size:30px;line-height:1}
+.ci-slot:not(.filled){color:#B9C0E8;font-size:22px;font-weight:700}
+@keyframes ciPop{0%{transform:scale(.25) rotate(-12deg);opacity:0}60%{transform:scale(1.18) rotate(4deg);opacity:1}100%{transform:scale(1) rotate(0)}}
+.ci-slot.pop{animation:ciPop .36s var(--ease-spring) both}
+
 /* ===================================================================
    ☀️ 날씨 연동 키오스크 배경 — Apple 날씨앱 감성 (2026)
    =================================================================== */
@@ -2289,9 +2296,14 @@ document.addEventListener('visibilitychange', () => {
     return d ? ['sky-clear-day','☀️','맑음','clear-day'] : ['sky-clear-night','🌙','맑음','clear-night'];
   }
 
+  // 날씨별 '번호 입력' 컨셉 이모지 (학생이 키패드를 누를 때 채워짐)
+  const CONCEPT = { 'clear-day':'☀️','clear-night':'🌙','partly-day':'⛅','partly-night':'☁️',
+    'clouds':'☁️','clouds-night':'☁️','fog':'🌫️','drizzle':'☔','rain':'☔','snow':'⛄','storm':'🔨' };
+
   let curKind = '';
   function render(kind){
     curKind = kind;
+    window._wxConcept = CONCEPT[kind] || '☀️';   // 키패드 표시용 전역
     const W = window.innerWidth || 1280;
     sky.innerHTML = '';
     const night = kind.indexOf('night')>=0;
@@ -3857,8 +3869,14 @@ window.numpadClear = function() {
 
 function updateCheckinDisplay() {
   const disp = document.getElementById('checkin-display');
-  let s = numpadBuffer.padEnd(4, '_');
-  disp.textContent = s.split('').join(' ');
+  const icon = window._wxConcept || '☀️';
+  const n = numpadBuffer.length;
+  let html = '';
+  for (let i = 0; i < 4; i++) {
+    if (i < n) html += '<span class="ci-slot filled' + (i === n - 1 ? ' pop' : '') + '">' + icon + '</span>';
+    else html += '<span class="ci-slot">·</span>';
+  }
+  disp.innerHTML = html;
 }
 
 function hideCheckinError() {
