@@ -593,12 +593,12 @@ input:focus,select:focus,textarea:focus{outline:none}
   background:radial-gradient(120% 80% at 72% -10%,rgba(255,255,255,.22),transparent 60%)}
 
 /* ── 태양 (사진 같은 흰빛 블룸 + 아나모픽 글레어) ── */
-.wx-sun{position:absolute;top:12%;left:24%;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;
-  background:radial-gradient(circle,#ffffff 0%,#FFFCEA 13%,#FFF0A8 28%,rgba(255,214,110,.55) 46%,rgba(255,196,80,.18) 62%,rgba(255,190,80,0) 74%);
-  box-shadow:0 0 120px 60px rgba(255,236,160,.62),0 0 280px 150px rgba(255,206,96,.40);
-  mix-blend-mode:screen;animation:wxSunPulse 7s ease-in-out infinite;will-change:transform,opacity}
-.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:480px;height:7px;transform:translate(-50%,-50%);
-  background:linear-gradient(90deg,transparent,rgba(255,240,180,.7) 44%,rgba(255,250,220,.85) 50%,rgba(255,240,180,.7) 56%,transparent);
+.wx-sun{position:absolute;top:12%;left:24%;width:128px;height:128px;margin:-64px 0 0 -64px;border-radius:50%;
+  background:radial-gradient(circle,#FFFEF6 0%,#FFF6BE 20%,#FFE372 40%,#FFCE45 57%,rgba(255,197,60,.42) 70%,rgba(255,188,60,0) 80%);
+  box-shadow:0 0 90px 30px rgba(255,222,110,.70),0 0 200px 90px rgba(255,201,80,.46),0 0 350px 160px rgba(255,190,70,.24);
+  animation:wxSunPulse 7s ease-in-out infinite;will-change:transform,opacity}
+.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:520px;height:8px;transform:translate(-50%,-50%);
+  background:linear-gradient(90deg,transparent,rgba(255,226,130,.75) 43%,rgba(255,248,205,.9) 50%,rgba(255,226,130,.75) 57%,transparent);
   filter:blur(2px);border-radius:50%;mix-blend-mode:screen}
 @keyframes wxSunPulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.05);opacity:1}}
 
