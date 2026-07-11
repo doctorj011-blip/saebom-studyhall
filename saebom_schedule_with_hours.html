@@ -468,6 +468,10 @@ body{letter-spacing:-0.012em;
 /* ── 진입 모션 : 섹션이 활성화될 때 부드럽게 페이드-업 ── */
 @keyframes sbSectionIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
 .section.active{animation:sbSectionIn .5s var(--ease-out) both}
+/* 입실·퇴실 화면은 transform 진입을 쓰지 않음 — 그래야 #weather-sky(position:fixed)가
+   섹션이 아닌 '뷰포트' 전체(시계 뒤까지)를 덮는다. transform이 남으면 fixed의 기준이 섹션으로 갇힘. */
+@keyframes sbFadeIn{from{opacity:0}to{opacity:1}}
+#sec-checkin.section.active{animation:sbFadeIn .6s var(--ease-out) both}
 @keyframes sbPopIn{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:scale(1) translateY(0)}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
@@ -570,8 +574,9 @@ input:focus,select:focus,textarea:focus{outline:none}
 #weather-sky{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;
   transition:background 1.4s ease;background:linear-gradient(180deg,#2E6FD6 0%,#5B9BE8 42%,#A9D3F5 80%,#DCEEFF 100%)}
 /* 콘텐츠는 하늘 위로 */
-#sec-checkin .checkin-wrap,#sec-checkin .checkin-today-wrap,#sec-checkin #kiosk-clock,
-#sec-checkin #kiosk-enter-btn,#sec-checkin #checkin-door-controls,#kiosk-weather{position:relative;z-index:2}
+#sec-checkin .checkin-wrap,#sec-checkin .checkin-today-wrap,#sec-checkin #checkin-door-controls,#kiosk-weather{position:relative;z-index:2}
+/* 시계·전체화면 버튼은 position:fixed 유지(자체 z-index로 하늘 위) */
+#sec-checkin #kiosk-clock{z-index:6}
 
 /* ── 씬별 하늘 그라데이션 ── */
 .sky-clear-day{background:linear-gradient(180deg,#2E6FD6 0%,#5B9BE8 42%,#A9D3F5 80%,#DCEEFF 100%)!important}
