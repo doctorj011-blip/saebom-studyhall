@@ -579,9 +579,9 @@ input:focus,select:focus,textarea:focus{outline:none}
 #sec-checkin #kiosk-clock{z-index:6}
 
 /* ── 씬별 하늘 그라데이션 ── */
-.sky-clear-day{background:linear-gradient(180deg,#2E6FD6 0%,#5B9BE8 42%,#A9D3F5 80%,#DCEEFF 100%)!important}
-.sky-clear-night{background:linear-gradient(180deg,#070B1E 0%,#141B3C 46%,#252B5E 80%,#3A3F7A 100%)!important}
-.sky-clouds{background:linear-gradient(180deg,#5E7CA4 0%,#93AAC6 55%,#C4D2E2 100%)!important}
+.sky-clear-day{background:radial-gradient(135% 100% at 26% 4%,#F2FAFF 0%,#DCF1FF 14%,#B4DEFB 34%,#83C0F2 60%,#4E98DF 84%,#397FD0 100%)!important}
+.sky-clear-night{background:radial-gradient(130% 105% at 78% 0%,#2B3672 0%,#1A2350 26%,#0E1436 56%,#060A20 100%)!important}
+.sky-clouds{background:radial-gradient(120% 92% at 30% 6%,#CBD9EB 0%,#AAC0D7 34%,#8AA6C4 62%,#6C8AAC 100%)!important}
 .sky-clouds-night{background:linear-gradient(180deg,#0C1230 0%,#222A50 55%,#3C4472 100%)!important}
 .sky-rain{background:linear-gradient(180deg,#38415A 0%,#556074 55%,#828B9E 100%)!important}
 .sky-snow{background:linear-gradient(180deg,#7E8CA6 0%,#AEB8CC 55%,#DEE4EF 100%)!important}
@@ -592,11 +592,28 @@ input:focus,select:focus,textarea:focus{outline:none}
 #weather-sky::before{content:"";position:absolute;inset:0;
   background:radial-gradient(120% 80% at 72% -10%,rgba(255,255,255,.22),transparent 60%)}
 
-/* ── 태양 ── */
-.wx-sun{position:absolute;top:11%;right:16%;width:120px;height:120px;border-radius:50%;
-  background:radial-gradient(circle at 50% 50%,#FFF7D6 0%,#FFE082 42%,#FFC85C 70%,rgba(255,200,92,0) 72%);
-  box-shadow:0 0 90px 40px rgba(255,214,120,.55);animation:wxSunPulse 6s ease-in-out infinite}
-@keyframes wxSunPulse{0%,100%{transform:scale(1);opacity:.96}50%{transform:scale(1.06);opacity:1}}
+/* ── 태양 (사진 같은 흰빛 블룸 + 아나모픽 글레어) ── */
+.wx-sun{position:absolute;top:12%;left:24%;width:100px;height:100px;margin:-50px 0 0 -50px;border-radius:50%;
+  background:radial-gradient(circle,#ffffff 0%,#ffffff 15%,rgba(255,255,255,.72) 32%,rgba(216,238,255,.30) 52%,rgba(200,230,255,0) 72%);
+  box-shadow:0 0 110px 55px rgba(255,255,255,.55),0 0 260px 130px rgba(190,225,255,.32);
+  mix-blend-mode:screen;animation:wxSunPulse 7s ease-in-out infinite;will-change:transform,opacity}
+.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:440px;height:6px;transform:translate(-50%,-50%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55) 45%,rgba(255,255,255,.55) 55%,transparent);
+  filter:blur(2px);border-radius:50%;mix-blend-mode:screen}
+@keyframes wxSunPulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.05);opacity:1}}
+
+/* ── 대기 블룸(태양 주변 밝은 헤이즈) ── */
+.wx-bloom{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
+  background:radial-gradient(58% 44% at 24% 12%,rgba(255,255,255,.55),rgba(255,255,255,.12) 42%,transparent 66%)}
+/* ── 수평선 헤이즈 ── */
+.wx-haze{position:absolute;left:0;right:0;bottom:0;height:44%;pointer-events:none;
+  background:linear-gradient(180deg,transparent,rgba(233,246,255,.26));filter:blur(2px)}
+/* ── 렌즈 플레어(빛망울) — 태양 반대 대각선으로 일렬 ── */
+.wx-flare{position:absolute;border-radius:50%;pointer-events:none;mix-blend-mode:screen;
+  background:radial-gradient(circle,rgba(var(--ft,255,255,255),calc(var(--fo,.1)*2)),rgba(var(--ft,255,255,255),var(--fo,.1)) 55%,transparent 72%);
+  animation:wxFlareP 8s ease-in-out infinite;will-change:opacity}
+.wx-flare.ring{background:radial-gradient(circle,transparent 50%,rgba(var(--ft,255,255,255),calc(var(--fo,.1)*1.7)) 62%,transparent 73%)}
+@keyframes wxFlareP{0%,100%{opacity:.7}50%{opacity:1}}
 
 /* ── 달 ── */
 .wx-moon{position:absolute;top:12%;right:17%;width:96px;height:96px;border-radius:50%;
@@ -685,7 +702,7 @@ body.kiosk-mode #kiosk-clock .kc-ampm{color:rgba(255,255,255,.92);text-shadow:0 
 body.kiosk-mode #kiosk-clock .kc-time{color:#fff;text-shadow:0 4px 30px rgba(10,15,40,.45)}
 body.kiosk-mode #kiosk-clock .kc-sec{color:rgba(255,255,255,.7)}
 body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:22px}
-@media (prefers-reduced-motion:reduce){.wx-sun,.wx-star,.wx-cloud,.wx-rain-drop,.wx-snow-flake,.wx-fog,.wx-drop,.wx-run,.sky-storm::after{animation:none!important}}
+@media (prefers-reduced-motion:reduce){.wx-sun,.wx-flare,.wx-star,.wx-cloud,.wx-rain-drop,.wx-snow-flake,.wx-fog,.wx-drop,.wx-run,.sky-storm::after{animation:none!important}}
 </style>
 
 
@@ -2226,8 +2243,9 @@ document.addEventListener('visibilitychange', () => {
   // WMO 코드 → 씬/이모지/설명
   function scene(code, isDay){
     const d = isDay!==0;
-    if (code===0 || code===1) return d ? ['sky-clear-day','☀️','맑음','clear-day']  : ['sky-clear-night','🌙','맑음','clear-night'];
-    if (code===2)            return d ? ['sky-clear-day','⛅','구름 조금','partly-day'] : ['sky-clear-night','☁️','구름 조금','partly-night'];
+    if (code===0)            return d ? ['sky-clear-day','☀️','맑음','clear-day']       : ['sky-clear-night','🌙','맑음','clear-night'];
+    if (code===1)            return d ? ['sky-clear-day','🌤️','대체로 맑음','clear-day'] : ['sky-clear-night','🌙','대체로 맑음','clear-night'];
+    if (code===2)            return d ? ['sky-clear-day','⛅','구름 조금','partly-day']  : ['sky-clear-night','☁️','구름 조금','partly-night'];
     if (code===3)            return d ? ['sky-clouds','☁️','흐림','clouds']          : ['sky-clouds-night','☁️','흐림','clouds-night'];
     if (code===45||code===48) return ['sky-fog','🌫️','안개','fog'];
     if (code>=51&&code<=57)   return ['sky-rain','🌦️','이슬비','drizzle'];
@@ -2247,7 +2265,27 @@ document.addEventListener('visibilitychange', () => {
     const starry = night && clear; // 흐림/비/눈 밤엔 달·별 감춤
 
     // 해 / 달
-    if (clear && !night) sky.appendChild(el('wx-sun'));
+    if (clear && !night){
+      sky.appendChild(el('wx-bloom'));
+      sky.appendChild(el('wx-haze'));
+      sky.appendChild(el('wx-sun'));
+      // 렌즈 플레어: 태양(24%,12%)→화면중심 지나 반대편으로 일렬 배치
+      const sx=24, sy=12;
+      const fl=[{t:0.95,s:16,o:.10,r:0,ft:'255,255,255'},
+                {t:1.30,s:34,o:.07,r:1,ft:'190,225,255'},
+                {t:1.62,s:22,o:.11,r:0,ft:'255,242,205'},
+                {t:1.98,s:54,o:.05,r:1,ft:'255,255,255'},
+                {t:2.28,s:14,o:.13,r:0,ft:'200,235,255'},
+                {t:2.72,s:82,o:.045,r:1,ft:'180,215,255'}];
+      fl.forEach(f=>{ const d=el('wx-flare'+(f.r?' ring':''));
+        const x=sx+(50-sx)*f.t, y=sy+(50-sy)*f.t;
+        d.style.left=x+'%'; d.style.top=y+'%';
+        d.style.width=f.s+'px'; d.style.height=f.s+'px';
+        d.style.marginLeft=(-f.s/2)+'px'; d.style.marginTop=(-f.s/2)+'px';
+        d.style.setProperty('--fo',f.o); d.style.setProperty('--ft',f.ft);
+        d.style.animationDelay=(-rnd(0,6)).toFixed(1)+'s';
+        sky.appendChild(d); });
+    }
     if (starry) sky.appendChild(el('wx-moon'));
 
     // 별 (맑은 밤)
