@@ -593,18 +593,18 @@ input:focus,select:focus,textarea:focus{outline:none}
   background:radial-gradient(120% 80% at 72% -10%,rgba(255,255,255,.22),transparent 60%)}
 
 /* ── 태양 (사진 같은 흰빛 블룸 + 아나모픽 글레어) ── */
-.wx-sun{position:absolute;top:12%;left:24%;width:128px;height:128px;margin:-64px 0 0 -64px;border-radius:50%;
-  background:radial-gradient(circle,#FFFEF6 0%,#FFF6BE 20%,#FFE372 40%,#FFCE45 57%,rgba(255,197,60,.42) 70%,rgba(255,188,60,0) 80%);
-  box-shadow:0 0 90px 30px rgba(255,222,110,.70),0 0 200px 90px rgba(255,201,80,.46),0 0 350px 160px rgba(255,190,70,.24);
-  animation:wxSunPulse 7s ease-in-out infinite;will-change:transform,opacity}
-.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:520px;height:8px;transform:translate(-50%,-50%);
-  background:linear-gradient(90deg,transparent,rgba(255,226,130,.75) 43%,rgba(255,248,205,.9) 50%,rgba(255,226,130,.75) 57%,transparent);
+.wx-sun{position:absolute;top:12%;left:24%;width:92px;height:92px;margin:-46px 0 0 -46px;border-radius:50%;
+  background:radial-gradient(circle,#FFFDF2 0%,#FFF4C8 26%,#FFE89C 48%,rgba(255,216,112,.45) 66%,rgba(255,206,92,0) 80%);
+  box-shadow:0 0 54px 12px rgba(255,228,145,.42),0 0 130px 34px rgba(255,208,110,.20);
+  animation:wxSunPulse 8s ease-in-out infinite;will-change:transform,opacity}
+.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:330px;height:5px;transform:translate(-50%,-50%);
+  background:linear-gradient(90deg,transparent,rgba(255,232,150,.5) 44%,rgba(255,248,210,.6) 50%,rgba(255,232,150,.5) 56%,transparent);
   filter:blur(2px);border-radius:50%;mix-blend-mode:screen}
 @keyframes wxSunPulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.05);opacity:1}}
 
 /* ── 대기 블룸(태양 주변 밝은 헤이즈) ── */
 .wx-bloom{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
-  background:radial-gradient(60% 46% at 24% 12%,rgba(255,250,220,.60),rgba(255,236,170,.20) 40%,rgba(255,224,140,.06) 58%,transparent 70%)}
+  background:radial-gradient(52% 40% at 24% 12%,rgba(255,248,214,.38),rgba(255,236,170,.12) 42%,transparent 62%)}
 /* ── 수평선 헤이즈 ── */
 .wx-haze{position:absolute;left:0;right:0;bottom:0;height:44%;pointer-events:none;
   background:linear-gradient(180deg,transparent,rgba(233,246,255,.26));filter:blur(2px)}
