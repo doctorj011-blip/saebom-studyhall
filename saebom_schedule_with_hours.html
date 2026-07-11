@@ -5892,6 +5892,7 @@ async function loadEventsAdmin() {
             <span style="font-size:12px;font-weight:600">${icon} ${ev.name || '이벤트'}</span>
             <div style="font-size:11px;color:#aaa;margin-top:2px;white-space:pre-line">${(ev.desc || '').slice(0, 80)}${(ev.desc || '').length > 80 ? '…' : ''}</div>
             ${goalLine ? `<div style="font-size:11px;color:#8B6010;margin-top:2px">${goalLine}</div>` : ''}
+            ${ev.type === 'studytime' ? `<button onclick="showEventAchievers(${i})" style="margin-top:7px;background:#FFF3D0;color:#8B6010;border:1px solid #E0B020;border-radius:8px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">🏆 달성자 보기</button>` : ''}
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0">
             <button onclick="toggleEventActive(${i})" style="background:${active ? '#EEF7F1' : '#E8F3EC'};color:${active ? '#777' : '#2E9E6B'};border:1px solid ${active ? '#ccc' : '#2E9E6B'};border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">${active ? '비활성화' : '활성화'}</button>
@@ -6017,6 +6018,107 @@ window.deleteEvent = async function(i) {
     showAdminToast('✅ 이벤트가 삭제됐습니다');
     loadEventsAdmin();
   } catch(e) { console.error('이벤트 삭제 실패:', e); }
+};
+
+// ── 이벤트 달성자 보기 (studytime형: 기간 내 공부시간 목표 달성자 판정) ──
+// 기간별 사용시간 조회(queryHoursRange)와 동일한 attendance_sessions 집계를 재사용한다.
+window.showEventAchievers = async function(i){
+  const ev = (window._adminEvents || [])[i];
+  if (!ev || ev.type !== 'studytime') return;
+  const goalMin = (parseInt(ev.goal, 10) || 42) * 60;
+  const startISO = _evDateInp(ev.start, '2026-07-06');
+  const endISO   = _evDateInp(ev.end, '2026-07-19');
+  const rangeLabel = `${startISO.replace(/-/g,'.')} ~ ${endISO.replace(/-/g,'.')}`;
+
+  const old = document.getElementById('achiever-modal-overlay');
+  if (old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'achiever-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(94vw,480px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FFF8DC">
+        <div style="font-size:15px;font-weight:700;color:#5C3D08">🏆 ${ev.name || '이벤트'} 달성자<div style="font-size:12px;font-weight:500;color:#8B6010;margin-top:2px">${rangeLabel} · 목표 ${Math.round(goalMin/60)}시간</div></div>
+        <button onclick="document.getElementById('achiever-modal-overlay').remove()"
+          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer;flex-shrink:0">✕</button>
+      </div>
+      <div id="achiever-modal-body" style="overflow-y:auto;padding:14px 16px">
+        <div style="text-align:center;padding:32px;color:#aaa;font-size:13px">불러오는 중...</div>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  const bodyEl = overlay.querySelector('#achiever-modal-body');
+
+  try {
+    const db = await window.waitDb();
+    const { collection, getDocs, query, where } = window._fs;
+    const isoDates = _rangeDateStringsISO(startISO, endISO);
+    const chunks = [];
+    for (let k = 0; k < isoDates.length; k += 30) chunks.push(isoDates.slice(k, k + 30));
+    const snaps = await Promise.all(chunks.map(c =>
+      getDocs(query(collection(db, 'attendance_sessions'), where('inDate', 'in', c)))
+    ));
+
+    const totalMin = {}, seatOf = {};
+    const nowTs = Date.now();
+    snaps.forEach(snap => snap.forEach(docSnap => {
+      const s = docSnap.data();
+      if (!s.studentName || !s.inDate || typeof s.inTs !== 'number') return;
+      if (window.isTestStudent(s.studentName)) return;
+      if (s.seat) seatOf[s.studentName] = s.seat;
+      let min = 0;
+      if (s.status === 'closed' && typeof s.durationMin === 'number') {
+        min = s.durationMin;
+      } else if (s.status === 'open') {
+        let away = s.awayMs || 0;
+        if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, sessCapTs(s.inTs)) - s.awayStartTs);
+        min = sessDurationMin(s.inTs, nowTs, away);
+      }
+      if (min > 0) totalMin[s.studentName] = (totalMin[s.studentName] || 0) + min;
+    }));
+
+    const seatFor = name => (STUDENTS.find(s => s.name === name) || {}).seat || seatOf[name] || '—';
+    const rows = Object.keys(totalMin)
+      .map(name => ({ name, seat: seatFor(name), min: totalMin[name] }))
+      .sort((a, b) => b.min - a.min);
+    const achievers = rows.filter(r => r.min >= goalMin);
+
+    if (!rows.length) {
+      bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#aaa;font-size:13px">이 기간에 공부 기록이 없습니다</div>`;
+      return;
+    }
+
+    const rowHtml = r => {
+      const done = r.min >= goalMin;
+      const pct = Math.min(100, Math.round(r.min / goalMin * 100));
+      const totalH = Math.round(r.min / 60 * 10) / 10;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:10px;background:${done ? '#F1FAF4' : '#FAFAFA'};border:1px solid ${done ? '#B6E3C6' : '#eee'};margin-bottom:6px">
+        <span style="flex-shrink:0;font-size:13px">${done ? '✅' : '⏳'}</span>
+        <div style="min-width:0;flex:1">
+          <div style="font-size:13px;font-weight:600">${r.name} <span style="font-size:10px;font-weight:500;color:#999">${r.seat}</span></div>
+          <div style="height:5px;background:#eee;border-radius:3px;margin-top:4px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${done ? '#2E9E6B' : '#E0B020'}"></div></div>
+        </div>
+        <div style="flex-shrink:0;text-align:right">
+          <div style="font-size:13px;font-weight:700;color:${done ? '#2E9E6B' : '#8B6010'}">${_fmtRangeMin(r.min)}</div>
+          <div style="font-size:10px;color:#aaa">${totalH}h · ${pct}%</div>
+        </div>
+      </div>`;
+    };
+
+    const notYet = rows.filter(r => r.min < goalMin);
+    bodyEl.innerHTML = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <div class="summary-chip">달성 <span style="color:#2E9E6B">${achievers.length}명</span></div>
+        <div class="summary-chip">참여 <span>${rows.length}명</span></div>
+        <div class="summary-chip">목표 <span>${Math.round(goalMin/60)}시간</span></div>
+      </div>
+      ${achievers.length ? `<div style="font-size:12px;font-weight:700;color:#2E9E6B;margin:4px 0 8px">🎉 달성 (${achievers.length}명)</div>${achievers.map(rowHtml).join('')}` : `<div style="text-align:center;padding:16px;color:#aaa;font-size:12px">아직 목표를 달성한 학생이 없습니다</div>`}
+      ${notYet.length ? `<div style="font-size:12px;font-weight:700;color:#8B6010;margin:14px 0 8px">진행 중 (${notYet.length}명)</div>${notYet.map(rowHtml).join('')}` : ''}`;
+  } catch(e) {
+    console.error('이벤트 달성자 조회 실패:', e);
+    bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${(e && e.message) || e}</div>`;
+  }
 };
 
 // 관리자 토스트 — 유일한 정의 (모듈 블록에서도 전역으로 이 함수를 호출한다)
