@@ -602,6 +602,8 @@ input:focus,select:focus,textarea:focus{outline:none}
   filter:blur(2px);border-radius:50%;mix-blend-mode:screen}
 @keyframes wxSunPulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.05);opacity:1}}
 
+/* 시간대별 이동(동→서)을 부드럽게 */
+.wx-sun,.wx-moon,.wx-flare{transition:top 4s linear,left 4s linear}
 /* ── 대기 블룸(태양 주변 밝은 헤이즈) ── */
 .wx-bloom{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
   background:radial-gradient(52% 40% at 24% 12%,rgba(255,248,214,.38),rgba(255,236,170,.12) 42%,transparent 62%)}
@@ -2237,6 +2239,38 @@ document.addEventListener('visibilitychange', () => {
   let CFG = { lat: 37.2506, lon: 127.0716, label: '수원 영통' };
   try { const s = JSON.parse(localStorage.getItem('saebom_wx')||'null'); if (s && s.lat) CFG = Object.assign(CFG, s); } catch(e){}
 
+  // 일출·일몰(ms). 태양/달이 동→서로 이동하는 데 사용.
+  let SUN = { rise:0, set:0 };
+  // 하루 중 시각 → 하늘 위 좌표. f=0(일출·동쪽) → 1(일몰·서쪽), 정오에 가장 높음.
+  function positionSun(){
+    if (!sky) return;
+    const sun = sky.querySelector('.wx-sun');
+    const moon = sky.querySelector('.wx-moon');
+    if (!sun && !moon) return;
+    const now = Date.now();
+    // 일출/일몰 없으면(오프라인) 06:00~19:00 근사
+    let rise=SUN.rise, set=SUN.set;
+    if (!rise || !set){ const d=new Date(); const r=new Date(d); r.setHours(6,0,0,0); const s=new Date(d); s.setHours(19,0,0,0); rise=r.getTime(); set=s.getTime(); }
+    if (sun){
+      let f=(now-rise)/(set-rise); f=Math.max(0,Math.min(1,f));
+      const x=12+f*76;                          // 동(12%) → 서(88%)
+      const y=8+(1-Math.sin(f*Math.PI))*30;     // 정오 최고(8%), 아침·저녁 낮음(38%)
+      sun.style.left=x+'%'; sun.style.top=y+'%';
+      // 렌즈 플레어를 태양→화면중심 축에 맞춰 이동
+      sky.querySelectorAll('.wx-flare').forEach(fl=>{
+        const t=parseFloat(fl.dataset.t||'1');
+        fl.style.left=(x+(50-x)*t)+'%'; fl.style.top=(y+(50-y)*t)+'%';
+      });
+    }
+    if (moon){
+      // 밤: 일몰 → 다음 일출. 근사(밤 길이 = 24h - 낮 길이).
+      const dayLen=(set-rise); const nightLen=Math.max(6*3600*1000, 24*3600*1000-dayLen);
+      let dt=now-set; if(dt<0) dt+=24*3600*1000;
+      let mf=Math.max(0,Math.min(1, dt/nightLen));
+      moon.style.left=(12+mf*76)+'%'; moon.style.top=(10+(1-Math.sin(mf*Math.PI))*28)+'%';
+    }
+  }
+
   const rnd = (a,b)=>a+Math.random()*(b-a);
   const el = (cls)=>{ const d=document.createElement('div'); d.className=cls; return d; };
 
@@ -2284,6 +2318,7 @@ document.addEventListener('visibilitychange', () => {
         d.style.width=f.s+'px'; d.style.height=f.s+'px';
         d.style.marginLeft=(-f.s/2)+'px'; d.style.marginTop=(-f.s/2)+'px';
         d.style.setProperty('--fo',f.o); d.style.setProperty('--ft',f.ft);
+        d.dataset.t=f.t;
         d.style.animationDelay=(-rnd(0,6)).toFixed(1)+'s';
         sky.appendChild(d); });
     }
@@ -2352,6 +2387,7 @@ document.addEventListener('visibilitychange', () => {
       f.style.animationDelay=(-rnd(0,8)).toFixed(1)+'s';
       f.style.setProperty('--sx',(rnd(-40,40)).toFixed(0)+'px');
       f.style.opacity=rnd(.5,1).toFixed(2); sky.appendChild(f); } }
+    positionSun();
   }
 
   function setChip(emoji, temp, cond, tmax, tmin){
@@ -2374,7 +2410,7 @@ document.addEventListener('visibilitychange', () => {
     try{
       const url='https://api.open-meteo.com/v1/forecast?latitude='+CFG.lat+'&longitude='+CFG.lon
         +'&current=temperature_2m,weather_code,is_day'
-        +'&daily=temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=1';
+        +'&daily=temperature_2m_max,temperature_2m_min,sunrise,sunset&timezone=auto&forecast_days=1';
       const res=await fetch(url,{cache:'no-store'});
       if(!res.ok) throw new Error('http '+res.status);
       const j=await res.json();
@@ -2385,6 +2421,11 @@ document.addEventListener('visibilitychange', () => {
       sky.className = cls;
       const tmax=(dl.temperature_2m_max||[])[0], tmin=(dl.temperature_2m_min||[])[0];
       setChip(emoji, cur.temperature_2m, cond, tmax, tmin);
+      // 일출·일몰 저장 후 태양/달 위치 갱신
+      const rise=(dl.sunrise||[])[0], set=(dl.sunset||[])[0];
+      if(rise) SUN.rise=new Date(rise).getTime();
+      if(set)  SUN.set =new Date(set).getTime();
+      positionSun();
     }catch(e){ console.warn('날씨 로드 실패, 시계 기반 폴백', e); if(!curKind) fallbackByClock(); }
   }
 
@@ -2392,6 +2433,7 @@ document.addEventListener('visibilitychange', () => {
   fallbackByClock();
   load();
   setInterval(load, 15*60*1000);
+  setInterval(positionSun, 60*1000); // 1분마다 태양·달 위치 갱신(동→서)
 
   // 리사이즈 시 파티클 재배치(디바운스)
   let rt; window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(curKind) render(curKind); }, 400); });
