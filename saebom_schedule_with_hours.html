@@ -12,7 +12,8 @@
 body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
 .topbar{background:#F0D020;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:48px}
 .topbar-title{color:#5C3D08;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
-.topbar-tabs{display:flex;gap:2px}
+.topbar-tabs{display:none;gap:2px}
+body.admin-device .topbar-tabs{display:flex}
 .tab-btn{padding:6px 14px;border:none;background:rgba(255,255,255,0.35);color:#5C3D08;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s}
 .tab-btn.active{background:#fff;color:#C8900A;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
 .content{padding:16px}
@@ -958,18 +959,26 @@ body.kiosk-mode #kiosk-clock{display:flex;position:fixed;left:0;right:0;top:var(
       </div>
     </div>
 
-    <!-- 관리자 PIN -->
+    <!-- 관리자 로그인 · 기기 등록 -->
     <div class="card">
       <div class="card-title" style="margin-bottom:4px">
-        <i class="ti ti-lock" style="font-size:15px;color:#C8900A"></i> 관리자 PIN
+        <i class="ti ti-lock" style="font-size:15px;color:#C8900A"></i> 관리자 로그인 · 기기
       </div>
-      <div style="font-size:12px;color:#8B6010;margin-bottom:12px">
-        입실·퇴실 화면을 제외한 모든 관리 화면(대시보드·배치도·스케줄·학생관리 등) 진입 시 필요한 PIN입니다. 한 번 입력하면 5분간 유지됩니다. 기본값은 <b>0000</b>이니 반드시 변경해주세요.
+      <div style="font-size:12px;color:#8B6010;margin-bottom:12px;line-height:1.6">
+        관리 화면은 <b>등록된 기기</b>에서만 열립니다. 학생이 주소를 알아 접속해도 등록 안 된 기기에선 입·퇴실 화면만 보입니다.<br>
+        새 기기 등록: 관리자 본인 기기에서 <b>주소 뒤에 <code>?admin</code></b>을 붙여 접속 → 마스터 비밀번호 입력.<br>
+        ⚠️ 마스터 비밀번호는 <b>키오스크·학생 앞에서 절대 입력하지 마세요.</b> 비밀번호를 바꾸면 다른 기기는 모두 자동 로그아웃됩니다.
       </div>
-      <button onclick="openPinModal('set')"
-        style="padding:10px 24px;background:#C8900A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(200,144,10,0.3)">
-        PIN 변경
-      </button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button onclick="openAdminLogin('change')"
+          style="padding:10px 20px;background:#C8900A;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(200,144,10,0.3)">
+          마스터 비밀번호 변경
+        </button>
+        <button onclick="adminLogoutDevice()"
+          style="padding:10px 20px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+          이 기기 등록 해제(로그아웃)
+        </button>
+      </div>
     </div>
 
     <!-- Firebase -->
@@ -1399,135 +1408,182 @@ window.addEventListener('load', function() {
   } catch(e) {}
 });
 
-// ── 관리자설정 PIN 잠금 (기본 PIN: 0000 — 설정 탭에서 변경) ──
-const PIN_UNLOCK_MS = 5 * 60 * 1000; // 해제 후 재입력 없이 유지되는 시간
-let _pinUnlockedAt = 0;
-let _pinFailCount = 0;
-let _pinLockUntil = 0;
+// ══════════════════════════════════════════════════════════════════════
+// 관리자 기기 등록제 (device trust) — 관리 화면은 '등록된 기기'에서만 열림.
+// 학생이 URL을 알아내 자기 폰으로 접속해도, 등록 안 된 기기에선 입·퇴실 화면만 보인다.
+// 마스터 비밀번호는 Firestore(settings/admin_auth)에 salt+PBKDF2 해시로 저장.
+// 기기 등록 성공 시 localStorage에 토큰(=해시)을 저장 → 이후 그 기기는 관리 가능.
+// 비밀번호를 바꾸면 다른 기기의 토큰은 자동 무효화(다음 로드 시 로그아웃).
+// 마스터 비밀번호는 '관리자 본인 기기'에서만 입력한다(키오스크·학생 앞 입력 금지).
+// ══════════════════════════════════════════════════════════════════════
+const ADMIN_TOKEN_KEY = 'saebom_admin_token';
+function isAdminDevice() { return !!localStorage.getItem(ADMIN_TOKEN_KEY); }
+function _setAdminDevice(token) { localStorage.setItem(ADMIN_TOKEN_KEY, token); _applyAdminDeviceUI(); }
+function _clearAdminDevice() { localStorage.removeItem(ADMIN_TOKEN_KEY); _applyAdminDeviceUI(); }
+window.isAdminDevice = isAdminDevice;
 
-function getSettingsPin() {
-  return localStorage.getItem('saebom_settings_pin') || '0000';
+function _randSalt() {
+  const a = new Uint8Array(16); crypto.getRandomValues(a);
+  return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
 }
-function isSettingsUnlocked() {
-  return Date.now() - _pinUnlockedAt < PIN_UNLOCK_MS;
+// PBKDF2(SHA-256, 150k) — 저장된 해시가 읽혀도 오프라인 무차별 대입을 어렵게 한다.
+async function _hashPw(salt, pw) {
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 150000, hash: 'SHA-256' }, key, 256);
+  return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('');
+}
+// 반환: 객체(설정됨) | null(서버에 미설정) | undefined(읽기 실패=판정 보류)
+async function _loadAdminAuth() {
+  const db = await window.waitDb();
+  if (!db) return undefined;
+  try {
+    const { doc, getDoc } = window._fs;
+    const snap = await getDoc(doc(db, 'settings', 'admin_auth'));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { console.warn('[관리자인증] 읽기 실패:', e); return undefined; }
+}
+async function _saveAdminAuth(salt, hash) {
+  const db = await window.waitDb();
+  if (!db) throw new Error('db-not-ready');
+  const { doc, setDoc, serverTimestamp } = window._fs;
+  await setDoc(doc(db, 'settings', 'admin_auth'), { salt, hash, updatedAt: serverTimestamp() });
 }
 
-// mode: 'unlock'(잠금 해제) | 'set'(새 PIN 등록 — 2회 입력 확인)
-window.openPinModal = function(mode, onSuccess) {
-  const old = document.getElementById('pin-modal');
-  if (old) old.remove();
+// 등록 여부에 따라 관리 탭 노출/입퇴실 고정
+function _applyAdminDeviceUI() {
+  const isAdmin = isAdminDevice();
+  document.body.classList.toggle('admin-device', isAdmin);
+  if (!isAdmin) {
+    const cur = document.querySelector('.section.active');
+    if (!cur || cur.id !== 'sec-checkin') {
+      const b = document.querySelector('.checkin-shortcut-btn');
+      if (b) window.showSection('checkin', b);
+    }
+  }
+}
+// 로드 시 토큰 검증: 서버 해시와 다르거나(비번 변경) 서버에 비번이 없으면 로그아웃
+async function _validateAdminToken() {
+  if (!isAdminDevice()) return;
+  const auth = await _loadAdminAuth();
+  if (auth === undefined) return;                 // 읽기 실패 → 유지(가용성 우선)
+  if (auth === null) { _clearAdminDevice(); return; }
+  if (localStorage.getItem(ADMIN_TOKEN_KEY) !== auth.hash) _clearAdminDevice();
+}
+window.adminLogoutDevice = function () {
+  if (!confirm('이 기기를 관리자 등록에서 해제할까요?\n다시 관리하려면 마스터 비밀번호로 재로그인해야 합니다.')) return;
+  _clearAdminDevice();
+  try { location.replace(location.pathname); } catch (e) { location.reload(); }
+};
 
-  const isSet = mode === 'set';
-  let entered = '';
-  let firstPin = null;
-
+function _buildAdminOverlay(mode) {
+  const old = document.getElementById('admin-login-modal'); if (old) old.remove();
+  const titles = { setup: '🔒 관리자 비밀번호 설정', login: '🔒 관리자 로그인', change: '🔒 비밀번호 변경' };
+  const subs = { setup: '관리 화면을 열 마스터 비밀번호를 만드세요', login: '관리자 본인만 입력하세요', change: '현재 비밀번호 확인 후 변경합니다' };
+  const fs = 'width:100%;padding:11px 12px;border:1.5px solid #E0B020;border-radius:10px;font-size:15px;box-sizing:border-box;margin-bottom:10px;background:#fff';
+  let inner = '';
+  if (mode === 'change') inner += `<input id="al-cur" type="password" autocomplete="off" placeholder="현재 비밀번호" style="${fs}">`;
+  inner += `<input id="al-pw" type="password" autocomplete="off" placeholder="${mode === 'login' ? '비밀번호' : '새 비밀번호(6자 이상)'}" style="${fs}">`;
+  if (mode !== 'login') inner += `<input id="al-pw2" type="password" autocomplete="off" placeholder="비밀번호 확인" style="${fs}">`;
   const overlay = document.createElement('div');
-  overlay.id = 'pin-modal';
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center';
+  overlay.id = 'admin-login-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
   overlay.innerHTML = `
-    <style>@keyframes pinshake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}</style>
-    <div id="pin-box" style="background:#fff;border-radius:20px;padding:26px 30px;width:280px;box-shadow:0 10px 40px rgba(0,0,0,0.25);text-align:center">
-      <div style="font-size:15px;font-weight:700;color:#5C3D08;margin-bottom:4px">🔒 관리자 PIN</div>
-      <div id="pin-msg" style="font-size:12px;color:#8B6010;margin-bottom:14px;min-height:16px">${isSet ? '새 PIN 4자리를 입력하세요' : 'PIN 4자리를 입력하세요'}</div>
-      <div id="pin-dots" style="display:flex;justify-content:center;gap:12px;margin-bottom:18px">
-        ${[0,1,2,3].map(()=>'<span class="pin-dot" style="width:14px;height:14px;border-radius:50%;background:#F0E0A0;display:inline-block;transition:background 0.1s"></span>').join('')}
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
-        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button data-pin="${n}" style="padding:13px 0;border:none;border-radius:12px;background:#FFF8DC;color:#5C3D08;font-size:18px;font-weight:700;cursor:pointer">${n}</button>`).join('')}
-        <button data-pin="del" style="padding:13px 0;border:none;border-radius:12px;background:#F5F5F5;color:#888;font-size:16px;cursor:pointer">←</button>
-        <button data-pin="0" style="padding:13px 0;border:none;border-radius:12px;background:#FFF8DC;color:#5C3D08;font-size:18px;font-weight:700;cursor:pointer">0</button>
-        <button data-pin="cancel" style="padding:13px 0;border:none;border-radius:12px;background:#F5F5F5;color:#888;font-size:13px;cursor:pointer">취소</button>
+    <style>@keyframes alshake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}</style>
+    <div id="al-box" style="background:#fff;border-radius:20px;padding:26px 26px;width:300px;max-width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3)">
+      <div style="font-size:16px;font-weight:700;color:#5C3D08;margin-bottom:6px;text-align:center">${titles[mode]}</div>
+      <div id="al-msg" style="font-size:12px;color:#8B6010;margin-bottom:14px;min-height:16px;text-align:center">${subs[mode]}</div>
+      ${inner}
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button id="al-cancel" style="flex:1;padding:11px 0;border:none;border-radius:10px;background:#F5F5F5;color:#888;font-size:14px;cursor:pointer">취소</button>
+        <button id="al-ok" style="flex:2;padding:11px 0;border:none;border-radius:10px;background:#C8900A;color:#fff;font-size:14px;font-weight:700;cursor:pointer">확인</button>
       </div>
     </div>`;
   document.body.appendChild(overlay);
+  return overlay;
+}
 
-  const msgEl = overlay.querySelector('#pin-msg');
-  const boxEl = overlay.querySelector('#pin-box');
-  const dots = overlay.querySelectorAll('.pin-dot');
+// mode: 'login' | 'setup' | 'change'  (서버에 비번이 없으면 무조건 setup)
+window.openAdminLogin = async function (mode) {
+  if (window._kioskAuto || /[?#&]kiosk/.test(location.search + location.hash)) {
+    alert('키오스크 기기에서는 관리자 로그인을 할 수 없습니다.\n관리자 본인 기기에서 접속하세요.');
+    return;
+  }
+  let auth = await _loadAdminAuth();
+  if (auth === undefined) { alert('네트워크 연결을 확인하세요.\n관리자 인증 정보를 불러오지 못했습니다.'); return; }
+  if (auth === null) mode = 'setup';
+  else if (!mode || mode === 'login') mode = 'login';
 
-  function close() {
-    document.removeEventListener('keydown', onKey);
-    overlay.remove();
+  const overlay = _buildAdminOverlay(mode);
+  const msgEl = overlay.querySelector('#al-msg');
+  const boxEl = overlay.querySelector('#al-box');
+  const pw = overlay.querySelector('#al-pw');
+  const pw2 = overlay.querySelector('#al-pw2');
+  const cur = overlay.querySelector('#al-cur');
+  const okBtn = overlay.querySelector('#al-ok');
+  setTimeout(() => (cur || pw).focus(), 50);
+
+  function shake(m) {
+    msgEl.textContent = m; msgEl.style.color = '#C62828';
+    boxEl.style.animation = 'none'; void boxEl.offsetWidth; boxEl.style.animation = 'alshake 0.35s';
   }
-  function updateDots() {
-    dots.forEach((d, i) => { d.style.background = i < entered.length ? '#C8900A' : '#F0E0A0'; });
-  }
-  function shake(msg) {
-    msgEl.textContent = msg;
-    msgEl.style.color = '#C62828';
-    boxEl.style.animation = 'none';
-    void boxEl.offsetWidth; // 애니메이션 재시작
-    boxEl.style.animation = 'pinshake 0.35s';
-    entered = '';
-    updateDots();
-  }
-  function evaluate() {
-    if (isSet) {
-      if (firstPin === null) {
-        firstPin = entered;
-        entered = '';
-        updateDots();
-        msgEl.textContent = '확인을 위해 한 번 더 입력하세요';
-        msgEl.style.color = '#8B6010';
-      } else if (entered === firstPin) {
-        localStorage.setItem('saebom_settings_pin', entered);
-        close();
-        window.showAdminToast && showAdminToast('✅ 관리자 PIN이 변경되었습니다');
-        if (onSuccess) onSuccess();
-      } else {
-        firstPin = null;
-        shake('일치하지 않습니다. 새 PIN을 다시 입력하세요');
+  function close() { overlay.remove(); }
+  let busy = false;
+  async function submit() {
+    if (busy) return; busy = true; okBtn.disabled = true;
+    try {
+      if (mode === 'login') {
+        const h = await _hashPw(auth.salt, pw.value);
+        if (h === auth.hash) { _setAdminDevice(h); close(); _afterAdminLogin(false); }
+        else { shake('비밀번호가 틀렸습니다'); }
+        return;
       }
-      return;
-    }
-    // unlock 모드
-    if (Date.now() < _pinLockUntil) {
-      shake(`잠시 후 다시 시도하세요 (${Math.ceil((_pinLockUntil - Date.now())/1000)}초)`);
-      return;
-    }
-    if (entered === getSettingsPin()) {
-      _pinUnlockedAt = Date.now();
-      _pinFailCount = 0;
+      if (mode === 'change') {
+        const hc = await _hashPw(auth.salt, cur.value);
+        if (hc !== auth.hash) { shake('현재 비밀번호가 틀렸습니다'); return; }
+      }
+      const p = pw.value, p2 = pw2.value;
+      if (p.length < 6) { shake('비밀번호는 6자 이상이어야 합니다'); return; }
+      if (p !== p2) { shake('새 비밀번호가 일치하지 않습니다'); return; }
+      const salt = _randSalt();
+      const hash = await _hashPw(salt, p);
+      await _saveAdminAuth(salt, hash);
+      _setAdminDevice(hash);
       close();
-      if (onSuccess) onSuccess();
-    } else {
-      _pinFailCount++;
-      if (_pinFailCount >= 5) {
-        _pinLockUntil = Date.now() + 30 * 1000;
-        _pinFailCount = 0;
-        shake('5회 틀렸습니다. 30초 후 다시 시도하세요');
-      } else {
-        shake(`PIN이 틀렸습니다 (${_pinFailCount}/5)`);
-      }
-    }
+      window.showAdminToast && showAdminToast('✅ ' + (mode === 'setup' ? '비밀번호가 설정되었습니다' : '비밀번호가 변경되었습니다'));
+      _afterAdminLogin(mode !== 'setup');
+    } catch (e) {
+      console.error('[관리자로그인] 오류:', e);
+      shake('오류가 발생했습니다. 다시 시도하세요');
+    } finally { busy = false; okBtn.disabled = false; }
   }
-  function input(d) {
-    if (entered.length >= 4) return;
-    entered += d;
-    updateDots();
-    if (entered.length === 4) setTimeout(evaluate, 150); // 마지막 점 표시 후 판정
-  }
-  function onKey(e) {
-    if (/^[0-9]$/.test(e.key)) { input(e.key); e.preventDefault(); }
-    else if (e.key === 'Backspace') { entered = entered.slice(0, -1); updateDots(); e.preventDefault(); }
+  okBtn.addEventListener('click', submit);
+  overlay.querySelector('#al-cancel').addEventListener('click', close);
+  overlay.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
     else if (e.key === 'Escape') { close(); }
-  }
-
-  overlay.addEventListener('click', function(e) {
-    const btn = e.target.closest('button[data-pin]');
-    if (!btn) { if (e.target === overlay) close(); return; }
-    const v = btn.dataset.pin;
-    if (v === 'cancel') close();
-    else if (v === 'del') { entered = entered.slice(0, -1); updateDots(); }
-    else input(v);
   });
-  document.addEventListener('keydown', onKey);
 };
+function _afterAdminLogin() {
+  try { history.replaceState(null, '', location.pathname); } catch (e) {}
+  _applyAdminDeviceUI();
+  const b = document.querySelector('.tab-btn[onclick*="dashboard"]');
+  if (b) window.showSection('dashboard', b);
+}
+
+// ?admin(또는 #admin) 비밀 주소로 접속하면 관리자 로그인 창을 띄운다.
+window.addEventListener('load', function () {
+  _applyAdminDeviceUI();
+  _validateAdminToken();
+  let wantAdmin = false;
+  try { wantAdmin = new URLSearchParams(location.search).has('admin') || /(^|[#&])admin(\b|=)/.test(location.hash); } catch (e) {}
+  if (wantAdmin && !window._kioskAuto) setTimeout(() => window.openAdminLogin('login'), 400);
+});
 
 window.showSection = function(id,btn){
-  // 입실·퇴실(키오스크 공개 화면)만 PIN 없이 열고, 나머지 관리 화면은 전부 PIN 필요
-  if (id !== 'checkin' && !isSettingsUnlocked()) {
-    openPinModal('unlock', function() { showSection(id, btn); });
+  // 입실·퇴실(공개 화면)만 열고, 나머지 관리 화면은 '등록된 관리자 기기'에서만 접근 가능
+  if (id !== 'checkin' && !isAdminDevice()) {
     return;
   }
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -9216,8 +9272,8 @@ function showStudyroomOverflowAlert(name, seat) {
   // 대시보드 탭이 아니어도 보이게 섹션 활성화
   const section = document.getElementById('studyroom-overflow-section');
   if (section) section.style.display = 'block';
-  // 대시보드로 자동 이동 (잠금 상태에서는 키오스크에 PIN 창을 띄우지 않고 토스트만)
-  if (isSettingsUnlocked()) {
+  // 대시보드로 자동 이동 (등록 안 된 기기에서는 관리 화면 대신 토스트만)
+  if (isAdminDevice()) {
     showSection('dashboard', document.querySelector('[onclick*="dashboard"]'));
   } else {
     window.showAdminToast && showAdminToast(`⚠️ 스터디룸 정원 초과: ${name} (${seat})`);
