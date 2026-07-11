@@ -593,18 +593,18 @@ input:focus,select:focus,textarea:focus{outline:none}
   background:radial-gradient(120% 80% at 72% -10%,rgba(255,255,255,.22),transparent 60%)}
 
 /* ── 태양 (사진 같은 흰빛 블룸 + 아나모픽 글레어) ── */
-.wx-sun{position:absolute;top:12%;left:24%;width:100px;height:100px;margin:-50px 0 0 -50px;border-radius:50%;
-  background:radial-gradient(circle,#ffffff 0%,#ffffff 15%,rgba(255,255,255,.72) 32%,rgba(216,238,255,.30) 52%,rgba(200,230,255,0) 72%);
-  box-shadow:0 0 110px 55px rgba(255,255,255,.55),0 0 260px 130px rgba(190,225,255,.32);
+.wx-sun{position:absolute;top:12%;left:24%;width:110px;height:110px;margin:-55px 0 0 -55px;border-radius:50%;
+  background:radial-gradient(circle,#ffffff 0%,#FFFCEA 13%,#FFF0A8 28%,rgba(255,214,110,.55) 46%,rgba(255,196,80,.18) 62%,rgba(255,190,80,0) 74%);
+  box-shadow:0 0 120px 60px rgba(255,236,160,.62),0 0 280px 150px rgba(255,206,96,.40);
   mix-blend-mode:screen;animation:wxSunPulse 7s ease-in-out infinite;will-change:transform,opacity}
-.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:440px;height:6px;transform:translate(-50%,-50%);
-  background:linear-gradient(90deg,transparent,rgba(255,255,255,.55) 45%,rgba(255,255,255,.55) 55%,transparent);
+.wx-sun::before{content:"";position:absolute;top:50%;left:50%;width:480px;height:7px;transform:translate(-50%,-50%);
+  background:linear-gradient(90deg,transparent,rgba(255,240,180,.7) 44%,rgba(255,250,220,.85) 50%,rgba(255,240,180,.7) 56%,transparent);
   filter:blur(2px);border-radius:50%;mix-blend-mode:screen}
 @keyframes wxSunPulse{0%,100%{transform:scale(1);opacity:.95}50%{transform:scale(1.05);opacity:1}}
 
 /* ── 대기 블룸(태양 주변 밝은 헤이즈) ── */
 .wx-bloom{position:absolute;inset:0;pointer-events:none;mix-blend-mode:screen;
-  background:radial-gradient(58% 44% at 24% 12%,rgba(255,255,255,.55),rgba(255,255,255,.12) 42%,transparent 66%)}
+  background:radial-gradient(60% 46% at 24% 12%,rgba(255,250,220,.60),rgba(255,236,170,.20) 40%,rgba(255,224,140,.06) 58%,transparent 70%)}
 /* ── 수평선 헤이즈 ── */
 .wx-haze{position:absolute;left:0;right:0;bottom:0;height:44%;pointer-events:none;
   background:linear-gradient(180deg,transparent,rgba(233,246,255,.26));filter:blur(2px)}
@@ -2271,12 +2271,13 @@ document.addEventListener('visibilitychange', () => {
       sky.appendChild(el('wx-sun'));
       // 렌즈 플레어: 태양(24%,12%)→화면중심 지나 반대편으로 일렬 배치
       const sx=24, sy=12;
-      const fl=[{t:0.95,s:16,o:.10,r:0,ft:'255,255,255'},
-                {t:1.30,s:34,o:.07,r:1,ft:'190,225,255'},
-                {t:1.62,s:22,o:.11,r:0,ft:'255,242,205'},
-                {t:1.98,s:54,o:.05,r:1,ft:'255,255,255'},
-                {t:2.28,s:14,o:.13,r:0,ft:'200,235,255'},
-                {t:2.72,s:82,o:.045,r:1,ft:'180,215,255'}];
+      const fl=[{t:0.92,s:22,o:.28,r:0,ft:'255,236,170'},
+                {t:1.22,s:44,o:.18,r:1,ft:'190,225,255'},
+                {t:1.55,s:30,o:.32,r:0,ft:'255,220,130'},
+                {t:1.85,s:64,o:.14,r:1,ft:'255,246,205'},
+                {t:2.12,s:20,o:.36,r:0,ft:'205,238,255'},
+                {t:2.45,s:38,o:.24,r:0,ft:'255,232,160'},
+                {t:2.78,s:98,o:.12,r:1,ft:'255,214,140'}];
       fl.forEach(f=>{ const d=el('wx-flare'+(f.r?' ring':''));
         const x=sx+(50-sx)*f.t, y=sy+(50-sy)*f.t;
         d.style.left=x+'%'; d.style.top=y+'%';
