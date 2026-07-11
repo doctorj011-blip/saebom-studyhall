@@ -2261,7 +2261,7 @@ document.addEventListener('visibilitychange', () => {
     if (sun){
       let f=(now-rise)/(set-rise); f=Math.max(0,Math.min(1,f));
       const x=12+f*76;                          // 동(12%) → 서(88%)
-      const y=8+(1-Math.sin(f*Math.PI))*30;     // 정오 최고(8%), 아침·저녁 낮음(38%)
+      const y=4+(1-Math.sin(f*Math.PI))*8;      // 상단 띠(정오 4% ~ 아침·저녁 12%) — 키패드에 안 가리게
       sun.style.left=x+'%'; sun.style.top=y+'%';
       // 렌즈 플레어를 태양→화면중심 축에 맞춰 이동
       sky.querySelectorAll('.wx-flare').forEach(fl=>{
@@ -2274,7 +2274,7 @@ document.addEventListener('visibilitychange', () => {
       const dayLen=(set-rise); const nightLen=Math.max(6*3600*1000, 24*3600*1000-dayLen);
       let dt=now-set; if(dt<0) dt+=24*3600*1000;
       let mf=Math.max(0,Math.min(1, dt/nightLen));
-      moon.style.left=(12+mf*76)+'%'; moon.style.top=(10+(1-Math.sin(mf*Math.PI))*28)+'%';
+      moon.style.left=(12+mf*76)+'%'; moon.style.top=(6+(1-Math.sin(mf*Math.PI))*8)+'%';
     }
   }
 
