@@ -365,6 +365,18 @@ body:has(.save-fab.show) .app-content{padding-bottom:170px}
 .ev-gauge-pct{font-size:18px;font-weight:800;color:var(--amber)}
 .ev-gauge-frac{font-size:11px;font-weight:700;color:var(--text2)}
 .ev-gauge-goal{font-size:11px;color:var(--text3);font-weight:600}
+/* ── 이벤트 달성 축하 연출 (끝.끝.아 완료) ── */
+.ev-card.ev-done{position:relative;overflow:hidden;border-color:#EFC24A;background:linear-gradient(180deg,#FFFCF3,var(--card));box-shadow:0 6px 20px rgba(239,194,74,0.30)}
+.ev-badge.ev-badge-done{color:#8A5A00;background:linear-gradient(180deg,#FFE7A3,#FFD264);border-color:#E7B44A}
+.ev-title-chip{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:800;color:#7A4E00;background:linear-gradient(135deg,#FFEAA6,#FFC94D);border:1px solid #E7B44A;box-shadow:0 2px 9px rgba(239,194,74,0.38)}
+.ev-title-chip .ev-title-label{font-size:10px;font-weight:700;color:#A9741B}
+.ev-done .ev-seg.on{background:linear-gradient(180deg,#FFD264,#F2A93B)}
+.ev-done .ev-gauge-pct,.ev-done .ev-gauge-val{color:#C77E00}
+.ev-congrats{font-size:12.5px;font-weight:700;color:#8A5A00;text-align:center;line-height:1.6;margin:12px 2px 2px}
+/* 컨페티(꽃가루) */
+.confetti-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+.confetti-piece{position:absolute;top:-14px;width:8px;height:13px;opacity:0;animation:confetti-fall linear forwards}
+@keyframes confetti-fall{0%{opacity:0;transform:translateY(-14px) rotate(0deg)}12%{opacity:1}100%{opacity:0.85;transform:translateY(340px) rotate(560deg)}}
 .ps-card{background:var(--card);border-radius:var(--r-lg);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-bottom:14px}
 .ps-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
 .ps-title{font-size:14px;font-weight:800;color:var(--text)}
@@ -2875,26 +2887,65 @@ function buildEvents() {
   el.innerHTML = '<div class="section-label">EVENTS · 진행 중인 이벤트</div>' + list.map(ev => {
     const isStreak = ev.type === 'streak';
     const isStudy = ev.type === 'studytime' || ev.id === 'kkeutkkeuta';
-    let gauge = '', badge = '진행 중';
+    let gauge = '', badge = '진행 중', achieved = false;
     if (isStreak) {
-      gauge = _gaugeHTML(_streakDays(), ev.goal || 20, '일');
+      const streak = _streakDays();
+      achieved = streak >= (ev.goal || 20);
+      if (achieved) badge = '🎉 달성 완료!';
+      gauge = _gaugeHTML(streak, ev.goal || 20, '일');
     } else if (isStudy) {
       const now = new Date();
       const start = _parseDkey(ev.start || '2026-7-6');
       if (now < start) badge = '진행 예정';
+      const goalH = ev.goal || 42;
       const hours = Math.round(_eventStudyMinutes(ev) / 60 * 10) / 10;
-      gauge = _gaugeHTML(hours, ev.goal || 42, '시간');
+      achieved = now >= start && hours >= goalH;
+      if (achieved) badge = '🎉 달성 완료!';
+      gauge = _gaugeHTML(hours, goalH, '시간');
     }
+    const title = achieved ? (ev.title || (isStudy ? '끝장보는 성격' : '꾸준함의 아이콘')) : '';
+    const titleChip = achieved ? `<div class="ev-title-chip"><span class="ev-title-label">획득 칭호</span> 🏆 ${title}</div>` : '';
+    const congrats = achieved ? `<div class="ev-congrats">🎉 ${isStudy ? '끝.끝.아 이벤트 달성! 5만원 장학금 대상이에요.' : '연속 출석 퀘스트 달성! 대단해요.'}</div>` : '';
     return `
-    <div class="ev-card" ${isStreak ? `onclick="openSection('quest','#6C5DD3')" style="cursor:pointer"` : ''}>
+    <div class="ev-card${achieved ? ' ev-done' : ''}" data-ev="${ev.id || ''}" ${isStreak ? `onclick="openSection('quest','#6C5DD3')" style="cursor:pointer"` : ''}>
       <div class="ev-card-head">
         <div class="ev-card-title">${isStreak ? '🔥 ' : '🎉 '}${ev.name || '이벤트'}</div>
-        <span class="ev-badge">${badge}</span>
+        <span class="ev-badge${achieved ? ' ev-badge-done' : ''}">${badge}</span>
       </div>
       <div class="ev-desc">${ev.desc || ''}</div>
+      ${titleChip}
       ${gauge}
+      ${congrats}
     </div>`;
   }).join('');
+  // 달성한 카드에 컨페티(꽃가루) — 이벤트별 세션당 1회
+  el.querySelectorAll('.ev-card.ev-done').forEach(card => {
+    const key = 'ev:' + (card.getAttribute('data-ev') || '');
+    if (_confettiFired.has(key)) return;
+    _confettiFired.add(key);
+    _fireConfetti(card);
+  });
+}
+
+// 컨페티(꽃가루) 애니메이션 — 대상 카드 안쪽에 색종이를 뿌린다
+const _confettiFired = new Set();
+function _fireConfetti(card) {
+  if (!card) return;
+  const layer = document.createElement('div');
+  layer.className = 'confetti-layer';
+  const colors = ['#FFD264','#F2A93B','#6C5DD3','#8F82E4','#4CAF50','#FF7597','#42A5F5'];
+  for (let i = 0; i < 44; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDuration = (1.6 + Math.random() * 1.6) + 's';
+    p.style.animationDelay = (Math.random() * 0.7) + 's';
+    if (Math.random() < 0.5) p.style.borderRadius = '50%';
+    layer.appendChild(p);
+  }
+  card.appendChild(layer);
+  setTimeout(() => layer.remove(), 4500);
 }
 
 // ── 연속 출석 퀘스트 ──
@@ -3192,9 +3243,9 @@ async function submitStudyroomReq(periodNum, roomCounts) {
       name: currentStudent.name, seat: currentStudent.seat,
       period: periodNum, room: assignRoom, reason,
       date: new Date().toISOString().slice(0,10),
-      status: 'pending', createdAt: window._fsServerTimestamp()
+      status: 'approved', createdAt: window._fsServerTimestamp()
     });
-    showToast(`✅ ${periodNum}교시 스터디룸 ${assignRoom}번 신청 완료!`);
+    showToast(`✅ ${periodNum}교시 스터디룸 ${assignRoom}번 사용 가능!`);
   } catch(e) { alert('신청 실패: ' + e.message); }
 }
 
@@ -3225,7 +3276,7 @@ function loadStudyroomData() {
                   <span style="font-size:11px;font-weight:700;color:${sc}">${st}</span>
                 </div>
                 ${r.reason?`<div style="font-size:11px;color:var(--text2)">📝 ${r.reason}</div>`:''}
-                ${r.status==='pending'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:var(--red);background:none;border:1px solid var(--red-border);border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
+                ${r.status!=='rejected'?`<button onclick="cancelStudyroom('${r.id}')" style="margin-top:4px;font-size:11px;color:var(--red);background:none;border:1px solid var(--red-border);border-radius:6px;padding:2px 8px;cursor:pointer">신청취소</button>`:''}
               </div>`;
             }).join('');
       }

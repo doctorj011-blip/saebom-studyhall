@@ -202,6 +202,18 @@
   .ev-gauge-pct{font-size:18px;font-weight:800;color:var(--brand)}
   .ev-gauge-frac{font-size:11px;font-weight:700;color:var(--text2)}
   .ev-gauge-goal{font-size:11px;color:var(--text3);font-weight:600}
+  /* ── 이벤트 달성 축하 연출 (끝.끝.아 완료) ── */
+  .ev-card.ev-done{position:relative;overflow:hidden;border-color:#EFC24A;background:linear-gradient(180deg,#FFFCF3,var(--card));box-shadow:0 6px 20px rgba(239,194,74,0.30)}
+  .ev-badge.ev-badge-done{color:#8A5A00;background:linear-gradient(180deg,#FFE7A3,#FFD264);border-color:#E7B44A}
+  .ev-title-chip{display:inline-flex;align-items:center;gap:6px;margin-bottom:12px;padding:6px 13px;border-radius:20px;font-size:13px;font-weight:800;color:#7A4E00;background:linear-gradient(135deg,#FFEAA6,#FFC94D);border:1px solid #E7B44A;box-shadow:0 2px 9px rgba(239,194,74,0.38)}
+  .ev-title-chip .ev-title-label{font-size:10px;font-weight:700;color:#A9741B}
+  .ev-done .ev-seg.on{background:linear-gradient(180deg,#FFD264,#F2A93B)}
+  .ev-done .ev-gauge-pct,.ev-done .ev-gauge-val{color:#C77E00}
+  .ev-congrats{font-size:12.5px;font-weight:700;color:#8A5A00;text-align:center;line-height:1.6;margin:12px 2px 2px;white-space:pre-line}
+  /* 컨페티(꽃가루) */
+  .confetti-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:5}
+  .confetti-piece{position:absolute;top:-14px;width:8px;height:13px;opacity:0;animation:confetti-fall linear forwards}
+  @keyframes confetti-fall{0%{opacity:0;transform:translateY(-14px) rotate(0deg)}12%{opacity:1}100%{opacity:0.85;transform:translateY(340px) rotate(560deg)}}
 
   /* 토스트 */
   .toast { position: fixed; bottom: calc(84px + var(--safe-b)); left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 11px 20px; border-radius: 20px; font-size: 13px; z-index: 9999; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; white-space: nowrap; box-shadow: 0 6px 20px rgba(0,0,0,0.25); }
@@ -1273,31 +1285,71 @@ function buildEvents() {
     el.innerHTML = '<div class="section-label">EVENTS</div><div class="empty-state"><div class="empty-icon">🎉</div><div class="empty-text">현재 진행 중인 이벤트가 없습니다.</div></div>';
     return;
   }
+  const childName = (currentStudent && currentStudent.name) || '자녀';
   el.innerHTML = '<div class="section-label">EVENTS · 진행 중인 이벤트</div>' + list.map(ev => {
     const isStreak = ev.type === 'streak';
     const isStudy = ev.type === 'studytime' || ev.id === 'kkeutkkeuta';
-    let gauge = '', badge = '진행 중';
+    let gauge = '', badge = '진행 중', achieved = false;
     if (isStreak) {
-      gauge = _gaugeHTML(_streakDays(), ev.goal || 20, '일');
+      const streak = _streakDays();
+      achieved = streak >= (ev.goal || 20);
+      if (achieved) badge = '🎉 달성 완료!';
+      gauge = _gaugeHTML(streak, ev.goal || 20, '일');
     } else if (isStudy) {
       const now = new Date();
       const start = _parseDkey(ev.start || '2026-7-6');
       if (now < start) badge = '진행 예정';
+      const goalH = ev.goal || 42;
       const hours = Math.round(_eventStudyMinutes(ev) / 60 * 10) / 10;
-      gauge = _gaugeHTML(hours, ev.goal || 42, '시간');
+      achieved = now >= start && hours >= goalH;
+      if (achieved) badge = '🎉 달성 완료!';
+      gauge = _gaugeHTML(hours, goalH, '시간');
     } else {
       return ''; // 알 수 없는 유형은 표시하지 않음
     }
+    const title = achieved ? (ev.title || (isStudy ? '끝장보는 성격' : '꾸준함의 아이콘')) : '';
+    const titleChip = achieved ? `<div class="ev-title-chip"><span class="ev-title-label">획득 칭호</span> 🏆 ${title}</div>` : '';
+    const congrats = achieved ? `<div class="ev-congrats">🎉 ${childName} 학생이 ${isStudy ? '끝.끝.아 이벤트를 달성했어요!\n끝까지 해내는 모습, 정말 자랑스럽습니다. (5만원 장학금 대상)' : '연속 출석 퀘스트를 달성했어요!\n꾸준함이 정말 대단합니다.'}</div>` : '';
     return `
-    <div class="ev-card">
+    <div class="ev-card${achieved ? ' ev-done' : ''}" data-ev="${ev.id || ''}">
       <div class="ev-card-head">
         <div class="ev-card-title">${isStreak ? '🔥 ' : '🎉 '}${ev.name || '이벤트'}</div>
-        <span class="ev-badge">${badge}</span>
+        <span class="ev-badge${achieved ? ' ev-badge-done' : ''}">${badge}</span>
       </div>
       <div class="ev-desc">${ev.desc || ''}</div>
+      ${titleChip}
       ${gauge}
+      ${congrats}
     </div>`;
   }).join('');
+  // 달성한 카드에 컨페티(꽃가루) — 이벤트별 세션당 1회
+  el.querySelectorAll('.ev-card.ev-done').forEach(card => {
+    const key = 'ev:' + (card.getAttribute('data-ev') || '');
+    if (_confettiFired.has(key)) return;
+    _confettiFired.add(key);
+    _fireConfetti(card);
+  });
+}
+
+// 컨페티(꽃가루) 애니메이션 — 대상 카드 안쪽에 색종이를 뿌린다
+const _confettiFired = new Set();
+function _fireConfetti(card) {
+  if (!card) return;
+  const layer = document.createElement('div');
+  layer.className = 'confetti-layer';
+  const colors = ['#FFD264','#F2A93B','#C8900A','#8F82E4','#4CAF50','#FF7597','#42A5F5'];
+  for (let i = 0; i < 44; i++) {
+    const p = document.createElement('div');
+    p.className = 'confetti-piece';
+    p.style.left = (Math.random() * 100) + '%';
+    p.style.background = colors[i % colors.length];
+    p.style.animationDuration = (1.6 + Math.random() * 1.6) + 's';
+    p.style.animationDelay = (Math.random() * 0.7) + 's';
+    if (Math.random() < 0.5) p.style.borderRadius = '50%';
+    layer.appendChild(p);
+  }
+  card.appendChild(layer);
+  setTimeout(() => layer.remove(), 4500);
 }
 
 // ── 학부모앱 공지사항 ──
