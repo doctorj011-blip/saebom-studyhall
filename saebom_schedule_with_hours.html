@@ -7911,7 +7911,12 @@ function renderStudyroomBoard() {
   // 오늘 신청분만, 거절된 건 제외 (취소는 이미 목록에서 삭제됨)
   const todays = Object.values(_knownStudyroomReqs)
     .filter(r => r.date === today && r.status !== 'rejected');
-  if (!todays.length) { section.style.display = 'none'; body.innerHTML = ''; if (summary) summary.textContent = ''; return; }
+  if (!todays.length) {
+    section.style.display = 'block';
+    if (summary) summary.textContent = '';
+    body.innerHTML = '<div style="text-align:center;color:#B9A9D9;font-size:12px;padding:18px 0">오늘 스터디룸을 신청한 학생이 없습니다.</div>';
+    return;
+  }
 
   // 교시별 · 룸별 그룹핑
   const byPeriod = {};
