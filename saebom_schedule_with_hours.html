@@ -6268,9 +6268,10 @@ async function loadNoticesAdmin() {
     el.innerHTML = items.map((n, i) => `
       <div style="background:#F8FAFF;border:1px solid #8F82E4;border-radius:10px;padding:10px 12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
-          <div style="min-width:0;flex:1">
+          <div style="min-width:0;flex:1;cursor:pointer" onclick="noticeToggleBody(${i})">
             <span style="font-size:10px;font-weight:700;color:#6C5DD3;margin-right:6px">${n.badgeLabel||n.badge}</span>
             <span style="font-size:12px;font-weight:600">${n.title}</span>
+            <span style="font-size:11px;color:#8F82E4;margin-left:6px">👁 보기</span>
             <div style="font-size:11px;color:#aaa;margin-top:2px">${n.date||''}${(n.images||[]).length ? ` · 📎 ${n.images.length}장` : ''}</div>
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0">
@@ -6278,6 +6279,7 @@ async function loadNoticesAdmin() {
             <button onclick="deleteNotice(${i})" style="background:#FCEBEB;color:#C62828;border:none;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">삭제</button>
           </div>
         </div>
+        <div id="notice-body-${i}" style="display:none;font-size:12px;color:#333;line-height:1.6;margin-top:8px;padding-top:8px;border-top:1px dashed #C7BFF0;white-space:pre-wrap;word-break:break-word">${(n.body||'').trim() ? (n.body||'') : '<span style="color:#aaa">(내용 없음)</span>'}</div>
         ${(n.images||[]).length ? `
           <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
             ${n.images.map((url,ii) => `<img src="${url}" data-url="${url}" style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #8F82E4;cursor:pointer" onclick="noticeAdminImgZoom(this.dataset.url)">`).join('')}
@@ -6285,6 +6287,12 @@ async function loadNoticesAdmin() {
       </div>`).join('');
   } catch(e) { console.error('공지 로드 실패:', e); }
 }
+
+window.noticeToggleBody = function(i) {
+  const b = document.getElementById('notice-body-' + i);
+  if (!b) return;
+  b.style.display = (b.style.display === 'none' || !b.style.display) ? 'block' : 'none';
+};
 
 window.editNotice = function(i) {
   const n = (window._adminNotices || [])[i];
@@ -10235,7 +10243,8 @@ async function _apcFillStudents() {
   const now = new Date();
   const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
   const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-  const opts = await Promise.all(STUDENTS.map(async s => {
+  const _apcExclude = ['관리자', '정원혁', '이새봄'];
+  const opts = await Promise.all(STUDENTS.filter(s => !_apcExclude.includes((s.name || '').trim())).map(async s => {
     const key = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g, '_');
     let isNew = false;
     try {
