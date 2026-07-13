@@ -718,10 +718,9 @@ async function loadParentPenalties() {
     docs.forEach(doc => {
       Object.keys(doc.periods || {}).sort((a, b) => a - b).forEach(k => {
         const p = doc.periods[k];
-        if (!p.canceled) {
-          total += (p.points || 1); // 무단결석=2점, 늦은 변경(구 기록 포함)=1점
-          if (doc.date.slice(0, 7) === curYm) monthTotal += (p.points || 1);
-        }
+        if (p.canceled) return; // 관리자가 취소한 벌점은 표시하지 않음
+        total += (p.points || 1); // 무단결석=2점, 늦은 변경(구 기록 포함)=1점
+        if (doc.date.slice(0, 7) === curYm) monthTotal += (p.points || 1);
         rows.push({ date: doc.date, day: doc.day, n: k, p: p });
       });
     });
