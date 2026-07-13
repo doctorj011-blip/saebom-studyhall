@@ -3248,12 +3248,16 @@ function buildStudyroomPeriodBtns() {
   ).join('');
 }
 
+// 스터디룸 '운영일' 키 — 앱 전반의 세션 경계(새벽 3시)와 동일 기준(3시 이전은 전날로 취급).
+// 관리앱 studyroomDayKey()와 반드시 같은 문자열을 만들어야 신청/현황이 일치한다.
+function studyroomDayKey(){ const d = new Date(Date.now() - 3*3600*1000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+
 async function applyStudyroom(periodNum) {
   const db = window._db;
   if (!db || !currentStudent) return;
   try {
     const snap = await window._fsGetDocs(window._fsCollection(db, 'studyroom_requests'));
-    const today = new Date().toISOString().slice(0,10);
+    const today = studyroomDayKey();
     const roomCounts = {1:[], 2:[], 3:[]};
     let alreadyApplied = false;
     snap.forEach(d => {
@@ -3305,7 +3309,7 @@ async function submitStudyroomReq(periodNum, roomCounts) {
     await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
       name: currentStudent.name, seat: currentStudent.seat,
       period: periodNum, room: assignRoom, reason,
-      date: new Date().toISOString().slice(0,10),
+      date: studyroomDayKey(),
       status: 'approved', createdAt: window._fsServerTimestamp()
     });
     showToast(`✅ ${periodNum}교시 스터디룸 ${assignRoom}번 사용 가능!`);
@@ -3316,7 +3320,7 @@ function loadStudyroomData() {
   const db = window._db;
   if (!db || !currentStudent) return;
   if (studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} }
-  const today = new Date().toISOString().slice(0,10);
+  const today = studyroomDayKey();
   studyroomUnsubscribe = window._fsOnSnapshot(
     window._fsCollection(db, 'studyroom_requests'),
     snap => {

@@ -1746,6 +1746,10 @@ function timeToMin(t) {
 function sessIsoDate(ts){ const d=new Date(ts); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
 function sessMonthKey(ts){ return sessIsoDate(ts).slice(0,7); } // "YYYY-MM" — students.hours key와 동일
 function sessLegacyDate(ts){ const d=new Date(ts); return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate(); } // checkin_logs 호환(무패딩)
+// 스터디룸 '운영일' 키 — 앱 전반의 세션 경계(새벽 3시)와 동일 기준. 3시 이전은 전날로
+// 취급해 11교시(자정~1시) 사용분이 자정에 사라지지 않게 하고, 3시에 하루가 넘어간다.
+function studyroomDayKey(){ return sessIsoDate(Date.now() - 3*3600*1000); }
+window.studyroomDayKey = studyroomDayKey;
 // 세션 인정 상한: 입실일 다음날 01:00 (= 입실일 0시 + 25h).
 // 같은 날 세션은 절대 걸리지 않고, 자정 넘긴 세션만 01:00까지 인정(미퇴실 과대집계 방지).
 function sessCapTs(inTs){ const d=new Date(inTs); d.setHours(0,0,0,0); return d.getTime() + 25*3600*1000; }
@@ -4619,8 +4623,8 @@ async function saveAutoStudyroomAssignment(student, room, period) {
     const db = await window.waitDb();
     if (!db) return;
     const { doc, setDoc, serverTimestamp } = window._fs;
-    // _syncStudyRoomStudents 와 동일한 날짜 형식(ISO YYYY-MM-DD) 사용
-    const date = new Date().toISOString().slice(0,10);
+    // _syncStudyRoomStudents·현황판과 동일한 운영일 키(새벽 3시 경계) 사용
+    const date = studyroomDayKey();
     const seatNum = String(student.seat).replace('번','').trim();
     // (좌석·날짜·교시)당 하나로 고정 → 재입실 시 중복 문서 생성 방지(덮어쓰기)
     const id = `auto_${date}_${seatNum}_p${period}`;
@@ -6231,6 +6235,9 @@ setInterval(() => {
     if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
     // 변동 스케줄(학생 당일변경)을 고정 시간표(schedule_base)로 자동 복구
     if (window.resetSchedulesToBase) window.resetSchedulesToBase();
+    // 스터디룸 신청현황도 함께 갱신 (운영일은 3시에 넘어가며, 실제 전환은 매분 틱이 처리)
+    if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
+    if (window.renderStudyroomBoard) window.renderStudyroomBoard();
     // 어제(및 놓친 날짜) 무단결석 벌점 판정 — 11교시 종료(01:00) 이후라 판정 가능
     if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
@@ -7874,7 +7881,7 @@ function _syncStudyRoomStudents() {
   // studyRoomStudents(현재 사용자)·studyRoomWaiting(다음 교시 대기자) 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
   studyRoomWaiting  = { 1: [], 2: [], 3: [] };
-  const today = new Date().toISOString().slice(0,10);
+  const today = window.studyroomDayKey();
   const now = new Date();
   const curMin = now.getHours() * 60 + now.getMinutes();
   const adjMin = now.getHours() < 3 ? curMin + 1440 : curMin;
@@ -7918,8 +7925,11 @@ function _syncStudyRoomStudents() {
 }
 window._syncStudyRoomStudents = _syncStudyRoomStudents;
 
-// 교시 전환에 맞춰 매분 배치도(현재/대기) 갱신
-setInterval(() => { if (window._syncStudyRoomStudents) window._syncStudyRoomStudents(); }, 60000);
+// 교시 전환·새벽 3시 운영일 전환에 맞춰 매분 배치도(현재/대기)·현황판 갱신
+setInterval(() => {
+  if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
+  if (window.renderStudyroomBoard) window.renderStudyroomBoard();
+}, 60000);
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;
@@ -7988,7 +7998,7 @@ function renderStudyroomBoard() {
   const body    = document.getElementById('studyroom-board-body');
   const summary = document.getElementById('studyroom-board-summary');
   if (!section || !body) return;
-  const today = new Date().toISOString().slice(0,10);
+  const today = window.studyroomDayKey();
   // 오늘 신청분만, 거절된 건 제외 (취소는 이미 목록에서 삭제됨)
   const todays = Object.values(_knownStudyroomReqs)
     .filter(r => r.date === today && r.status !== 'rejected');
