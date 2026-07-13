@@ -221,7 +221,7 @@ body.admin-device .topbar-tabs{display:flex}
 .checkin-sub{font-size:12px;color:var(--color-text-secondary);margin-top:4px}
 .checkin-display{font-size:36px;font-weight:600;letter-spacing:10px;color:#6C5DD3;background:#EEF2FF;border-radius:12px;padding:12px 0;margin-bottom:20px;font-family:monospace}
 .numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.numpad-btn{padding:14px;font-size:20px;font-weight:500;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:10px;cursor:pointer;color:var(--color-text-primary);transition:background 0.1s;display:flex;align-items:center;justify-content:center}
+.numpad-btn{padding:14px;font-size:20px;font-weight:500;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:10px;cursor:pointer;color:var(--color-text-primary);transition:background 0.1s;display:flex;align-items:center;justify-content:center;touch-action:manipulation;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none}
 .numpad-btn:active{background:var(--color-background-secondary)}
 .numpad-clear{background:#FCEBEB;color:#C62828;border-color:#F7C1C1;font-size:12px;font-weight:600}
 .numpad-del{background:var(--color-background-secondary)}
@@ -701,11 +701,12 @@ input:focus,select:focus,textarea:focus{outline:none}
 #kiosk-weather .wx-loc{font-size:12px;font-weight:600;opacity:.8;letter-spacing:.2px}
 #kiosk-weather .wx-range{font-size:12px;font-weight:600;opacity:.78;margin-top:1px}
 
-/* 체크인 카드: 하늘 위에 뜬 프로스티드 글래스 */
-#sec-checkin .checkin-wrap{background:rgba(255,255,255,.55);backdrop-filter:saturate(150%) blur(14px);
-  -webkit-backdrop-filter:saturate(150%) blur(14px);border:1px solid rgba(255,255,255,.5);
+/* 체크인 카드: 하늘 위에 뜬 프로스티드 글래스
+   ※ backdrop-filter(라이브 블러)는 움직이는 날씨 배경을 매 프레임 다시 합성해
+      저사양 태블릿에서 터치 반응을 느리게 만든다 → 불투명 배경으로 대체(블러 제거). */
+#sec-checkin .checkin-wrap{background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.7);
   box-shadow:0 24px 60px rgba(15,23,42,.22)}
-#sec-checkin .checkin-today-wrap{background:rgba(255,255,255,.9);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.6)}
+#sec-checkin .checkin-today-wrap{background:rgba(255,255,255,.97);border:1px solid rgba(255,255,255,.7)}
 
 /* 키오스크 모드: 시계·정보 흰색으로 (어떤 하늘에도 대비 확보) */
 body.kiosk-mode #weather-sky{z-index:0}
