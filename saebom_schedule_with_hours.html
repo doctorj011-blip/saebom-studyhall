@@ -1527,6 +1527,9 @@ const PERIODS_SAT=[
 let PERIODS = PERIODS_WEEKDAY;
 let PERIOD_OFFSET = 6;
 
+// 교시별 출석현황(숫자·명단)에서 제외할 학생 이름
+const PERIOD_EXCLUDED_NAMES = ['정원혁', '이새봄'];
+
 let STUDENTS=[];
 
 // ── 누적시간 key 헬퍼 (YYYY-MM) — 정의는 saebom-common.js 한 곳에만 둔다 ──
@@ -3693,6 +3696,7 @@ function buildDashboard(){
   const periodData = todayPeriods.map((p) => {
     const pNum = parseInt(p.n); // '7교시' → 7
     const scheduled = STUDENTS.filter(s => {
+      if (PERIOD_EXCLUDED_NAMES.includes(s.name)) return false;
       const sched = s.schedule[todayName] || '';
       if (!sched || sched === '-') return false;
       const parsed = parseScheduleStr(sched);
@@ -6054,6 +6058,7 @@ function showPeriodStudents(periodIdx) {
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
   const todayName = getTodayDayName();
   const students = STUDENTS.filter(s => {
+    if (PERIOD_EXCLUDED_NAMES.includes(s.name)) return false;
     const sched = s.schedule[todayName] || '';
     if (!sched || sched === '-') return false;
     const parsed = parseScheduleStr(sched);
