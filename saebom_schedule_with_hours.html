@@ -1561,7 +1561,7 @@ const PRESENT=[];
 // 미입실 알림·입퇴실/스케줄 알림톡·무단결석 벌점·사용시간 집계에서 전부 제외한다.
 // 좌석 배치도·학생 목록·입퇴실 동작 자체는 그대로 둔다(기기 테스트용).
 // "(관리)" 등 괄호 표기는 무시하고 이름만 비교. (학생앱 순위의 RANK_EXCLUDE와 별개)
-const TEST_STUDENTS = new Set(['이새봄', '정원혁']);
+const TEST_STUDENTS = new Set(['이새봄', '정원혁', '손형준', '김근우', '이수연']);
 window.isTestStudent = function(name) {
   const base = String(name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
   return TEST_STUDENTS.has(base);

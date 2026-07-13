@@ -1406,7 +1406,7 @@ function periodStartMs(pNum, dayName) {
 function computeLatePenalties() {
   if (!currentStudent || !todayDay || todayDay === '일') return [];
   // 테스트 계정(실제 학생 아님)은 벌점 대상에서 제외
-  if (['이새봄','정원혁'].includes(String(currentStudent.name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim())) return [];
+  if (['이새봄','정원혁','손형준','김근우','이수연'].includes(String(currentStudent.name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim())) return [];
   // 주간설정(관리자 허용 수정기간) 표에서 오늘 요일을 고친 경우는 정식 수정 → 벌점 제외
   if (scheduleEditEnabled && weeklyEditedDays.has(todayDay)) return [];
   const oldSched = currentStudent.schedule[todayDay] || '-';
