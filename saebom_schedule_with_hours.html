@@ -770,6 +770,14 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="studyroom-overflow-list"></div>
     </div>
+    <!-- 스터디룸 신청 현황판 (한눈에 보기) -->
+    <div class="card" id="studyroom-board-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-layout-grid" style="font-size:14px;color:#7C3AED"></i> 오늘 스터디룸 신청 현황</span>
+        <span id="studyroom-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+      </div>
+      <div id="studyroom-board-body" style="overflow-x:auto"></div>
+    </div>
     <!-- 스터디룸 신청 알림 -->
     <div class="card" id="studyroom-req-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -7859,6 +7867,7 @@ onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
     if (prevStatus !== data.status) _syncStudyRoomStudents();
   });
   if (changed) renderStudyroomAlerts();
+  renderStudyroomBoard();
 });
 
 function renderStudyroomAlerts() {
@@ -7891,6 +7900,65 @@ function renderStudyroomAlerts() {
     </div>`;
   }).join('');
 }
+
+// ── 오늘 스터디룸 신청 현황판 (교시 × 룸 표) ──
+function renderStudyroomBoard() {
+  const section = document.getElementById('studyroom-board-section');
+  const body    = document.getElementById('studyroom-board-body');
+  const summary = document.getElementById('studyroom-board-summary');
+  if (!section || !body) return;
+  const today = new Date().toISOString().slice(0,10);
+  // 오늘 신청분만, 거절된 건 제외 (취소는 이미 목록에서 삭제됨)
+  const todays = Object.values(_knownStudyroomReqs)
+    .filter(r => r.date === today && r.status !== 'rejected');
+  if (!todays.length) { section.style.display = 'none'; body.innerHTML = ''; if (summary) summary.textContent = ''; return; }
+
+  // 교시별 · 룸별 그룹핑
+  const byPeriod = {};
+  todays.forEach(r => {
+    const p = r.period;
+    if (!byPeriod[p]) byPeriod[p] = { 1:[], 2:[], 3:[] };
+    if (!byPeriod[p][r.room]) byPeriod[p][r.room] = [];
+    byPeriod[p][r.room].push(r);
+  });
+  const periods = Object.keys(byPeriod).map(Number).sort((a,b) => a - b);
+  section.style.display = 'block';
+  if (summary) {
+    const pend = todays.filter(r => r.status === 'pending').length;
+    summary.textContent = `신청 ${todays.length}건` + (pend ? ` · 대기 ${pend}건` : '');
+  }
+
+  const th = 'padding:7px 8px;font-size:11px;font-weight:700;color:#7C3AED;background:#F3E8FF;border:1px solid #E9D5FF;text-align:center';
+  const td = 'padding:6px 8px;border:1px solid #EDE4F7;vertical-align:top;min-width:90px';
+  const chip = (r) => {
+    const pend = r.status === 'pending';
+    const bg = pend ? '#FEF3C7' : '#EDE7FF';
+    const fg = pend ? '#B45309' : '#5B21B6';
+    const safeReason = (r.reason || '').replace(/"/g, '&quot;');
+    return `<span title="${safeReason}" style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;margin:2px 2px 0 0">${r.name}<span style="color:#9CA3AF;font-weight:400"> ${r.seat}</span>${pend ? ' ⏳' : ''}</span>`;
+  };
+  const cell = (p, room) => {
+    const arr = byPeriod[p][room] || [];
+    if (!arr.length) return `<td style="${td};text-align:center;color:#D8C9EC">·</td>`;
+    return `<td style="${td}">${arr.map(chip).join('')}</td>`;
+  };
+  body.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr>
+        <th style="${th};min-width:52px">교시</th>
+        <th style="${th}">🚪 스터디룸 1</th>
+        <th style="${th}">🚪 스터디룸 2</th>
+        <th style="${th}">🚪 스터디룸 3</th>
+      </tr></thead>
+      <tbody>
+        ${periods.map(p => `<tr>
+          <td style="${td};text-align:center;font-weight:700;color:#7C3AED;background:#FAF5FF;min-width:52px">${p}교시</td>
+          ${cell(p,1)}${cell(p,2)}${cell(p,3)}
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+window.renderStudyroomBoard = renderStudyroomBoard;
 
 window.approveStudyroomReq = async function(id) {
   try { await setDoc(doc(db,'studyroom_requests',id),{status:'approved'},{merge:true}); showAdminToast('✅ 스터디룸 신청 승인됨'); }
