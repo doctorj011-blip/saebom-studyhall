@@ -10243,8 +10243,11 @@ async function _apcFillStudents() {
   const now = new Date();
   const todayStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
   const twelveHoursAgo = new Date(now.getTime() - 12 * 60 * 60 * 1000);
-  const _apcExclude = ['관리자', '정원혁', '이새봄', '손형준', '김근우', '이수연'];
-  const opts = await Promise.all(STUDENTS.filter(s => !_apcExclude.includes((s.name || '').trim())).map(async s => {
+  // 관리/테스트 계정 제외: "(관리)" 등 괄호 꼬리표는 무시하고 이름만 비교.
+  const _apcExclude = new Set(['관리자', '정원혁', '이새봄', '손형준', '김근우', '이수연']);
+  const _apcBase = n => String(n || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
+  const _apcIsStaff = n => /\(\s*관리/.test(String(n || '')) || _apcBase(n) === '관리자';
+  const opts = await Promise.all(STUDENTS.filter(s => !_apcExclude.has(_apcBase(s.name)) && !_apcIsStaff(s.name)).map(async s => {
     const key = String(s.seat).replace(/[^0-9a-zA-Z가-힣]/g, '_');
     let isNew = false;
     try {
