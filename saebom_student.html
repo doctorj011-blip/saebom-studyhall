@@ -1475,6 +1475,67 @@ async function recordPenalties(list) {
   } catch(e) { console.warn('벌점 기록 실패:', e); }
 }
 
+// 불참/해제였던 교시를 다시 출석(참여·중간입실)으로 되돌린 경우의 교시 목록을 반환한다.
+// 정책: '불참 → 참여' 복귀는 벌점 대상이 아니므로, 그 교시에 이미 기록돼 있던
+//       늦은 변경(1점) 벌점을 취소해 준다. computeLatePenalties와 반대 방향.
+function computePenaltyReversals() {
+  if (!currentStudent || !todayDay || todayDay === '일') return [];
+  const oldSched = currentStudent.schedule[todayDay] || '-';
+  const dd = draftSchedule[todayDay];
+  if (!dd) return [];
+  const periods = todayDay === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const out = [];
+  periods.forEach(p => {
+    const oldSt = parsePeriodStatus(oldSched, p.n);
+    const newSt = dd.periods[p.n] || 'none';
+    const wasIn = oldSt === 'attend' || oldSt === 'partial';
+    const stillIn = newSt === 'attend' || newSt === 'partial';
+    // 출석이 아니었다가(불참/해제) → 다시 출석(참여/중간입실)으로 복귀한 교시
+    if (!wasIn && stillIn) out.push(p.n);
+  });
+  return out;
+}
+
+// 되돌린 교시에 이미 기록된 늦은 변경(1점) 벌점을 오늘 벌점 문서에서 제거한다.
+// 무단결석(type:'noshow', 2점)은 실제 미출석 사후 판정이라 건드리지 않는다.
+async function clearReturnedPenalties(periodsList) {
+  if (!periodsList || !periodsList.length || !window._firebaseReady || !currentStudent) return;
+  try {
+    const db = window._db;
+    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
+    const t = new Date();
+    const dateStr = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+    const ref = window._fsDoc(db, 'penalties', `${dateStr}_${seatKey}`);
+    const s = await window._fsGetDoc(ref);
+    if (!s.exists()) return;
+    const data = s.data();
+    const periods = { ...(data.periods || {}) };
+    let changed = false;
+    periodsList.forEach(pn => {
+      const k = String(pn);
+      const p = periods[k];
+      // 늦은 변경(1점)만 취소 — 무단결석(noshow)은 실제 결석 판정이라 보존
+      if (p && p.type !== 'noshow') { delete periods[k]; changed = true; }
+    });
+    if (!changed) return;
+    if (Object.keys(periods).length === 0) {
+      // 남은 벌점 교시가 없으면 문서 자체를 삭제
+      await window._fsDeleteDoc(ref);
+    } else {
+      await window._fsSetDoc(ref, {
+        name: currentStudent.name,
+        seat: currentStudent.seat,
+        seatKey: seatKey,
+        date: dateStr,
+        day: todayDay,
+        periods: periods,
+        updatedAt: window._fsServerTimestamp()
+      });
+    }
+    loadMyPenalties(); // 벌점 카드 갱신
+  } catch(e) { console.warn('벌점 취소 실패:', e); }
+}
+
 // ── 내 벌점 조회/표시 (오늘 일정 탭 상단 카드) ──
 let _penaltyDocs = null;
 async function loadMyPenalties() {
@@ -2108,6 +2169,8 @@ function wkSetPartialTime(day, pNum, el) {
 async function saveSchedule() {
   // 마감(교시 시작 5시간 전) 이후의 출석 취소 → 벌점 경고 후 진행
   const latePenalties = computeLatePenalties();
+  // 불참 → 참여 복귀 교시: 이미 기록된 늦은 변경 벌점을 취소한다 (저장 후 처리)
+  const penaltyReversals = computePenaltyReversals();
   if (latePenalties.length) {
     const lines = latePenalties.map(c => ` · ${c.n}교시 (참여 → ${c.to==='absent'?'불참':'해제'})`).join('\n');
     const ok = confirm(
@@ -2158,6 +2221,7 @@ async function saveSchedule() {
   buildWeeklyTable(); // base 커밋/당일변경 반영 후 '오늘만' 배지 상태 갱신
   if (ok) {
     try { sessionStorage.removeItem('saebom_pending_sync'); } catch(e) {}
+    if (penaltyReversals.length) clearReturnedPenalties(penaltyReversals); // 불참→참여 복귀 교시 벌점 취소
     if (latePenalties.length) {
       recordPenalties(latePenalties);
       showToast(`✅ 저장됐습니다 · 늦은 변경으로 벌점 ${latePenalties.length}점이 부여됐습니다`);
