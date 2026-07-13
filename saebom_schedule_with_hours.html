@@ -155,6 +155,8 @@ body.admin-device .topbar-tabs{display:flex}
 .student-list-empty{grid-column:1/-1;text-align:center;padding:40px 0;color:var(--color-text-tertiary);font-size:13px}
 .add-btn{padding:7px 14px;background:#6C5DD3;color:#fff;border:none;border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap}
 .today-chip{display:inline-flex;align-items:center;gap:4px;background:#EEF2FF;color:#27500A;border-radius:20px;padding:2px 8px;font-size:11px;margin-left:8px}
+.now-period-chip{display:inline-flex;align-items:center;gap:4px;background:#FFF7ED;color:#9A3412;border-radius:20px;padding:2px 8px;font-size:11px;margin-left:6px;white-space:nowrap}
+.now-period-chip.active{background:#DCFCE7;color:#166534;font-weight:700}
 .period-header{font-size:10px;line-height:1.3}
 
 /* 사용시간 탭 전용 */
@@ -722,6 +724,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <span style="display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;background:rgba(255,255,255,0.85);border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,0.15);vertical-align:middle;flex-shrink:0"><img src="data:image/png;base64,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y9PpFM/ORQ6eYRzrdWszY0a+UYyjbAvn90y9wSXZXcwalNvseh7BWcRgajXG2xud5I84xnsq/geVde+817xi+uKKQJdbpyAiWKEXMzJq8eTH/5wtF9grNmFtfEcmRUEuX35Fb62CGUHg4x4O7D02wQeZySPGE220rSvqv+xxvIzZQJ0eFPF+UL9o05qylZcChujYUrUxATAewfcK6dsJzrhMkoMC3EK00TavrLvXZ7sGxCaf4CXjpX887dHmw0OFHRSYQCeLzTEXbry1CuvogAj9TRQ7QHxAyWRDkhBsjlbcsm1b68rpswPjXiWg06k3v27hpnUXA1oSGIzt+UiVCHTui2UYMqJY+2JL6yDmlWxgtlRP2H5iIBWbfz99sWf0V6r0Vuz4iYbHNh24FFhgkEunuoT73l23uqIS8zVREAFRpBGIX09s8MvKidt2F9vb+of68b7a55io3gr/xB7i39y5dOOghfklAwOFpDHC7/yO59HtzlKbI/+1YTdu/cdAa1uWNHipz+h4YXmESB8EsDWG+fnMb21quxygZQGXKztWPObb9IE6cXEtQTosh811C97u92pzRT4J8j8/MLEEtB9IuwAAAABJRU5ErkJggg==" style="height:24px;width:auto" alt="나비"></span>
     새봄 면학관
     <span class="today-chip"><i class="ti ti-calendar" aria-hidden="true"></i> <span id="today-label"></span></span>
+    <span class="now-period-chip" id="now-period-chip"><i class="ti ti-clock-hour-4" aria-hidden="true"></i> —</span>
     <button class="tab-btn checkin-shortcut-btn active" onclick="showSection('checkin',this)" style="margin-left:8px;background:rgba(255,255,255,0.35);color:#1E1B4B;font-weight:600;border:1px solid rgba(255,255,255,0.6)">입실·퇴실</button>
   </div>
   <div class="topbar-tabs">
@@ -1526,6 +1529,78 @@ const PERIODS_SAT=[
 ];
 let PERIODS = PERIODS_WEEKDAY;
 let PERIOD_OFFSET = 6;
+
+// ── 현재 교시 표시 ──
+// PERIODS_* 의 시각 문자열('6:00~6:50' 등)은 12시간제라 오전/오후가 모호하다.
+// 하루가 아침→밤→자정 넘김 순으로 '단조 증가'한다는 성질을 이용해 24시간(분) 값으로 해석한다.
+// (예: 평일 '6:00'=18:00, '12:00~1:00'=24:00~25:00 = 자정~새벽1시)
+function _periodMinutesList(periods, seedMin){
+  let prev = seedMin;
+  const resolve = (hm) => {
+    const [h, m] = hm.split(':').map(Number);
+    const cands = (h === 12) ? [12*60 + m, 24*60 + m]          // 정오 또는 자정
+                             : [h*60 + m, (h+12)*60 + m, (h+24)*60 + m];
+    for (const c of cands) if (c >= prev) return c;
+    return cands[cands.length - 1];
+  };
+  return periods.map(p => {
+    const [s, e] = p.t.split('~');
+    const startMin = resolve(s); prev = startMin;
+    const endMin   = resolve(e); prev = endMin;
+    return { n: p.n, t: p.t, startMin, endMin };
+  });
+}
+const _PERIOD_MIN_WEEKDAY = _periodMinutesList(PERIODS_WEEKDAY, 12*60); // 첫 교시가 저녁(18시)
+const _PERIOD_MIN_SAT     = _periodMinutesList(PERIODS_SAT, 0);         // 첫 교시가 오전(9시)
+
+// 현재 진행 중인 교시 정보. phase: in(수업중)/break(쉬는시간)/before(수업전)/after(수업종료)/closed(휴관)
+function _currentPeriodInfo(now){
+  now = now || new Date();
+  const h = now.getHours();
+  // 새벽 3시 이전은 전날 밤 세션(11교시 자정 넘김)의 연장으로 취급 — 앱 전반의 '오늘' 기준과 동일
+  const effDay = h < 3 ? (now.getDay() + 6) % 7 : now.getDay();
+  let nowMin = h*60 + now.getMinutes();
+  if (h < 3) nowMin += 1440; // 자정 넘긴 시각을 확장 스케일(24:00~)로
+  const list = (effDay === 6) ? _PERIOD_MIN_SAT
+             : (effDay >= 1 && effDay <= 5) ? _PERIOD_MIN_WEEKDAY
+             : null; // 일요일(0) → 휴관
+  if (!list) return { phase: 'closed' };
+  for (const p of list) if (nowMin >= p.startMin && nowMin < p.endMin) return { phase: 'in', current: p };
+  const next = list.find(p => p.startMin > nowMin);
+  if (!next) return { phase: 'after' };
+  if (nowMin < list[0].startMin) return { phase: 'before', next };
+  return { phase: 'break', next };
+}
+
+function updateNowPeriodChip(){
+  const el = document.getElementById('now-period-chip');
+  if (!el) return;
+  const info = _currentPeriodInfo();
+  el.classList.toggle('active', info.phase === 'in');
+  switch (info.phase){
+    case 'in':
+      el.innerHTML = `<i class="ti ti-clock-hour-4" aria-hidden="true"></i> ${info.current.n} · ${info.current.t}`;
+      el.title = `현재 ${info.current.n} 진행 중 (${info.current.t})`;
+      break;
+    case 'break':
+      el.innerHTML = `<i class="ti ti-clock-pause" aria-hidden="true"></i> 쉬는시간 · 다음 ${info.next.n}(${info.next.t.split('~')[0]})`;
+      el.title = `쉬는시간 — 다음은 ${info.next.n} (${info.next.t})`;
+      break;
+    case 'before':
+      el.innerHTML = `<i class="ti ti-clock-play" aria-hidden="true"></i> 수업 전 · 곧 ${info.next.n}(${info.next.t.split('~')[0]})`;
+      el.title = `수업 시작 전 — 첫 교시는 ${info.next.n} (${info.next.t})`;
+      break;
+    case 'after':
+      el.innerHTML = `<i class="ti ti-clock-off" aria-hidden="true"></i> 수업 종료`;
+      el.title = '오늘 교시가 모두 끝났습니다';
+      break;
+    default: // closed
+      el.innerHTML = `<i class="ti ti-clock-off" aria-hidden="true"></i> 휴관일`;
+      el.title = '오늘은 휴관일입니다';
+  }
+}
+updateNowPeriodChip();
+setInterval(updateNowPeriodChip, 10*1000);
 
 // 교시별 출석현황(숫자·명단)에서 제외할 학생 이름
 const PERIOD_EXCLUDED_NAMES = ['정원혁', '이새봄'];
@@ -3518,7 +3593,7 @@ function getCurrentPeriod() {
 function showTodayAttendees() {
   const old = document.getElementById('today-popup-overlay');
   if (old) { old.remove(); return; }
-  const inStudents = PRESENT.map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
+  const inStudents = PRESENT.filter(name => !window.isTestStudent(name)).map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
   const overlay = document.createElement('div');
   overlay.id = 'today-popup-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;display:flex;align-items:center;justify-content:center';
@@ -3675,7 +3750,7 @@ function buildDashboard(){
     if (typeof buildFloorplan === 'function') setTimeout(buildFloorplan, 0);
   }
 
-  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+PRESENT.map(name=>{
+  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+PRESENT.filter(name=>!window.isTestStudent(name)).map(name=>{
     const s=STUDENTS.find(s=>s.name===name);
     return `<div class="attend-row">
       <div style="display:flex;align-items:center;gap:5px">
