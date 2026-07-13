@@ -8470,7 +8470,10 @@ async function _assessNoShowForDate(dIso, d0, dayName) {
       const schedStr = (rptBySeat[seatKey] !== undefined) ? rptBySeat[seatKey] : (bd[dayName] || '-');
       const parsed = window.parseScheduleStr(schedStr);
       if (!parsed || !parsed.periods || !parsed.periods.size) return; // 출석 예정 교시 없음(전일 불참·'-'·근무 등)
-      const name = bd.name || st.name;
+      // 세션·포인터는 students 컬렉션 이름(st.name)으로 저장되므로 그것을 우선한다.
+      // schedule_base의 name(bd.name)은 개명(동명이인 구분자 등) 시 갱신되지 않아 stale일 수 있고,
+      // stale 이름으로 sessByName을 조회하면 출석했는데도 세션 0건→전 교시 무단결석 오판이 난다.
+      const name = st.name || bd.name;
       if (window.isTestStudent && window.isTestStudent(name)) return; // 테스트 계정 — 무단결석 벌점 없음
       const sessions = sessByName[name] || [];
       const missed = [];
