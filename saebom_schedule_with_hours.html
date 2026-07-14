@@ -10786,7 +10786,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const C = { accent:'#6C5DD3', accentSoft:'#F1EEFF', line:'#E5E7EB', text:'#1F2937', muted:'#6B7280',
     inputBg:'#fff', onBg:'#DCFCE7', onTx:'#15803D', offBg:'#F3F4F6', offTx:'#9CA3AF', warn:'#B45309', err:'#DC2626' };
 
-  let STATE = {}, CONF = {};
+  let STATE = {}, CONF = {}, showHidden = false;
 
   function parseState(st){
     const s = st||{}, op = s.operation||{}, j = s.airConJobMode||{}, f = s.airFlow||{};
@@ -10862,14 +10862,24 @@ document.addEventListener('DOMContentLoaded', function() {
         </select>
         <input id="acr_${esc(id)}" placeholder="방 번호" style="display:none;width:80px;background:${C.inputBg};border:1px solid ${C.line};color:${C.text};border-radius:7px;padding:6px 8px;font-size:12px">
         <button onclick="__ac.assign('${esc(id)}')" style="background:${C.accent};border:0;color:#fff;font-weight:700;font-size:12px;padding:7px 12px;border-radius:8px;cursor:pointer">배정</button>
+        <button onclick="__ac.ignore('${esc(id)}')" title="면학관 에어컨이 아니면 숨김" style="background:#fff;border:1px solid ${C.line};color:${C.muted};font-weight:700;font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer">숨김</button>
       </div>
     </div>`;
   }
 
   function render(){
     const zones = CONF.zones || {};
-    const mapped = Object.keys(zones);
-    const discovered = (STATE.discovered || []).filter(d => d && d.deviceId && !zones[d.deviceId]);
+    const mapped = Object.keys(zones).sort((a, b) => {
+      const za = zones[a] || {}, zb = zones[b] || {};
+      const rank = z => z.type === 'studyroom' ? 1 : 0;   // 열람실(에어컨1·2) 먼저, 그다음 스터디룸(1·2·3번)
+      if (rank(za) !== rank(zb)) return rank(za) - rank(zb);
+      return String(za.name || a).localeCompare(String(zb.name || b), 'ko', { numeric: true });
+    });
+    const ignore = CONF.ignore || [];
+    const isAC = d => /AIR_CONDITIONER/i.test((d.deviceInfo && d.deviceInfo.deviceType) || '');   // 에어컨만 (냉장고·정수기 등 제외)
+    const unmappedAC = (STATE.discovered || []).filter(d => d && d.deviceId && !zones[d.deviceId] && isAC(d));
+    const discovered = unmappedAC.filter(d => !ignore.includes(d.deviceId));
+    const hiddenAC = unmappedAC.filter(d => ignore.includes(d.deviceId));
     const auto = CONF.auto !== false;
     const present = STATE.present!=null ? STATE.present : '—';
     const op = STATE.op;
@@ -10903,7 +10913,11 @@ document.addEventListener('DOMContentLoaded', function() {
     } else {
       body = '';
       if (mapped.length) body += `<div style="display:flex;flex-wrap:wrap;gap:12px">${mapped.map(deviceCard).join('')}</div>`;
-      if (discovered.length) body += `<div style="margin-top:16px"><div style="font-size:12px;color:${C.muted};font-weight:700;margin-bottom:8px">미배정 에어컨 (열람실/스터디룸에 배정)</div><div style="display:flex;flex-wrap:wrap;gap:12px">${discovered.map(discoveredCard).join('')}</div></div>`;
+      if (discovered.length) body += `<div style="margin-top:16px"><div style="font-size:12px;color:${C.muted};font-weight:700;margin-bottom:8px">미배정 에어컨 (열람실/스터디룸에 배정 · 면학관 아니면 <b>숨김</b>)</div><div style="display:flex;flex-wrap:wrap;gap:12px">${discovered.map(discoveredCard).join('')}</div></div>`;
+      if (hiddenAC.length) {
+        body += `<div style="margin-top:12px;font-size:12px;color:${C.muted}">숨긴 에어컨 ${hiddenAC.length}대 <button onclick="__ac.toggleHidden()" style="border:1px solid ${C.line};background:#fff;color:${C.muted};border-radius:6px;padding:3px 9px;font-weight:700;cursor:pointer">${showHidden?'접기':'다시 보기'}</button></div>`;
+        if (showHidden) body += `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px">${hiddenAC.map(d=>{const id=d.deviceId;const alias=(d.deviceInfo&&(d.deviceInfo.alias||d.deviceInfo.modelName))||id;return `<div style="border:1px solid ${C.line};background:#fff;border-radius:8px;padding:8px 12px;font-size:12px;color:${C.text}">${esc(alias)} <button onclick="__ac.unignore('${esc(id)}')" style="margin-left:6px;border:1px solid ${C.line};background:#fff;color:${C.accent};border-radius:6px;padding:2px 8px;font-weight:700;cursor:pointer">복원</button></div>`;}).join('')}</div>`;
+      }
     }
     el.innerHTML = head + settings + body;
   }
@@ -10916,6 +10930,9 @@ document.addEventListener('DOMContentLoaded', function() {
     search:()=>cmd({ action:'list' }),
     refresh:()=>cmd({ action:'refresh' }),
     toggleAuto:()=>saveConf({ auto: !(CONF.auto!==false) }),
+    ignore:(id)=>saveConf({ ignore: Array.from(new Set([...(CONF.ignore||[]), id])) }),   // 면학관 아닌 기기 숨김
+    unignore:(id)=>saveConf({ ignore: (CONF.ignore||[]).filter(x=>x!==id) }),               // 숨김 해제
+    toggleHidden:()=>{ showHidden=!showHidden; render(); },
     toggleRoom:(id)=>{ const t=document.getElementById('act_'+id), r=document.getElementById('acr_'+id); if(t&&r) r.style.display = t.value==='studyroom' ? '' : 'none'; },
     assign:(id)=>{
       const name=(document.getElementById('acn_'+id)||{}).value||'';
