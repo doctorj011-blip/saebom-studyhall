@@ -762,9 +762,20 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <div class="card-title"><i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</div>
       <div id="present-list"></div>
     </div>
-    <div class="card">
-      <div class="card-title"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</div>
-      <div id="period-chart"></div>
+    <!-- 2열: 교시별 출석 현황 + 그 바로 아래 스터디룸 신청 현황을 세로로 묶는다(왼쪽 입실현황 높이와 무관하게 붙게) -->
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="card">
+        <div class="card-title"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</div>
+        <div id="period-chart"></div>
+      </div>
+      <!-- 오늘 스터디룸 신청 현황 (교시별 출석 바로 아래) -->
+      <div class="card" id="studyroom-board-section" style="display:none">
+        <div class="card-title" style="justify-content:space-between">
+          <span><i class="ti ti-layout-grid" style="font-size:14px;color:#7C3AED"></i> 오늘 스터디룸 신청 현황</span>
+          <span id="studyroom-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+        </div>
+        <div id="studyroom-board-body" style="overflow-x:auto"></div>
+      </div>
     </div>
     <!-- 오늘 벌점 현황판 (오늘 늦은 변경 + 오늘 새벽 확정된 어제 무단결석) -->
     <div class="card" id="penalty-board-section">
@@ -784,14 +795,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <button onclick="dismissStudyroomOverflow()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">닫기</button>
       </div>
       <div id="studyroom-overflow-list"></div>
-    </div>
-    <!-- 스터디룸 신청 현황판 (한눈에 보기) -->
-    <div class="card" id="studyroom-board-section" style="display:none;grid-column:2">
-      <div class="card-title" style="justify-content:space-between">
-        <span><i class="ti ti-layout-grid" style="font-size:14px;color:#7C3AED"></i> 오늘 스터디룸 신청 현황</span>
-        <span id="studyroom-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
-      </div>
-      <div id="studyroom-board-body" style="overflow-x:auto"></div>
     </div>
     <!-- 스터디룸 신청 알림 -->
     <div class="card" id="studyroom-req-section" style="display:none">
@@ -10945,10 +10948,7 @@ document.addEventListener('DOMContentLoaded', function() {
       body = '';
       if (mapped.length) body += `<div style="display:flex;flex-wrap:wrap;gap:12px">${mapped.map(deviceCard).join('')}</div>`;
       if (discovered.length) body += `<div style="margin-top:16px"><div style="font-size:12px;color:${C.muted};font-weight:700;margin-bottom:8px">미배정 에어컨 (열람실/스터디룸에 배정 · 면학관 아니면 <b>숨김</b>)</div><div style="display:flex;flex-wrap:wrap;gap:12px">${discovered.map(discoveredCard).join('')}</div></div>`;
-      if (hiddenAC.length) {
-        body += `<div style="margin-top:12px;font-size:12px;color:${C.muted}">숨긴 에어컨 ${hiddenAC.length}대 <button onclick="__ac.toggleHidden()" style="border:1px solid ${C.line};background:#fff;color:${C.muted};border-radius:6px;padding:3px 9px;font-weight:700;cursor:pointer">${showHidden?'접기':'다시 보기'}</button></div>`;
-        if (showHidden) body += `<div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:8px">${hiddenAC.map(d=>{const id=d.deviceId;const alias=(d.deviceInfo&&(d.deviceInfo.alias||d.deviceInfo.modelName))||id;return `<div style="border:1px solid ${C.line};background:#fff;border-radius:8px;padding:8px 12px;font-size:12px;color:${C.text}">${esc(alias)} <button onclick="__ac.unignore('${esc(id)}')" style="margin-left:6px;border:1px solid ${C.line};background:#fff;color:${C.accent};border-radius:6px;padding:2px 8px;font-weight:700;cursor:pointer">복원</button></div>`;}).join('')}</div>`;
-      }
+      // 숨긴 기기(집에 있는 것들)는 완전히 표시하지 않음. (ac_config.ignore 로만 유지 — 복원은 관리자 문의)
     }
     el.innerHTML = head + settings + body;
   }
