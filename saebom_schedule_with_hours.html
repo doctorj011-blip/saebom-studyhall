@@ -757,10 +757,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div class="alert-title"><i class="ti ti-bell" style="font-size:15px" aria-hidden="true"></i> <span id="alert-title-text">미입실 알림 대상</span></div>
     <div id="alert-list"></div>
   </div>
-  <!-- ❄️🔥 냉난방(에어컨) 패널 — 입퇴실 자동 + 수동 제어. 내용은 하단 module 스크립트가 채운다. -->
-  <div class="card" id="acPanel" style="margin-bottom:14px">
-    <div style="color:var(--color-text-tertiary);font-size:13px">냉난방 패널 불러오는 중…</div>
-  </div>
   <div class="dashboard-grid">
     <div class="card">
       <div class="card-title"><i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</div>
@@ -814,6 +810,11 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="schedule-change-list"></div>
     </div>
+  </div>
+
+  <!-- ❄️🔥 냉난방(에어컨) 패널 — 입실현황·출석·벌점 아래에 배치. 내용은 하단 module 스크립트가 채운다. -->
+  <div class="card" id="acPanel" style="margin-top:14px">
+    <div style="color:var(--color-text-tertiary);font-size:13px">냉난방 패널 불러오는 중…</div>
   </div>
 </div>
 
@@ -10780,6 +10781,10 @@ document.addEventListener('DOMContentLoaded', function() {
   const MODE_LABEL = { COOL:'냉방', AIR_DRY:'제습', FAN:'송풍', AUTO:'자동', HEAT:'난방', AIR_CLEAN:'공기청정' };
   const FAN_LABEL  = { SLOW:'미풍', LOW:'약', MID:'중', HIGH:'강', POWER:'파워', AUTO:'자동', NATURE:'자연풍' };
   const MODES_FB = ['COOL','AIR_DRY','FAN','AUTO'], FANS_FB = ['SLOW','LOW','MID','HIGH','AUTO'], STEP = 0.5;
+  // 모든 카드에서 버튼 순서를 동일하게: 냉방·난방·자동·송풍·제습 / 약·중·강·파워·자동
+  const MODE_ORDER = ['COOL','HEAT','AUTO','FAN','AIR_DRY','AIR_CLEAN'];
+  const FAN_ORDER  = ['SLOW','LOW','MID','HIGH','POWER','NATURE','AUTO'];
+  const orderBy = (arr, order) => arr.slice().sort((a,b)=>{ const ia=order.indexOf(a), ib=order.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
   // 밝은 테마 색 (이 앱 팔레트)
@@ -10800,7 +10805,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const cat = n => { let c=root[n]; if(Array.isArray(c)) c=c[0]; return c||{}; };
     const en = node => { if(!node) return null; const v=node.value!==undefined?node.value:node;
       if(Array.isArray(v)) return v; if(v&&Array.isArray(v.w)) return v.w; if(v&&Array.isArray(v.r)) return v.r; return null; };
-    return { modes: en(cat('airConJobMode').currentJobMode)||MODES_FB, fans: en(cat('airFlow').windStrength)||FANS_FB, step: STEP };
+    return { modes: orderBy(en(cat('airConJobMode').currentJobMode)||MODES_FB, MODE_ORDER), fans: orderBy(en(cat('airFlow').windStrength)||FANS_FB, FAN_ORDER), step: STEP };
   }
   const clampT = v => Math.round(v*2)/2;
 
