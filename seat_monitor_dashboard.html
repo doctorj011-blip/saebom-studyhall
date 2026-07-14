@@ -207,7 +207,7 @@
 </div>
 
 <section id="acPanel" style="margin:18px 0;padding:16px 18px;background:#0f1720;border:1px solid #22303d;border-radius:14px;color:#e5ecf2;font-size:14px">
-  <div style="color:#7d8a94;font-size:13px">냉방 패널 불러오는 중…</div>
+  <div style="color:#7d8a94;font-size:13px">냉난방 패널 불러오는 중…</div>
 </section>
 
 <div class="pipeline">
@@ -937,7 +937,7 @@
   startSim();
 </script>
 
-<!-- ❄️ 냉방(에어컨) 패널 — 입퇴실 자동 + 수동 제어. LG 통신은 서버(Cloud Function)만, 여기선 Firestore 문서로 연동. -->
+<!-- ❄️🔥 냉난방(에어컨) 패널 — 입퇴실 자동 + 수동 제어. LG 통신은 서버(Cloud Function)만, 여기선 Firestore 문서로 연동. -->
 <script type="module">
 (async () => {
   const CFG = { apiKey:"AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM", authDomain:"saebom-studyhall.firebaseapp.com", projectId:"saebom-studyhall", storageBucket:"saebom-studyhall.appspot.com" };
@@ -1043,7 +1043,7 @@
     const op = STATE.op;
 
     const head = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
-      <div style="font-size:16px;font-weight:800">❄️ 냉방 · 입퇴실 자동</div>
+      <div style="font-size:16px;font-weight:800">❄️🔥 냉난방 · 입퇴실 자동</div>
       <span style="font-size:12px;color:#8a96a1">현재 재실 <b style="color:#e5ecf2">${esc(present)}</b>명 ${op===false?'· <span style="color:#e2b84a">운영시간 외</span>':''}</span>
       <label style="margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;cursor:pointer">
         자동
@@ -1058,6 +1058,8 @@
     const settings = `<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;color:#8a96a1;background:#0c141c;border:1px solid #1b2732;border-radius:9px;padding:9px 12px;margin-bottom:14px">
       운영 <input id="ac_opStart" value="${esc(CONF.opStart||'06:00')}" style="width:62px;background:#131e28;border:1px solid #2b3a49;color:#e5ecf2;border-radius:6px;padding:4px 6px">~<input id="ac_opEnd" value="${esc(CONF.opEnd||'24:00')}" style="width:62px;background:#131e28;border:1px solid #2b3a49;color:#e5ecf2;border-radius:6px;padding:4px 6px">
       · OFF 유예 <input id="ac_grace" type="number" value="${esc(CONF.offGraceMin!=null?CONF.offGraceMin:20)}" style="width:52px;background:#131e28;border:1px solid #2b3a49;color:#e5ecf2;border-radius:6px;padding:4px 6px">분
+      · 자동 운전 ${(() => { const m = CONF.onMode || 'COOL'; const opt = (v,lb)=>`<option value="${v}"${m===v?' selected':''}>${lb}</option>`;
+        return `<select id="ac_mode" style="background:#131e28;border:1px solid #2b3a49;color:#e5ecf2;border-radius:6px;padding:4px 6px">${opt('COOL','냉방')}${opt('HEAT','난방')}${opt('AUTO','자동')}</select>`; })()}
       · 기본온도 <input id="ac_temp" type="number" step="0.5" value="${esc(CONF.onTemp!=null?CONF.onTemp:24)}" style="width:58px;background:#131e28;border:1px solid #2b3a49;color:#e5ecf2;border-radius:6px;padding:4px 6px">°
       <button onclick="__ac.saveSettings()" style="border:0;background:#2b3a49;color:#e5ecf2;font-weight:700;padding:5px 12px;border-radius:7px;cursor:pointer">저장</button>
     </div>`;
@@ -1092,12 +1094,13 @@
       saveConf({ zones: { [id]: z } });
     },
     saveSettings:()=>{
-      const g=el.querySelector('#ac_grace'), t=el.querySelector('#ac_temp');
+      const g=el.querySelector('#ac_grace'), t=el.querySelector('#ac_temp'), m=el.querySelector('#ac_mode');
       saveConf({
         opStart:(el.querySelector('#ac_opStart')||{}).value||'06:00',
         opEnd:(el.querySelector('#ac_opEnd')||{}).value||'24:00',
         offGraceMin:Number(g&&g.value)||20,
         onTemp:Number(t&&t.value)||24,
+        onMode:(m&&m.value)||'COOL',   // 자동 켜짐 시 운전(냉방/난방/자동) — 계절 따라 전환
       });
     },
   };
