@@ -8455,16 +8455,41 @@ window.resetSchedulesToBase = async function() {
   const _dateStr = new Date().toLocaleDateString('ko-KR');
   // 다른 기기가 이미 오늘 리셋을 끝냈으면 Firestore 쓰기는 건너뛰고 로컬 정리만 한다.
   if (await _dailyResetAlreadyDone(_dateStr)) { _resetLocalAfterDailyReset(0); return; }
+  // ── '오늘'의 당일변경은 지우면 안 된다 ──
+  // 학생앱은 자정이 지나면 곧바로 그날을 '오늘'로 보고 수정을 허용하는데(학생앱 todayDay는
+  // 달력 요일 기준), 이 리셋은 02시에 돈다. 그래서 00:00~02:00 사이에 들어온 '오늘' 변경까지
+  // 어제 것과 함께 지워지던 버그가 있었다(학생·학부모는 변경 알림톡을 이미 받은 뒤라
+  // 관리자 화면만 고정 시간표로 되돌아감 → 미입실 알림 오발송).
+  // 학생앱 applyBaseAndRevert()와 동일하게, 오늘 날짜의 daily_reports를 오늘 요일에 다시 얹는다.
+  // ※ 여기서는 getTodayDayName()(새벽 3시 경계)이 아니라 달력 요일을 쓴다 — daily_reports를
+  //   기록하는 학생앱이 달력 요일 기준이라 그쪽과 키를 맞춰야 한다.
+  const _now = new Date();
+  const _todayIso = SH.sessIsoDate(_now.getTime());
+  const _todayDay = ['일','월','화','수','목','금','토'][_now.getDay()];
   try {
+    // 오늘자 당일변경: seatKey → 오늘 요일 스케줄 문자열
+    const _todayOverrides = {};
+    if (RDAYS.includes(_todayDay)) {
+      const rptSnap = await getDocs(query(collection(db, 'daily_reports'), where('date', '==', _todayIso)));
+      rptSnap.forEach(rdoc => {
+        const rd = rdoc.data();
+        if (typeof rd.schedule !== 'string') return;
+        const sk = rdoc.id.startsWith(_todayIso + '_') ? rdoc.id.slice(_todayIso.length + 1) : null;
+        if (sk) _todayOverrides[sk] = rd.schedule;
+      });
+    }
     const baseSnap = await getDocs(collection(db, 'schedule_base'));
     const writes = [];
     baseSnap.forEach(bdoc => {
       const seatKey = bdoc.id;
       const bd = bdoc.data();
+      // 이 좌석의 리셋 목표값 = 고정 시간표, 단 오늘 요일은 오늘자 당일변경이 있으면 그 값
+      const _val = d => (d === _todayDay && _todayOverrides[seatKey] != null)
+        ? _todayOverrides[seatKey] : (bd[d] || '-');
       // schedules를 원본값으로 덮어씀. changedBy:'admin' → schedules onSnapshot이
       // 이 되돌림을 '학생발 변경'으로 오인해 알림을 만들지 않도록 표시한다.
       const payload = { name: bd.name || '', seat: bd.seat || seatKey, updatedAt: serverTimestamp(), changedBy: 'admin' };
-      RDAYS.forEach(d => { payload[d] = bd[d] || '-'; });
+      RDAYS.forEach(d => { payload[d] = _val(d); });
       writes.push(setDoc(doc(db, 'schedules', seatKey), payload));
       // 실재하는 학생일 때만: students 컬렉션 요일 필드도 원본으로 되돌리고(새로고침 후에도
       // 고정 시간표가 보이도록), 로컬 STUDENTS 배열도 동기화(관리자 스케줄 표 즉시 반영).
@@ -8472,9 +8497,9 @@ window.resetSchedulesToBase = async function() {
       const st = (window.STUDENTS || []).find(s =>
         (s.seat || '').replace(/[^0-9]/g,'') === seatKey || s.seat === bd.seat);
       if (st) {
-        if (st.schedule) RDAYS.forEach(d => { st.schedule[d] = bd[d] || '-'; });
+        if (st.schedule) RDAYS.forEach(d => { st.schedule[d] = _val(d); });
         const stuPayload = {};
-        RDAYS.forEach(d => { stuPayload[d] = bd[d] || '-'; });
+        RDAYS.forEach(d => { stuPayload[d] = _val(d); });
         writes.push(setDoc(doc(db, 'students', seatKey), stuPayload, { merge: true }));
       }
       count++;
