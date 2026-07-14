@@ -116,5 +116,18 @@ git push
 > ⚠️ **주의**: `firebase deploy --only firestore:rules` 는 콘솔 규칙을 **이 파일로 통째 교체**합니다.
 > 그래서 규칙 수정은 반드시 이 파일에서만 하고, 콘솔에서 급히 고쳤다면 그 내용을 이 파일에도 반영한 뒤 커밋해 두세요.
 
+### 자동 배포 (GitHub Actions)
+
+`.github/workflows/deploy-firestore-rules.yml` 이 있어서, `firestore.rules` 를 고쳐 **`main` 에 push 하면 콘솔에 자동 배포**됩니다.
+PR 에서는 **검증(dry-run)만** 돌아 잘못된 규칙이 머지 전에 걸러집니다. → 규칙이 바뀔 때마다 자동으로 확인·반영됩니다.
+
+**최초 1회 시크릿 등록** (이거 없으면 워크플로가 실패):
+1. Firebase 콘솔 → **프로젝트 설정 → 서비스 계정 → "새 비공개 키 생성"** → JSON 다운로드
+2. GitHub 저장소 → **Settings → Secrets and variables → Actions → New repository secret**
+   - 이름: `FIREBASE_SERVICE_ACCOUNT`
+   - 값: 위 JSON 파일 **전체 내용** 붙여넣기
+
+> 이후로는 `firestore.rules` 만 고쳐 push 하면 끝. 로컬에서 직접 배포하려면 `bash scripts/deploy-rules.sh` 를 써도 됩니다(둘 다 같은 파일이 원본).
+
 ### 냉방(에어컨) 관련 컬렉션
 `ac_config`(설정·zone 매핑) · `ac_commands`(수동 명령) · `ac_state`(상태, 서버만 쓰기) — 대시보드 냉방 패널이 사용합니다.
