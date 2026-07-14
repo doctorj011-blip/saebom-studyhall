@@ -24,7 +24,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, query, where, onSnapshot, serverTimestamp }
+import { getFirestore, connectFirestoreEmulator, doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, query, where, onSnapshot, serverTimestamp, runTransaction }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -49,7 +49,7 @@ if (new URLSearchParams(location.search).get('emu') === '1') {
 
 // 전역 노출
 // Firestore 함수 일괄 노출 — classic 스크립트에서 매번 동적 import 하지 않도록 (_db 보다 먼저 세팅)
-window._fs = { doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, query, where, onSnapshot, serverTimestamp, getFirestore };
+window._fs = { doc, setDoc, getDoc, getDocs, deleteDoc, addDoc, collection, query, where, onSnapshot, serverTimestamp, getFirestore, runTransaction };
 window._db = db;
 window._fsDoc = doc;
 window._fsSetDoc = setDoc;
@@ -60,6 +60,7 @@ window._fsAddDoc = addDoc;
 window._fsOnSnapshot = onSnapshot;
 window._fsServerTimestamp = serverTimestamp;
 window._fsGetDoc = getDoc;
+window._fsRunTransaction = runTransaction;
 window._firebaseReady = true;
 console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#E6E2F9;color:#fff;font-size:13px;padding:4px 8px;border-radius:4px');
 window.dispatchEvent(new Event('firebase-ready'));
@@ -3188,57 +3189,73 @@ window.selectSeat = async function(seatNum) {
   const oldId = oldSeat.replace('번','');
   currentStudent.seat = ns;
   try {
-    // 1. 옛 좌석 문서를 통째로 읽어 그대로 새 좌석으로 옮긴다.
-    //    (currentStudent에는 fee·startDate·feeMemo 등 관리자 관리 필드가 없어
-    //     재구성 방식으로 저장하면 자리 이동 시 수납·등록 정보가 유실된다.)
-    let base = {};
-    if (oldId) {
-      try { const os = await window._fsGetDoc(window._fsDoc(db, 'students', oldId)); if (os.exists()) base = os.data(); } catch(e) {}
-    }
-    // 옛 문서가 없을 때(로컬 샘플 로그인 등)를 대비한 하위 폴백. base(관리자 원본)가 있으면 그 값이 우선.
-    const fallback = {
-      parent: currentStudent.parent || '', gender: currentStudent.gender || 'f', expiry: currentStudent.expiry || '',
-      월: currentStudent.schedule?.['월']||'-', 화: currentStudent.schedule?.['화']||'-', 수: currentStudent.schedule?.['수']||'-',
-      목: currentStudent.schedule?.['목']||'-', 금: currentStudent.schedule?.['금']||'-', 토: currentStudent.schedule?.['토']||'-',
-      hours: currentStudent.hours || {},
-    };
-    await window._fsSetDoc(window._fsDoc(db, 'students', ns), {
-      ...fallback,
-      ...base,
-      seat: ns,
-      name: currentStudent.name,
-      phone: base.phone || currentStudent.phone || '',
-      phoneLast4: window._phoneLast4(base.phone || currentStudent.phone), // 입실/로그인 where 검색용 색인
-      updatedAt: window._fsServerTimestamp(),
+    const runTx = window._fsRunTransaction;
+    // 1. 좌석 선점(경합 방지): 트랜잭션으로 대상 좌석을 원자적으로 확인·차지한다.
+    //    두 학생이 같은 공석을 동시에 눌러도 한 명만 성공(SEAT_TAKEN으로 나머지 거부).
+    //    옛 좌석 문서를 통째로 옮겨 fee·startDate·feeMemo 등 관리자 관리 필드를 보존한다.
+    //    (currentStudent에는 이 값들이 없어 재구성 저장하면 자리 이동 시 유실됨.)
+    await runTx(db, async (tx) => {
+      const newRef = window._fsDoc(db, 'students', ns);
+      const newSnap = await tx.get(newRef);
+      // 이미 다른 학생이 이름을 올려둔 좌석이면 선점 실패
+      if (newSnap.exists() && newSnap.data().name && newSnap.data().name !== currentStudent.name) {
+        throw new Error('SEAT_TAKEN');
+      }
+      // ★트랜잭션은 모든 읽기(get)를 쓰기(set/delete)보다 먼저 해야 한다.
+      let base = {};
+      const oldRef = (oldId && oldId !== ns) ? window._fsDoc(db, 'students', oldId) : null;
+      if (oldRef) {
+        const os = await tx.get(oldRef);
+        if (os.exists()) base = os.data();
+      }
+      // 옛 문서가 없을 때(로컬 샘플 로그인 등)를 대비한 하위 폴백. base(관리자 원본)가 있으면 우선.
+      const fallback = {
+        parent: currentStudent.parent || '', gender: currentStudent.gender || 'f', expiry: currentStudent.expiry || '',
+        월: currentStudent.schedule?.['월']||'-', 화: currentStudent.schedule?.['화']||'-', 수: currentStudent.schedule?.['수']||'-',
+        목: currentStudent.schedule?.['목']||'-', 금: currentStudent.schedule?.['금']||'-', 토: currentStudent.schedule?.['토']||'-',
+        hours: currentStudent.hours || {},
+      };
+      tx.set(newRef, {
+        ...fallback, ...base,
+        seat: ns, name: currentStudent.name,
+        phone: base.phone || currentStudent.phone || '',
+        phoneLast4: window._phoneLast4(base.phone || currentStudent.phone), // 입실/로그인 where 검색용 색인
+        updatedAt: window._fsServerTimestamp(),
+      });
+      if (oldRef) tx.delete(oldRef); // 옛 좌석 students 문서 공석 처리(선점과 원자적)
     });
 
-    // 2. schedules·schedule_base 도 함께 이동 (좌석이 바뀌어도 시간표/원본 유지)
-    for (const col of ['schedules', 'schedule_base']) {
-      if (!oldId || oldId === ns) break;
-      try {
-        const snap = await window._fsGetDoc(window._fsDoc(db, col, oldId));
-        if (snap.exists()) {
-          await window._fsSetDoc(window._fsDoc(db, col, ns), {
-            ...snap.data(), seat: ns, name: currentStudent.name, updatedAt: window._fsServerTimestamp()
-          });
-        }
-      } catch(e) {}
-    }
-
-    // 3. 기존 좌석의 students·schedules·schedule_base 문서 삭제 (공석 처리)
+    // 2. schedules·schedule_base 이동 (본인 데이터라 경합 없음 → 트랜잭션 밖)
     if (oldId && oldId !== ns) {
-      for (const col of ['students', 'schedules', 'schedule_base']) {
+      for (const col of ['schedules', 'schedule_base']) {
+        try {
+          const snap = await window._fsGetDoc(window._fsDoc(db, col, oldId));
+          if (snap.exists()) {
+            await window._fsSetDoc(window._fsDoc(db, col, ns), {
+              ...snap.data(), seat: ns, name: currentStudent.name, updatedAt: window._fsServerTimestamp()
+            });
+          }
+        } catch(e) {}
+      }
+      // 3. 옛 좌석의 schedules·schedule_base + 접미사(番) 잔여 문서 정리
+      for (const col of ['schedules', 'schedule_base']) {
         for (const id of [oldId, oldId + '번']) {
           try { await window._fsDeleteDoc(window._fsDoc(db, col, id)); } catch(e) {}
         }
       }
+      try { await window._fsDeleteDoc(window._fsDoc(db, 'students', oldId + '번')); } catch(e) {}
     }
 
     alert(`✅ ${seatNum}번 자리로 이동됐습니다!`);
     buildStudentSeatmap();
   } catch(e) {
     currentStudent.seat = oldSeat;
-    alert('자리 선택 실패: ' + e.message);
+    if (e && e.message === 'SEAT_TAKEN') {
+      alert('⚠️ 방금 다른 학생이 먼저 선택한 자리입니다. 다른 자리를 골라주세요.');
+      buildStudentSeatmap(); // 최신 배치도(점유 반영) 다시 그림
+    } else {
+      alert('자리 선택 실패: ' + (e && e.message ? e.message : e));
+    }
   }
 };
 
