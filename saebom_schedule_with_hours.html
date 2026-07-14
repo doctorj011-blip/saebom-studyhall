@@ -10804,11 +10804,11 @@ document.addEventListener('DOMContentLoaded', function() {
   if (!el) return;
 
   const MODE_LABEL = { COOL:'냉방', AIR_DRY:'제습', FAN:'송풍', AUTO:'자동', HEAT:'난방', AIR_CLEAN:'공기청정' };
-  const FAN_LABEL  = { SLOW:'미풍', LOW:'약', MID:'중', HIGH:'강', POWER:'파워', AUTO:'자동', NATURE:'자연풍' };
+  const FAN_LABEL  = { SLOW_LOW:'미약풍', SLOW:'미풍', LOW:'약', MID:'중', HIGH:'강', POWER:'파워', AUTO:'자동', NATURE:'자연풍' };
   const MODES_FB = ['COOL','AIR_DRY','FAN','AUTO'], FANS_FB = ['SLOW','LOW','MID','HIGH','AUTO'], STEP = 0.5;
   // 모든 카드에서 버튼 순서를 동일하게: 냉방·난방·자동·송풍·제습 / 약·중·강·파워·자동
   const MODE_ORDER = ['COOL','HEAT','AUTO','FAN','AIR_DRY','AIR_CLEAN'];
-  const FAN_ORDER  = ['SLOW','LOW','MID','HIGH','POWER','NATURE','AUTO'];
+  const FAN_ORDER  = ['SLOW_LOW','SLOW','LOW','MID','HIGH','POWER','NATURE','AUTO'];
   const orderBy = (arr, order) => arr.slice().sort((a,b)=>{ const ia=order.indexOf(a), ib=order.indexOf(b); return (ia<0?999:ia)-(ib<0?999:ib); });
   const esc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -10823,14 +10823,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const t = Array.isArray(s.temperature)?(s.temperature[0]||{}):(s.temperature||{});
     const h = Array.isArray(s.humidity)?(s.humidity[0]||{}):(s.humidity||{});
     return { power:(op.airConOperationMode)==='POWER_ON', cur:t.currentTemperature, target:t.targetTemperature,
-      unit:t.unit||'C', humidity:h.currentHumidity, mode:j.currentJobMode, fan:f.windStrength };
+      unit:t.unit||'C', humidity:h.currentHumidity, mode:j.currentJobMode, fan:(f.windStrengthDetail!=null?f.windStrengthDetail:f.windStrength) };
   }
   function caps(profile){
     const root = (profile&&profile.property)?profile.property:(profile||{});
     const cat = n => { let c=root[n]; if(Array.isArray(c)) c=c[0]; return c||{}; };
     const en = node => { if(!node) return null; const v=node.value!==undefined?node.value:node;
       if(Array.isArray(v)) return v; if(v&&Array.isArray(v.w)) return v.w; if(v&&Array.isArray(v.r)) return v.r; return null; };
-    return { modes: orderBy(en(cat('airConJobMode').currentJobMode)||MODES_FB, MODE_ORDER), fans: orderBy(en(cat('airFlow').windStrength)||FANS_FB, FAN_ORDER), step: STEP };
+    const af = cat('airFlow');   // windStrengthDetail(미약풍 포함)이 있으면 우선 사용
+    return { modes: orderBy(en(cat('airConJobMode').currentJobMode)||MODES_FB, MODE_ORDER), fans: orderBy(en(af.windStrengthDetail)||en(af.windStrength)||FANS_FB, FAN_ORDER), step: STEP };
   }
   const clampT = v => Math.round(v*2)/2;
 
@@ -10956,7 +10957,7 @@ document.addEventListener('DOMContentLoaded', function() {
     power:(id,on)=>cmd({ deviceId:id, command:'power', value:(on===true||on==='true') }),
     temp:(id,v)=>cmd({ deviceId:id, command:'temp', value:Number(v) }),
     mode:(id,v)=>cmd({ deviceId:id, command:'mode', value:v }),
-    fan:(id,v)=>cmd({ deviceId:id, command:'fan', value:v }),
+    fan:(id,v)=>cmd({ deviceId:id, body:{ airFlow:{ windStrengthDetail: v } } }),   // 미약풍(SLOW_LOW) 포함 세밀 제어
     search:()=>cmd({ action:'list' }),
     refresh:()=>cmd({ action:'refresh' }),
     toggleAuto:()=>saveConf({ auto: !(CONF.auto!==false) }),
