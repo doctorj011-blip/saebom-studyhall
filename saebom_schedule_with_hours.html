@@ -7599,7 +7599,8 @@ async function loadStudentsFromFirebase() {
   cleanupWithdrawnStudents(); // 90일 지난 퇴원 보관 데이터 정리 (백그라운드·하루1회)
   if (window.initApp) window.initApp();
 
-  // students 컬렉션 실시간 감시 - added 무시, modified/removed만 처리
+  // students 컬렉션 실시간 감시 - 첫 스냅샷 added만 무시(getDocs가 로드), 이후 added/modified/removed 처리
+  window._studentsSnapFirst = true;
   onSnapshot(collection(db, 'students'), (snap) => {
     if (window._seatChanging) return;
     let changed = false;
@@ -7644,8 +7645,9 @@ async function loadStudentsFromFirebase() {
       }
       // 그 외 메타 문서(새벽 리셋 잠금 등)는 학생이 아니므로 무시
       if (change.doc.id.startsWith('_meta_')) return;
-      // added는 getDocs에서 이미 처리했으므로 완전히 무시
-      if (change.type === 'added') return;
+      // 첫 스냅샷의 added는 getDocs가 이미 로드했으므로 무시.
+      // 이후 added(학생앱 자리이동·타 기기 신규등록으로 생긴 새 좌석 문서)는 modified와 동일하게 반영.
+      if (change.type === 'added' && window._studentsSnapFirst) return;
 
       const v = change.doc.data();
       if (change.type === 'removed') {
@@ -7686,6 +7688,8 @@ async function loadStudentsFromFirebase() {
       }
       changed = true;
     });
+
+    window._studentsSnapFirst = false; // 이후 스냅샷의 added는 실시간 반영
 
     if (changed) {
       STUDENTS.sort((a,b) => parseInt(a.seat||0) - parseInt(b.seat||0));

@@ -3184,29 +3184,54 @@ window.selectSeat = async function(seatNum) {
 
   if (!confirm(`${seatNum}번 자리를 선택하시겠습니까?`)) return;
 
-  currentStudent.seat = String(seatNum);
+  const ns = String(seatNum);
+  const oldId = oldSeat.replace('번','');
+  currentStudent.seat = ns;
   try {
-    // 1. 새 자리에 내 정보 저장
-    await window._fsSetDoc(window._fsDoc(db, 'students', String(seatNum)), {
-      seat: String(seatNum),
-      name: currentStudent.name,
-      phone: currentStudent.phone || '',
-      phoneLast4: window._phoneLast4(currentStudent.phone), // 입실/로그인 where 검색용 색인
-      parent: currentStudent.parent || '',
-      gender: currentStudent.gender || 'f',
-      expiry: currentStudent.expiry || '',
-      월: currentStudent.schedule['월']||'-',
-      화: currentStudent.schedule['화']||'-',
-      수: currentStudent.schedule['수']||'-',
-      목: currentStudent.schedule['목']||'-',
-      금: currentStudent.schedule['금']||'-',
-      토: currentStudent.schedule['토']||'-',
+    // 1. 옛 좌석 문서를 통째로 읽어 그대로 새 좌석으로 옮긴다.
+    //    (currentStudent에는 fee·startDate·feeMemo 등 관리자 관리 필드가 없어
+    //     재구성 방식으로 저장하면 자리 이동 시 수납·등록 정보가 유실된다.)
+    let base = {};
+    if (oldId) {
+      try { const os = await window._fsGetDoc(window._fsDoc(db, 'students', oldId)); if (os.exists()) base = os.data(); } catch(e) {}
+    }
+    // 옛 문서가 없을 때(로컬 샘플 로그인 등)를 대비한 하위 폴백. base(관리자 원본)가 있으면 그 값이 우선.
+    const fallback = {
+      parent: currentStudent.parent || '', gender: currentStudent.gender || 'f', expiry: currentStudent.expiry || '',
+      월: currentStudent.schedule?.['월']||'-', 화: currentStudent.schedule?.['화']||'-', 수: currentStudent.schedule?.['수']||'-',
+      목: currentStudent.schedule?.['목']||'-', 금: currentStudent.schedule?.['금']||'-', 토: currentStudent.schedule?.['토']||'-',
       hours: currentStudent.hours || {},
+    };
+    await window._fsSetDoc(window._fsDoc(db, 'students', ns), {
+      ...fallback,
+      ...base,
+      seat: ns,
+      name: currentStudent.name,
+      phone: base.phone || currentStudent.phone || '',
+      phoneLast4: window._phoneLast4(base.phone || currentStudent.phone), // 입실/로그인 where 검색용 색인
+      updatedAt: window._fsServerTimestamp(),
     });
 
-    // 2. 기존 자리 문서 삭제 (공석 처리)
-    if (oldSeat && oldSeat !== String(seatNum)) {
-      await window._fsDeleteDoc(window._fsDoc(db, 'students', oldSeat)).catch(()=>{});
+    // 2. schedules·schedule_base 도 함께 이동 (좌석이 바뀌어도 시간표/원본 유지)
+    for (const col of ['schedules', 'schedule_base']) {
+      if (!oldId || oldId === ns) break;
+      try {
+        const snap = await window._fsGetDoc(window._fsDoc(db, col, oldId));
+        if (snap.exists()) {
+          await window._fsSetDoc(window._fsDoc(db, col, ns), {
+            ...snap.data(), seat: ns, name: currentStudent.name, updatedAt: window._fsServerTimestamp()
+          });
+        }
+      } catch(e) {}
+    }
+
+    // 3. 기존 좌석의 students·schedules·schedule_base 문서 삭제 (공석 처리)
+    if (oldId && oldId !== ns) {
+      for (const col of ['students', 'schedules', 'schedule_base']) {
+        for (const id of [oldId, oldId + '번']) {
+          try { await window._fsDeleteDoc(window._fsDoc(db, col, id)); } catch(e) {}
+        }
+      }
     }
 
     alert(`✅ ${seatNum}번 자리로 이동됐습니다!`);
