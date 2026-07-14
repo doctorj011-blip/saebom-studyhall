@@ -1,0 +1,13 @@
+{
+  "name": "functions",
+  "description": "새봄면학관 — LG ThinQ 에어컨 자동/수동 제어 (입퇴실 연동)",
+  "engines": {
+    "node": "22"
+  },
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "firebase-admin": "^12.6.0",
+    "firebase-functions": "^6.1.0"
+  }
+}

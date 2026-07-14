@@ -1,0 +1,65 @@
+name: Deploy Firestore Rules
+
+# firestore.rules 가 바뀌면 자동으로 콘솔에 배포한다.
+#   · main 에 push  → 실제 배포
+#   · PR            → dry-run(문법·유효성 검증만, 실제 반영 X)
+#   · 수동 실행 가능(workflow_dispatch)
+#
+# 필요 시크릿(저장소 Settings → Secrets and variables → Actions):
+#   FIREBASE_SERVICE_ACCOUNT
+#     = Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → "새 비공개 키 생성"으로 받은 JSON 전체
+#       (firebase-adminsdk 계정 키. 규칙 배포 권한 포함)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+      - '.github/workflows/deploy-firestore-rules.yml'
+  pull_request:
+    paths:
+      - 'firestore.rules'
+      - 'firebase.json'
+  workflow_dispatch:
+
+# 동시에 여러 배포가 겹치지 않도록
+concurrency:
+  group: firestore-rules
+  cancel-in-progress: false
+
+jobs:
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install firebase-tools
+        run: npm install -g firebase-tools
+
+      - name: Write service account key
+        env:
+          SA_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$SA_JSON" ]; then
+            echo "::error::FIREBASE_SERVICE_ACCOUNT 시크릿이 설정되지 않았습니다. 저장소 Settings → Secrets → Actions 에서 추가하세요."
+            exit 1
+          fi
+          printf '%s' "$SA_JSON" > "$RUNNER_TEMP/sa.json"
+
+      - name: Deploy or validate Firestore rules
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/sa.json
+          GCLOUD_PROJECT: saebom-studyhall
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "▶ PR — 규칙 검증(dry-run)만 수행 (실제 반영 안 함)"
+            firebase deploy --only firestore:rules --project saebom-studyhall --non-interactive --dry-run
+          else
+            echo "▶ main 반영 — 규칙 실제 배포"
+            firebase deploy --only firestore:rules --project saebom-studyhall --non-interactive
+          fi

@@ -93,3 +93,41 @@ git push
 - **키오스크(입구 태블릿/PC)**: 관리자 앱 주소 `#kiosk` 로 실행. 전화 뒷 4자리 입퇴실, 자동문 릴레이(Web Serial), 알림톡 발송 지원.
 - **데이터 연동**: 학생 앱에서 저장한 스케줄(참여 `O` / 불참 `X`(사유) / 중간입실 `세모`(입실시간))은 Firebase를 통해 관리자 앱 시간표에 실시간 반영됩니다.
 - **카톡 링크 미리보기**: 학생/학부모 앱 주소를 카톡에 붙여넣으면 자동으로 이미지가 있는 미리보기 카드가 뜹니다(Open Graph 태그, `icons/og-student.png` / `icons/og-parent.png`). 이미지를 따로 첨부할 필요 없이 주소만 보내면 됩니다.
+
+---
+
+## 6. 🔒 Firestore 보안 규칙 관리 (중요)
+
+**2026-07-14 부로, Firestore 보안 규칙의 "원본"은 이 저장소의 `firestore.rules` 파일입니다.**
+그 전까지는 Firebase 콘솔에서 직접 관리했지만, 이제 파일 → 배포 방식으로 코드처럼 관리합니다.
+
+### 규칙을 바꿀 때 (항상 이 순서)
+
+1. **`firestore.rules` 파일을 수정** (콘솔에서 직접 고치지 말 것 — 다음 배포 때 덮어써집니다)
+2. 파일 상단 **`[배포 이력]`에 날짜·변경 요약** 한 줄 추가
+3. 배포:
+   ```bash
+   bash scripts/deploy-rules.sh          # 변경분 보여주고 확인 후 배포 (권장)
+   # 또는
+   firebase deploy --only firestore:rules
+   ```
+4. 변경한 `firestore.rules`를 **git commit / push** (콘솔과 저장소가 항상 일치하도록)
+
+> ⚠️ **주의**: `firebase deploy --only firestore:rules` 는 콘솔 규칙을 **이 파일로 통째 교체**합니다.
+> 그래서 규칙 수정은 반드시 이 파일에서만 하고, 콘솔에서 급히 고쳤다면 그 내용을 이 파일에도 반영한 뒤 커밋해 두세요.
+
+### 자동 배포 (GitHub Actions)
+
+`.github/workflows/deploy-firestore-rules.yml` 이 있어서, `firestore.rules` 를 고쳐 **`main` 에 push 하면 콘솔에 자동 배포**됩니다.
+PR 에서는 **검증(dry-run)만** 돌아 잘못된 규칙이 머지 전에 걸러집니다. → 규칙이 바뀔 때마다 자동으로 확인·반영됩니다.
+
+**최초 1회 시크릿 등록** (이거 없으면 워크플로가 실패):
+1. Firebase 콘솔 → **프로젝트 설정 → 서비스 계정 → "새 비공개 키 생성"** → JSON 다운로드
+2. GitHub 저장소 → **Settings → Secrets and variables → Actions → New repository secret**
+   - 이름: `FIREBASE_SERVICE_ACCOUNT`
+   - 값: 위 JSON 파일 **전체 내용** 붙여넣기
+
+> 이후로는 `firestore.rules` 만 고쳐 push 하면 끝. 로컬에서 직접 배포하려면 `bash scripts/deploy-rules.sh` 를 써도 됩니다(둘 다 같은 파일이 원본).
+
+### 냉방(에어컨) 관련 컬렉션
+`ac_config`(설정·zone 매핑) · `ac_commands`(수동 명령) · `ac_state`(상태, 서버만 쓰기) — 대시보드 냉방 패널이 사용합니다.
