@@ -766,6 +766,17 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <div class="card-title"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</div>
       <div id="period-chart"></div>
     </div>
+    <!-- 오늘 벌점 현황판 (오늘 늦은 변경 + 오늘 새벽 확정된 어제 무단결석) -->
+    <div class="card" id="penalty-board-section">
+      <div class="card-title" style="justify-content:space-between">
+        <span><i class="ti ti-alert-triangle" style="font-size:14px;color:#C62828" aria-hidden="true"></i> 오늘 벌점 현황</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span id="penalty-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+          <button onclick="showPenaltyModal()" style="padding:3px 9px;border:1px solid #E5E7EB;background:#fff;color:#6B7280;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">전체 보기</button>
+        </span>
+      </div>
+      <div id="penalty-board-body"></div>
+    </div>
     <!-- 스터디룸 초과 경고 -->
     <div class="card" id="studyroom-overflow-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -3247,7 +3258,9 @@ window.togglePenaltyCancel = async function(docId, pn) {
     if (!periods[pn]) return;
     periods[pn] = { ...periods[pn], canceled: !periods[pn].canceled };
     await setDoc(ref, { ...data, periods: periods });
-    showPenaltyModal(_penaltyModalFilter); // 재렌더
+    // 모달이 열려 있을 때만 재렌더 — 대시보드 현황판에서 호출되면 모달을 띄우지 않는다
+    // (현황판은 penalties onSnapshot으로 스스로 갱신된다)
+    if (document.getElementById('penalty-modal-overlay')) showPenaltyModal(_penaltyModalFilter);
   } catch(e) {
     console.error('벌점 취소/복구 실패:', e);
     alert('처리 실패: ' + (e.message || e));
@@ -8059,6 +8072,109 @@ function renderStudyroomBoard() {
     </table>`;
 }
 window.renderStudyroomBoard = renderStudyroomBoard;
+
+// ── 오늘 벌점 현황판 (대시보드) ──
+// 한 카드에 모으는 것: (1)오늘 날짜 벌점 — 늦은 변경 1점, 학생앱이 저장 시점에 실시간 기록,
+// (2)어제 무단결석 2점 — 오늘 새벽 assessNoShowPenalties가 확정하므로 관리자가 '오늘' 확인할 대상이다.
+// (어제 늦은 변경은 어제 이미 이 카드에 떴으므로 다시 올리지 않는다.)
+// date 단일 필드 'in' 쿼리라 복합 색인이 필요 없다.
+let _penaltyBoardDocs = [];
+let _penaltyBoardUnsub = null;
+let _penaltyBoardKey = '';
+
+function _penIsoDate(ts) {
+  const d = new Date(ts);
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function subscribePenaltyBoard() {
+  const now = Date.now();
+  const today = _penIsoDate(now);
+  const yesterday = _penIsoDate(now - 86400000);
+  const key = today + '|' + yesterday;
+  if (key === _penaltyBoardKey && _penaltyBoardUnsub) return; // 날짜가 바뀔 때만 재구독
+  if (_penaltyBoardUnsub) { _penaltyBoardUnsub(); _penaltyBoardUnsub = null; }
+  _penaltyBoardKey = key;
+  _penaltyBoardUnsub = onSnapshot(
+    query(collection(db, 'penalties'), where('date', 'in', [today, yesterday])),
+    snap => {
+      _penaltyBoardDocs = [];
+      snap.forEach(d => _penaltyBoardDocs.push({ id: d.id, ...d.data() }));
+      renderPenaltyBoard();
+    },
+    e => {
+      console.error('벌점 현황판 구독 실패:', e);
+      const body = document.getElementById('penalty-board-body');
+      if (body) body.innerHTML = `<div style="text-align:center;padding:18px;color:#C62828;font-size:12px">벌점 조회 실패: ${e.message || e}</div>`;
+    }
+  );
+}
+
+function renderPenaltyBoard() {
+  const body    = document.getElementById('penalty-board-body');
+  const summary = document.getElementById('penalty-board-summary');
+  if (!body) return;
+  const today = _penaltyBoardKey.split('|')[0];
+
+  const byStudent = {};
+  let totalPts = 0;
+  _penaltyBoardDocs.forEach(d => {
+    if (window.isTestStudent && window.isTestStudent(d.name || '')) return;
+    const isToday = d.date === today;
+    Object.keys(d.periods || {}).sort((a, b) => a - b).forEach(pn => {
+      const p = d.periods[pn];
+      const isNoShow = p.type === 'noshow';
+      if (!isToday && !isNoShow) return;
+      const sk = String(d.seatKey || d.seat || '?');
+      const st = (byStudent[sk] = byStudent[sk] || { name: d.name || '?', seatKey: sk, pts: 0, items: [] });
+      const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
+      if (!p.canceled) { st.pts += pts; totalPts += pts; }
+      st.items.push({ docId: d.id, pn, pts, isNoShow, isToday, canceled: !!p.canceled, reason: p.reason || '', to: p.to });
+    });
+  });
+
+  const students = Object.values(byStudent).filter(s => s.items.length)
+    .sort((a, b) => (b.pts - a.pts) || ((parseInt(a.seatKey)||999) - (parseInt(b.seatKey)||999)));
+
+  if (summary) summary.textContent = students.length ? `${students.length}명 · 합계 ${totalPts}점` : '';
+
+  if (!students.length) {
+    body.innerHTML = `<div style="text-align:center;padding:20px;color:#9CA3AF;font-size:12.5px">오늘 벌점 없음 👍</div>`;
+    return;
+  }
+
+  body.innerHTML = students.map(s => {
+    const chips = s.items.map(it => {
+      const bg = it.canceled ? '#F3F4F6' : (it.isNoShow ? '#FDE7E7' : '#FFF4E5');
+      const fg = it.canceled ? '#9CA3AF' : (it.isNoShow ? '#8B1A1A' : '#9A5B00');
+      const label = it.isNoShow
+        ? `${it.isToday ? '' : '어제 '}${it.pn}교시 무단결석`
+        : `${it.pn}교시 ${it.to === 'absent' ? '불참' : '해제'} 변경${it.reason ? ` · ${it.reason}` : ''}`;
+      return `<button onclick="window.penaltyBoardToggle('${it.docId}','${it.pn}',${it.canceled})"
+        title="클릭하면 이 벌점을 ${it.canceled ? '다시 부과' : '취소'}합니다"
+        style="background:${bg};color:${fg};border:1px solid ${it.canceled ? '#E5E7EB' : 'transparent'};border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;${it.canceled ? 'text-decoration:line-through' : ''}">${label} <b>${it.pts}점</b>${it.canceled ? ' (취소됨)' : ''}</button>`;
+    }).join('');
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid #F3F4F6">
+      <div style="flex:0 0 88px;cursor:pointer" onclick="window.showPenaltyModal('${s.seatKey}')" title="이 학생의 전체 벌점 보기">
+        <div style="font-size:12.5px;font-weight:700;color:#1F2937">${s.name}</div>
+        <div style="font-size:10.5px;font-weight:500;color:#9CA3AF">${s.seatKey}번</div>
+      </div>
+      <div style="flex:1;display:flex;flex-wrap:wrap;gap:5px">${chips}</div>
+      <div style="flex:0 0 auto;font-size:13px;font-weight:800;color:${s.pts ? '#C62828' : '#9CA3AF'}">${s.pts}점</div>
+    </div>`;
+  }).join('');
+}
+window.renderPenaltyBoard = renderPenaltyBoard;
+
+// 칩 클릭으로 바로 취소·복구 (오조작 방지용 확인창) — 갱신은 onSnapshot이 처리한다
+window.penaltyBoardToggle = function(docId, pn, canceled) {
+  const msg = canceled ? `${pn}교시 벌점을 다시 부과할까요?` : `${pn}교시 벌점을 취소할까요?`;
+  if (!confirm(msg)) return;
+  window.togglePenaltyCancel(docId, pn);
+};
+
+subscribePenaltyBoard();
+setInterval(subscribePenaltyBoard, 60000); // 자정 넘어가면 오늘/어제 날짜로 재구독
 
 window.approveStudyroomReq = async function(id) {
   try { await setDoc(doc(db,'studyroom_requests',id),{status:'approved'},{merge:true}); showAdminToast('✅ 스터디룸 신청 승인됨'); }
