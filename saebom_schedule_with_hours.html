@@ -1401,6 +1401,10 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
           <input type="datetime-local" id="seat-sel-end" style="width:100%;padding:6px 8px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF">
         </div>
       </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:11px;color:#4A3FA8;margin-bottom:4px">실제 적용일 <span style="font-weight:400;color:var(--color-text-tertiary)">— 비워두면 선택 즉시 적용. 날짜를 지정하면 학생이 고른 자리는 <b>예약</b>만 되고, 그날 새벽 2시에 일괄 반영됩니다.</span></div>
+        <input type="date" id="seat-sel-effective" style="width:100%;padding:6px 8px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF">
+      </div>
       <div style="display:flex;gap:8px;align-items:center">
         <button onclick="saveSeatSelection()" style="padding:7px 16px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">저장 및 활성화</button>
         <button onclick="cancelSeatSelection()" style="padding:7px 16px;background:#EEF2FF;border:1.5px solid #8F82E4;color:#4A3FA8;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">비활성화</button>
@@ -2565,17 +2569,21 @@ document.addEventListener('visibilitychange', () => {
 window.saveSeatSelection = async function() {
   const start = document.getElementById('seat-sel-start').value;
   const end = document.getElementById('seat-sel-end').value;
+  const effective = document.getElementById('seat-sel-effective').value || '';
   if (!start || !end) { alert('시작/종료 시각을 모두 입력해주세요'); return; }
   if (start >= end) { alert('종료 시각이 시작 시각보다 늦어야 합니다'); return; }
+  const _today = SH.sessIsoDate(Date.now());
+  if (effective && effective < _today) { alert('실제 적용일은 오늘 이후로 지정해주세요'); return; }
   const db = window._adminDb;
   if (!db) { alert('Firebase 연결이 필요합니다'); return; }
   try {
     await window._fsSetDoc(window._fsDoc(db, 'settings', 'seatSelection'), {
-      active: true, start, end, updatedAt: window._fsServerTimestamp()
+      active: true, start, end, effectiveDate: effective, updatedAt: window._fsServerTimestamp()
     });
-    document.getElementById('seat-sel-status').textContent = '✅ 활성화됨';
+    const deferred = effective && effective > _today;
+    document.getElementById('seat-sel-status').textContent = deferred ? `✅ 활성화됨 · ${effective} 적용 예정` : '✅ 활성화됨';
     document.getElementById('seat-sel-status').style.color = '#2D7A4F';
-    showAdminToast('✅ 자리선택 기간이 설정됐습니다');
+    showAdminToast(deferred ? `✅ 자리선택 설정 완료 — ${effective} 새벽 2시에 일괄 적용됩니다` : '✅ 자리선택 기간이 설정됐습니다');
     scheduleRandomAssignment(new Date(end));
   } catch(e) { alert('저장 실패: ' + e.message); }
 };
@@ -2602,9 +2610,24 @@ function scheduleRandomAssignment(endDate) {
 }
 
 async function doRandomAssignment() {
+  const db2 = window._adminDb;
+  // 미래 적용일이 설정돼 있으면 즉시 배정 대신 '예약'으로 만든다(그날 새벽 2시 커밋).
+  let effDate = '';
+  try {
+    if (db2) { const ss = await window._fsGetDoc(window._fsDoc(db2, 'settings', 'seatSelection')); if (ss.exists()) effDate = ss.data().effectiveDate || ''; }
+  } catch(e) {}
+  const deferred = effDate && effDate > SH.sessIsoDate(Date.now());
+
   // 자리 없는 학생에게 빈 자리 랜덤 배정
   const DEFAULT_SEATS_VALUES = Object.values(DEFAULT_SEATS).filter(v => v > 0);
   const takenSeats = new Set(STUDENTS.filter(s => s.seat && parseInt(s.seat) > 0).map(s => parseInt(s.seat)));
+  // 이미 예약된 자리도 빈자리 후보에서 제외
+  if (db2) {
+    try {
+      const psnap = await window._fsGetDocs(window._fsCollection(db2, 'pendingSeats'));
+      psnap.forEach(pd => { const n = parseInt(pd.data().toSeat); if (n > 0) takenSeats.add(n); });
+    } catch(e) {}
+  }
   const emptySeats = DEFAULT_SEATS_VALUES.filter(v => !takenSeats.has(v));
   const unassigned = STUDENTS.filter(s => !s.seat || parseInt(s.seat) <= 0);
 
@@ -2614,17 +2637,31 @@ async function doRandomAssignment() {
     [emptySeats[i], emptySeats[j]] = [emptySeats[j], emptySeats[i]];
   }
 
-  for (let i = 0; i < Math.min(unassigned.length, emptySeats.length); i++) {
-    unassigned[i].seat = String(emptySeats[i]);
-    if (window.saveStudentToFirebase) await window.saveStudentToFirebase(unassigned[i]).catch(console.error);
+  const n = Math.min(unassigned.length, emptySeats.length);
+  const RDAYS = ['월','화','수','목','금','토'];
+  for (let i = 0; i < n; i++) {
+    const ns = String(emptySeats[i]);
+    if (deferred) {
+      // 예약으로 저장 — 미배정 학생은 옮길 원본 문서가 없으므로 학생 데이터 스냅샷을 함께 담는다.
+      const s = unassigned[i];
+      const sd = { name: s.name || '', parent: s.parent || '', gender: s.gender || 'f', expiry: s.expiry || '',
+        phone: s.phone || '', hours: s.hours || {} };
+      RDAYS.forEach(d => { sd[d] = (s.schedule && s.schedule[d]) || '-'; });
+      await window._fsSetDoc(window._fsDoc(db2, 'pendingSeats', ns), {
+        name: s.name || '', fromSeat: '', toSeat: ns, effectiveDate: effDate,
+        studentData: sd, createdAt: window._fsServerTimestamp()
+      }).catch(console.error);
+    } else {
+      unassigned[i].seat = ns;
+      if (window.saveStudentToFirebase) await window.saveStudentToFirebase(unassigned[i]).catch(console.error);
+    }
   }
 
-  // 자리선택 비활성화
-  const db2 = window._adminDb;
-  if (db2) await window._fsSetDoc(window._fsDoc(db2, 'settings', 'seatSelection'), { active: false, start: '', end: '' });
+  // 선택 창은 닫되(active:false), 미래 적용일은 보존해 예약이 커밋될 수 있게 한다.
+  if (db2) await window._fsSetDoc(window._fsDoc(db2, 'settings', 'seatSelection'), { active: false, start: '', end: '' }, { merge: true });
   buildFloorplan();
   buildDashboard();
-  showAdminToast(`🎲 ${Math.min(unassigned.length, emptySeats.length)}명 랜덤 배정 완료`);
+  showAdminToast(deferred ? `🎲 ${n}명 랜덤 예약 완료 — ${effDate} 적용` : `🎲 ${n}명 랜덤 배정 완료`);
 }
 
 async function loadSeatSelectionStatus() {
@@ -2636,11 +2673,17 @@ async function loadSeatSelectionStatus() {
     const d = snap.data();
     if (d.start) document.getElementById('seat-sel-start').value = d.start;
     if (d.end) document.getElementById('seat-sel-end').value = d.end;
+    if (d.effectiveDate) document.getElementById('seat-sel-effective').value = d.effectiveDate;
+    const _today = SH.sessIsoDate(Date.now());
+    const deferred = d.effectiveDate && d.effectiveDate > _today;
     const statusEl = document.getElementById('seat-sel-status');
     if (d.active) {
-      statusEl.textContent = '✅ 활성화됨';
+      statusEl.textContent = deferred ? `✅ 활성화됨 · ${d.effectiveDate} 적용 예정` : '✅ 활성화됨';
       statusEl.style.color = '#2D7A4F';
       if (d.end) scheduleRandomAssignment(new Date(d.end));
+    } else if (deferred) {
+      statusEl.textContent = `⏳ ${d.effectiveDate} 적용 대기 중`;
+      statusEl.style.color = '#B45309';
     } else {
       statusEl.textContent = '비활성화됨';
       statusEl.style.color = '#888';
@@ -6262,6 +6305,8 @@ setInterval(() => {
     if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
     // 변동 스케줄(학생 당일변경)을 고정 시간표(schedule_base)로 자동 복구
     if (window.resetSchedulesToBase) window.resetSchedulesToBase();
+    // 예약된(미래 적용) 자리변경 반영 — 적용일(effectiveDate)이 오늘이면 일괄 커밋
+    commitPendingSeatsIfDue().catch(e => console.error('예약 좌석 반영 오류:', e));
     // 스터디룸 신청현황도 함께 갱신 (운영일은 3시에 넘어가며, 실제 전환은 매분 틱이 처리)
     if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
     if (window.renderStudyroomBoard) window.renderStudyroomBoard();
@@ -8538,6 +8583,83 @@ window.resetSchedulesToBase = async function() {
   try { await updateDoc(doc(db, 'students', '_meta_auto_sms'), { keys: {} }); } catch(e) {}
   _resetLocalAfterDailyReset(count);
 };
+
+// ── 예약된(미래 적용) 자리변경 커밋 ──
+// 학생앱/랜덤배정이 pendingSeats에 남긴 예약 중, 적용일(effectiveDate)이 오늘 이하인 것을
+// 실제 좌석 이동으로 반영한다. 새벽 2시 리셋 블록에서 하루 한 번 호출된다.
+// 여러 기기가 동시에 돌아도 각 예약을 트랜잭션으로 '집어들며' 처리해 중복 이동을 막는다.
+async function commitPendingSeatsIfDue() {
+  const _db = window._adminDb || db;
+  if (!_db) return;
+  let psnap;
+  try { psnap = await getDocs(collection(_db, 'pendingSeats')); } catch(e) { return; }
+  if (!psnap || psnap.empty) return;
+  const todayIso = SH.sessIsoDate(Date.now());
+  const due = [];
+  psnap.forEach(pd => {
+    const p = pd.data();
+    const eff = p.effectiveDate || '';
+    if (!eff || eff <= todayIso) {
+      due.push({ id: pd.id, name: p.name || '', fromSeat: p.fromSeat || '', toSeat: String(p.toSeat || pd.id), studentData: p.studentData || null });
+    }
+  });
+  if (!due.length) return;
+  let done = 0;
+  for (const res of due) {
+    try { await _commitOneReservation(_db, res); done++; }
+    catch(e) { console.error('예약 반영 실패:', res, e); }
+  }
+  // 남은 예약이 없으면 설정의 effectiveDate도 비워 둔다(다음 학생 선택은 즉시 적용).
+  try {
+    const remain = await getDocs(collection(_db, 'pendingSeats'));
+    if (remain.empty) await setDoc(doc(_db, 'settings', 'seatSelection'), { effectiveDate: '' }, { merge: true });
+  } catch(e) {}
+  // 화면 반영
+  try { if (window.loadStudentsFromFirebase) await window.loadStudentsFromFirebase(); } catch(e) {}
+  try { if (window.buildFloorplan) buildFloorplan(); } catch(e) {}
+  try { if (window.buildDashboard) buildDashboard(); } catch(e) {}
+  if (done) showAdminToast(`🪑 예약된 자리변경 ${done}건이 적용됐습니다`);
+}
+
+// 예약 1건을 실제 좌석 이동으로 반영. 예약 문서 삭제를 이동과 원자적으로 처리(트랜잭션)해
+// 두 기기가 동시에 커밋해도 이동이 한 번만 일어나게 한다.
+async function _commitOneReservation(_db, res) {
+  const to = String(res.toSeat);
+  const from = res.fromSeat ? String(res.fromSeat) : '';
+  await runTransaction(_db, async (tx) => {
+    const resRef = doc(_db, 'pendingSeats', res.id);
+    const rs = await tx.get(resRef);
+    if (!rs.exists()) return; // 다른 기기가 이미 처리함
+    const toRef = doc(_db, 'students', to);
+    const toSnap = await tx.get(toRef);
+    // 원본 좌석 데이터(관리자 관리 필드 보존) — 없으면 예약에 담긴 스냅샷 사용(랜덤 예약)
+    let base = res.studentData || {};
+    const fromRef = (from && from !== to) ? doc(_db, 'students', from) : null;
+    if (fromRef) { const fs = await tx.get(fromRef); if (fs.exists()) base = fs.data(); }
+    // 대상이 이미 다른 학생 점유면(이론상 없음 — 예약은 빈자리만) 이동 없이 예약만 정리
+    if (toSnap.exists() && toSnap.data().name && toSnap.data().name !== res.name) { tx.delete(resRef); return; }
+    tx.set(toRef, { ...base, seat: to, name: res.name, updatedAt: serverTimestamp() });
+    if (fromRef) tx.delete(fromRef);
+    tx.delete(resRef);
+  });
+  // schedules / schedule_base 이동 (본인 데이터라 경합 낮음 → 트랜잭션 밖, 멱등)
+  if (from && from !== to) {
+    for (const col of ['schedules', 'schedule_base']) {
+      try {
+        const snap = await getDoc(doc(_db, col, from));
+        if (snap.exists()) await setDoc(doc(_db, col, to), { ...snap.data(), seat: to, name: res.name, updatedAt: serverTimestamp() });
+      } catch(e) {}
+    }
+    for (const col of ['schedules', 'schedule_base']) {
+      for (const id of [from, from + '번']) {
+        try { await deleteDoc(doc(_db, col, id)); } catch(e) {}
+      }
+    }
+    try { await deleteDoc(doc(_db, 'students', from + '번')); } catch(e) {}
+  }
+}
+// 수동 적용/테스트용 노출 (2시 리셋 자동 호출과 별개로 관리자가 즉시 커밋 가능)
+window.commitPendingSeatsIfDue = commitPendingSeatsIfDue;
 
 // ── 무단결석 벌점 판정 (교시당 2점) ──
 // 규칙: 그날 유효 스케줄(고정 base + 당일변경 daily_reports)에서 출석 예정(o/△)이던 교시에

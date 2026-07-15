@@ -3053,6 +3053,14 @@ function buildQuest() {
 }
 
 // ── 자리선택 배치도 ──
+// 미래 적용(예약) 자리변경: 관리자가 settings/seatSelection.effectiveDate(YYYY-MM-DD)를
+// 미래로 지정하면, 학생이 고른 자리는 지금 옮겨지지 않고 pendingSeats에 '예약'만 저장된다.
+// 실제 이동은 관리자앱이 그 날 새벽 2시 리셋에서 일괄 커밋한다.
+let _seatEffectiveDate = '';
+function _localDateIso(dt){ const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),d=String(dt.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
+function _effDateLabel(iso){ const p=String(iso).split('-').map(Number); const dt=new Date(p[0],p[1]-1,p[2]); const dn=['일','월','화','수','목','금','토'][dt.getDay()]; return `${p[1]}월 ${p[2]}일(${dn})`; }
+function _isDeferredSeat(){ return _seatEffectiveDate && _seatEffectiveDate > _localDateIso(new Date()); }
+
 async function checkSeatSelectionActive() {
   const db = window._db;
   if (!db) return;
@@ -3064,13 +3072,15 @@ async function checkSeatSelectionActive() {
       return;
     }
     const d = snap.data ? snap.data() : null;
+    _seatEffectiveDate = (d && d.effectiveDate) || '';
     const now = new Date();
     const active = d && d.active && new Date(d.start) <= now && new Date(d.end) >= now;
     const card = document.getElementById('home-seatmap-card');
     if (active) {
       const deadline = new Date(d.end);
       const deadlineStr = deadline.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-      document.getElementById('seatmap-deadline').textContent = `⏰ 선택 마감: ${deadlineStr}`;
+      const applyNote = _isDeferredSeat() ? ` · 실제 적용: ${_effDateLabel(_seatEffectiveDate)}` : '';
+      document.getElementById('seatmap-deadline').textContent = `⏰ 선택 마감: ${deadlineStr}${applyNote}`;
       document.getElementById('student-seatmap').innerHTML = '';
       if (card) { card.style.display = ''; document.getElementById('home-seatmap-deadline').textContent = `⏰ 마감: ${deadlineStr}`; }
       buildStudentSeatmap();
@@ -3099,7 +3109,7 @@ function buildStudentSeatmap() {
   // onSnapshot으로 실시간 감시
   seatmapUnsubscribe = window._fsOnSnapshot(
     window._fsCollection(db, 'students'),
-    (snap) => {
+    async (snap) => {
       const takenSeats = {};
       snap.forEach(d => {
         const s = d.data();
@@ -3110,13 +3120,24 @@ function buildStudentSeatmap() {
         const s = d.data();
         if (s.name === currentStudent.name && s.seat) currentStudent.seat = s.seat;
       });
-      renderSeatmap(takenSeats);
+      // 예약(미래 적용) 좌석 로드 — 예약된 자리는 점유로 간주해 중복 선택을 막는다
+      const reservations = {};
+      try {
+        const psnap = await window._fsGetDocs(window._fsCollection(db, 'pendingSeats'));
+        psnap.forEach(pd => {
+          const p = pd.data();
+          const n = parseInt(p && p.toSeat);
+          if (n > 0) reservations[n] = (p.name || '');
+        });
+      } catch(e) { console.warn('예약 좌석 로드 실패:', e); }
+      renderSeatmap(takenSeats, reservations);
     },
     (err) => { console.error('배치도 실시간 오류:', err); }
   );
 }
 
-function renderSeatmap(takenSeats) {
+function renderSeatmap(takenSeats, reservations) {
+  reservations = reservations || {};
   const el = document.getElementById('student-seatmap');
   if (!el || !currentStudent) return;
 
@@ -3146,8 +3167,24 @@ function renderSeatmap(takenSeats) {
     .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
     .sm-available:active { transform:scale(0.95); }
     .sm-mine { background:var(--amber); color:#fff; border:2px solid var(--amber-dark); }
-  </style>
-  <div id="sm-grid">`;
+    .sm-reserved { background:#F3F4F6; border:1.5px dashed #9CA3AF; color:#9CA3AF; }
+    .sm-myreserve { background:#EEF2FF; border:2px solid #6C5DD3; color:#4A3FA8; }
+  </style>`;
+
+  // 내가 예약한 자리 배너 (미래 적용 안내)
+  const myReserveNum = Object.keys(reservations).find(n => reservations[n] === currentStudent.name);
+  if (myReserveNum) {
+    html += `<div style="background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#4A3FA8;line-height:1.5">
+      🪑 <b>${myReserveNum}번</b> 자리를 예약했어요.<br>
+      <b>${_seatEffectiveDate ? _effDateLabel(_seatEffectiveDate) : '적용일'}</b>부터 적용되며, 그때까지는 <b>현재 자리(${myCurrentSeat || '미배정'}번)</b>를 그대로 사용하세요.
+    </div>`;
+  } else if (_isDeferredSeat()) {
+    html += `<div style="background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#9A3412;line-height:1.5">
+      ⏳ 지금 고르는 자리는 <b>${_effDateLabel(_seatEffectiveDate)}</b>부터 적용돼요. 그때까지는 현재 자리를 유지합니다.
+    </div>`;
+  }
+
+  html += `<div id="sm-grid">`;
 
   // 빈 셀 채우기
   const occupied = {};
@@ -3162,12 +3199,21 @@ function renderSeatmap(takenSeats) {
       }
       const isMyseat = val === myCurrentSeat;
       const isTaken = !!takenSeats[val];
-      const cls = isTaken ? (isMyseat ? 'sm-mine' : 'sm-taken') : 'sm-available';
-      // 공석이면 누구나 클릭 가능, 내 자리면 클릭 불가 (이미 선택됨), 다른 사람 자리는 불가
-      const clickAttr = !isTaken ? `onclick="selectSeat(${val})"` : '';
+      const resName = reservations[val];               // 이 자리를 예약한 사람(없으면 undefined)
+      const isMyReserve = resName === currentStudent.name;
+      const isReserved = !!resName;
+      // 우선순위: 점유(내자리/남) > 내 예약 > 남의 예약 > 공석
+      let cls, label = '';
+      if (isTaken) { cls = isMyseat ? 'sm-mine' : 'sm-taken'; if (isMyseat) label = '내 자리'; }
+      else if (isMyReserve) { cls = 'sm-myreserve'; label = '내 예약'; }
+      else if (isReserved) { cls = 'sm-reserved'; label = '예약됨'; }
+      else { cls = 'sm-available'; }
+      // 공석이면서 아직 예약되지 않은 자리만 클릭 가능
+      const clickable = !isTaken && !isReserved;
+      const clickAttr = clickable ? `onclick="selectSeat(${val})"` : '';
       html += `<div class="sm-cell ${cls}" style="grid-row:${r};grid-column:${c}" ${clickAttr}>
         <div>${val}번</div>
-        ${isMyseat ? '<div style="font-size:9px">내 자리</div>' : ''}
+        ${label ? `<div style="font-size:9px">${label}</div>` : ''}
       </div>`;
     }
   }
@@ -3182,6 +3228,16 @@ window.selectSeat = async function(seatNum) {
   const oldSeat = currentStudent.seat ? String(currentStudent.seat) : '';
   const isSame = oldSeat === String(seatNum);
   if (isSame) return; // 이미 내 자리
+
+  // 적용일(effectiveDate)을 설정 문서에서 권위있게 재확인 — 미래면 즉시 이동 대신 '예약'.
+  let effDate = _seatEffectiveDate || '';
+  try {
+    const setSnap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
+    if (setSnap.exists()) { effDate = setSnap.data().effectiveDate || ''; _seatEffectiveDate = effDate; }
+  } catch(e) {}
+  if (effDate && effDate > _localDateIso(new Date())) {
+    return reserveSeat(seatNum, oldSeat, effDate);
+  }
 
   if (!confirm(`${seatNum}번 자리를 선택하시겠습니까?`)) return;
 
@@ -3258,6 +3314,53 @@ window.selectSeat = async function(seatNum) {
     }
   }
 };
+
+// ── 미래 적용(예약) 자리변경 ──
+// 지금은 자리를 옮기지 않고 pendingSeats/{좌석}에 예약만 남긴다. 예약 문서 자체가 대상
+// 좌석 선점 잠금이라 두 학생이 같은 자리를 동시에 예약하는 것을 막는다. 실제 이동은
+// 관리자앱이 effectiveDate 새벽 2시 리셋에서 커밋한다. 한 명당 예약은 1개만 유지한다.
+async function reserveSeat(seatNum, oldSeat, effDate) {
+  const db = window._db;
+  const ns = String(seatNum);
+  const fromId = String(oldSeat || '').replace('번', ''); // 좌석 문서 ID는 숫자 형식
+  const effLabel = _effDateLabel(effDate);
+  if (!confirm(`${seatNum}번 자리를 예약하시겠습니까?\n\n${effLabel}부터 적용되며, 그때까지는 현재 자리(${fromId || '미배정'}번)를 그대로 사용합니다.`)) return;
+  try {
+    const runTx = window._fsRunTransaction;
+    // 대상 좌석 선점: 이미 남이 예약(pendingSeats)했거나 사용 중(students)이면 실패
+    await runTx(db, async (tx) => {
+      const resRef = window._fsDoc(db, 'pendingSeats', ns);
+      const occRef = window._fsDoc(db, 'students', ns);
+      const resSnap = await tx.get(resRef);
+      const occSnap = await tx.get(occRef);
+      if (resSnap.exists() && resSnap.data().name && resSnap.data().name !== currentStudent.name) throw new Error('RESERVED');
+      if (occSnap.exists() && occSnap.data().name && occSnap.data().name !== currentStudent.name) throw new Error('SEAT_TAKEN');
+      tx.set(resRef, {
+        name: currentStudent.name,
+        fromSeat: fromId,
+        toSeat: ns,
+        effectiveDate: effDate,
+        createdAt: window._fsServerTimestamp(),
+      });
+    });
+    // 이전에 내가 예약해 둔 다른 자리는 해제 (한 명당 예약 1개)
+    try {
+      const psnap = await window._fsGetDocs(window._fsCollection(db, 'pendingSeats'));
+      for (const pd of psnap.docs) {
+        if (pd.id !== ns && pd.data().name === currentStudent.name) {
+          await window._fsDeleteDoc(window._fsDoc(db, 'pendingSeats', pd.id));
+        }
+      }
+    } catch(e) { console.warn('이전 예약 해제 실패:', e); }
+    alert(`✅ ${seatNum}번 자리를 예약했습니다!\n\n${effLabel}부터 적용됩니다. 그때까지는 현재 자리를 이용하세요.`);
+    buildStudentSeatmap();
+  } catch(e) {
+    if (e && e.message === 'RESERVED') alert('⚠️ 방금 다른 학생이 먼저 예약한 자리입니다. 다른 자리를 골라주세요.');
+    else if (e && e.message === 'SEAT_TAKEN') alert('⚠️ 이미 사용 중인 자리입니다. 다른 자리를 골라주세요.');
+    else alert('자리 예약 실패: ' + (e && e.message ? e.message : e));
+    buildStudentSeatmap();
+  }
+}
 
 
 // ── 스터디룸 신청 ──
