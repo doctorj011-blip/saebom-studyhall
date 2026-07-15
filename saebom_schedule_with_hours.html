@@ -1410,6 +1410,10 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <button onclick="cancelSeatSelection()" style="padding:7px 16px;background:#EEF2FF;border:1.5px solid #8F82E4;color:#4A3FA8;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">비활성화</button>
         <span id="seat-sel-status" style="font-size:12px;color:#888"></span>
       </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #E8E5F5;display:flex;gap:8px;align-items:center">
+        <button onclick="applyPendingSeatsNow()" style="padding:7px 16px;background:#F59E0B;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">⚡ 예약 즉시 적용</button>
+        <span style="font-size:11px;color:var(--color-text-tertiary)">적용일을 기다리지 않고 대기 중인 자리 예약을 지금 바로 반영합니다.</span>
+      </div>
     </div>
 
     <!-- 학생앱 -->
@@ -8588,22 +8592,23 @@ window.resetSchedulesToBase = async function() {
 // 학생앱/랜덤배정이 pendingSeats에 남긴 예약 중, 적용일(effectiveDate)이 오늘 이하인 것을
 // 실제 좌석 이동으로 반영한다. 새벽 2시 리셋 블록에서 하루 한 번 호출된다.
 // 여러 기기가 동시에 돌아도 각 예약을 트랜잭션으로 '집어들며' 처리해 중복 이동을 막는다.
-async function commitPendingSeatsIfDue() {
+// forceAll=true면 적용일과 무관하게 대기 중인 모든 예약을 지금 커밋한다('예약 즉시 적용' 버튼).
+async function commitPendingSeatsIfDue(forceAll) {
   const _db = window._adminDb || db;
-  if (!_db) return;
+  if (!_db) return 0;
   let psnap;
-  try { psnap = await getDocs(collection(_db, 'pendingSeats')); } catch(e) { return; }
-  if (!psnap || psnap.empty) return;
+  try { psnap = await getDocs(collection(_db, 'pendingSeats')); } catch(e) { return 0; }
+  if (!psnap || psnap.empty) return 0;
   const todayIso = SH.sessIsoDate(Date.now());
   const due = [];
   psnap.forEach(pd => {
     const p = pd.data();
     const eff = p.effectiveDate || '';
-    if (!eff || eff <= todayIso) {
+    if (forceAll || !eff || eff <= todayIso) {
       due.push({ id: pd.id, name: p.name || '', fromSeat: p.fromSeat || '', toSeat: String(p.toSeat || pd.id), studentData: p.studentData || null });
     }
   });
-  if (!due.length) return;
+  if (!due.length) return 0;
   let done = 0;
   for (const res of due) {
     try { await _commitOneReservation(_db, res); done++; }
@@ -8619,7 +8624,21 @@ async function commitPendingSeatsIfDue() {
   try { if (window.buildFloorplan) buildFloorplan(); } catch(e) {}
   try { if (window.buildDashboard) buildDashboard(); } catch(e) {}
   if (done) showAdminToast(`🪑 예약된 자리변경 ${done}건이 적용됐습니다`);
+  return done;
 }
+
+// '예약 즉시 적용' 버튼 — 대기 중인 예약 수를 확인하고, 관리자 확인 후 적용일과 무관하게 전부 커밋.
+window.applyPendingSeatsNow = async function() {
+  const _db = window._adminDb;
+  if (!_db) { alert('Firebase 연결이 필요합니다'); return; }
+  let cnt = 0;
+  try { const snap = await getDocs(collection(_db, 'pendingSeats')); cnt = snap.size; } catch(e) {}
+  if (!cnt) { showAdminToast('대기 중인 예약이 없습니다'); return; }
+  if (!confirm(`대기 중인 자리변경 예약 ${cnt}건을 지금 바로 적용할까요?\n\n(적용일을 기다리지 않고 즉시 좌석이 이동됩니다)`)) return;
+  const done = await commitPendingSeatsIfDue(true);
+  if (window.loadSeatSelectionStatus) window.loadSeatSelectionStatus();
+  alert(`✅ 예약 ${done}건을 적용했습니다.`);
+};
 
 // 예약 1건을 실제 좌석 이동으로 반영. 예약 문서 삭제를 이동과 원자적으로 처리(트랜잭션)해
 // 두 기기가 동시에 커밋해도 이동이 한 번만 일어나게 한다.
