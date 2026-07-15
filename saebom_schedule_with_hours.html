@@ -780,13 +780,13 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <!-- 오늘 벌점 현황판 (오늘 늦은 변경 + 오늘 새벽 확정된 어제 무단결석) -->
     <div class="card" id="penalty-board-section">
       <div class="card-title" style="justify-content:space-between">
-        <span><i class="ti ti-alert-triangle" style="font-size:14px;color:#C62828" aria-hidden="true"></i> 오늘 벌점 현황</span>
+        <span onclick="togglePenaltyBoard()" style="cursor:pointer;user-select:none" title="벌점 현황 접기/펼치기"><i id="penalty-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#C62828;transition:transform .15s" aria-hidden="true"></i> <i class="ti ti-alert-triangle" style="font-size:14px;color:#C62828" aria-hidden="true"></i> 오늘 벌점 현황</span>
         <span style="display:flex;align-items:center;gap:8px">
           <span id="penalty-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
           <button onclick="showPenaltyModal()" style="padding:3px 9px;border:1px solid #E5E7EB;background:#fff;color:#6B7280;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">전체 보기</button>
         </span>
       </div>
-      <div id="penalty-board-body"></div>
+      <div id="penalty-board-body" style="display:none"></div>
     </div>
     <!-- 스터디룸 초과 경고 -->
     <div class="card" id="studyroom-overflow-section" style="display:none">
@@ -8089,6 +8089,16 @@ window.renderStudyroomBoard = renderStudyroomBoard;
 let _penaltyBoardDocs = [];
 let _penaltyBoardUnsub = null;
 let _penaltyBoardKey = '';
+
+// 대시보드 벌점 현황 접기/펼치기 (기본값=접힘)
+window.togglePenaltyBoard = function() {
+  const body  = document.getElementById('penalty-board-body');
+  const caret = document.getElementById('penalty-board-caret');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  if (caret) caret.style.transform = open ? 'rotate(90deg)' : '';
+};
 
 function _penIsoDate(ts) {
   const d = new Date(ts);
