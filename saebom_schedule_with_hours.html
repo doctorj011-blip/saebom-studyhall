@@ -10841,10 +10841,10 @@ document.addEventListener('DOMContentLoaded', function() {
   async function cmd(obj){ try{ await fs.addDoc(fs.collection(db,'ac_commands'), Object.assign({ ts:Date.now(), createdAt: fs.serverTimestamp() }, obj)); }catch(e){ alert('명령 전송 실패: '+e.message); } }
   async function saveConf(patch){ try{ await fs.setDoc(fs.doc(db,'ac_config','main'), patch, { merge:true }); }catch(e){ alert('설정 저장 실패: '+e.message); } }
 
-  const seg = (list, cur, id, kind) => `<div style="display:inline-flex;flex-wrap:wrap;gap:5px">` + list.map(v => {
+  const seg = (list, cur, id, kind) => `<div style="display:flex;flex-wrap:nowrap;gap:3px;max-width:100%;overflow-x:auto">` + list.map(v => {
     const on = cur===v;
     const lb = kind==='mode' ? (MODE_LABEL[v]||v) : (FAN_LABEL[v]||v);
-    return `<button onclick="__ac.${kind}('${id}','${v}')" style="border:1px solid ${on?C.accent:C.line};background:${on?C.accent:'#fff'};color:${on?'#fff':C.text};font-weight:700;font-size:12px;padding:5px 11px;border-radius:8px;cursor:pointer">${esc(lb)}</button>`;
+    return `<button onclick="__ac.${kind}('${id}','${v}')" style="border:1px solid ${on?C.accent:C.line};background:${on?C.accent:'#fff'};color:${on?'#fff':C.text};font-weight:700;font-size:11px;padding:4px 5px;border-radius:7px;cursor:pointer;white-space:nowrap;flex:0 0 auto">${esc(lb)}</button>`;
   }).join('') + `</div>`;
 
   function deviceCard(id){
@@ -10856,30 +10856,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const held = zs.manualUntil && zs.manualUntil > Date.now();
     const occ = zs.occupied;
     const canT = p.target != null;
-    return `<div style="border:1px solid ${p.power?'#BBF7D0':C.line};background:${p.power?'#F7FEF9':'#fff'};border-radius:12px;padding:14px;min-width:250px;flex:1 1 250px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    return `<div style="border:1px solid ${p.power?'#BBF7D0':C.line};background:${p.power?'#F7FEF9':'#fff'};border-radius:10px;padding:10px 11px;min-width:240px;flex:1 1 240px;max-width:310px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
         <div>
-          <div style="font-weight:800;font-size:15px;color:${C.text}">${esc(zone.name || id)}</div>
-          <div style="font-size:11px;color:${C.muted}">${esc(zone.type==='studyroom'?('스터디룸'+(zone.room?(' '+zone.room):'')):'열람실')} · ${esc((dev.state&&!dev.error)?'연결됨':(dev.error?'오류':'대기'))}</div>
+          <div style="font-weight:800;font-size:13px;color:${C.text}">${esc(zone.name || id)}</div>
+          <div style="font-size:10px;color:${C.muted}">${esc(zone.type==='studyroom'?('스터디룸'+(zone.room?(' '+zone.room):'')):'열람실')} · ${esc((dev.state&&!dev.error)?'연결됨':(dev.error?'오류':'대기'))}</div>
         </div>
-        <span style="margin-left:auto;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;background:${p.power?C.onBg:C.offBg};color:${p.power?C.onTx:C.offTx}">${p.power?'가동중':'꺼짐'}</span>
-        <button onclick="__ac.power('${id}',${p.power?'false':'true'})" title="전원" style="border:0;border-radius:999px;width:50px;height:27px;position:relative;cursor:pointer;background:${p.power?'#22C55E':'#D1D5DB'}">
-          <span style="position:absolute;top:3px;left:${p.power?'26px':'3px'};width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span>
+        <span style="margin-left:auto;font-size:10px;font-weight:800;padding:2px 7px;border-radius:999px;background:${p.power?C.onBg:C.offBg};color:${p.power?C.onTx:C.offTx}">${p.power?'가동중':'꺼짐'}</span>
+        <button onclick="__ac.power('${id}',${p.power?'false':'true'})" title="전원" style="border:0;border-radius:999px;width:42px;height:23px;position:relative;cursor:pointer;background:${p.power?'#22C55E':'#D1D5DB'};flex:0 0 auto">
+          <span style="position:absolute;top:3px;left:${p.power?'22px':'3px'};width:17px;height:17px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span>
         </button>
       </div>
-      <div style="display:flex;align-items:center;gap:6px;margin:4px 0 12px">
-        <span style="font-size:11px;padding:2px 8px;border-radius:6px;background:${occ?C.onBg:C.offBg};color:${occ?C.onTx:C.offTx};font-weight:700">${occ?'사용 중':'비어 있음'}</span>
-        ${held?`<span style="font-size:11px;color:${C.warn}">🖐 수동 보류</span>`:''}
-        ${dev.error?`<span style="font-size:11px;color:${C.err}">${esc(dev.error)}</span>`:''}
+      <div style="display:flex;align-items:center;gap:5px;margin:2px 0 8px">
+        <span style="font-size:10px;padding:2px 7px;border-radius:6px;background:${occ?C.onBg:C.offBg};color:${occ?C.onTx:C.offTx};font-weight:700">${occ?'사용 중':'비어 있음'}</span>
+        ${held?`<span style="font-size:10px;color:${C.warn}">🖐 수동 보류</span>`:''}
+        ${dev.error?`<span style="font-size:10px;color:${C.err}">${esc(dev.error)}</span>`:''}
       </div>
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
-        <button ${canT?'':'disabled'} onclick="__ac.temp('${id}',${clampT(Number(p.target)-c.step)})" style="width:38px;height:38px;border-radius:50%;border:1px solid ${C.line};background:#fff;color:${C.text};font-size:20px;cursor:pointer">−</button>
-        <div style="font-size:30px;font-weight:800;color:${C.accent};min-width:70px;text-align:center">${canT?p.target:'–'}<span style="font-size:15px;color:${C.muted}">°${esc(p.unit)}</span></div>
-        <button ${canT?'':'disabled'} onclick="__ac.temp('${id}',${clampT(Number(p.target)+c.step)})" style="width:38px;height:38px;border-radius:50%;border:1px solid ${C.line};background:#fff;color:${C.text};font-size:20px;cursor:pointer">+</button>
-        <div style="font-size:12px;color:${C.muted}">${p.cur!=null?`현재 <b style="color:${C.text}">${p.cur}°</b>`:''}${(p.cur!=null&&p.humidity!=null)?' · ':''}${p.humidity!=null?`습도 <b style="color:${C.text}">${p.humidity}%</b>`:''}</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <button ${canT?'':'disabled'} onclick="__ac.temp('${id}',${clampT(Number(p.target)-c.step)})" style="width:30px;height:30px;border-radius:50%;border:1px solid ${C.line};background:#fff;color:${C.text};font-size:16px;cursor:pointer;flex:0 0 auto">−</button>
+        <div style="font-size:22px;font-weight:800;color:${C.accent};min-width:54px;text-align:center">${canT?p.target:'–'}<span style="font-size:12px;color:${C.muted}">°${esc(p.unit)}</span></div>
+        <button ${canT?'':'disabled'} onclick="__ac.temp('${id}',${clampT(Number(p.target)+c.step)})" style="width:30px;height:30px;border-radius:50%;border:1px solid ${C.line};background:#fff;color:${C.text};font-size:16px;cursor:pointer;flex:0 0 auto">+</button>
+        <div style="font-size:11px;color:${C.muted}">${p.cur!=null?`현재 <b style="color:${C.text}">${p.cur}°</b>`:''}${(p.cur!=null&&p.humidity!=null)?' · ':''}${p.humidity!=null?`습도 <b style="color:${C.text}">${p.humidity}%</b>`:''}</div>
       </div>
-      <div style="margin-bottom:9px"><div style="font-size:11px;color:${C.muted};font-weight:700;margin-bottom:5px">운전 모드</div>${seg(c.modes, p.mode, id, 'mode')}</div>
-      <div><div style="font-size:11px;color:${C.muted};font-weight:700;margin-bottom:5px">바람 세기</div>${seg(c.fans, p.fan, id, 'fan')}</div>
+      <div style="margin-bottom:7px"><div style="font-size:10px;color:${C.muted};font-weight:700;margin-bottom:4px">운전 모드</div>${seg(c.modes, p.mode, id, 'mode')}</div>
+      <div><div style="font-size:10px;color:${C.muted};font-weight:700;margin-bottom:4px">바람 세기</div>${seg(c.fans, p.fan, id, 'fan')}</div>
     </div>`;
   }
 
@@ -10946,7 +10946,7 @@ document.addEventListener('DOMContentLoaded', function() {
       body = `<div style="color:${C.muted};font-size:13px;padding:10px 2px;line-height:1.7">아직 배정된 에어컨이 없습니다. 위 <b>🔍 에어컨 검색</b>을 누른 뒤, 나타난 에어컨을 열람실/스터디룸에 <b>배정</b>하세요.</div>`;
     } else {
       body = '';
-      if (mapped.length) body += `<div style="display:flex;flex-wrap:wrap;gap:12px">${mapped.map(deviceCard).join('')}</div>`;
+      if (mapped.length) body += `<div style="display:flex;flex-wrap:wrap;gap:10px">${mapped.map(deviceCard).join('')}</div>`;
       if (discovered.length) body += `<div style="margin-top:16px"><div style="font-size:12px;color:${C.muted};font-weight:700;margin-bottom:8px">미배정 에어컨 (열람실/스터디룸에 배정 · 면학관 아니면 <b>숨김</b>)</div><div style="display:flex;flex-wrap:wrap;gap:12px">${discovered.map(discoveredCard).join('')}</div></div>`;
       // 숨긴 기기(집에 있는 것들)는 완전히 표시하지 않음. (ac_config.ignore 로만 유지 — 복원은 관리자 문의)
     }
