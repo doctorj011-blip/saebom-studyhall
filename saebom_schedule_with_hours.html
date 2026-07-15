@@ -834,19 +834,19 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     </div>
   </div>
 
-  <div style="display:flex;gap:14px;align-items:flex-start">
-    <div class="fp-drag-wrap" id="fp-drag-wrap" style="flex:1;min-width:0">
+  <div style="position:relative">
+    <div class="fp-drag-wrap" id="fp-drag-wrap" style="margin-right:254px;min-width:0">
       <div class="fp-room" id="fp-room" style="position:relative"></div>
     </div>
 
-    <!-- 입실 현황 사이드패널 -->
-    <div id="fp-side-panel" style="width:220px;flex-shrink:0;display:flex;flex-direction:column;gap:8px;max-height:80vh;overflow-y:auto;cursor:pointer">
-      <div style="font-size:12px;font-weight:700;color:#1E1B4B;padding:4px 2px;display:flex;align-items:center;justify-content:space-between">
+    <!-- 입실 현황 사이드패널 : 배치도와 같은 높이로 정렬, 카드가 잘리지 않게 내부 스크롤 -->
+    <div id="fp-side-panel" style="position:absolute;top:0;bottom:0;right:0;width:240px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:12px;font-weight:700;color:#1E1B4B;padding:4px 2px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
         <span>📋 입실 현황</span>
         <span id="fp-side-count" style="font-size:11px;color:#888"></span>
       </div>
-      <div id="fp-side-list"></div>
-      <div class="fp-side-drag-hint" id="fp-side-drag-hint">✋ 카드를 배치도 좌석에 드롭 → 좌석 변경</div>
+      <div id="fp-side-list" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:2px"></div>
+      <div class="fp-side-drag-hint" id="fp-side-drag-hint" style="flex-shrink:0">✋ 카드를 배치도 좌석에 드롭 → 좌석 변경</div>
     </div>
   </div>
 </div>
@@ -5213,7 +5213,7 @@ function buildFpSidePanel() {
       const exp = new Date(s.expiry);
       const diff = Math.round((exp - today) / 86400000);
       expiryStr = diff >= 0
-        ? `<span style="font-size:10px;color:#888">📅 ${s.expiry.replace(/-/g,'.')} (D-${diff})</span>`
+        ? `<span style="font-size:10px;color:#6B7280">📅 ${s.expiry.replace(/-/g,'.')} (D-${diff})</span>`
         : `<span style="font-size:10px;color:#C62828">📅 만료</span>`;
     }
 
@@ -5224,20 +5224,20 @@ function buildFpSidePanel() {
       draggable="true"
       onclick="fpSeatClick(${parseInt(s.seat)})"
       onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
-      style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:8px 10px;cursor:pointer;transition:box-shadow 0.1s;position:relative">
-      <div style="position:absolute;top:7px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-        <div style="display:flex;align-items:center;gap:5px">
-          <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:${badgeBg};color:#fff">${badgeText}</span>
+      style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:6px 10px;cursor:pointer;transition:box-shadow 0.1s;position:relative;flex-shrink:0;line-height:1.25">
+      <div style="position:absolute;top:6px;right:9px;font-size:13px;color:#D1D5DB">⠿</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
+        <div style="display:flex;align-items:center;gap:4px">
+          <span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px;background:${badgeBg};color:#fff">${badgeText}</span>
         </div>
-        <span style="font-size:10px;color:#6B7280;margin-right:14px">${s.seat}번</span>
+        <span style="font-size:11px;color:#6B7280;margin-right:15px">${s.seat}번</span>
       </div>
-      <div style="display:flex;align-items:center;gap:4px;margin-bottom:3px">
+      <div style="display:flex;align-items:center;gap:4px">
         <span style="font-size:13px;font-weight:700;color:#1F2937">${s.name}</span>
         ${genderIcon}
+        ${isIn && rec ? `<span style="font-size:10px;color:#6C5DD3;margin-left:2px">⏱ ${rec.inTime}</span>` : ''}
       </div>
-      ${expiryStr ? `<div style="margin-top:2px">${expiryStr}</div>` : ''}
-      ${isIn && rec ? `<div style="font-size:10px;color:#6C5DD3;margin-top:2px">⏱ ${rec.inTime} 입실</div>` : ''}
+      ${expiryStr ? `<div style="margin-top:1px">${expiryStr}</div>` : ''}
     </div>`;
   }).join('');
 
