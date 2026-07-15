@@ -3758,7 +3758,7 @@ function buildDashboard(){
         const gi = ALERTS.indexOf(a);
         const sent = window._absentSmsSent && window._absentSmsSent.has(window._absentSmsKey(a.name, a.period));
         return `<div class="alert-item">
-          <div><span class="alert-name">${a.name}</span> <span class="alert-info">(${a.seat}) ${a.period} ${a.time}</span></div>
+          <div><span class="alert-name" style="cursor:pointer;text-decoration:underline;text-underline-offset:2px" title="스케줄 보기" onclick="openStudentScheduleByName('${a.name}')">${a.name}</span> <span class="alert-info">(${a.seat}) ${a.period} ${a.time}</span></div>
           ${sent
             ? `<button class="send-btn" style="background:#d4edda;color:#2D7A4F;box-shadow:none;cursor:default" disabled>✅ 발송완료</button>`
             : `<button class="send-btn" onclick="sendAbsentAlert(${gi})"><i class="ti ti-send" aria-hidden="true"></i> 발송</button>`}
@@ -5638,6 +5638,12 @@ let _schedDraft = {};
 
 const ALL_PERIODS_SAT = [1,2,3,4,5,6,7,8,9,10,11];
 const ALL_PERIODS_WEEK = [7,8,9,10,11];
+
+// 미입실 알림 대상 이름 클릭 → 해당 학생 스케줄(상세 정보) 모달 열기
+window.openStudentScheduleByName = function(name) {
+  const idx = STUDENTS.findIndex(s => s.name === name);
+  if (idx >= 0) openScheduleModal(idx);
+};
 
 function openScheduleModal(idx) {
   _schedEditIdx = idx;
