@@ -11,6 +11,7 @@
  *   · 끌 때: 재실 0이 offGraceMin 분 동안 "계속" 유지될 때만 OFF (잠깐 출입은 안 끔)
  *   · 한 번 켜지면 minOnMin 분은 유지(최소 운전시간)
  *   · 운영시간(opStart~opEnd) 밖에는 항상 OFF
+ *   · 끄기 직전 dryOffMin 분 송풍 건조 후 전원 차단(코일 곰팡이·냄새 방지) — 자동/수동 OFF 공통
  * 제어 단위(zone): 열람실(hall)=전체 재실 기준 / 스터디룸(studyroom)=해당 방 배정+재실 기준
  *
  * 인증 없는 면학관앱(정적 PWA)과는 Firestore 문서로 연동:
@@ -108,6 +109,10 @@ async function acConfig() {
     lateAfter: c.lateAfter || '23:50',                         // 이 시각 이후: zone 인원 lateMinCount 미만이면 OFF
     lateMinCount: c.lateMinCount != null ? c.lateMinCount : 2, // 마감 임박 시 zone 유지 최소 인원
     onMode: c.onMode || 'COOL', onFan: c.onFan || 'AUTO',
+    // 끄기 전 송풍 건조 — 냉방으로 젖은 코일을 말려 곰팡이·냄새 방지(LG 자동건조와 같은 원리).
+    //   ※ 기기 프로필에 AIR_CLEAN(자동건조)이 없어 FAN으로 직접 구현. AIR_DRY는 '제습'이라 코일이 오히려 젖는다.
+    //   ※ 풍량은 건드리지 않는다 — 열람실은 자동화가 풍량을 관리하지 않아, 여기서 바꾸면 그 값이 그대로 굳는다.
+    dryOffMin: c.dryOffMin != null ? c.dryOffMin : 15,   // 0이면 건조 없이 즉시 OFF
     // 스터디룸 예측 제어(예약 교시 기반)
     bridgeTemp: c.bridgeTemp != null ? c.bridgeTemp : 30,      // 빈 교시(뒤에 예약 있음) 브리지 온도 — 압축기 거의 정지+재냉방 상한
     srPreCoolMin: c.srPreCoolMin != null ? c.srPreCoolMin : 15,// 다음 예약 시작 N분 전부터 미리 냉방
@@ -299,9 +304,19 @@ async function acEvaluate(reason) {
     zs.occupied = occupied;
     zs.count = count;   // 대시보드 참고용(현재 zone 인원수)
 
-    // 자동 꺼짐 or 수동 보류 중이면 자동 전환은 건너뛰고 상태만 기록
+    // 자동 꺼짐 or 수동 보류 중이면 자동 전환은 건너뛰고 상태만 기록.
+    //   단, 예약된 건조(dryUntil)는 보류 중이어도 반드시 마무리한다 — 아니면 송풍이 계속 돈다.
     const held = zs.manualUntil && zs.manualUntil > nowMs;
-    if (cfg.auto === false || held) { zs.emptySince = occupied ? null : (zs.emptySince || nowMs); out[deviceId] = zs; continue; }
+    if (cfg.auto === false || held) {
+      if (zs.on === true && zs.dryUntil && nowMs >= zs.dryUntil) {
+        try {
+          await acSetPower(cfg, deviceId, false);
+          zs.on = false; zs.mode = null; zs.temp = null; zs.fan = null; zs.dryUntil = null; zs.error = null;
+          logger.info('AC 건조 완료 → OFF', { deviceId, zone: z.name, reason });
+        } catch (e) { logger.error('AC 건조 후 OFF 실패', { deviceId, err: e.message }); zs.error = e.message; }
+      }
+      zs.emptySince = occupied ? null : (zs.emptySince || nowMs); out[deviceId] = zs; continue;
+    }
 
     // 목표 프로파일 결정
     //   [스터디룸] 예약 교시 기반: 진행중 교시=인원별 냉방 / 빈 교시(뒤 예약 있음)=브리지 / 남은 예약 없음=OFF
@@ -328,12 +343,21 @@ async function acEvaluate(reason) {
     try {
       if (!profile.power) {
         if (zs.on === true) {
+          // 끄기 전 건조 — dryOffMin 동안 송풍으로 코일을 말린 뒤 실제 전원 차단.
+          if (cfg.dryOffMin > 0) {
+            if (!zs.dryUntil) { zs.dryUntil = nowMs + cfg.dryOffMin * 60000; logger.info('AC 건조 시작', { deviceId, zone: z.name, minutes: cfg.dryOffMin, reason }); }
+            if (nowMs < zs.dryUntil) {
+              if (zs.mode !== 'FAN') { await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: 'FAN' } }); zs.mode = 'FAN'; zs.temp = null; }
+              zs.error = null; out[deviceId] = zs; continue;   // 건조 중 — 전원 차단은 다음 틱 이후
+            }
+          }
           await acSetPower(cfg, deviceId, false);
-          zs.on = false; zs.mode = null; zs.temp = null; zs.fan = null;
+          zs.on = false; zs.mode = null; zs.temp = null; zs.fan = null; zs.dryUntil = null;
           logger.info('AC 자동 OFF', { deviceId, zone: z.name, occupied, reason });
         }
       } else {
         let changed = false;
+        zs.dryUntil = null;   // 다시 켜는 상황 → 예약된 건조 취소
         if (zs.on !== true) {   // 켜기: 전원 ON 후 잠깐 대기(반영) → 모드 → 온도 → 풍량
           await acSetPower(cfg, deviceId, true);
           zs.on = true; zs.lastOnTs = nowMs; changed = true;
@@ -408,11 +432,30 @@ exports.acOnCommand = onDocumentCreated(
       } else if (c.action === 'refresh') {
         await acRefreshState(c.deviceId ? [c.deviceId] : undefined);
       } else if (c.deviceId) {     // 수동 제어
-        const payload = c.body || acPayload(c.command, c.value);
-        if (payload) await acExecute(cfg, c.deviceId, payload);
-        const holdMs = (c.holdMin != null ? c.holdMin : cfg.manualHoldMin) * 60000;
-        await db.collection('ac_state').doc('main')
-          .set({ zones: { [c.deviceId]: { manualUntil: Date.now() + holdMs } } }, { merge: true });
+        const ref = db.collection('ac_state').doc('main');
+        const zs = ((((await ref.get()).data() || {}).zones) || {})[c.deviceId] || {};
+        const now = Date.now();
+        const patch = { manualUntil: now + ((c.holdMin != null ? c.holdMin : cfg.manualHoldMin) * 60000) };
+        const isPower = c.command === 'power' && !c.body;
+        const on = c.value === true || c.value === 'true';
+        if (isPower && !on && zs.on === true && cfg.dryOffMin > 0) {
+          // 수동 OFF도 건조 후 종료 — 여기선 송풍 전환만, 실제 전원 차단은 acTick이 dryUntil 지나서.
+          await acExecute(cfg, c.deviceId, { airConJobMode: { currentJobMode: 'FAN' } });
+          Object.assign(patch, { on: true, mode: 'FAN', temp: null, dryUntil: now + cfg.dryOffMin * 60000 });
+        } else if (isPower) {
+          await acSetPower(cfg, c.deviceId, on);   // 이미 그 전원상태여도 성공 처리
+          Object.assign(patch, on ? { on: true, lastOnTs: now, dryUntil: null }
+                                  : { on: false, mode: null, temp: null, fan: null, dryUntil: null });
+          if (on && zs.dryUntil) {   // 건조 중 다시 켬 → 송풍에 갇히지 않게 운전 모드 복구(보류 중엔 틱이 못 고쳐준다)
+            try { await acExecute(cfg, c.deviceId, { airConJobMode: { currentJobMode: cfg.onMode } }); patch.mode = cfg.onMode; }
+            catch (e) { logger.warn('AC 수동 ON 모드 복구 보류', { deviceId: c.deviceId, err: e.message }); }
+          }
+        } else {
+          const payload = c.body || acPayload(c.command, c.value);
+          if (payload) await acExecute(cfg, c.deviceId, payload);
+          patch.dryUntil = null;   // 사람이 손댔으면 예약된 건조는 취소 — 쓰는 중에 꺼지면 안 된다
+        }
+        await ref.set({ zones: { [c.deviceId]: patch } }, { merge: true });
         await acRefreshState([c.deviceId]);
       }
       await snap.ref.set({ done: true, doneAt: new Date().toISOString() }, { merge: true });

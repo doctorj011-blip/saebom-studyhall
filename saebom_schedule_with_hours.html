@@ -11231,6 +11231,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const c = caps(dev.profile);
     const held = zs.manualUntil && zs.manualUntil > Date.now();
     const occ = zs.occupied;
+    const dryLeft = zs.dryUntil && zs.dryUntil > Date.now() ? Math.ceil((zs.dryUntil - Date.now())/60000) : 0;   // 끄기 전 송풍 건조 남은 시간
     const canT = p.target != null;
     return `<div style="border:1px solid ${p.power?'#BBF7D0':C.line};background:${p.power?'#F7FEF9':'#fff'};border-radius:10px;padding:10px 11px;min-width:240px;flex:1 1 240px;max-width:310px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
@@ -11245,6 +11246,7 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div style="display:flex;align-items:center;gap:5px;margin:2px 0 8px">
         <span style="font-size:10px;padding:2px 7px;border-radius:6px;background:${occ?C.onBg:C.offBg};color:${occ?C.onTx:C.offTx};font-weight:700">${occ?'사용 중':'비어 있음'}</span>
+        ${dryLeft?`<span title="끄기 전 코일 건조 중 — 끝나면 자동으로 전원이 내려갑니다" style="font-size:10px;color:${C.accent};font-weight:700">🌬 건조중 ${dryLeft}분</span>`:''}
         ${held?`<span style="font-size:10px;color:${C.warn}">🖐 수동 보류</span>`:''}
         ${dev.error?`<span style="font-size:10px;color:${C.err}">${esc(dev.error)}</span>`:''}
       </div>
@@ -11314,6 +11316,9 @@ document.addEventListener('DOMContentLoaded', function() {
       · 자동 운전 <select id="ac_mode" style="${inp}">${modeOpt('COOL','냉방')}${modeOpt('HEAT','난방')}${modeOpt('AUTO','자동')}</select>
       · OFF 유예 <input id="ac_grace" type="number" value="${esc(CONF.offGraceMin!=null?CONF.offGraceMin:20)}" style="width:52px;${inp}">분
       · 기본온도 <input id="ac_temp" type="number" step="0.5" value="${esc(CONF.onTemp!=null?CONF.onTemp:24)}" style="width:58px;${inp}">°
+      · <span title="끌 때 이 시간만큼 송풍으로 코일을 말린 뒤 전원을 내립니다(곰팡이·냄새 방지). 0이면 즉시 OFF.">끄기 전 건조</span> <input id="ac_dry" type="number" value="${esc(CONF.dryOffMin!=null?CONF.dryOffMin:15)}" style="width:52px;${inp}">분
+      · <span title="스터디룸: 예약 시작 이 시간 전부터 미리 냉방합니다.">스터디룸 예냉</span> <input id="ac_precool" type="number" value="${esc(CONF.srPreCoolMin!=null?CONF.srPreCoolMin:15)}" style="width:52px;${inp}">분 전
+      · <span title="스터디룸: 예약 사이 공백이 이 시간 이하면 끄지 않고 30°로 켜둡니다(브리지). 0이면 브리지 없이 OFF.">브리지 공백</span> <input id="ac_bridge" type="number" value="${esc(CONF.srBridgeMaxGap!=null?CONF.srBridgeMaxGap:45)}" style="width:52px;${inp}">분 이하
       <button onclick="__ac.saveSettings()" style="border:0;background:${C.accent};color:#fff;font-weight:700;padding:5px 12px;border-radius:7px;cursor:pointer">저장</button>
     </div>`;
 
@@ -11351,12 +11356,18 @@ document.addEventListener('DOMContentLoaded', function() {
     },
     saveSettings:()=>{
       const g=el.querySelector('#ac_grace'), t=el.querySelector('#ac_temp'), md=el.querySelector('#ac_mode');
+      const dry=el.querySelector('#ac_dry'), pc=el.querySelector('#ac_precool'), br=el.querySelector('#ac_bridge');
+      // 0도 유효값(=기능 끔)이라 ||로 기본값을 못 준다. 빈 칸일 때만 기본값.
+      const num=(n,dflt)=>{ const s=String((n&&n.value)||'').trim(); if(!s) return dflt; const v=Number(s); return Number.isFinite(v)&&v>=0 ? v : dflt; };
       saveConf({
         opStart:(el.querySelector('#ac_opStart')||{}).value||'06:00',
         opEnd:(el.querySelector('#ac_opEnd')||{}).value||'24:00',
         offGraceMin:Number(g&&g.value)||20,
         onTemp:Number(t&&t.value)||24,
         onMode:(md&&md.value)||'COOL',
+        dryOffMin:num(dry,15),
+        srPreCoolMin:num(pc,15),
+        srBridgeMaxGap:num(br,45),
       });
     },
   };
