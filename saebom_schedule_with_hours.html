@@ -777,6 +777,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <div id="studyroom-board-body" style="overflow-x:auto"></div>
       </div>
     </div>
+    <!-- 3열: 오늘 벌점 현황 + 그 바로 아래 오늘 스케줄 변동을 세로로 묶어 오른쪽 컬럼에 함께 배치 -->
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
     <!-- 오늘 벌점 현황판 (오늘 늦은 변경 + 오늘 새벽 확정된 어제 무단결석) -->
     <div class="card" id="penalty-board-section">
       <div class="card-title" style="justify-content:space-between">
@@ -795,6 +797,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <span id="schedvar-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
       </div>
       <div id="schedvar-board-body"></div>
+    </div>
     </div>
     <!-- 스터디룸 초과 경고 -->
     <div class="card" id="studyroom-overflow-section" style="display:none">
