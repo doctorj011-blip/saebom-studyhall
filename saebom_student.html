@@ -1188,6 +1188,9 @@ body{
       <div style="margin-bottom:20px">
         <div class="section-label" style="margin-top:2px">SELECT PERIOD · 오늘 교시 선택</div>
         <div id="studyroom-period-btns" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        <button id="studyroom-lock-btn" onclick="openLockRequestModal()"
+          style="width:100%;margin-top:10px;padding:11px;background:var(--surface);color:#B45309;border:1.5px dashed #F59E0B;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">🔒 1인 단독 사용 신청 (관리자 승인제)</button>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px;line-height:1.5">감기 등 사유로 스터디룸을 혼자 사용해야 할 때 신청하세요. 승인되면 해당 교시에 그 방은 다른 학생이 사용할 수 없습니다.</div>
       </div>
       <div style="margin-bottom:16px">
         <div class="section-label">MY REQUESTS · 내 신청 현황</div>
@@ -3776,25 +3779,31 @@ async function reserveSeat(seatNum, oldSeat, effDate) {
 // ── 스터디룸 신청 ──
 let studyroomUnsubscribe = null;
 
-function buildStudyroomPeriodBtns() {
+// 오늘 운영 교시 목록 (일요일=null). 일반 신청 버튼과 단독 사용 모달이 공유한다.
+function studyroomPeriodsToday() {
   const today = DAY_NAMES[new Date().getDay()];
-  const isSat = today === '토';
-  const isSun = today === '일';
-  const el = document.getElementById('studyroom-period-btns');
-  if (!el) return;
-
-  if (isSun) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
-    return;
-  }
-
-  const periods = isSat
+  if (today === '일') return null;
+  return today === '토'
     ? [{n:1,t:'09:00~10:00'},{n:2,t:'10:10~11:10'},{n:3,t:'11:20~12:30'},
        {n:4,t:'13:30~14:30'},{n:5,t:'14:40~15:40'},{n:6,t:'15:50~17:00'},
        {n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}]
     : [{n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
+}
+
+function buildStudyroomPeriodBtns() {
+  const el = document.getElementById('studyroom-period-btns');
+  if (!el) return;
+
+  const periods = studyroomPeriodsToday();
+  const lockBtn = document.getElementById('studyroom-lock-btn');
+  if (!periods) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:8px 0">일요일은 스터디룸 운영을 하지 않습니다.</div>';
+    if (lockBtn) lockBtn.style.display = 'none';
+    return;
+  }
+  if (lockBtn) lockBtn.style.display = '';
 
   el.innerHTML = periods.map(p =>
     `<button class="pill-btn" onclick="applyStudyroom(${p.n})">
@@ -3807,22 +3816,33 @@ function buildStudyroomPeriodBtns() {
 // 관리앱 studyroomDayKey()와 반드시 같은 문자열을 만들어야 신청/현황이 일치한다.
 function studyroomDayKey(){ const d = new Date(Date.now() - 3*3600*1000); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 
+// 해당 교시에 승인된 1인 단독 사용(lock)이 걸린 룸 번호 Set
+function _lockedRoomsFor(reqs, periodNum) {
+  const s = new Set();
+  reqs.forEach(r => { if (r.lock && r.status === 'approved' && r.period === periodNum && r.room) s.add(r.room); });
+  return s;
+}
+
 async function applyStudyroom(periodNum) {
   const db = window._db;
   if (!db || !currentStudent) return;
   try {
     const snap = await window._fsGetDocs(window._fsCollection(db, 'studyroom_requests'));
     const today = studyroomDayKey();
-    const roomCounts = {1:[], 2:[], 3:[]};
-    let alreadyApplied = false;
+    const periodReqs = [];
     snap.forEach(d => {
       const r = d.data();
-      if (r.date !== today || r.period !== periodNum) return;
-      if (roomCounts[r.room]) roomCounts[r.room].push(r.name);
-      if (r.name === currentStudent.name) alreadyApplied = true;
+      if (r.date === today && r.period === periodNum && r.status !== 'rejected') periodReqs.push(r);
     });
-    if (alreadyApplied) { alert(`이미 ${periodNum}교시 스터디룸을 신청하셨습니다.`); return; }
-    const totalCount = roomCounts[1].length + roomCounts[2].length + roomCounts[3].length;
+    if (periodReqs.some(r => r.name === currentStudent.name)) { alert(`이미 ${periodNum}교시 스터디룸을 신청하셨습니다.`); return; }
+    // 단독 사용 승인된 룸은 배정 대상에서 제외
+    const locked = _lockedRoomsFor(periodReqs, periodNum);
+    const availRooms = [1,2,3].filter(r => !locked.has(r));
+    if (!availRooms.length) { alert(`${periodNum}교시는 모든 스터디룸이 1인 단독 사용 중이라 신청할 수 없습니다.`); return; }
+    const roomCounts = {};
+    availRooms.forEach(r => roomCounts[r] = []);
+    periodReqs.forEach(r => { if (roomCounts[r.room]) roomCounts[r.room].push(r.name); });
+    const totalCount = availRooms.reduce((a,r) => a + roomCounts[r].length, 0);
     showStudyroomModal(periodNum, totalCount, roomCounts);
   } catch(e) { alert('오류: ' + e.message); }
 }
@@ -3856,10 +3876,12 @@ async function submitStudyroomReq(periodNum, roomCounts) {
   const reason = document.getElementById('studyroom-reason-input')?.value.trim();
   if (!reason) { alert('사용 사유를 입력해주세요'); return; }
   document.getElementById('studyroom-apply-modal')?.remove();
-  let assignRoom = 1, minCount = (roomCounts[1]||[]).length;
-  for (let r = 2; r <= 3; r++) {
+  // roomCounts에는 단독 사용(lock) 룸이 이미 빠져 있음 — 남은 룸 중 인원이 적은 곳으로
+  const rooms = Object.keys(roomCounts).map(Number).sort((a,b) => a-b);
+  let assignRoom = rooms[0], minCount = (roomCounts[assignRoom]||[]).length;
+  rooms.forEach(r => {
     if ((roomCounts[r]||[]).length < minCount) { minCount = (roomCounts[r]||[]).length; assignRoom = r; }
-  }
+  });
   try {
     await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
       name: currentStudent.name, seat: currentStudent.seat,
@@ -3870,6 +3892,78 @@ async function submitStudyroomReq(periodNum, roomCounts) {
     showToast(`✅ ${periodNum}교시 스터디룸 ${assignRoom}번 사용 가능!`);
   } catch(e) { alert('신청 실패: ' + e.message); }
 }
+
+// ── 1인 단독 사용(Lock) 신청 — 승인제·여러 교시 선택 가능 ──
+// 교시당 문서 1건, lockGroup으로 묶어 관리자가 한 번에 승인/거절(같은 룸 배정)한다.
+// room은 승인 시점에 관리자앱이 배정하므로 신청 시엔 0(미배정).
+window.openLockRequestModal = function() {
+  const periods = studyroomPeriodsToday();
+  if (!periods) { alert('일요일은 스터디룸 운영을 하지 않습니다.'); return; }
+  document.getElementById('studyroom-lock-modal')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'studyroom-lock-modal';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  overlay.innerHTML = `<div style="background:var(--card);border-radius:var(--r-lg);padding:20px;width:100%;max-width:360px;box-shadow:var(--shadow-lg);max-height:85vh;overflow-y:auto">
+    <div style="font-size:15px;font-weight:800;color:var(--text);margin-bottom:4px">🔒 1인 단독 사용 신청</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.5;margin-bottom:12px">관리자 승인 후 사용할 수 있습니다. 승인되면 선택한 교시 동안 배정된 스터디룸을 혼자 사용합니다.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">사용 교시 (여러 개 선택 가능) <span style="color:var(--red)">*</span></div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+      ${periods.map(p => `<label style="display:flex;align-items:center;gap:5px;border:1.5px solid var(--border);border-radius:var(--r-md);padding:7px 10px;font-size:12px;color:var(--text);cursor:pointer">
+        <input type="checkbox" class="studyroom-lock-pchk" value="${p.n}" style="accent-color:#F59E0B">
+        <span><b>${p.n}교시</b> <span style="color:var(--text3);font-size:11px">${p.t}</span></span>
+      </label>`).join('')}
+    </div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:6px">사용 사유 <span style="color:var(--red)">*</span></div>
+    <textarea id="studyroom-lock-reason" placeholder="예: 감기 기침이 심해서 부모님 오실 때까지 따로 공부해야 해요" rows="3"
+      style="width:100%;border:1.5px solid var(--border);border-radius:var(--r-md);padding:10px;font-size:13px;resize:none;outline:none;font-family:inherit;box-sizing:border-box;background:var(--surface);color:var(--text)"></textarea>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button onclick="document.getElementById('studyroom-lock-modal').remove()"
+        style="flex:1;padding:10px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">취소</button>
+      <button onclick="submitLockReq()"
+        style="flex:2;padding:10px;background:linear-gradient(135deg,#FBBF24,#F59E0B);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">🔒 신청하기</button>
+    </div>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if(e.target===overlay) overlay.remove(); });
+};
+
+window.submitLockReq = async function() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  const checked = [...document.querySelectorAll('.studyroom-lock-pchk:checked')].map(c => parseInt(c.value)).sort((a,b) => a-b);
+  if (!checked.length) { alert('사용할 교시를 1개 이상 선택해주세요'); return; }
+  const reason = document.getElementById('studyroom-lock-reason')?.value.trim();
+  if (!reason) { alert('사용 사유를 입력해주세요'); return; }
+  try {
+    const snap = await window._fsGetDocs(window._fsCollection(db, 'studyroom_requests'));
+    const today = studyroomDayKey();
+    const todayReqs = [];
+    snap.forEach(d => {
+      const r = d.data();
+      if (r.date === today && r.status !== 'rejected') todayReqs.push(r);
+    });
+    // 선택 교시에 내 신청(일반/단독)이 이미 있으면 차단
+    const dup = [...new Set(todayReqs.filter(r => r.name === currentStudent.name && checked.includes(r.period)).map(r => r.period))].sort((a,b) => a-b);
+    if (dup.length) { alert(`이미 신청한 교시가 있습니다: ${dup.join(', ')}교시\n먼저 해당 신청을 취소한 뒤 다시 신청해주세요.`); return; }
+    // 각 교시에 비어있는 룸이 하나도 없으면 승인이 불가능하므로 미리 안내
+    const impossible = checked.filter(p => {
+      const users = todayReqs.filter(r => r.period === p && r.status === 'approved');
+      return ![1,2,3].some(room => !users.some(r => r.room === room));
+    });
+    if (impossible.length) { alert(`${impossible.join(', ')}교시는 비어있는 스터디룸이 없어 단독 사용 신청이 어렵습니다.\n관리자 선생님께 직접 문의해주세요.`); return; }
+    const lockGroup = `lock_${today}_${String(currentStudent.seat).replace(/\D/g,'')}_${Date.now()}`;
+    for (const p of checked) {
+      await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
+        name: currentStudent.name, seat: currentStudent.seat,
+        period: p, room: 0, reason,
+        date: today, lock: true, lockGroup,
+        status: 'pending', createdAt: window._fsServerTimestamp()
+      });
+    }
+    document.getElementById('studyroom-lock-modal')?.remove();
+    showToast(`🔒 단독 사용 신청 완료 (${checked.join(', ')}교시) — 관리자 승인 후 사용 가능합니다`);
+  } catch(e) { alert('신청 실패: ' + e.message); }
+};
 
 function loadStudyroomData() {
   const db = window._db;
@@ -3889,12 +3983,15 @@ function loadStudyroomData() {
           ? '<div style="font-size:13px;color:var(--text3)">신청 내역 없음</div>'
           : myReqs.map(r => {
               const sc = r.status==='approved'?'#1AB5A3':r.status==='rejected'?'var(--red)':'var(--amber)';
-              const st = r.status==='approved'?'✅ 사용가능':r.status==='rejected'?'❌ 거절됨':'⏳ 대기중';
+              const st = r.status==='approved'?'✅ 사용가능':r.status==='rejected'?'❌ 거절됨':'⏳ 승인 대기중';
               const bg = r.status==='approved'?'#F0FBF7':r.status==='rejected'?'var(--red-pale)':'var(--amber-pale)';
               const bd = r.status==='approved'?'#9BE0D3':r.status==='rejected'?'var(--red-border)':'rgba(108,93,211,0.3)';
+              const roomTxt = r.lock
+                ? (r.room ? `스터디룸 ${r.room}번 🔒 단독 사용` : '🔒 단독 사용 (룸은 승인 시 배정)')
+                : `스터디룸 ${r.room}번`;
               return `<div style="padding:10px 12px;background:${bg};border:1px solid ${bd};border-radius:var(--r-md);margin-bottom:6px">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
-                  <span style="font-size:13px;font-weight:700;color:var(--text)">${r.period}교시 · 스터디룸 ${r.room}번</span>
+                  <span style="font-size:13px;font-weight:700;color:var(--text)">${r.period}교시 · ${roomTxt}</span>
                   <span style="font-size:11px;font-weight:700;color:${sc}">${st}</span>
                 </div>
                 ${r.reason?`<div style="font-size:11px;color:var(--text2)">📝 ${r.reason}</div>`:''}
@@ -3906,13 +4003,17 @@ function loadStudyroomData() {
       todayReqs.forEach(r => { if(rc[r.room]) rc[r.room].push(r); });
       const stEl = document.getElementById('studyroom-status');
       if (stEl) {
-        stEl.innerHTML = [1,2,3].map(room =>
-          `<div class="panel" style="margin-bottom:0">
-            <div style="font-size:12px;font-weight:700;color:var(--amber-dark);margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명</div>
+        stEl.innerHTML = [1,2,3].map(room => {
+          const lockedPeriods = [...new Set(rc[room].filter(m => m.lock && m.status==='approved').map(m => m.period))].sort((a,b) => a-b);
+          const lockBadge = lockedPeriods.length
+            ? `<span style="font-size:10px;font-weight:700;color:#B45309;background:#FEF3C7;border-radius:6px;padding:1px 6px;margin-left:6px">🔒 ${lockedPeriods.join(', ')}교시 단독</span>`
+            : '';
+          return `<div class="panel" style="margin-bottom:0">
+            <div style="font-size:12px;font-weight:700;color:var(--amber-dark);margin-bottom:4px">🚪 스터디룸 ${room}번 · ${rc[room].length}명${lockBadge}</div>
             ${rc[room].length===0?'<div style="font-size:12px;color:var(--text3)">신청자 없음</div>'
-              :rc[room].map(m=>`<div style="font-size:12px;color:var(--text2)">${m.period}교시 · 이용자</div>`).join('')}
-          </div>`
-        ).join('');
+              :rc[room].map(m=>`<div style="font-size:12px;color:var(--text2)">${m.period}교시 · ${m.lock?'🔒 단독 사용':'이용자'}</div>`).join('')}
+          </div>`;
+        }).join('');
       }
     }
   );
