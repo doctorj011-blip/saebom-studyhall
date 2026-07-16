@@ -788,6 +788,14 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="penalty-board-body" style="display:none"></div>
     </div>
+    <!-- 오늘 스케줄 변동 현황판 (고정 시간표 대비 오늘 요일 변경) — 기본 펼침 -->
+    <div class="card" id="schedvar-board-section">
+      <div class="card-title" style="justify-content:space-between">
+        <span onclick="toggleSchedVarBoard()" style="cursor:pointer;user-select:none" title="스케줄 변동 접기/펼치기"><i id="schedvar-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-calendar-event" style="font-size:14px;color:#5546C4" aria-hidden="true"></i> 오늘 스케줄 변동</span>
+        <span id="schedvar-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+      </div>
+      <div id="schedvar-board-body"></div>
+    </div>
     <!-- 스터디룸 초과 경고 -->
     <div class="card" id="studyroom-overflow-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -8248,6 +8256,125 @@ window.penaltyBoardToggle = function(docId, pn, canceled) {
 
 subscribePenaltyBoard();
 setInterval(subscribePenaltyBoard, 60000); // 자정 넘어가면 오늘/어제 날짜로 재구독
+
+// ── 오늘 스케줄 변동 현황판 (대시보드) ──
+// 고정 시간표(schedule_base)와 현재 적용 스케줄(schedules)을 '오늘 요일'에서 비교해,
+// 학생이 당일 변경(불참·중간입실·복귀 등)한 내역을 한눈에 보여준다.
+// 새벽 2시 리셋으로 schedules가 base로 되돌아가면 델타가 사라져 자동으로 목록에서 빠진다.
+// schedules·schedule_base 두 컬렉션을 각각 구독하고 둘 중 하나라도 바뀌면 다시 그린다.
+let _svCurrent = {};   // seatKey → schedules 문서(현재 적용값)
+let _svBase = {};      // seatKey → schedule_base 문서(고정 시간표)
+let _svCurUnsub = null, _svBaseUnsub = null;
+
+// 대시보드 스케줄 변동 접기/펼치기 (기본값=펼침 — 한눈에 보이도록)
+window.toggleSchedVarBoard = function() {
+  const body  = document.getElementById('schedvar-board-body');
+  const caret = document.getElementById('schedvar-board-caret');
+  if (!body) return;
+  const open = body.style.display === 'none';
+  body.style.display = open ? '' : 'none';
+  if (caret) caret.style.transform = open ? 'rotate(90deg)' : '';
+};
+
+// 고정 대비 오늘 변경 델타 계산 → [{pn, kind, label}] (kind: absent/partial/return/add/remove)
+function _svDelta(baseStr, curStr) {
+  if (!window.parseScheduleStr) return [];
+  const bp = window.parseScheduleStr(baseStr || '-');
+  const cp = window.parseScheduleStr(curStr || '-');
+  const stateOf = (p, x) => x.absentPeriods.has(p) ? 'absent'
+    : x.partials.has(p) ? 'partial'
+    : x.periods.has(p) ? 'attend' : 'none';
+  const all = [...new Set([
+    ...bp.periods, ...bp.absentPeriods, ...bp.partials,
+    ...cp.periods, ...cp.absentPeriods, ...cp.partials
+  ])].sort((a, b) => a - b);
+  const out = [];
+  all.forEach(p => {
+    const bs = stateOf(p, bp), cs = stateOf(p, cp);
+    const bt = bp.partialTimes[p] || '', ct = cp.partialTimes[p] || '';
+    const br = bp.absentReasons[p] || '', cr = cp.absentReasons[p] || '';
+    if (bs === cs && bt === ct && br === cr) return; // 상태·시간·사유 모두 그대로면 변동 없음
+    // 상태는 그대로(불참↔불참)인데 사유만 바뀐 경우도 현재 사유 칩으로 표시
+    if (cs === 'absent') out.push({ pn: p, kind: 'absent',  label: `${p}교시 불참${cr ? '·' + cr : ''}` });
+    else if (cs === 'partial') out.push({ pn: p, kind: 'partial', label: `${p}교시 중간입실${ct ? ' ' + ct : ''}` });
+    else if (cs === 'attend') out.push({ pn: p, kind: bs === 'none' ? 'add' : 'return', label: `${p}교시 ${bs === 'none' ? '추가' : '복귀'}` });
+    else out.push({ pn: p, kind: 'remove', label: `${p}교시 빠짐` });
+  });
+  return out;
+}
+
+function renderSchedVarBoard() {
+  const body    = document.getElementById('schedvar-board-body');
+  const summary = document.getElementById('schedvar-board-summary');
+  if (!body) return;
+  const today = (typeof getTodayDayName === 'function') ? getTodayDayName() : (window.currentDay || '월');
+
+  const rows = [];
+  Object.keys(_svBase).forEach(seatKey => {
+    const bd = _svBase[seatKey];
+    const cd = _svCurrent[seatKey];
+    if (!cd) return; // 현재 스케줄 문서가 없으면 비교 불가
+    const name = bd.name || cd.name || seatKey;
+    if (window.isTestStudent && window.isTestStudent(name)) return;
+    const seat = bd.seat || cd.seat || seatKey;
+    if (window.isAdminSeat && window.isAdminSeat(seat)) return;
+    const delta = _svDelta(bd[today], cd[today]);
+    if (!delta.length) return;
+    rows.push({ seatKey, name, seat, base: bd[today], cur: cd[today], delta });
+  });
+  rows.sort((a, b) => (parseInt(a.seatKey) || 999) - (parseInt(b.seatKey) || 999));
+
+  if (summary) summary.textContent = rows.length ? `${rows.length}명 변동` : '';
+  if (!rows.length) {
+    body.innerHTML = `<div style="text-align:center;padding:20px;color:#9CA3AF;font-size:12.5px">오늘 스케줄 변동 없음</div>`;
+    return;
+  }
+
+  const palette = {
+    absent:  ['#FDE7E7', '#8B1A1A'],
+    partial: ['#FFF4E5', '#9A5B00'],
+    return:  ['#E8F5E9', '#2D7A4F'],
+    add:     ['#EDE9FE', '#5B21B6'],
+    remove:  ['#F3F4F6', '#6B7280'],
+  };
+  const fmt = window._fmtSchedAlertVal || (s => s || '-');
+  body.innerHTML = rows.map(r => {
+    const chips = r.delta.map(d => {
+      const [bg, fg] = palette[d.kind] || palette.remove;
+      return `<span style="background:${bg};color:${fg};border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600">${d.label}</span>`;
+    }).join('');
+    const seatNum = String(r.seat).replace(/[^0-9]/g, '') || r.seatKey;
+    const nameEsc = String(r.name || '').replace(/'/g, "\\'");
+    return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 0;border-top:1px solid #F3F4F6">
+      <div style="flex:0 0 88px;cursor:pointer" onclick="window.svOpenStudent('${nameEsc}')" title="이 학생 스케줄 열기">
+        <div style="font-size:12.5px;font-weight:700;color:#1F2937">${r.name}</div>
+        <div style="font-size:10.5px;font-weight:500;color:#9CA3AF">${seatNum}번</div>
+      </div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">${chips}</div>
+        <div style="font-size:10.5px;color:#9CA3AF">고정 ${fmt(r.base)} → 오늘 <span style="color:#5546C4;font-weight:600">${fmt(r.cur)}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+window.renderSchedVarBoard = renderSchedVarBoard;
+
+window.svOpenStudent = function(name) {
+  if (window.openStudentScheduleByName) window.openStudentScheduleByName(name);
+};
+
+function subscribeSchedVarBoard() {
+  if (_svCurUnsub || _svBaseUnsub) return; // 한 번만 구독
+  _svCurUnsub = onSnapshot(collection(db, 'schedules'), snap => {
+    _svCurrent = {}; snap.forEach(d => { _svCurrent[d.id] = d.data(); }); renderSchedVarBoard();
+  }, e => { console.error('스케줄 변동판(schedules) 구독 실패:', e); });
+  _svBaseUnsub = onSnapshot(collection(db, 'schedule_base'), snap => {
+    _svBase = {}; snap.forEach(d => { _svBase[d.id] = d.data(); }); renderSchedVarBoard();
+  }, e => { console.error('스케줄 변동판(base) 구독 실패:', e); });
+}
+
+subscribeSchedVarBoard();
+setInterval(renderSchedVarBoard, 60000); // 요일 경계(3시)·2시 리셋 후 목록 자동 정리
 
 window.approveStudyroomReq = async function(id) {
   try { await setDoc(doc(db,'studyroom_requests',id),{status:'approved'},{merge:true}); showAdminToast('✅ 스터디룸 신청 승인됨'); }
