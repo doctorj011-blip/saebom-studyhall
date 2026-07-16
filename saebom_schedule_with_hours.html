@@ -7051,8 +7051,9 @@ window.applyStudentSchedule = function(seat, idx) {
   a.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
   // '적용'은 학생의 당일 변경을 받아들이는 것이므로 '변동'으로 저장한다(다음날 2시 리셋).
   // 이 변경을 영구 고정하려면 스케줄 편집 모달에서 '🔒 고정' 버튼을 사용한다.
-  // (saveScheduleToFirebase(student) = commitBase 미지정 → students + schedules 저장, base 유지)
-  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student).catch(console.error);
+  // (saveScheduleToFirebase(student, false, 'student') = students + schedules 저장, base 유지,
+  //  daily_reports에는 학생발로 기록 → 변동판이 '신청'으로 표시)
+  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student, false, 'student').catch(console.error);
   else if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
   buildScheduleTable(currentDay);
   buildStudentList(document.getElementById('student-search')?.value || '');
@@ -8770,7 +8771,11 @@ window.clearAllScheduleAlerts = function() {
 // 관리자가 스케줄/정보 수정 시 students + schedules 양쪽 저장
 // commitBase=true  → '고정' 버튼: 고정 시간표(schedule_base)까지 이 값으로 확정
 // commitBase=false → 일반 '저장': 당일 변동(schedules)만 저장, base는 유지(다음날 2시 리셋)
-async function saveScheduleToFirebase(student, commitBase) {
+// origin='student' → 이 저장이 '학생 신청을 받아 적용'하는 것임을 뜻한다(자동적용·'적용' 버튼).
+//   schedules.changedBy는 이 경우에도 'admin'을 유지해야 한다 — onSnapshot이 이 표시를 보고
+//   자기 저장을 학생발 변경으로 오인해 무한 적용하는 것을 막는 잠금장치이기 때문.
+//   대신 daily_reports.changedBy에만 원 작성자를 남겨, 변동판이 '신청'과 '관리자'를 구분한다.
+async function saveScheduleToFirebase(student, commitBase, origin) {
   try {
     await window.saveStudentToFirebase(student);
     // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
@@ -8806,7 +8811,8 @@ async function saveScheduleToFirebase(student, commitBase) {
         if (tDay !== '일') {
           await setDoc(doc(db, 'daily_reports', `${dateStr}_${seatKey}`), {
             name: student.name, seat: student.seat, date: dateStr, day: tDay,
-            schedule: student.schedule[tDay] || '-', changedBy: 'admin',
+            schedule: student.schedule[tDay] || '-',
+            changedBy: origin === 'student' ? 'student' : 'admin',
             updatedAt: serverTimestamp()
           }, { merge: true });
         }
@@ -9217,7 +9223,9 @@ function _autoHandleScheduleChange(alertObj) {
   // 1) 즉시 적용 — 켜져 있는 모든 기기가 각자 실행(같은 값 저장이라 멱등), 관리자 표 즉시 갱신.
   //    '변동'으로 저장되므로(base 유지) 다음날 새벽 2시에 고정 시간표로 자동 복구된다.
   alertObj.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
-  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student).catch(console.error);
+  // origin='student' — 학생이 신청한 값을 그대로 적용하는 것이므로 daily_reports에 학생발로 남긴다
+  // (이걸 'admin'으로 남기면 변동판이 학생 신청을 '관리자 변경'으로 잘못 표시한다)
+  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student, false, 'student').catch(console.error);
   try {
     const day = window.getTodayDayName ? window.getTodayDayName() : (window.currentDay || '월');
     if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || day);
