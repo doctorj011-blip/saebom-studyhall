@@ -34,3 +34,20 @@ window._normalizeHours = function(hours) {
 // ── 전화번호 뒷 4자리 (입실 키오스크·학생앱 로그인 검색 색인) ──
 // students 문서에 phoneLast4 필드로 저장해 where('phoneLast4','==',...) 한 번으로 검색.
 window._phoneLast4 = function(phone) { return String(phone || '').replace(/\D/g, '').slice(-4); };
+
+// ── 로그인/입실에 실제로 누르는 4자리 (loginPin 우선) ──
+// 기본은 전화 뒷 4자리지만, 뒷 4자리가 다른 학생과 겹치는 경우 loginPin(예: 가운데 4자리)을
+// 지정해 충돌을 피한다. 지정된 학생은 그 값'만' 통하고 뒷 4자리로는 검색되지 않으므로,
+// 원래 그 뒷 4자리를 쓰던 학생은 아무 영향 없이 기존대로 로그인/입실한다.
+// ★ phoneLast4 색인 필드는 여전히 '진짜 뒷 4자리'를 담는다(백필·저장 로직과 충돌 방지).
+//   그래서 loginPin 학생은 where 색인에 안 걸리고 전체 스캔 폴백으로 찾힌다(문서 수십 개라 무해).
+window._loginKey = function(s) {
+  if (!s) return '';
+  if (s.loginPin) return String(s.loginPin).replace(/\D/g, '').slice(0, 4);
+  return window._phoneLast4(s.phone);
+};
+// 가운데 4자리 (010-6823-5626 → '6823')
+window._phoneMid4 = function(phone) {
+  const d = String(phone || '').replace(/\D/g, '');
+  return d.length === 11 ? d.slice(3, 7) : '';
+};

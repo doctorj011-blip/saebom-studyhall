@@ -1658,6 +1658,8 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._readHour=(hours,key)=>(hours&&hours[key]!=null)?hours[key]:0;
   window._normalizeHours=(hours)=>{if(!hours||typeof hours!=='object')return{};const out={};for(const k of Object.keys(hours)){if(/^\d{4}-\d{2}$/.test(k))out[k]=Number(hours[k])||0;}for(const k of Object.keys(hours)){if(/^\d{1,2}$/.test(k)){const m=parseInt(k,10);if(m>=1&&m<=12){const nk=_ymKey(2026,m);if(out[nk]==null)out[nk]=Number(hours[k])||0;}}}return out;};
   window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
+  window._loginKey=(s)=>!s?'':(s.loginPin?String(s.loginPin).replace(/\D/g,'').slice(0,4):window._phoneLast4(s.phone));
+  window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
 }
 
 // ── Firebase DB 준비 대기 (전 화면 공용) ──
@@ -4056,12 +4058,9 @@ function hideCheckinError() {
 
 async function processCheckin() {
   const last4 = numpadBuffer;
-  // 전화번호 뒷 4자리로 학생 검색 (로컬 먼저)
-  let matched = STUDENTS.filter(s => {
-    if (!s.phone) return false;
-    const digits = s.phone.replace(/\D/g, '');
-    return digits.slice(-4) === last4;
-  });
+  // 전화번호 뒷 4자리(또는 지정된 loginPin)로 학생 검색 (로컬 먼저)
+  // ★loginPin이 있는 학생은 그 번호로만 검색된다 → 같은 뒷 4자리를 원래 쓰던 학생은 영향 없음.
+  let matched = STUDENTS.filter(s => s.phone && window._loginKey(s) === last4);
 
   // 로컬에 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._adminDb) {
@@ -4071,18 +4070,26 @@ async function processCheckin() {
     _searchingEl.style.display = 'block';
     try {
       const { getDocs, collection, query, where } = window._fs;
-      // phoneLast4 색인 필드로 1회 조회 (전체 다운로드 방지).
-      // 구 문서(phoneLast4 미저장) 대비: 결과가 없으면 기존 방식(전체 스캔)으로 폴백.
-      let snap = await getDocs(query(collection(window._adminDb, 'students'), where('phoneLast4', '==', last4)));
-      if (snap.empty) snap = await getDocs(collection(window._adminDb, 'students'));
-      snap.forEach(doc => {
+      // 색인 2개로 조회(전체 다운로드 방지): 뒷 4자리(phoneLast4) + 지정 PIN(loginPin).
+      // 구 문서(phoneLast4 미저장) 대비: 색인 조회가 비면 기존 방식(전체 스캔)으로 폴백.
+      const [byLast4, byPin] = await Promise.all([
+        getDocs(query(collection(window._adminDb, 'students'), where('phoneLast4', '==', last4))),
+        getDocs(query(collection(window._adminDb, 'students'), where('loginPin',   '==', last4))),
+      ]);
+      const seen = new Set(); let list = [];
+      [byLast4, byPin].forEach(s => s.forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); list.push(d); } }));
+      if (list.length === 0) {
+        const all = await getDocs(collection(window._adminDb, 'students'));
+        list = []; all.forEach(d => list.push(d));
+      }
+      list.forEach(doc => {
         const v = doc.data();
-        if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === last4) {
+        if (v.name && v.phone && window._loginKey(v) === last4) {
           const existing = STUDENTS.find(s => s.seat === v.seat);
           if (!existing) {
             STUDENTS.push({
               seat: String(v.seat).replace('번',''), name: v.name,
-              phone: v.phone || '', parent: v.parent || '',
+              phone: v.phone || '', parent: v.parent || '', loginPin: v.loginPin || '',
               schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
               hours: {}  // 누적시간은 이번 달 입퇴실 기록으로만 계산
             });
@@ -7452,6 +7459,11 @@ async function saveStudentToFirebase(student) {
     fee: student.fee || 0,
     feeMemo: student.feeMemo || '',
     awayAt: (window._awayStudents && window._awayStudents[student.name]) || '', // 외출 상태 보존
+    // 앱 UI가 직접 다루지 않는 필드 보존 — setDoc은 문서를 통째로 덮어쓰므로 명시하지 않으면
+    // 관리자가 학생 정보를 저장하는 순간 사라진다(예약 퇴원·예약 승계가 조용히 깨짐).
+    ...(student.loginPin   ? { loginPin:   String(student.loginPin) } : {}),
+    ...(student.withdrawAt ? { withdrawAt: String(student.withdrawAt) } : {}),
+    ...(student.nextStudent ? { nextStudent: student.nextStudent } : {}),
     updatedAt: serverTimestamp()
   });
 }
@@ -7675,7 +7687,12 @@ async function loadStudentsFromFirebase() {
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
           hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
-          awayAt: v.awayAt || ''
+          awayAt: v.awayAt || '',
+          // 저장(setDoc)이 문서를 통째로 덮어쓰므로, 앱이 직접 쓰지 않는 필드도 들고 있어야
+          // 관리자 편집 시 유실되지 않는다. loginPin=지정 로그인번호, withdrawAt=예약 퇴원일,
+          // nextStudent=그 자리를 예약한 신규생.
+          loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
+          nextStudent: v.nextStudent || null
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -7758,7 +7775,11 @@ async function loadStudentsFromFirebase() {
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
-        awayAt: v.awayAt || ''
+        awayAt: v.awayAt || '',
+        // 로드 매핑과 동일하게 앱이 직접 안 쓰는 필드도 유지 — 여기서 빠뜨리면 스냅샷이 올 때
+        // 로컬 학생 객체에서 사라지고, 다음 저장(setDoc)에 반영돼 실제 문서에서도 지워진다.
+        loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
+        nextStudent: v.nextStudent || null
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영
       if (!window._awayStudents) window._awayStudents = {};
@@ -10433,11 +10454,30 @@ async function autoWithdrawExpired() {
         console.log(`[자동퇴원] ${name}(${d.id}번) 입실 중 — 이번엔 건너뜀`);
         continue;
       }
+      const next = v.nextStudent && v.nextStudent.name ? v.nextStudent : null;
       await archiveAndRemoveStudent(d.id, name, v.sid);
       const si = STUDENTS.findIndex(s => String(s.seat).replace('번','').trim() === String(d.id));
       if (si !== -1) STUDENTS.splice(si, 1);
       console.log(`[자동퇴원] ${name}(${d.id}번) withdrawAt=${w} 경과 → 보관함 이동`);
       if (window.showAdminToast) showAdminToast(`📦 ${name}(${d.id}번) 예약 퇴원 처리됨 — 보관함에서 복구 가능`);
+
+      // 신규생이 이 자리를 미리 예약해 뒀으면(학생앱 자가등록) 실제 좌석으로 승계한다.
+      if (next) {
+        const { nextStudent: _drop, ...clean } = next; // 예약 안에 예약이 중첩되는 것 방지
+        await setDoc(doc(db, 'students', d.id), { ...clean, seat: String(d.id), updatedAt: serverTimestamp() });
+        // students onSnapshot이 added를 무시하므로 로컬 배열에 직접 넣어야 화면에 뜬다.
+        if (!STUDENTS.some(s => s.name === clean.name)) {
+          STUDENTS.push({
+            seat: String(d.id) + '번', name: clean.name, phone: clean.phone || '', parent: clean.parent || '',
+            gender: clean.gender || 'f', expiry: clean.expiry || '', startDate: clean.startDate || '',
+            loginPin: clean.loginPin || '',
+            schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
+            hours: {}, fee: 0, feeMemo: '',
+          });
+        }
+        console.log(`[자동퇴원] ${d.id}번 예약 승계 → ${clean.name} 배정 완료`);
+        if (window.showAdminToast) showAdminToast(`🪑 ${d.id}번 → ${clean.name} 자동 배정됨 (신규 예약)`);
+      }
     }
     try { if (typeof buildDashboard === 'function') buildDashboard(); } catch(e) {}
     try { if (document.getElementById('fp-room')) buildFloorplan(); } catch(e) {}

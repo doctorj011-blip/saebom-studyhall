@@ -110,6 +110,16 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .lc-meta{font-size:11px;color:var(--text3)}
 .lc-new{background:#EEF2FF;border-color:#8F82E4}
 .lc-new .lc-meta{color:#6C5DD3;font-weight:700}
+/* ── 전체번호 본인 확인 ── */
+.login-verify{display:none;margin-top:14px}
+.verify-hint{font-size:12px;color:var(--text3);text-align:center;line-height:1.6;margin-bottom:12px}
+.verify-row{display:flex;align-items:center;border:1.5px solid #8F82E4;border-radius:var(--r-md);overflow:hidden;background:var(--surface)}
+.verify-prefix{padding:12px 4px 12px 14px;font-size:16px;font-weight:700;color:var(--text2);white-space:nowrap}
+.verify-input{flex:1;padding:12px 14px 12px 6px;border:none;background:transparent;color:var(--text);
+  font-size:16px;font-weight:700;letter-spacing:1px;outline:none;width:100%;font-family:inherit}
+.verify-ok{width:100%;margin-top:12px;padding:13px;border:none;border-radius:var(--r-md);background:#6C5DD3;
+  color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.verify-ok:active{transform:scale(0.98)}
 /* ── 신규 자가등록 ── */
 .signup-card{max-width:460px;max-height:88vh;overflow-y:auto}
 .signup-who{background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#4A3FA8;line-height:1.6}
@@ -981,6 +991,20 @@ body{
       <div id="login-choose-list"></div>
       <button class="signup-btn-ghost" onclick="cancelChoose()">취소</button>
     </div>
+    <!-- 뒷 4자리가 재원생과 겹치는 신규생: 전체번호로 본인 확인 -->
+    <div class="login-verify" id="login-verify">
+      <div class="login-choose-t" id="verify-title">본인 확인</div>
+      <div class="verify-hint" id="verify-hint"></div>
+      <div class="verify-row">
+        <span class="verify-prefix">010 -</span>
+        <input class="verify-input" id="verify-input" type="tel" inputmode="numeric"
+               maxlength="9" placeholder="0000-0000" oninput="verifyFormat(this)"
+               onkeydown="if(event.key==='Enter')verifySubmit()">
+      </div>
+      <div class="login-error" id="verify-error">번호가 일치하지 않습니다</div>
+      <button class="verify-ok" onclick="verifySubmit()">확인</button>
+      <button class="signup-btn-ghost" onclick="cancelChoose()">취소</button>
+    </div>
   </div>
 </div>
 
@@ -1403,6 +1427,8 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._readHour=(hours,key)=>(hours&&hours[key]!=null)?hours[key]:0;
   window._normalizeHours=(hours)=>{if(!hours||typeof hours!=='object')return{};const out={};for(const k of Object.keys(hours)){if(/^\d{4}-\d{2}$/.test(k))out[k]=Number(hours[k])||0;}for(const k of Object.keys(hours)){if(/^\d{1,2}$/.test(k)){const m=parseInt(k,10);if(m>=1&&m<=12){const nk=_ymKey(2026,m);if(out[nk]==null)out[nk]=Number(hours[k])||0;}}}return out;};
   window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
+  window._loginKey=(s)=>!s?'':(s.loginPin?String(s.loginPin).replace(/\D/g,'').slice(0,4):window._phoneLast4(s.phone));
+  window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
 }
 
 // ── 교시 데이터 ──
@@ -1663,25 +1689,35 @@ async function tryLogin() {
   document.getElementById('login-error').style.display='none';
 
   // 1) 로컬 STUDENTS 배열에서 먼저 검색
-  let matched = STUDENTS.filter(s => {
-    if (!s.phone) return false;
-    return s.phone.replace(/\D/g,'').slice(-4) === pinBuffer;
-  });
+  let matched = STUDENTS.filter(s => s.phone && window._loginKey(s) === pinBuffer);
 
   // 2) 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._db) {
     try {
       const { getDocs, collection, query, where } = window._fs;
-      // phoneLast4 색인 필드로 1회 조회 (전체 다운로드 방지).
-      // 구 문서(phoneLast4 미저장) 대비: 결과가 없으면 기존 방식(전체 스캔)으로 폴백.
-      let snap = await getDocs(query(collection(window._db, 'students'), where('phoneLast4', '==', pinBuffer)));
-      if (snap.empty) snap = await getDocs(collection(window._db, 'students'));
-      snap.forEach(doc => {
+      // 색인 2개로 조회(전체 다운로드 방지): 뒷 4자리(phoneLast4) + 지정 PIN(loginPin).
+      // ★loginPin이 있는 학생은 _loginKey가 loginPin이라, 그 학생의 '뒷 4자리'로는 매칭되지
+      //   않는다 → 같은 뒷 4자리를 원래 쓰던 학생은 선택화면 없이 기존대로 로그인된다.
+      const [byLast4, byPin] = await Promise.all([
+        getDocs(query(collection(window._db, 'students'), where('phoneLast4', '==', pinBuffer))),
+        getDocs(query(collection(window._db, 'students'), where('loginPin',   '==', pinBuffer))),
+      ]);
+      const seen = new Set();
+      const docs = [];
+      [byLast4, byPin].forEach(s => s.forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); docs.push(d); } }));
+      // 구 문서(phoneLast4 미저장) 대비: 색인 조회가 비면 기존 방식(전체 스캔)으로 폴백.
+      let list = docs;
+      if (list.length === 0) {
+        const all = await getDocs(collection(window._db, 'students'));
+        list = []; all.forEach(d => list.push(d));
+      }
+      list.forEach(doc => {
         const v = doc.data();
-        if (v.phone && v.phone.replace(/\D/g,'').slice(-4) === pinBuffer) {
+        if (v.name && v.phone && window._loginKey(v) === pinBuffer) {
           matched.push({
             seat: v.seat, name: v.name,
             phone: v.phone || '', parent: v.parent || '',
+            loginPin: v.loginPin || '',
             schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
             hours: v.hours || {}
           });
@@ -1728,6 +1764,8 @@ let _loginCandidates = [];
 let _signupInvite = null;
 let _signupGender = 'f';
 let _signupSeatUnsub = null;
+let _signupLoginPin = '';
+let _signupPendingSeats = {}; // 좌석 → 퇴원예정 학생 이름 (신규생 화면엔 이름을 노출하지 않음)
 
 function _esc(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
@@ -1742,11 +1780,26 @@ async function findInvitesByLast4(last4, already) {
     if (!snap.exists()) return [];
     const d = snap.data() || {};
     const list = Array.isArray(d.invites) ? d.invites : [];
-    // 이미 그 이름으로 재원 문서가 있으면 등록 대상이 아니다(그냥 로그인하면 됨).
-    const registered = new Set((already || []).map(s => s && s.name));
-    return list
-      .filter(i => i && String(i.phoneLast4) === String(last4) && !registered.has(i.name))
-      .map(i => ({ ...i, startDate: d.startDate || '' }));
+    let hits = list.filter(i => i && String(i.phoneLast4) === String(last4));
+    if (hits.length === 0) return [];
+
+    // 이 번호로 이미 로그인 가능한 재원 문서가 있으면 등록 대상이 아니다.
+    const registeredNames = new Set((already || []).map(s => s && s.name));
+    // 등록/예약 상태 확인 — 이름이 students에 있거나(등록), 퇴원예정 자리에 예약(nextStudent)돼
+    // 있으면 중복 등록을 막는다. 초대 매칭이 있을 때만 도는 드문 경로라 전체 조회해도 무해.
+    const reserved = new Map(); // 이름 → 예약한 좌석
+    try {
+      const all = await window._fsGetDocs(window._fsCollection(db, 'students'));
+      all.forEach(doc => {
+        const v = doc.data();
+        if (v.name) registeredNames.add(v.name);
+        if (v.nextStudent && v.nextStudent.name) reserved.set(v.nextStudent.name, doc.id);
+      });
+    } catch(e) { console.warn('등록/예약 확인 실패:', e); }
+
+    return hits
+      .filter(i => !registeredNames.has(i.name))
+      .map(i => ({ ...i, startDate: d.startDate || '', reservedSeat: reserved.get(i.name) || '' }));
   } catch(e) { console.warn('초대 명단 조회 실패:', e); return []; }
 }
 
@@ -1760,8 +1813,10 @@ function showChooser(cands) {
         <span class="lc-name">${_esc(c.student.name)}</span>
         <span class="lc-meta">${seat ? seat + '번 · 재원생' : '재원생'}</span></button>`;
     }
+    // ★신규 후보의 이름은 노출하지 않는다. 같은 뒷 4자리를 쓰는 재원생이 이 화면을 보게 되는데,
+    //   거기에 남의 이름이 뜨면 안 된다. 이름은 전체번호 본인 확인을 통과한 뒤에만 보여준다.
     return `<button class="lc-item lc-new" onclick="pickCandidate(${idx})">
-      <span class="lc-name">${_esc(c.invite.name)}</span>
+      <span class="lc-name">처음 오셨나요?</span>
       <span class="lc-meta">신규 등록 ✨</span></button>`;
   }).join('');
   document.getElementById('login-choose').style.display = 'block';
@@ -1773,29 +1828,77 @@ function showChooser(cands) {
 window.pickCandidate = function(idx) {
   const c = _loginCandidates[idx];
   if (!c) return;
+  if (c.type === 'student') { cancelChoose(); return loginAsStudent(c.student); }
+  // 신규생인데 그 뒷 4자리를 이미 쓰는 재원생이 있으면, 전체번호로 본인 확인을 받고
+  // 앞으로 쓸 로그인 번호를 '가운데 4자리'로 바꾼다(재원생은 기존 번호 그대로 유지).
+  if (_loginCandidates.some(x => x.type === 'student')) return showVerify(c.invite);
   cancelChoose();
-  if (c.type === 'student') loginAsStudent(c.student);
-  else startSignup(c.invite);
+  startSignup(c.invite);
+};
+
+let _verifyInvite = null;
+
+function showVerify(invite) {
+  _verifyInvite = invite;
+  document.getElementById('login-choose').style.display = 'none';
+  document.getElementById('login-verify').style.display = 'block';
+  // 확인 전이므로 이름을 쓰지 않는다(재원생이 이 화면을 볼 수도 있음).
+  document.getElementById('verify-title').textContent = '신규 등록 · 본인 확인';
+  document.getElementById('verify-hint').innerHTML =
+    '같은 뒷 4자리를 쓰는 학생이 있어요.<br>본인 확인을 위해 <b>010을 뺀 나머지 8자리</b>를 입력해주세요.';
+  document.getElementById('verify-error').style.display = 'none';
+  const inp = document.getElementById('verify-input');
+  inp.value = '';
+  setTimeout(() => inp.focus(), 100);
+}
+
+window.verifyFormat = function(el) {
+  const d = String(el.value || '').replace(/\D/g, '').slice(0, 8);
+  el.value = d.length > 4 ? d.slice(0, 4) + '-' + d.slice(4) : d;
+  document.getElementById('verify-error').style.display = 'none';
+};
+
+window.verifySubmit = function() {
+  const inv = _verifyInvite;
+  if (!inv) return;
+  const typed = String(document.getElementById('verify-input').value || '').replace(/\D/g, '');
+  const want  = String(inv.phone || '').replace(/\D/g, '').replace(/^010/, '');
+  if (typed.length !== 8 || typed !== want) {
+    document.getElementById('verify-error').style.display = 'block';
+    return;
+  }
+  const pin = window._phoneMid4(inv.phone); // 앞으로 이 학생의 로그인 번호 = 가운데 4자리
+  _verifyInvite = null;
+  cancelChoose();
+  startSignup(inv, pin);
 };
 
 window.cancelChoose = function() {
   document.getElementById('login-choose').style.display = 'none';
+  document.getElementById('login-verify').style.display = 'none';
   document.getElementById('pin-display').style.display = '';
   const np = document.querySelector('.numpad');
   if (np) np.style.display = '';
-  _loginCandidates = [];
+  _loginCandidates = []; _verifyInvite = null;
   pinBuffer = ''; updatePinDisplay(); hideLoginError();
 };
 
-function startSignup(invite) {
+function startSignup(invite, loginPin) {
+  // 이미 퇴원예정 자리를 예약해 둔 학생 — 중복 등록 방지
+  if (invite.reservedSeat) {
+    alert(`${invite.name}님은 이미 ${invite.reservedSeat}번 자리를 예약했어요.\n그 자리를 쓰던 학생이 나가면 자동으로 배정되고, 그때부터 로그인할 수 있어요.`);
+    return;
+  }
   _signupInvite = invite;
+  _signupLoginPin = loginPin || '';
   document.getElementById('login-screen').style.display = 'none';
   document.getElementById('signup-screen').style.display = 'flex';
   const school = invite.school ? _esc(invite.school) + (invite.grade ? ' ' + _esc(invite.grade) + '학년' : '') + ' · ' : '';
   document.getElementById('signup-who').innerHTML =
     `<b>${_esc(invite.name)}</b> 님, 환영합니다! 👋<br>${school}${_esc(invite.phone)}<br>` +
     `학부모 연락처 <b>${_esc(invite.parent || '미등록')}</b>` +
-    (invite.startDate ? `<br>이용 시작일 <b>${_esc(invite.startDate)}</b>` : '');
+    (invite.startDate ? `<br>이용 시작일 <b>${_esc(invite.startDate)}</b>` : '') +
+    (_signupLoginPin ? `<br>🔑 앞으로 로그인 번호는 <b>${_esc(_signupLoginPin)}</b> (가운데 4자리)` : '');
   signupGender('f');
   buildSignupSeatmap();
 }
@@ -1826,9 +1929,18 @@ function buildSignupSeatmap() {
     window._fsCollection(db, 'students'),
     (snap) => {
       const taken = {};
+      _signupPendingSeats = {};
       snap.forEach(d => {
         const s = d.data();
-        if (s.name && s.seat && parseInt(s.seat) > 0) taken[parseInt(s.seat)] = s.name;
+        const n = parseInt(s.seat);
+        if (!s.name || !(n > 0)) return;
+        if (s.withdrawAt && !s.nextStudent) {
+          // 퇴원예정 자리 — 신규생에겐 '선택 가능'으로 보이고, 쓰던 학생 이름은 노출하지 않는다.
+          // 지금 고르면 예약만 되고, 그 학생이 나가는 날 새벽에 자동으로 배정된다.
+          _signupPendingSeats[n] = s.name;
+          return;
+        }
+        taken[n] = s.name; // 재원생 자리 + 이미 예약된 퇴원예정 자리
       });
       renderSignupSeatmap(taken);
     },
@@ -1860,41 +1972,81 @@ function renderSignupSeatmap(taken) {
     : '⚠️ 남은 자리가 없습니다. 관리자에게 문의해주세요.';
 }
 
+// 새 학생 문서 내용 (관리자 saveStudentToFirebase와 동일 스키마)
+function _newStudentDoc(ns, inv, gender, loginPin) {
+  const d = {
+    seat: ns,
+    name: inv.name,
+    phone: inv.phone || '',
+    phoneLast4: window._phoneLast4(inv.phone), // 색인은 항상 '진짜 뒷 4자리'
+    parent: inv.parent || '',
+    gender: gender || 'f',
+    expiry: '',
+    startDate: inv.startDate || '',
+    월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-',
+    hours: {}, fee: 0, feeMemo: '',
+  };
+  // 뒷 4자리가 재원생과 겹쳐 별도 로그인 번호를 받은 학생만 loginPin을 갖는다.
+  if (loginPin) d.loginPin = String(loginPin);
+  return d;
+}
+
 window.signupSelectSeat = async function(seatNum) {
   const db = window._db;
   const inv = _signupInvite;
   if (!db || !inv) return;
-  if (!confirm(`${seatNum}번 자리로 등록할까요?\n\n${inv.name} · ${inv.phone}\n등록 후에는 번호 뒷 4자리로 로그인할 수 있어요.`)) return;
   const ns = String(seatNum);
+  const pinNote = _signupLoginPin
+    ? `로그인 번호는 ${_signupLoginPin} (가운데 4자리)예요.`
+    : '등록 후에는 번호 뒷 4자리로 로그인할 수 있어요.';
+  const isPending = !!_signupPendingSeats[parseInt(ns)];
+  const msg = isPending
+    ? `${seatNum}번 자리를 예약할까요?\n\n${inv.name} · ${inv.phone}\n지금은 다른 학생이 쓰는 자리라 바로 배정되진 않고,\n그 학생이 나가는 날 새벽에 자동으로 내 자리가 됩니다.\n${pinNote}`
+    : `${seatNum}번 자리로 등록할까요?\n\n${inv.name} · ${inv.phone}\n${pinNote}`;
+  if (!confirm(msg)) return;
+
   try {
+    let reserved = false;
     await window._fsRunTransaction(db, async (tx) => {
       const ref = window._fsDoc(db, 'students', ns);
       const snap = await tx.get(ref);
-      // 이미 누군가 이름을 올려둔 자리면 선점 실패
-      if (snap.exists() && snap.data().name) throw new Error('SEAT_TAKEN');
-      tx.set(ref, {
-        seat: ns,
-        name: inv.name,
-        phone: inv.phone || '',
-        phoneLast4: window._phoneLast4(inv.phone), // 입실/로그인 where 검색용 색인
-        parent: inv.parent || '',
-        gender: _signupGender || 'f',
-        expiry: '',
-        startDate: inv.startDate || '',
-        월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-',
-        hours: {}, fee: 0, feeMemo: '',
-        updatedAt: window._fsServerTimestamp(),
-      });
+      const cur = snap.exists() ? snap.data() : null;
+      if (cur && cur.name) {
+        // 이미 쓰는 사람이 있는 자리 — 퇴원예정이고 아직 예약이 없을 때만 '예약'을 건다.
+        if (!cur.withdrawAt) throw new Error('SEAT_TAKEN');
+        if (cur.nextStudent) throw new Error('SEAT_TAKEN');
+        reserved = true;
+        // 쓰던 학생 문서는 그대로 두고(남은 기간 입퇴실 정상 동작) 예약만 얹는다.
+        // 그 학생이 자동 퇴원될 때 관리자앱이 이 예약을 실제 좌석으로 만든다.
+        tx.update(ref, {
+          nextStudent: _newStudentDoc(ns, inv, _signupGender, _signupLoginPin),
+          updatedAt: window._fsServerTimestamp(),
+        });
+        return;
+      }
+      tx.set(ref, { ..._newStudentDoc(ns, inv, _signupGender, _signupLoginPin), updatedAt: window._fsServerTimestamp() });
     });
+
     if (_signupSeatUnsub) { _signupSeatUnsub(); _signupSeatUnsub = null; }
-    alert(`✅ ${inv.name}님, ${seatNum}번 자리로 등록됐습니다!\n앞으로 번호 뒷 4자리로 로그인하세요.`);
+    const loginMsg = _signupLoginPin
+      ? `\n앞으로 로그인은 가운데 4자리 ${_signupLoginPin} 을 누르세요.`
+      : '\n앞으로 번호 뒷 4자리로 로그인하세요.';
+    if (reserved) {
+      alert(`✅ ${inv.name}님, ${seatNum}번 자리를 예약했어요!\n\n지금 그 자리를 쓰는 학생이 나가면 자동으로 배정됩니다.\n배정된 뒤부터 로그인할 수 있어요.${loginMsg}`);
+      _signupInvite = null; _signupLoginPin = '';
+      document.getElementById('signup-screen').style.display = 'none';
+      document.getElementById('login-screen').style.display = 'flex';
+      pinBuffer = ''; updatePinDisplay(); hideLoginError();
+      return;
+    }
+    alert(`✅ ${inv.name}님, ${seatNum}번 자리로 등록됐습니다!${loginMsg}`);
     const me = {
       seat: ns, name: inv.name, phone: inv.phone || '', parent: inv.parent || '',
-      gender: _signupGender || 'f',
+      gender: _signupGender || 'f', loginPin: _signupLoginPin || '',
       schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
       hours: {},
     };
-    _signupInvite = null;
+    _signupInvite = null; _signupLoginPin = '';
     document.getElementById('signup-screen').style.display = 'none';
     loginAsStudent(me);
   } catch(e) {
