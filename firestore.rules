@@ -11,6 +11,8 @@ rules_version = '2';
 //
 //   [배포 이력]
 //   - 2026-07-14  통합본을 파일로 이관 + 냉방 컬렉션 3개 추가(ac_config·ac_commands·ac_state)
+//   - 2026-07-16  pendingSeats 추가 — 자리변경 예약(학생앱 미래 적용일)이 캐치올에 막혀
+//                 permission-denied로 조용히 죽어 있던 것을 수정
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -27,6 +29,10 @@ service cloud.firestore {
     match /schedules/{id}      { allow read, write: if true; }
     match /schedule_base/{id}  { allow read, write: if true; }
     match /daily_reports/{id}  { allow read, write: if true; }
+
+    // 예약된 자리변경 (학생앱이 미래 적용일에 고른 자리 / 관리자앱이 새벽 2시에 커밋)
+    // 문서 ID = 대상 좌석번호. 예약 문서 자체가 좌석 선점 잠금 역할을 한다.
+    match /pendingSeats/{seat} { allow read, write: if true; }
 
     // 입퇴실 기록(감사용): 형식 검증 (type은 in/out만, 이름 30자 이내)
     match /checkin_logs/{id} {
