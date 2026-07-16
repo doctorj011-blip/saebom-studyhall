@@ -8345,6 +8345,23 @@ let _svCurrent = {};   // seatKey → schedules 문서(현재 적용값)
 let _svBase = {};      // seatKey → schedule_base 문서(고정 시간표)
 let _svCurUnsub = null, _svBaseUnsub = null;
 
+// 변동을 신청한 시각의 원본 = daily_reports/{오늘날짜}_{seat}.updatedAt
+// (학생앱 saveDailyReportToFirebase / 관리자 당일저장 둘 다 여기에 기록한다)
+// ⚠️ schedules.updatedAt은 신청 시각이 아니다 — 새벽 2시 리셋이 전 좌석 문서를 다시 쓰면서
+//    02시로 덮어쓴다. daily_reports는 리셋이 건드리지 않아 신청 시각이 그대로 남는다.
+let _svReports = {};                     // seatKey → { ms, by }
+let _svRptUnsub = null, _svRptDate = '';
+
+// Firestore Timestamp / 숫자 / 직렬화 형태 → epoch ms (없으면 0)
+function _svMs(u) {
+  if (!u) return 0;
+  if (typeof u === 'number') return u;
+  if (u.toDate) return u.toDate().getTime();
+  if (u.seconds != null) return u.seconds * 1000;
+  if (u._ms != null) return u._ms;
+  return 0;
+}
+
 // 대시보드 스케줄 변동 접기/펼치기 (기본값=펼침 — 한눈에 보이도록)
 window.toggleSchedVarBoard = function() {
   const body  = document.getElementById('schedvar-board-body');
@@ -8382,6 +8399,21 @@ function _svDelta(baseStr, curStr) {
   return out;
 }
 
+// 행 오른쪽 '신청 14:32' 라벨. 관리자가 대신 바꾼 건은 '관리자'로 구분해 표기한다.
+// 시각을 못 구한 행은 빈 문자열 → 라벨 없이 그린다.
+function _svAtHtml(r) {
+  if (!r.at) return '';
+  const now = new Date(), at = new Date(r.at);
+  const hm = SH.sessFmtKoTime(r.at);
+  // 날짜가 다르면(자정~새벽 신청분) 며칠 것인지 헷갈리지 않게 날짜를 붙인다.
+  const when = at.toDateString() === now.toDateString() ? hm : `${at.getMonth() + 1}/${at.getDate()} ${hm}`;
+  const admin = r.by === 'admin';
+  return `<div style="flex:0 0 auto;text-align:right;white-space:nowrap;font-size:10.5px;color:#9CA3AF;padding-top:2px"
+    title="${admin ? '관리자가 변경한 시각' : '학생이 변동을 신청한 시각'}">
+    <i class="ti ti-clock-hour-4" style="font-size:11px" aria-hidden="true"></i> ${admin ? '관리자' : '신청'} ${when}
+  </div>`;
+}
+
 function renderSchedVarBoard() {
   const body    = document.getElementById('schedvar-board-body');
   const summary = document.getElementById('schedvar-board-summary');
@@ -8399,7 +8431,13 @@ function renderSchedVarBoard() {
     if (window.isAdminSeat && window.isAdminSeat(seat)) return;
     const delta = _svDelta(bd[today], cd[today]);
     if (!delta.length) return;
-    rows.push({ seatKey, name, seat, base: bd[today], cur: cd[today], delta });
+    // 신청 시각: 오늘자 daily_reports가 1순위. 없으면 changedBy가 없는 schedules 문서
+    // (= 학생앱이 마지막으로 쓴 문서)의 updatedAt으로 대체한다. changedBy:'admin'인 문서의
+    // 시각은 2시 리셋 시각일 수 있어 쓰지 않는다 — 틀린 시각보다 공백이 낫다.
+    const rpt = _svReports[seatKey];
+    const at = rpt ? rpt.ms : (cd.changedBy ? 0 : _svMs(cd.updatedAt));
+    const by = rpt ? rpt.by : (cd.changedBy || '');
+    rows.push({ seatKey, name, seat, base: bd[today], cur: cd[today], delta, at, by });
   });
   rows.sort((a, b) => (parseInt(a.seatKey) || 999) - (parseInt(b.seatKey) || 999));
 
@@ -8433,6 +8471,7 @@ function renderSchedVarBoard() {
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">${chips}</div>
         <div style="font-size:10.5px;color:#9CA3AF">고정 ${fmt(r.base)} → 오늘 <span style="color:#5546C4;font-weight:600">${fmt(r.cur)}</span></div>
       </div>
+      ${_svAtHtml(r)}
     </div>`;
   }).join('');
 }
@@ -8442,6 +8481,27 @@ window.svOpenStudent = function(name) {
   if (window.openStudentScheduleByName) window.openStudentScheduleByName(name);
 };
 
+// 오늘자 daily_reports 구독 (신청 시각의 원본). 날짜가 바뀌면 어제 구독을 끊고 새로 건다.
+// 날짜 키는 달력 날짜 — 기록하는 쪽(학생앱·2시 리셋)과 같은 기준이어야 문서를 찾는다.
+function subscribeSchedVarReports() {
+  const iso = SH.sessIsoDate(Date.now());
+  if (_svRptUnsub && _svRptDate === iso) return; // 이미 오늘자 구독 중
+  if (_svRptUnsub) { _svRptUnsub(); _svRptUnsub = null; }
+  _svRptDate = iso;
+  _svReports = {};
+  _svRptUnsub = onSnapshot(query(collection(db, 'daily_reports'), where('date', '==', iso)), snap => {
+    _svReports = {};
+    snap.forEach(d => {
+      if (!d.id.startsWith(iso + '_')) return;
+      const seatKey = d.id.slice(iso.length + 1);
+      const rd = d.data();
+      const ms = _svMs(rd.updatedAt);
+      if (ms) _svReports[seatKey] = { ms, by: rd.changedBy || '' };
+    });
+    renderSchedVarBoard();
+  }, e => { console.error('스케줄 변동판(daily_reports) 구독 실패:', e); });
+}
+
 function subscribeSchedVarBoard() {
   if (_svCurUnsub || _svBaseUnsub) return; // 한 번만 구독
   _svCurUnsub = onSnapshot(collection(db, 'schedules'), snap => {
@@ -8450,10 +8510,14 @@ function subscribeSchedVarBoard() {
   _svBaseUnsub = onSnapshot(collection(db, 'schedule_base'), snap => {
     _svBase = {}; snap.forEach(d => { _svBase[d.id] = d.data(); }); renderSchedVarBoard();
   }, e => { console.error('스케줄 변동판(base) 구독 실패:', e); });
+  subscribeSchedVarReports();
 }
 
 subscribeSchedVarBoard();
-setInterval(renderSchedVarBoard, 60000); // 요일 경계(3시)·2시 리셋 후 목록 자동 정리
+setInterval(() => {
+  subscribeSchedVarReports();  // 자정 넘어가면 오늘자 리포트로 갈아탄다
+  renderSchedVarBoard();       // 요일 경계(3시)·2시 리셋 후 목록 자동 정리
+}, 60000);
 
 // 단독 사용(lock) 신청의 같은 그룹(여러 교시) 문서 모음. lockGroup 없는 구형 문서는 단건으로 취급.
 function _lockGroupDocs(req) {
