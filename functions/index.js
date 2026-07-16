@@ -101,7 +101,7 @@ async function acConfig() {
     offGraceMin: c.offGraceMin != null ? c.offGraceMin : 20,   // 무인 지속 → 절전(setback) 전환 유예
     hardOffMin: c.hardOffMin != null ? c.hardOffMin : 60,      // 무인 지속 → 완전 OFF (2단 공실 2단계)
     minOnMin: c.minOnMin != null ? c.minOnMin : 20,            // 최소 운전시간(완전 OFF 억제)
-    manualHoldMin: c.manualHoldMin != null ? c.manualHoldMin : 90, // 수동조작 후 자동보류
+    manualHoldMin: c.manualHoldMin != null ? c.manualHoldMin : 60, // 수동조작 후 자동보류(분)
     onTemp: c.onTemp != null ? c.onTemp : 24,
     setbackTemp: c.setbackTemp != null ? c.setbackTemp : 28,   // 절전(무인/마감여열) 시 목표온도 — 압축기 idle
     preCloseMin: c.preCloseMin != null ? c.preCloseMin : 20,   // 마감 전 여열 coast 시작(냉방 중단)
