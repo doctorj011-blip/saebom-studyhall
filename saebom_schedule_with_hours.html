@@ -6327,6 +6327,8 @@ setInterval(() => {
     if (window.renderStudyroomBoard) window.renderStudyroomBoard();
     // 어제(및 놓친 날짜) 무단결석 벌점 판정 — 11교시 종료(01:00) 이후라 판정 가능
     if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
+    // 예약 퇴원(withdrawAt) 대상 자동 처리 — 날짜가 지난 학생을 보관함으로
+    if (window.autoWithdrawExpired) window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e));
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
   }
 }, 60000);
@@ -7879,6 +7881,8 @@ loadStudentsFromFirebase();
 loadTodayCheckinFromFirebase();
 // 무단결석 벌점 판정 — 지난 날짜분 소급(멱등·기기간 완료표시 공유). 학생 로드가 끝난 뒤 여유를 두고 실행.
 setTimeout(() => { try { window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e)); } catch(e) {} }, 20000);
+// 예약 퇴원(withdrawAt) 자동 처리 — 키오스크가 2시에 꺼져 있었어도 로드 시 소급 처리된다.
+setTimeout(() => { try { window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e)); } catch(e) {} }, 25000);
 
 // ── 입퇴실 실시간 감시 (다중 기기 동기화) — 세션 스냅샷 선언적 재구성 ──
 // 이벤트 증분 패치(구 checkin_logs 방식)는 폐기: 스냅샷이 올 때마다 캐시를 통째로
@@ -10404,6 +10408,43 @@ async function archiveAndRemoveStudent(seat, name, sid) {
   if (sid && sid !== seat) { try { await deleteDoc(doc(db, 'students', sid)); } catch(e) {} }
   return archiveId;
 }
+
+// ── 예약 자동 퇴원 (withdrawAt 필드 기반) ──
+// 특정 학생 문서에 withdrawAt='YYYY-MM-DD'가 있으면, 그 날짜가 지난 뒤(오늘 > withdrawAt)
+// 새벽 2시 리셋 또는 앱 로드 시 자동으로 소프트 퇴원(보관함 이동)한다.
+// ★expiry(만료일)가 아니라 전용 필드를 쓰는 이유: 현재 재원생 상당수가 만료일을
+//   공유(예: 썸머 시작일)해서 expiry 기준으로 하면 계속 다니는 학생까지 함께 퇴원되는
+//   참사가 난다. withdrawAt은 실제로 그날 나갈 학생에게만 명시적으로 부여한다.
+// 멱등: 이미 퇴원돼 문서가 사라지면 다음 실행 때 대상에서 자연히 빠진다. 입실 중이면
+//   열린 세션이 꼬이지 않도록 건너뛰고 다음 기회(다음 로드/리셋)에 처리한다.
+async function autoWithdrawExpired() {
+  try {
+    const todayStr = sessIsoDate(Date.now()); // 'YYYY-MM-DD'
+    const snap = await getDocs(collection(db, 'students'));
+    if (snap.metadata && snap.metadata.fromCache) return; // 오프라인 캐시면 보류(오판 방지)
+    for (const d of snap.docs) {
+      const v = d.data();
+      const w = v.withdrawAt;
+      if (!w || typeof w !== 'string') continue;
+      if (todayStr <= w) continue;              // 아직 그날 전 — 오늘 > withdrawAt 이어야 퇴원
+      const name = v.name;
+      if (!name || String(d.id).startsWith('_meta')) continue;
+      if (Array.isArray(PRESENT) && PRESENT.includes(name)) {
+        console.log(`[자동퇴원] ${name}(${d.id}번) 입실 중 — 이번엔 건너뜀`);
+        continue;
+      }
+      await archiveAndRemoveStudent(d.id, name, v.sid);
+      const si = STUDENTS.findIndex(s => String(s.seat).replace('번','').trim() === String(d.id));
+      if (si !== -1) STUDENTS.splice(si, 1);
+      console.log(`[자동퇴원] ${name}(${d.id}번) withdrawAt=${w} 경과 → 보관함 이동`);
+      if (window.showAdminToast) showAdminToast(`📦 ${name}(${d.id}번) 예약 퇴원 처리됨 — 보관함에서 복구 가능`);
+    }
+    try { if (typeof buildDashboard === 'function') buildDashboard(); } catch(e) {}
+    try { if (document.getElementById('fp-room')) buildFloorplan(); } catch(e) {}
+    try { if (typeof buildHoursTable === 'function') buildHoursTable(); } catch(e) {}
+  } catch(e) { console.error('예약 자동퇴원 오류:', e); }
+}
+window.autoWithdrawExpired = autoWithdrawExpired;
 
 window.fpWithdrawStudent = async function(seatNum) {
   document.getElementById('fp-ctx-menu')?.remove();

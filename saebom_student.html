@@ -100,6 +100,33 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .np-clear{font-size:12px;font-weight:700;color:var(--red);background:var(--red-pale);border-color:var(--red-border)}
 .np-clear:active{background:#fcd4d4}
 .login-error{text-align:center;font-size:13px;color:var(--red);background:var(--red-pale);border-radius:var(--r-sm);padding:10px;margin-top:12px;display:none;border:1px solid var(--red-border)}
+/* ── 본인 선택 (뒷 4자리 중복) ── */
+.login-choose{display:none;margin-top:14px}
+.login-choose-t{font-size:13px;font-weight:700;color:var(--text2);text-align:center;margin-bottom:10px}
+.lc-item{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:12px 14px;margin-bottom:8px;
+  background:var(--surface);border:1.5px solid var(--border);border-radius:var(--r-md);cursor:pointer;text-align:left;font-family:inherit}
+.lc-item:active{transform:scale(0.98)}
+.lc-name{font-size:14px;font-weight:700;color:var(--text)}
+.lc-meta{font-size:11px;color:var(--text3)}
+.lc-new{background:#EEF2FF;border-color:#8F82E4}
+.lc-new .lc-meta{color:#6C5DD3;font-weight:700}
+/* ── 신규 자가등록 ── */
+.signup-card{max-width:460px;max-height:88vh;overflow-y:auto}
+.signup-who{background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:var(--r-md);padding:12px 14px;margin-bottom:14px;font-size:13px;color:#4A3FA8;line-height:1.6}
+.signup-who b{color:#1E1B4B}
+.signup-gwrap{display:flex;gap:8px}
+.signup-g{flex:1;padding:10px 0;border:1.5px solid var(--border);border-radius:var(--r-md);background:var(--surface);
+  color:var(--text3);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit}
+.signup-g.on{background:#EEF2FF;border-color:#6C5DD3;color:#6C5DD3}
+.signup-hint{font-size:11px;color:var(--text3);margin-bottom:10px}
+.signup-btn-ghost{width:100%;margin-top:14px;padding:11px;border:1px solid var(--border);border-radius:var(--r-md);
+  background:transparent;color:var(--text3);font-size:13px;cursor:pointer;font-family:inherit}
+/* 자가등록 배치도 — 자리선택 배치도(.sm-*)와 독립된 클래스로 둔다(그쪽은 렌더 시 <style>을 직접 주입함) */
+.su-grid{display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(12,40px);gap:3px;max-width:420px}
+.su-cell{border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;transition:transform .1s}
+.su-taken{background:var(--surface);border:1px solid var(--border);color:var(--text3)}
+.su-available{background:#DCFCE7;border:1.5px solid #4CAF50;color:#166534;cursor:pointer}
+.su-available:active{transform:scale(0.95)}
 
 /* ── 앱 메인 ── */
 .app-screen{display:none;min-height:100vh;flex-direction:column;background:var(--bg)}
@@ -948,6 +975,32 @@ body{
       <button class="np-btn np-del" onclick="pinDel()">←</button>
     </div>
     <div class="login-error" id="login-error">번호가 일치하는 학생을 찾을 수 없습니다</div>
+    <!-- 뒷 4자리가 여러 명과 겹칠 때 본인 선택 (재원생 + 신규 등록 대상) -->
+    <div class="login-choose" id="login-choose">
+      <div class="login-choose-t">본인을 선택해주세요</div>
+      <div id="login-choose-list"></div>
+      <button class="signup-btn-ghost" onclick="cancelChoose()">취소</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 신규 자가등록 화면 (초대 명단 대조 통과 시) ── -->
+<div class="login-screen" id="signup-screen" style="display:none">
+  <div class="login-title">신규 등록</div>
+  <div class="login-sub">앉을 자리를 선택하세요</div>
+  <div class="login-card signup-card">
+    <div class="signup-who" id="signup-who"></div>
+    <div class="signup-gender">
+      <div class="login-label" style="margin-bottom:6px">성별</div>
+      <div class="signup-gwrap">
+        <button class="signup-g" id="signup-g-f" onclick="signupGender('f')">♀ 여</button>
+        <button class="signup-g" id="signup-g-m" onclick="signupGender('m')">♂ 남</button>
+      </div>
+    </div>
+    <div class="login-label" style="margin-top:14px">빈 자리 (초록색)를 누르면 등록됩니다</div>
+    <div class="signup-hint" id="signup-hint">회색은 이미 사용 중인 자리예요</div>
+    <div id="signup-seatmap"></div>
+    <button class="signup-btn-ghost" onclick="signupCancel()">취소하고 처음으로</button>
   </div>
 </div>
 
@@ -1637,16 +1690,218 @@ async function tryLogin() {
     } catch(e) { console.error('Firebase 로그인 검색 실패:', e); }
   }
 
-  if (matched.length === 0) {
+  // 3) 초대 명단(신규 자가등록) 대조 — 아직 등록되지 않은 초대자만 후보로
+  const invites = await findInvitesByLast4(pinBuffer, matched);
+
+  // 4) 후보 정리. 뒷 4자리는 재원생끼리도, 재원생↔신규끼리도 겹칠 수 있으므로
+  //    후보가 2명 이상이면 반드시 본인 선택을 거친다(엉뚱한 계정 로그인 방지).
+  const candidates = [
+    ...matched.map(s => ({ type:'student', student:s })),
+    ...invites.map(i => ({ type:'invite',  invite:i })),
+  ];
+  if (candidates.length === 0) {
     document.getElementById('login-error').style.display='block';
     pinBuffer=''; updatePinDisplay(); return;
   }
-  currentStudent = matched[0];
+  if (candidates.length === 1) {
+    const c = candidates[0];
+    return c.type === 'student' ? loginAsStudent(c.student) : startSignup(c.invite);
+  }
+  _loginCandidates = candidates;
+  showChooser(candidates);
+}
+
+function loginAsStudent(s) {
+  currentStudent = s;
   // 새로고침 후 자동 로그인을 위해 저장
   try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
   initDraft();
   enterApp();
 }
+
+// ── 신규 자가등록 (초대 명단 대조) ──
+// 관리자가 미리 넣어둔 settings/summerInvites.invites[] 에 있는 학생만 스스로 등록할 수 있다.
+// 흐름: 뒷 4자리 입력 → 재원생에 없고 초대 명단에 있으면 → 공석 배치도에서 자리 선택 →
+//       students/{좌석} 생성(관리자 등록과 동일 스키마) → 그대로 로그인.
+// 좌석 문서는 트랜잭션으로 선점해 두 명이 같은 자리를 동시에 눌러도 한 명만 성공한다.
+let _loginCandidates = [];
+let _signupInvite = null;
+let _signupGender = 'f';
+let _signupSeatUnsub = null;
+
+function _esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function findInvitesByLast4(last4, already) {
+  const db = window._db;
+  if (!db) return [];
+  try {
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'summerInvites'));
+    if (!snap.exists()) return [];
+    const d = snap.data() || {};
+    const list = Array.isArray(d.invites) ? d.invites : [];
+    // 이미 그 이름으로 재원 문서가 있으면 등록 대상이 아니다(그냥 로그인하면 됨).
+    const registered = new Set((already || []).map(s => s && s.name));
+    return list
+      .filter(i => i && String(i.phoneLast4) === String(last4) && !registered.has(i.name))
+      .map(i => ({ ...i, startDate: d.startDate || '' }));
+  } catch(e) { console.warn('초대 명단 조회 실패:', e); return []; }
+}
+
+function showChooser(cands) {
+  const list = document.getElementById('login-choose-list');
+  if (!list) return;
+  list.innerHTML = cands.map((c, idx) => {
+    if (c.type === 'student') {
+      const seat = String(c.student.seat || '').replace('번','');
+      return `<button class="lc-item" onclick="pickCandidate(${idx})">
+        <span class="lc-name">${_esc(c.student.name)}</span>
+        <span class="lc-meta">${seat ? seat + '번 · 재원생' : '재원생'}</span></button>`;
+    }
+    return `<button class="lc-item lc-new" onclick="pickCandidate(${idx})">
+      <span class="lc-name">${_esc(c.invite.name)}</span>
+      <span class="lc-meta">신규 등록 ✨</span></button>`;
+  }).join('');
+  document.getElementById('login-choose').style.display = 'block';
+  document.getElementById('pin-display').style.display = 'none';
+  const np = document.querySelector('.numpad');
+  if (np) np.style.display = 'none';
+}
+
+window.pickCandidate = function(idx) {
+  const c = _loginCandidates[idx];
+  if (!c) return;
+  cancelChoose();
+  if (c.type === 'student') loginAsStudent(c.student);
+  else startSignup(c.invite);
+};
+
+window.cancelChoose = function() {
+  document.getElementById('login-choose').style.display = 'none';
+  document.getElementById('pin-display').style.display = '';
+  const np = document.querySelector('.numpad');
+  if (np) np.style.display = '';
+  _loginCandidates = [];
+  pinBuffer = ''; updatePinDisplay(); hideLoginError();
+};
+
+function startSignup(invite) {
+  _signupInvite = invite;
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('signup-screen').style.display = 'flex';
+  const school = invite.school ? _esc(invite.school) + (invite.grade ? ' ' + _esc(invite.grade) + '학년' : '') + ' · ' : '';
+  document.getElementById('signup-who').innerHTML =
+    `<b>${_esc(invite.name)}</b> 님, 환영합니다! 👋<br>${school}${_esc(invite.phone)}<br>` +
+    `학부모 연락처 <b>${_esc(invite.parent || '미등록')}</b>` +
+    (invite.startDate ? `<br>이용 시작일 <b>${_esc(invite.startDate)}</b>` : '');
+  signupGender('f');
+  buildSignupSeatmap();
+}
+
+window.signupGender = function(g) {
+  _signupGender = g;
+  document.getElementById('signup-g-f').classList.toggle('on', g === 'f');
+  document.getElementById('signup-g-m').classList.toggle('on', g === 'm');
+};
+
+window.signupCancel = function() {
+  if (_signupSeatUnsub) { _signupSeatUnsub(); _signupSeatUnsub = null; }
+  _signupInvite = null;
+  document.getElementById('signup-screen').style.display = 'none';
+  document.getElementById('login-screen').style.display = 'flex';
+  pinBuffer = ''; updatePinDisplay(); hideLoginError();
+};
+
+function buildSignupSeatmap() {
+  const db = window._db;
+  const el = document.getElementById('signup-seatmap');
+  if (!el) return;
+  if (!db) { el.innerHTML = '<div class="signup-hint">연결 오류로 자리를 불러오지 못했습니다.</div>'; return; }
+  if (_signupSeatUnsub) { _signupSeatUnsub(); _signupSeatUnsub = null; }
+  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">자리 확인 중...</div>';
+  // 실시간 구독 — 다른 신규생이 먼저 잡은 자리가 즉시 회색으로 바뀐다
+  _signupSeatUnsub = window._fsOnSnapshot(
+    window._fsCollection(db, 'students'),
+    (snap) => {
+      const taken = {};
+      snap.forEach(d => {
+        const s = d.data();
+        if (s.name && s.seat && parseInt(s.seat) > 0) taken[parseInt(s.seat)] = s.name;
+      });
+      renderSignupSeatmap(taken);
+    },
+    (err) => { console.error('신규등록 배치도 오류:', err); }
+  );
+}
+
+function renderSignupSeatmap(taken) {
+  const el = document.getElementById('signup-seatmap');
+  if (!el) return;
+  const at = {};
+  SEAT_GRID.forEach(([r,c,n]) => at[r+'_'+c] = n);
+  let html = '<div class="su-grid">', free = 0;
+  for (let r = 1; r <= SEAT_ROWS; r++) {
+    for (let c = 1; c <= SEAT_COLS; c++) {
+      const n = at[r+'_'+c];
+      if (!n) { html += `<div style="grid-row:${r};grid-column:${c}"></div>`; continue; }
+      const isTaken = !!taken[n];
+      if (!isTaken) free++;
+      html += `<div class="su-cell ${isTaken ? 'su-taken' : 'su-available'}" style="grid-row:${r};grid-column:${c}"`
+        + (isTaken ? '' : ` onclick="signupSelectSeat(${n})"`) + `>${n}번</div>`;
+    }
+  }
+  html += '</div>';
+  el.innerHTML = html;
+  const hint = document.getElementById('signup-hint');
+  if (hint) hint.textContent = free
+    ? `빈 자리 ${free}곳 · 회색은 이미 사용 중인 자리예요`
+    : '⚠️ 남은 자리가 없습니다. 관리자에게 문의해주세요.';
+}
+
+window.signupSelectSeat = async function(seatNum) {
+  const db = window._db;
+  const inv = _signupInvite;
+  if (!db || !inv) return;
+  if (!confirm(`${seatNum}번 자리로 등록할까요?\n\n${inv.name} · ${inv.phone}\n등록 후에는 번호 뒷 4자리로 로그인할 수 있어요.`)) return;
+  const ns = String(seatNum);
+  try {
+    await window._fsRunTransaction(db, async (tx) => {
+      const ref = window._fsDoc(db, 'students', ns);
+      const snap = await tx.get(ref);
+      // 이미 누군가 이름을 올려둔 자리면 선점 실패
+      if (snap.exists() && snap.data().name) throw new Error('SEAT_TAKEN');
+      tx.set(ref, {
+        seat: ns,
+        name: inv.name,
+        phone: inv.phone || '',
+        phoneLast4: window._phoneLast4(inv.phone), // 입실/로그인 where 검색용 색인
+        parent: inv.parent || '',
+        gender: _signupGender || 'f',
+        expiry: '',
+        startDate: inv.startDate || '',
+        월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-',
+        hours: {}, fee: 0, feeMemo: '',
+        updatedAt: window._fsServerTimestamp(),
+      });
+    });
+    if (_signupSeatUnsub) { _signupSeatUnsub(); _signupSeatUnsub = null; }
+    alert(`✅ ${inv.name}님, ${seatNum}번 자리로 등록됐습니다!\n앞으로 번호 뒷 4자리로 로그인하세요.`);
+    const me = {
+      seat: ns, name: inv.name, phone: inv.phone || '', parent: inv.parent || '',
+      gender: _signupGender || 'f',
+      schedule: { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' },
+      hours: {},
+    };
+    _signupInvite = null;
+    document.getElementById('signup-screen').style.display = 'none';
+    loginAsStudent(me);
+  } catch(e) {
+    if (e && e.message === 'SEAT_TAKEN') alert('⚠️ 방금 다른 학생이 먼저 선택한 자리예요. 다른 자리를 골라주세요.');
+    else alert('등록 실패: ' + (e && e.message ? e.message : e));
+  }
+};
 
 function logout() {
   currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false; baseScheduleRaw = null;
@@ -3136,28 +3391,31 @@ function buildStudentSeatmap() {
   );
 }
 
+// DEFAULT_SEATS와 동일한 그리드 구성 (관리자앱과 동일)
+// 학생 좌석만 (스터디룸·빈열 제외) — 관리자앱 DEFAULT_SEATS에서 양수만.
+// ★자리선택 배치도와 신규 자가등록 배치도가 함께 쓰므로 모듈 스코프에 둔다.
+const SEAT_GRID = [
+  // [row, col, seatNum]  — 새봄 면학관 실제 배열
+  [2,1,1],[3,1,2],[4,1,3],[5,1,4],
+  [1,2,9],[2,2,8],[3,2,7],[4,2,6],[5,2,5],
+  [1,4,10],[2,4,11],[3,4,12],[4,4,13],[5,4,14],
+  [1,5,19],[2,5,18],[3,5,17],[4,5,16],[5,5,15],
+  [1,7,20],[2,7,21],[3,7,22],[4,7,23],[5,7,24],[6,7,25],[7,7,26],
+  // 우측 세로줄 27~29
+  [9,7,27],[10,7,28],[11,7,29],
+  // 하단 블록: 41~45(9행) / 36~40(10행) / 30~35(12행)
+  [9,1,45],[9,2,44],[9,3,43],[9,4,42],[9,5,41],
+  [10,1,36],[10,2,37],[10,3,38],[10,4,39],[10,5,40],
+  [12,1,35],[12,2,34],[12,3,33],[12,4,32],[12,5,31],[12,6,30],
+];
+const SEAT_ROWS = 12, SEAT_COLS = 7;
+
 function renderSeatmap(takenSeats, reservations) {
   reservations = reservations || {};
   const el = document.getElementById('student-seatmap');
   if (!el || !currentStudent) return;
 
-  // DEFAULT_SEATS와 동일한 그리드 구성 (관리자앱과 동일)
-  // 학생 좌석만 (스터디룸·빈열 제외) — 관리자앱 DEFAULT_SEATS에서 양수만
-  const SEAT_GRID = [
-    // [row, col, seatNum]  — 새봄 면학관 실제 배열
-    [2,1,1],[3,1,2],[4,1,3],[5,1,4],
-    [1,2,9],[2,2,8],[3,2,7],[4,2,6],[5,2,5],
-    [1,4,10],[2,4,11],[3,4,12],[4,4,13],[5,4,14],
-    [1,5,19],[2,5,18],[3,5,17],[4,5,16],[5,5,15],
-    [1,7,20],[2,7,21],[3,7,22],[4,7,23],[5,7,24],[6,7,25],[7,7,26],
-    // 우측 세로줄 27~29
-    [9,7,27],[10,7,28],[11,7,29],
-    // 하단 블록: 41~45(9행) / 36~40(10행) / 30~35(12행)
-    [9,1,45],[9,2,44],[9,3,43],[9,4,42],[9,5,41],
-    [10,1,36],[10,2,37],[10,3,38],[10,4,39],[10,5,40],
-    [12,1,35],[12,2,34],[12,3,33],[12,4,32],[12,5,31],[12,6,30],
-  ];
-  const ROWS = 12, COLS = 7;
+  const ROWS = SEAT_ROWS, COLS = SEAT_COLS;
   const myCurrentSeat = currentStudent.seat ? parseInt(currentStudent.seat) : 0;
 
   let html = `<style>
