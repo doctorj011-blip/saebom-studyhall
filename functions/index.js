@@ -98,11 +98,23 @@ async function acConfig() {
     auto: c.auto !== false,                      // 기본 자동 ON
     country: c.country || 'KR', region: c.region || 'kic',
     opStart: c.opStart || '06:00', opEnd: c.opEnd || '24:00',
-    offGraceMin: c.offGraceMin != null ? c.offGraceMin : 20,   // 재실0 지속 → OFF 유예
-    minOnMin: c.minOnMin != null ? c.minOnMin : 20,            // 최소 운전시간
+    offGraceMin: c.offGraceMin != null ? c.offGraceMin : 20,   // 무인 지속 → 절전(setback) 전환 유예
+    hardOffMin: c.hardOffMin != null ? c.hardOffMin : 60,      // 무인 지속 → 완전 OFF (2단 공실 2단계)
+    minOnMin: c.minOnMin != null ? c.minOnMin : 20,            // 최소 운전시간(완전 OFF 억제)
     manualHoldMin: c.manualHoldMin != null ? c.manualHoldMin : 90, // 수동조작 후 자동보류
     onTemp: c.onTemp != null ? c.onTemp : 24,
+    setbackTemp: c.setbackTemp != null ? c.setbackTemp : 28,   // 절전(무인/마감여열) 시 목표온도 — 압축기 idle
+    preCloseMin: c.preCloseMin != null ? c.preCloseMin : 20,   // 마감 전 여열 coast 시작(냉방 중단)
+    lateAfter: c.lateAfter || '23:50',                         // 이 시각 이후: zone 인원 lateMinCount 미만이면 OFF
+    lateMinCount: c.lateMinCount != null ? c.lateMinCount : 2, // 마감 임박 시 zone 유지 최소 인원
     onMode: c.onMode || 'COOL', onFan: c.onFan || 'AUTO',
+    // 스터디룸 예측 제어(예약 교시 기반)
+    bridgeTemp: c.bridgeTemp != null ? c.bridgeTemp : 30,      // 빈 교시(뒤에 예약 있음) 브리지 온도 — 압축기 거의 정지+재냉방 상한
+    srPreCoolMin: c.srPreCoolMin != null ? c.srPreCoolMin : 15,// 다음 예약 시작 N분 전부터 미리 냉방
+    srBridgeMaxGap: c.srBridgeMaxGap != null ? c.srBridgeMaxGap : 45, // 다음 예약이 이보다 멀면 브리지 대신 OFF
+    srTemp: c.srTemp || { '1': 26, '2': 25, '3': 24 },         // 인원수별 냉방온도(과용량 소형실 기준)
+    srFan: c.srFan || { '1': 'LOW', '2': 'LOW', '3': 'MID' },  // 인원수별 풍량
+    noShowGraceMin: c.noShowGraceMin != null ? c.noShowGraceMin : 15, // 교시 시작 후 이 시간까진 예약수 유지(도착 지연 배려), 이후 실입실자 수
     zones: c.zones || {},   // deviceId -> { name, type:'hall'|'studyroom', room? }
   };
 }
@@ -113,6 +125,16 @@ function _withinOp(cfg, date) {
   let end = _hhmm(cfg.opEnd); if (end === 0) end = 24 * 60;   // '24:00'
   return start <= end ? (now >= start && now < end) : (now >= start || now < end);
 }
+// 마감(opEnd)까지 남은 분. 운영시간 밖이면 null.
+function _minsUntilOpEnd(cfg, date) {
+  const now = date.getHours() * 60 + date.getMinutes();
+  const start = _hhmm(cfg.opStart);
+  let end = _hhmm(cfg.opEnd); if (end === 0) end = 24 * 60;
+  if (start <= end) return (now >= start && now < end) ? end - now : null;
+  if (now >= start) return (24 * 60 - now) + end;   // 자정 넘김 운영: 익일 end까지
+  if (now < end) return end - now;
+  return null;
+}
 function _kstNow() { return new Date(Date.now() + 9 * 3600 * 1000); }   // 함수 런타임 UTC → KST
 // 앱들과 동일: (KST-3h)의 날짜를 zero-padded YYYY-MM-DD 로. (studyroom_requests.date 형식)
 function _srDayKey(date) {
@@ -121,8 +143,12 @@ function _srDayKey(date) {
 }
 
 // ---------- 재실/사용 판정 ----------
-// 현재 재실 학생 이름 집합 — 최근 18시간 checkin_logs를 학생별 마지막 이벤트로 판정(마지막이 'in').
-async function acPresentNames() {
+function _seatNum(v) { const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10); return Number.isNaN(n) ? null : n; }
+
+// 현재 재실 — 최근 18시간 checkin_logs를 학생별 마지막 이벤트로 판정(마지막이 'in').
+//   names: 재실 학생 이름 집합(스터디룸 배정 대조용)
+//   seats: 재실 학생 좌석번호 집합(열람실 좌석범위 판정용)
+async function acPresence() {
   const since = Date.now() - 18 * 3600 * 1000;
   const snap = await db.collection('checkin_logs').where('ts', '>=', since).get();
   const last = new Map();
@@ -130,25 +156,93 @@ async function acPresentNames() {
     const x = d.data();
     if (x.away === true || !x.studentName || typeof x.ts !== 'number') return;
     const cur = last.get(x.studentName);
-    if (!cur || x.ts > cur.ts) last.set(x.studentName, { type: x.type, ts: x.ts });
+    if (!cur || x.ts > cur.ts) last.set(x.studentName, { type: x.type, ts: x.ts, seat: x.seat });
   });
-  const set = new Set();
-  last.forEach((v, name) => { if (v.type === 'in') set.add(name); });
-  return set;
+  const names = new Set(), seats = new Set(), missing = [];
+  last.forEach((v, name) => {
+    if (v.type !== 'in') return;
+    names.add(name);
+    const s = _seatNum(v.seat);
+    if (s != null) seats.add(s); else missing.push(name);   // 로그에 좌석 없으면 아래서 보완
+  });
+  if (missing.length) {   // 좌석 누락 재실자만 students에서 이름으로 보완
+    try {
+      const byName = new Map();
+      (await db.collection('students').get()).forEach(d => {
+        const x = d.data() || {}; if (x.name) byName.set(x.name, _seatNum(x.seat != null ? x.seat : d.id));
+      });
+      for (const name of missing) { const s = byName.get(name); if (s != null) seats.add(s); }
+    } catch (e) { logger.warn('acPresence 좌석 보완 실패', { message: e.message }); }
+  }
+  return { names, seats };
 }
-// 스터디룸별 사용 여부 — 오늘 배정(approved)된 학생 중 현재 재실자가 있으면 사용 중.
-async function acStudyroomOccupancy(present, kstDate) {
+
+// 열람실(hall) 좌석 범위 — 배치도 기준(사용자 지정): 에어컨1=26~45번, 에어컨2=1~25번.
+//   config zone에 seatFrom/seatTo가 있으면 그 값을 우선(이름 변경에도 안전).
+const HALL_SEAT_RANGES = { '에어컨1': [26, 45], '에어컨2': [1, 25] };
+function _hallSeatRange(z) {
+  if (z.seatFrom != null && z.seatTo != null) return [Number(z.seatFrom), Number(z.seatTo)];
+  return HALL_SEAT_RANGES[String(z.name || '').replace(/\s/g, '')] || null;
+}
+// 열람실 재실 인원수: 범위 지정 시 그 범위 안 좌석 수, 없으면 전체 재실 수(하위호환).
+function _hallCount(z, presentSeats, totalPresent) {
+  const r = _hallSeatRange(z);
+  if (!r) return totalPresent;
+  const lo = Math.min(r[0], r[1]), hi = Math.max(r[0], r[1]); let c = 0;
+  for (const s of presentSeats) { if (s >= lo && s <= hi) c++; }
+  return c;
+}
+// 교시 시각(분, 자정 기준) — 앱 PERIODS와 동일. 평일 예약은 7~10교시(저녁)만 사용.
+//   11교시(24:00~25:00)는 현재 운영시간(~24:00) 밖이라 사실상 미사용.
+const PERIOD_TIMES = {
+  1: [540, 600], 2: [610, 670], 3: [680, 750], 4: [810, 870], 5: [880, 940], 6: [950, 1020],
+  7: [1080, 1130], 8: [1140, 1220], 9: [1230, 1320], 10: [1350, 1430], 11: [1440, 1500],
+};
+// 스터디룸 예약 스케줄 — 방별 { periodCounts:{교시:인원}, periodNames:{교시:[이름]}, booked:[교시...] } (오늘 approved).
+async function acStudyroomSchedule(kstDate) {
   const key = _srDayKey(kstDate);
   const snap = await db.collection('studyroom_requests')
     .where('date', '==', key).where('status', '==', 'approved').get();
   const byRoom = {};
   snap.forEach(d => {
     const x = d.data(); const room = String(x.room || '').trim();
-    if (!room) return; (byRoom[room] = byRoom[room] || new Set()).add(x.name);
+    const p = parseInt(x.period, 10);
+    if (!room || Number.isNaN(p)) return;
+    const r = (byRoom[room] = byRoom[room] || { seen: {}, periodCounts: {}, periodNames: {} });
+    const set = (r.seen[p] = r.seen[p] || new Set());
+    if (!set.has(x.name)) { set.add(x.name); r.periodCounts[p] = (r.periodCounts[p] || 0) + 1; (r.periodNames[p] = r.periodNames[p] || []).push(x.name); }   // 이름 중복 제거
   });
-  const occ = {};
-  Object.keys(byRoom).forEach(room => { occ[room] = [...byRoom[room]].some(n => present.has(n)); });
-  return occ;
+  const out = {};
+  Object.keys(byRoom).forEach(room => {
+    out[room] = { periodCounts: byRoom[room].periodCounts, periodNames: byRoom[room].periodNames, booked: Object.keys(byRoom[room].periodCounts).map(Number).sort((a, b) => a - b) };
+  });
+  return out;
+}
+function _srTemp(n, cfg) { const k = String(Math.min(Math.max(n, 1), 3)); return cfg.srTemp[k] != null ? cfg.srTemp[k] : cfg.onTemp; }
+function _srFan(n, cfg) { const k = String(Math.min(Math.max(n, 1), 3)); return cfg.srFan[k] || 'LOW'; }
+// 스터디룸 예측 프로파일: 예약 교시 기반 냉방/브리지/OFF. no-show 판정 = 예약자 중 실제 입실(present)자 수.
+//   교시 시작 후 noShowGraceMin 이내엔 예약 인원 유지(도착 지연), 이후엔 실입실자 수(0이면 빈 것으로 처리).
+function _srProfile(room, sched, nowMin, cfg, present) {
+  const rs = sched[String(room)] || { periodCounts: {}, periodNames: {}, booked: [] };
+  for (const p of rs.booked) {   // 현재 진행 중인 예약 교시?
+    const t = PERIOD_TIMES[p];
+    if (!t || nowMin < t[0] || nowMin >= t[1]) continue;
+    const names = rs.periodNames[p] || [];
+    const elapsed = nowMin - t[0];
+    const n = elapsed < cfg.noShowGraceMin ? names.length : names.filter(x => present.has(x)).length;
+    if (n > 0) return { count: n, profile: { power: true, mode: cfg.onMode, temp: _srTemp(n, cfg), fan: _srFan(n, cfg) } };
+    break;   // no-show(입실 0) → 빈 것으로 간주, 아래 브리지/OFF 판정
+  }
+  let nextStart = Infinity, nextP = null;   // 앞으로 남은 가장 이른 예약 교시
+  for (const p of rs.booked) { const t = PERIOD_TIMES[p]; if (t && t[0] > nowMin && t[0] < nextStart) { nextStart = t[0]; nextP = p; } }
+  if (nextP == null) return { count: 0, profile: { power: false } };   // 오늘 남은 예약 없음 → OFF
+  const lead = nextStart - nowMin;
+  if (lead <= cfg.srPreCoolMin) {           // 곧 시작 → 예약 인원 기준으로 미리 냉방(도착 전이라 예약수 사용)
+    const n = (rs.periodNames[nextP] || []).length || 1;
+    return { count: 0, profile: { power: true, mode: cfg.onMode, temp: _srTemp(n, cfg), fan: _srFan(n, cfg) } };
+  }
+  if (lead <= cfg.srBridgeMaxGap) return { count: 0, profile: { power: true, mode: cfg.onMode, temp: cfg.bridgeTemp } };   // 짧은 공백 → 30 브리지
+  return { count: 0, profile: { power: false } };   // 다음 예약까지 멀다 → OFF
 }
 
 // 실제 LG 제어 (Secret 직접 사용)
@@ -160,6 +254,15 @@ async function acExecute(cfg, deviceId, payload) {
     { pat, country: cfg.country, region: cfg.region, clientId },
     { method: 'POST', body: payload, control: true });
 }
+// 전원 전환 — LG는 이미 그 전원상태면 "Command not supported in POWER ON/OFF" 400을 내므로 '이미 그 상태=성공'으로 처리.
+async function acSetPower(cfg, deviceId, on) {
+  try {
+    await acExecute(cfg, deviceId, { operation: { airConOperationMode: on ? 'POWER_ON' : 'POWER_OFF' } });
+  } catch (e) {
+    if (/not supported in POWER/i.test(e.message || '')) return;   // 이미 원하는 전원상태 (중복 명령)
+    throw e;
+  }
+}
 
 // ---------- 자동화 핵심 ----------
 async function acEvaluate(reason) {
@@ -168,10 +271,17 @@ async function acEvaluate(reason) {
   if (!zoneIds.length) return;   // 아직 에어컨↔공간 매핑 전이면 아무것도 안 함
   const now = _kstNow();
   const nowMs = Date.now();
-  const present = await acPresentNames();
-  const anyPresent = present.size > 0;
-  const srOcc = await acStudyroomOccupancy(present, now);
+  const { names: present, seats: presentSeats } = await acPresence();
+  const totalPresent = present.size;
+  const srSched = await acStudyroomSchedule(now);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
   const op = _withinOp(cfg, now);
+  const minsToClose = _minsUntilOpEnd(cfg, now);
+  const preClose = minsToClose != null && minsToClose <= cfg.preCloseMin;   // ⑤ 마감 여열 coast 구간
+  // 마감 임박 구간: opEnd - lateAfter 만큼 남았을 때부터. (남은시간으로 계산해 자정경계·오버나잇 안전)
+  let _opEndMin = _hhmm(cfg.opEnd); if (_opEndMin === 0) _opEndMin = 24 * 60;
+  const lateWinMin = Math.max(0, _opEndMin - _hhmm(cfg.lateAfter));
+  const late = minsToClose != null && minsToClose <= lateWinMin;   // ⑥ 소수인원 zone OFF 구간
 
   const ref = db.collection('ac_state').doc('main');
   const stSnap = await ref.get();
@@ -181,37 +291,63 @@ async function acEvaluate(reason) {
   for (const deviceId of zoneIds) {
     const z = cfg.zones[deviceId] || {};
     const zs = Object.assign({}, zoneState[deviceId]);
-    const occupied = z.type === 'studyroom' ? !!srOcc[String(z.room)] : anyPresent;
+    const isSr = z.type === 'studyroom';
+    // 스터디룸: 예약 교시 기반 예측 프로파일을 미리 계산(인원수·on/off 판단 포함)
+    const srProf = isSr ? _srProfile(z.room, srSched, nowMin, cfg, present) : null;
+    const count = isSr ? srProf.count : _hallCount(z, presentSeats, totalPresent);
+    const occupied = count > 0;
     zs.occupied = occupied;
+    zs.count = count;   // 대시보드 참고용(현재 zone 인원수)
 
     // 자동 꺼짐 or 수동 보류 중이면 자동 전환은 건너뛰고 상태만 기록
     const held = zs.manualUntil && zs.manualUntil > nowMs;
     if (cfg.auto === false || held) { zs.emptySince = occupied ? null : (zs.emptySince || nowMs); out[deviceId] = zs; continue; }
 
-    let desiredOn;
-    if (!op) { desiredOn = false; zs.emptySince = null; }
-    else if (occupied) { desiredOn = true; zs.emptySince = null; }
-    else {
+    // 목표 프로파일 결정
+    //   [스터디룸] 예약 교시 기반: 진행중 교시=인원별 냉방 / 빈 교시(뒤 예약 있음)=브리지 / 남은 예약 없음=OFF
+    //   [열람실]  마감 임박(late)+인원<lateMinCount → OFF · 재실 → 냉방(마감구간 setback) · 무인 2단(offGrace→setback→hardOff)
+    let profile;   // { power, mode?, temp?, fan? }
+    if (!op) { profile = { power: false }; zs.emptySince = null; }
+    else if (isSr) { profile = srProf.profile; }
+    else if (late && count < cfg.lateMinCount) { profile = { power: false }; zs.emptySince = null; }
+    else if (occupied) {
+      zs.emptySince = null;
+      profile = preClose ? { power: true, mode: cfg.onMode, temp: cfg.setbackTemp }
+                         : { power: true, mode: cfg.onMode, temp: cfg.onTemp };
+    } else {
       if (!zs.emptySince) zs.emptySince = nowMs;
       const emptyMin = (nowMs - zs.emptySince) / 60000;
       const onMin = zs.lastOnTs ? (nowMs - zs.lastOnTs) / 60000 : 1e9;
-      desiredOn = (emptyMin >= cfg.offGraceMin && onMin >= cfg.minOnMin) ? false : (zs.on === true);
+      if (emptyMin >= cfg.hardOffMin && onMin >= cfg.minOnMin) profile = { power: false };
+      else if (emptyMin >= cfg.offGraceMin || preClose) profile = { power: true, mode: cfg.onMode, temp: cfg.setbackTemp };
+      else profile = { power: true, mode: cfg.onMode, temp: cfg.onTemp };   // 유예 중: 냉방 유지
     }
 
-    if (desiredOn !== (zs.on === true)) {
-      try {
-        await acExecute(cfg, deviceId, { operation: { airConOperationMode: desiredOn ? 'POWER_ON' : 'POWER_OFF' } });
-        if (desiredOn) {   // 켤 때 기본 모드·온도도 적용(실패해도 무시)
-          await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: cfg.onMode } }).catch(() => {});
-          await acExecute(cfg, deviceId, { temperature: { targetTemperature: cfg.onTemp } }).catch(() => {});
-          zs.lastOnTs = nowMs;
+    // 필요한 변경(전원/모드/온도/풍량)만 LG로 전송 — API 스팸·불필요 전환 방지.
+    // 설정(모드/온도/풍량)은 성공했을 때만 zs에 기록 → 실패 시 다음 틱에 재시도(전원 전환 직후 씹힘 대비).
+    try {
+      if (!profile.power) {
+        if (zs.on === true) {
+          await acSetPower(cfg, deviceId, false);
+          zs.on = false; zs.mode = null; zs.temp = null; zs.fan = null;
+          logger.info('AC 자동 OFF', { deviceId, zone: z.name, occupied, reason });
         }
-        zs.on = desiredOn;
-        logger.info('AC 자동전환', { deviceId, zone: z.name, desiredOn, occupied, op, reason });
-      } catch (e) {
-        logger.error('AC 자동전환 실패', { deviceId, message: e.message });
-        zs.error = e.message;
+      } else {
+        let changed = false;
+        if (zs.on !== true) {   // 켜기: 전원 ON 후 잠깐 대기(반영) → 모드 → 온도 → 풍량
+          await acSetPower(cfg, deviceId, true);
+          zs.on = true; zs.lastOnTs = nowMs; changed = true;
+          await new Promise(r => setTimeout(r, 4000));
+        }
+        if (zs.mode !== profile.mode) { try { await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: profile.mode } }); zs.mode = profile.mode; changed = true; } catch (e) { logger.warn('AC 모드 설정 보류', { deviceId, err: e.message }); } }
+        if (profile.temp != null && zs.temp !== profile.temp) { try { await acExecute(cfg, deviceId, { temperature: { targetTemperature: profile.temp } }); zs.temp = profile.temp; changed = true; } catch (e) { logger.warn('AC 온도 설정 보류', { deviceId, err: e.message }); } }
+        if (profile.fan != null && zs.fan !== profile.fan) { try { await acExecute(cfg, deviceId, { airFlow: { windStrength: profile.fan } }); zs.fan = profile.fan; changed = true; } catch (e) { logger.warn('AC 풍량 설정 보류', { deviceId, err: e.message }); } }
+        if (changed) logger.info('AC 자동 설정', { deviceId, zone: z.name, mode: zs.mode, temp: zs.temp, fan: zs.fan, count, reason });
       }
+      zs.error = null;
+    } catch (e) {
+      logger.error('AC 자동전환 실패', { deviceId, err: e.message });
+      zs.error = e.message;
     }
     out[deviceId] = zs;
   }
