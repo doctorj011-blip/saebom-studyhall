@@ -1666,7 +1666,7 @@ function renderPenaltyCard() {
   if (!rows.length) { el.innerHTML = ''; return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
-      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.n}교시 ${r.p.type==='noshow' ? '무단결석' : `늦은 ${r.p.to==='absent'?'불참':'해제'} 변경`}${r.p.canceled?' · 관리자 취소':''}</span>
+      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${r.p.type==='manual' ? String(r.p.reason||'벌점').replace(/</g,'&lt;') : `${r.n}교시 ${r.p.type==='noshow' ? '무단결석' : `늦은 ${r.p.to==='absent'?'불참':'해제'} 변경`}`}${r.p.canceled?' · 관리자 취소':''}</span>
       <span style="font-weight:700;color:var(--red);flex:0 0 auto">${r.p.canceled?0:(r.p.points||1)}점</span>
     </div>`).join('');
   el.innerHTML = `

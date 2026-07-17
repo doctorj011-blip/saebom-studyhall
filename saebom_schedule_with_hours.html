@@ -2877,11 +2877,12 @@ function _aggregatePenalties(docs, startISO, endISO){
   });
   return byName;
 }
-// 벌점 배지 HTML — 0점이면 '—', 있으면 빨간 배지(클릭 시 해당 학생 벌점 모달)
+// 벌점 배지 HTML — 0점이면 클릭 가능한 '＋'(수기 부과), 있으면 빨간 배지(클릭 시 상세·부과 모달)
 function _penaltyBadge(pts, seat){
-  if (!pts || pts <= 0) return '<span style="color:#9CA3AF;font-size:11px">—</span>';
   const sk = String(seat).replace(/'/g,"\\'");
-  return `<span onclick="showPenaltyModal('${sk}')" title="벌점 상세 보기" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;background:#FEF0F0;color:#C62828;border:1px solid #F5C6C6;border-radius:8px;padding:2px 8px;font-size:11.5px;font-weight:700">⚠️ ${pts}점</span>`;
+  if (!pts || pts <= 0)
+    return `<span onclick="showPenaltyModal('${sk}')" title="벌점 부과" style="cursor:pointer;color:#9CA3AF;font-size:12px;border:1px dashed #D1D5DB;border-radius:8px;padding:1px 9px">＋</span>`;
+  return `<span onclick="showPenaltyModal('${sk}')" title="벌점 상세·부과" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;background:#FEF0F0;color:#C62828;border:1px solid #F5C6C6;border-radius:8px;padding:2px 8px;font-size:11.5px;font-weight:700">⚠️ ${pts}점</span>`;
 }
 // 표가 그려진 뒤 벌점 셀(data-penalty-name)을 현재 기간 기준으로 채운다 (fire-and-forget)
 async function applyPenaltyBadges(){
@@ -3367,10 +3368,41 @@ window.showStudentSessionsModal = async function(name){
 // 여기서는 전체/학생별 조회와 교시별 취소·복구를 제공한다.
 let _penaltyModalFilter = null; // 열려 있는 모달의 학생 필터(seatKey) — 취소/복구 후 재렌더용
 
+// 좌석번호(digits)로 현재 학생 이름 찾기 (수기 벌점 부과 폼용)
+function _nameForSeatKey(sk){
+  const digits = String(sk).replace(/[^0-9]/g,'');
+  const s = (window.STUDENTS||[]).find(st => String(st.seat).replace(/[^0-9]/g,'') === digits);
+  return s ? s.name : '';
+}
+
 window.showPenaltyModal = async function(filterSeatKey) {
   _penaltyModalFilter = filterSeatKey || null;
   const old = document.getElementById('penalty-modal-overlay');
   if (old) old.remove();
+
+  // 학생 1명으로 필터된 경우에만 수기 부과 폼을 띄운다 (전체 보기에선 대상이 특정 안 됨)
+  let addForm = '';
+  if (filterSeatKey) {
+    const name = _nameForSeatKey(filterSeatKey);
+    const skAttr = String(filterSeatKey).replace(/'/g,"\\'");
+    const nmAttr = String(name).replace(/'/g,"\\'");
+    addForm = `
+      <div style="padding:12px 16px;border-bottom:0.5px solid #eee;background:#FEF6F6;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <select id="penalty-preset" onchange="_penaltyPresetPick(this.value)" style="padding:6px 8px;border:1px solid #F5C6C6;border-radius:8px;font-size:12.5px">
+          <option value="">항목 선택…</option>
+          <option value="플래너 지각제출|1">플래너 지각제출 (1점)</option>
+          <option value="플래너 미제출|2">플래너 미제출 (2점)</option>
+          <option value="휴대폰 미제출|2">휴대폰 미제출 (2점)</option>
+          <option value="휴대폰 무단사용|2">휴대폰 무단사용 (2점)</option>
+          <option value="면학분위기 저해|1">면학분위기 저해 (1점)</option>
+          <option value="__custom__|1">직접 입력</option>
+        </select>
+        <input id="penalty-points-input" type="number" min="1" max="2" value="1" style="width:46px;padding:6px 8px;border:1px solid #F5C6C6;border-radius:8px;font-size:13px" title="점수(최대 2점)">
+        <span style="font-size:12px;color:#C62828">점</span>
+        <input id="penalty-reason-input" type="text" placeholder="사유" onkeydown="if(event.key==='Enter')addManualPenalty('${skAttr}','${nmAttr}')" style="flex:1;min-width:100px;padding:6px 10px;border:1px solid #F5C6C6;border-radius:8px;font-size:13px">
+        <button onclick="addManualPenalty('${skAttr}','${nmAttr}')" style="padding:6px 14px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">＋ 부과</button>
+      </div>`;
+  }
 
   const overlay = document.createElement('div');
   overlay.id = 'penalty-modal-overlay';
@@ -3378,18 +3410,24 @@ window.showPenaltyModal = async function(filterSeatKey) {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;width:min(94vw,520px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FEF0F0">
-        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 벌점 현황 <span style="font-size:12px;font-weight:500;color:#B05555">늦은 변경 교시당 1점 · 무단결석 교시당 2점</span></div>
+        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 벌점 현황 <span style="font-size:12px;font-weight:500;color:#B05555">늦은 변경 1점 · 무단결석 2점 · 수기 최대 2점</span></div>
         <button onclick="document.getElementById('penalty-modal-overlay').remove()"
           style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
       </div>
+      ${addForm}
       <div id="penalty-modal-body" style="overflow-y:auto;padding:14px 16px">
         <div style="text-align:center;padding:32px;color:#aaa;font-size:13px">불러오는 중...</div>
       </div>
     </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
-  const bodyEl = overlay.querySelector('#penalty-modal-body');
+  _renderPenaltyList(filterSeatKey);
+};
 
+// 벌점 목록 렌더 (부과/취소 후에도 폼을 유지한 채 목록만 다시 그린다)
+async function _renderPenaltyList(filterSeatKey) {
+  const bodyEl = document.getElementById('penalty-modal-body');
+  if (!bodyEl) return;
   try {
     const db = await window.waitDb();
     const { collection, getDocs, query, where } = window._fs;
@@ -3401,7 +3439,7 @@ window.showPenaltyModal = async function(filterSeatKey) {
     const docs = [];
     snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
     if (!docs.length) {
-      bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#aaa;font-size:13px">벌점 기록이 없습니다</div>`;
+      bodyEl.innerHTML = `<div style="text-align:center;padding:28px;color:#aaa;font-size:13px">${filterSeatKey ? '부과된 벌점이 없습니다' : '벌점 기록이 없습니다'}</div>`;
       return;
     }
 
@@ -3424,16 +3462,25 @@ window.showPenaltyModal = async function(filterSeatKey) {
           const p = doc.periods[pn];
           const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
           const isNoShow = p.type === 'noshow';
+          const isManual = p.type === 'manual';
           if (!p.canceled) { total += pts; if (doc.date.slice(0,7) === curYm) monthTotal += pts; }
           const dl = p.deadline ? new Date(p.deadline) : null;
           const ch = p.changedAt ? new Date(p.changedAt) : null;
           const fmt = d => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '?';
-          const label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)` : `${p.to==='absent'?'불참':'해제'} 변경`;
-          const meta = isNoShow ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
+          let when, label, meta;
+          if (isManual) {
+            when = '';
+            label = `<b style="color:#8B1A1A">${String(p.reason || '수기 벌점').replace(/</g,'&lt;')}</b>`;
+            meta = '· ✍️ 수기 부과';
+          } else {
+            when = `<b>${pn}교시</b> `;
+            label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)` : `${p.to==='absent'?'불참':'해제'} 변경`;
+            meta = isNoShow ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
+          }
           rows.push(`
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid #F3F4F6;${p.canceled?'opacity:0.5':''}">
               <span style="flex:1;${p.canceled?'text-decoration:line-through':''}">
-                ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) <b>${pn}교시</b> ${label}
+                ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) ${when}${label}
                 <span style="color:#9CA3AF">${meta}</span>
               </span>
               <span style="font-weight:700;color:${p.canceled?'#9CA3AF':'#C62828'};flex:0 0 auto">${p.canceled?'취소됨':pts+'점'}</span>
@@ -3455,6 +3502,49 @@ window.showPenaltyModal = async function(filterSeatKey) {
     console.error('벌점 조회 실패:', e);
     bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`;
   }
+}
+
+// 프리셋 선택 → 사유·점수 자동 채움 ('직접 입력'이면 사유칸 비우고 포커스)
+window._penaltyPresetPick = function(val){
+  if (!val) return;
+  const idx = val.lastIndexOf('|');
+  const label = val.slice(0, idx), pts = val.slice(idx+1);
+  const rEl = document.getElementById('penalty-reason-input');
+  const pEl = document.getElementById('penalty-points-input');
+  if (label === '__custom__') { if (rEl) { rEl.value = ''; rEl.focus(); } return; }
+  if (rEl) rEl.value = label;
+  if (pEl) pEl.value = pts;
+};
+
+// 수기 벌점 부과 — penalties/{오늘}_{좌석} 문서 periods에 type:'manual' 항목 병합.
+// 앵커 규칙(무단결석 2점이 최상단)에 따라 점수는 1~2로 강제.
+window.addManualPenalty = async function(seatKey, name){
+  const pEl = document.getElementById('penalty-points-input');
+  const rEl = document.getElementById('penalty-reason-input');
+  let pts = Math.round(Number(pEl && pEl.value) || 0);
+  pts = Math.max(1, Math.min(2, pts)); // 1~2점 제한
+  const reason = ((rEl && rEl.value) || '').trim();
+  if (!reason) { alert('사유를 입력하거나 항목을 선택하세요'); return; }
+  try {
+    const db = await window.waitDb();
+    if (!db) { alert('DB 준비 안 됨'); return; }
+    const { doc, getDoc, setDoc } = window._fs;
+    const sk = String(seatKey).replace(/[^0-9]/g,'') || String(seatKey);
+    const now = new Date();
+    const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
+    const ref = doc(db, 'penalties', `${dateISO}_${sk}`);
+    const snap = await getDoc(ref);
+    const data = snap.exists() ? snap.data() : {};
+    const periods = { ...(data.periods || {}) };
+    periods[String(Date.now())] = { points: pts, type: 'manual', reason, canceled: false, createdAt: new Date().toISOString(), by: 'admin' };
+    await setDoc(ref, { name: name || data.name || '', seatKey: sk, date: dateISO, day: data.day || dayName, periods });
+    _penaltyDocsTs = 0; // 사용시간 탭 배지 캐시 무효화
+    if (rEl) rEl.value = ''; if (pEl) pEl.value = '1';
+    const presetEl = document.getElementById('penalty-preset'); if (presetEl) presetEl.value = '';
+    await _renderPenaltyList(_penaltyModalFilter);
+    try { applyPenaltyBadges(); } catch(e){}
+  } catch(e){ console.error('수기 벌점 부과 실패:', e); alert('부과 실패: ' + (e.message || e)); }
 };
 
 // 교시별 벌점 취소 ↔ 복구 토글 (문서는 남기고 canceled 플래그만 변경)
@@ -3474,9 +3564,9 @@ window.togglePenaltyCancel = async function(docId, pn) {
     // 사용시간 탭 벌점 배지 캐시 무효화 후 즉시 갱신
     _penaltyDocsTs = 0;
     try { applyPenaltyBadges(); } catch(e){}
-    // 모달이 열려 있을 때만 재렌더 — 대시보드 현황판에서 호출되면 모달을 띄우지 않는다
+    // 모달이 열려 있을 때만 목록 재렌더(부과 폼은 유지) — 대시보드 현황판에서 호출되면 모달을 띄우지 않는다
     // (현황판은 penalties onSnapshot으로 스스로 갱신된다)
-    if (document.getElementById('penalty-modal-overlay')) showPenaltyModal(_penaltyModalFilter);
+    if (document.getElementById('penalty-modal-overlay')) _renderPenaltyList(_penaltyModalFilter);
   } catch(e) {
     console.error('벌점 취소/복구 실패:', e);
     alert('처리 실패: ' + (e.message || e));
@@ -8820,7 +8910,7 @@ function renderPenaltyBoard() {
       const st = (byStudent[sk] = byStudent[sk] || { name: d.name || '?', seatKey: sk, pts: 0, items: [] });
       const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
       if (!p.canceled) { st.pts += pts; totalPts += pts; }
-      st.items.push({ docId: d.id, pn, pts, isNoShow, isToday, canceled: !!p.canceled, reason: p.reason || '', to: p.to });
+      st.items.push({ docId: d.id, pn, pts, isNoShow, isManual: p.type === 'manual', isToday, canceled: !!p.canceled, reason: p.reason || '', to: p.to });
     });
   });
 
@@ -8838,9 +8928,11 @@ function renderPenaltyBoard() {
     const chips = s.items.map(it => {
       const bg = it.canceled ? '#F3F4F6' : (it.isNoShow ? '#FDE7E7' : '#FFF4E5');
       const fg = it.canceled ? '#9CA3AF' : (it.isNoShow ? '#8B1A1A' : '#9A5B00');
-      const label = it.isNoShow
-        ? `${it.isToday ? '' : '어제 '}${it.pn}교시 무단결석`
-        : `${it.pn}교시 ${it.to === 'absent' ? '불참' : '해제'} 변경${it.reason ? ` · ${it.reason}` : ''}`;
+      const label = it.isManual
+        ? `✍️ ${it.reason || '수기 벌점'}`
+        : it.isNoShow
+          ? `${it.isToday ? '' : '어제 '}${it.pn}교시 무단결석`
+          : `${it.pn}교시 ${it.to === 'absent' ? '불참' : '해제'} 변경${it.reason ? ` · ${it.reason}` : ''}`;
       return `<button onclick="window.penaltyBoardToggle('${it.docId}','${it.pn}',${it.canceled})"
         title="클릭하면 이 벌점을 ${it.canceled ? '다시 부과' : '취소'}합니다"
         style="background:${bg};color:${fg};border:1px solid ${it.canceled ? '#E5E7EB' : 'transparent'};border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;${it.canceled ? 'text-decoration:line-through' : ''}">${label} <b>${it.pts}점</b>${it.canceled ? ' (취소됨)' : ''}</button>`;
@@ -8859,7 +8951,7 @@ window.renderPenaltyBoard = renderPenaltyBoard;
 
 // 칩 클릭으로 바로 취소·복구 (오조작 방지용 확인창) — 갱신은 onSnapshot이 처리한다
 window.penaltyBoardToggle = function(docId, pn, canceled) {
-  const msg = canceled ? `${pn}교시 벌점을 다시 부과할까요?` : `${pn}교시 벌점을 취소할까요?`;
+  const msg = canceled ? `이 벌점을 다시 부과할까요?` : `이 벌점을 취소할까요?`;
   if (!confirm(msg)) return;
   window.togglePenaltyCancel(docId, pn);
 };
