@@ -2899,19 +2899,21 @@ async function applyPenaltyBadges(){
 function buildHoursTable(){
   // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
   if (window._hoursRangeMode) return;
-  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name) && !window.isAdminSeat(s.seat)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
+  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name) && !window.isAdminSeat(s.seat)).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
   if (!sorted.length) return;
   const vals=sorted.map(s=>_readHour(s.hours,currentMonth));
   const maxH=Math.max(...vals,1);
   const avg=Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
   const over180=vals.filter(v=>v>=180).length;
   const under100=vals.filter(v=>v<100).length;
+  // 표는 좌석순이라 최다 사용 학생은 별도 계산 (요약 칩 '최고'용)
+  const topStudent=sorted.reduce((best,s)=>_readHour(s.hours,currentMonth)>_readHour(best.hours,currentMonth)?s:best,sorted[0]);
 
   document.getElementById('hours-summary').innerHTML=`
     <div class="summary-chip">평균 <span>${avg}시간</span></div>
     <div class="summary-chip">180h 이상 <span style="color:#6C5DD3">${over180}명</span></div>
     <div class="summary-chip">100h 미만 <span style="color:#C62828">${under100}명</span></div>
-    <div class="summary-chip">최고 <span>${maxH}h</span> (${sorted[0]?.name||'-'})</div>
+    <div class="summary-chip">최고 <span>${maxH}h</span> (${topStudent?.name||'-'})</div>
   `;
 
   // 1일 사용시간 계산
@@ -3096,7 +3098,9 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
     if (window.isAdminSeat(seatOf[name])) return; // 관리자석(54번~) — 기간 집계 제외
     if (!known.has(name)) rows.push({ name, seat: seatOf[name] || '—', min: totalMin[name], days: daysSet[name] ? daysSet[name].size : 0, former: true });
   });
-  rows.sort((a, b) => b.min - a.min);
+  // 표는 좌석순이라 최다 사용 학생은 별도 계산 (요약 칩 '최고'용). 좌석 없는 퇴원생은 뒤로.
+  const top = rows.reduce((best, r) => r.min > (best ? best.min : 0) ? r : best, null);
+  rows.sort((a, b) => (parseInt(a.seat) || 999) - (parseInt(b.seat) || 999));
 
   const active = rows.filter(r => r.min > 0);
   const avgMin = active.length ? Math.round(active.reduce((a, r) => a + r.min, 0) / active.length) : 0;
@@ -3106,7 +3110,7 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
     <div class="summary-chip">📅 <span>${label}</span> (${dayCount}일)</div>
     <div class="summary-chip">이용 학생 <span>${active.length}명</span></div>
     <div class="summary-chip">평균 <span>${_fmtRangeMin(avgMin)}</span></div>
-    <div class="summary-chip">최고 <span>${_fmtRangeMin(rows[0]?.min || 0)}</span> (${rows[0]?.min > 0 ? rows[0].name : '-'})</div>
+    <div class="summary-chip">최고 <span>${_fmtRangeMin(top ? top.min : 0)}</span> (${top && top.min > 0 ? top.name : '-'})</div>
   `;
 
   let html = `<thead><tr>
