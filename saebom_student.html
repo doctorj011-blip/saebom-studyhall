@@ -1154,6 +1154,7 @@ body{
     <div id="tab-daily" style="display:none">
       <div class="section-label">TODAY · 오늘 일정</div>
       <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
+      <div id="merit-card"></div>
       <div id="penalty-card"></div>
       <div class="day-tabs" id="student-day-tabs"></div>
       <div id="daily-periods"></div>
@@ -1679,6 +1680,54 @@ function renderPenaltyCard() {
     </div>`;
 }
 
+// ── 내 상점 조회/표시 (오늘 일정 탭 상단, 벌점 카드 위) ──
+// merits/{autoId} 문서 — 관리자가 수동 부여. { name, seatKey, date, day, points, reason, canceled }
+let _meritDocs = null;
+async function loadMyMerits() {
+  if (!window._firebaseReady || !currentStudent) return;
+  try {
+    const { collection, query, where, getDocs } = window._fs;
+    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
+    const snap = await getDocs(query(collection(window._db, 'merits'), where('seatKey','==',seatKey)));
+    const docs = [];
+    snap.forEach(d => docs.push(d.data()));
+    docs.sort((a,b) => a.date < b.date ? 1 : -1);
+    _meritDocs = docs;
+    renderMeritCard();
+  } catch(e) { console.warn('상점 조회 실패:', e); }
+}
+
+function renderMeritCard() {
+  const el = document.getElementById('merit-card');
+  if (!el || !_meritDocs) return;
+  const t = new Date();
+  const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+  let total = 0, monthTotal = 0;
+  const rows = [];
+  _meritDocs.forEach(doc => {
+    if (doc.canceled) return; // 관리자가 취소한 상점은 표시하지 않음
+    const pts = Number(doc.points) || 0;
+    if (pts <= 0) return;
+    total += pts;
+    if (String(doc.date).slice(0,7) === curYm) monthTotal += pts;
+    rows.push({ date: doc.date, day: doc.day, pts: pts, reason: doc.reason });
+  });
+  if (!rows.length) { el.innerHTML = ''; return; }
+  const list = rows.slice(0, 10).map(r => `
+    <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(5,150,105,0.14)">
+      <span>${String(r.date).slice(5).replace('-','/')} ${r.day ? `(${r.day})` : ''} ${r.reason ? String(r.reason).replace(/</g,'&lt;') : '상점'}</span>
+      <span style="font-weight:700;color:#059669;flex:0 0 auto">+${r.pts}점</span>
+    </div>`).join('');
+  el.innerHTML = `
+    <div style="background:#ECFDF5;border:1.5px solid #A7F3D0;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:13px;font-weight:700;color:#059669">🎁 상점</span>
+        <span style="font-size:12px;font-weight:700;color:#059669">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+      </div>
+      <div style="margin-top:4px">${list}</div>
+    </div>`;
+}
+
 // ── 로그인 ──
 let pinBuffer = '';
 
@@ -2113,6 +2162,7 @@ function enterApp() {
     loadActualStudyData();
     loadEventsList();
     loadMyPenalties();
+    loadMyMerits();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
@@ -2123,6 +2173,7 @@ function enterApp() {
       loadActualStudyData();
       loadEventsList();
       loadMyPenalties();
+      loadMyMerits();
     }, { once: true });
   }
 }
