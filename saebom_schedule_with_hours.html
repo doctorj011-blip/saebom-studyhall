@@ -2937,7 +2937,7 @@ function buildHoursTable(){
   });
 
   let html=`<thead><tr>
-    <th>이름</th><th>좌석</th>
+    <th>좌석</th><th>이름</th>
     <th>벌점현황</th>
     <th>1일 사용시간</th>
     <th>${_ymLabel(currentMonth)} 사용시간</th>
@@ -2955,8 +2955,8 @@ function buildHoursTable(){
       : '—';
     const todayColor = todayMin >= 180 ? '#27500A' : todayMin >= 60 ? '#4338A8' : '#9CA3AF';
     html+=`<tr>
-      <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(s.name).replace(/'/g,"\\'")}')">${s.name}</span></td>
       <td><span class="seat-badge">${s.seat}</span></td>
+      <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(s.name).replace(/'/g,"\\'")}')">${s.name}</span></td>
       <td data-penalty-name="${String(s.name).replace(/"/g,'&quot;')}" data-penalty-seat="${String(s.seat).replace(/"/g,'&quot;')}">${_penaltyBadge(0, s.seat)}</td>
       <td style="font-weight:600;color:${todayColor}">${todayStr}</td>
       <td>${getHoursChip(h)}</td>
@@ -3114,7 +3114,7 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
   `;
 
   let html = `<thead><tr>
-    <th>이름</th><th>좌석</th>
+    <th>좌석</th><th>이름</th>
     <th>벌점현황</th>
     <th>총 사용시간</th>
     <th>출석일수</th>
@@ -3124,8 +3124,8 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
     const dayAvg = r.days > 0 ? Math.round(r.min / r.days) : 0;
     const totalH = Math.round(r.min / 60 * 10) / 10;
     html += `<tr>
-      <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(r.name).replace(/'/g,"\\'")}')">${r.name}</span>${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
       <td><span class="seat-badge">${r.seat}</span></td>
+      <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(r.name).replace(/'/g,"\\'")}')">${r.name}</span>${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
       <td data-penalty-name="${String(r.name).replace(/"/g,'&quot;')}" data-penalty-seat="${String(r.seat).replace(/"/g,'&quot;')}">${_penaltyBadge(0, r.seat)}</td>
       <td style="font-weight:600">${_fmtRangeMin(r.min)}${r.min > 0 ? ` <span style="font-size:10px;color:var(--color-text-tertiary)">(${totalH}h)</span>` : ''}</td>
       <td>${r.days > 0 ? r.days + '일' : '—'}</td>
