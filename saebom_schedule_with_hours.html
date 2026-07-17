@@ -1858,6 +1858,9 @@ function getTodayDayName() {
   return DAYS[Math.min(Math.max(d.getDay() - 1, 0), 5)];
 }
 // 스터디룸 대기 현황: { 1: ['이름1','이름2'], 2: [], 3: [] }
+// 룸당 수용 인원. module 스크립트(초과 경고)에서도 쓰므로 window로 노출한다.
+const STUDYROOM_CAPACITY = 3;
+window.STUDYROOM_CAPACITY = STUDYROOM_CAPACITY;
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 let studyRoomWaiting  = { 1: [], 2: [], 3: [] };
 
@@ -4733,7 +4736,7 @@ function autoAssignStudyroom(student, curPeriod) {
   }
   if (Object.values(studyRoomStudents).flat().includes(student.name)) return null;
   const locked = window._lockedRoomsForPeriod ? window._lockedRoomsForPeriod(curPeriod) : new Set();
-  const avail = [1, 2, 3].filter(r => !locked.has(r) && studyRoomStudents[r].length < 4);
+  const avail = [1, 2, 3].filter(r => !locked.has(r) && studyRoomStudents[r].length < STUDYROOM_CAPACITY);
   // showStudyroomOverflowAlert는 module 스코프라 window 경유(모듈 미로드 시 토스트 폴백)
   if (!avail.length) {
     if (window.showStudyroomOverflowAlert) window.showStudyroomOverflowAlert(student.name, student.seat);
@@ -11099,7 +11102,7 @@ function renderStudyroomOverflow() {
         <div style="width:36px;height:36px;border-radius:10px;background:#C62828;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:700;color:#fff;flex-shrink:0">${a.name[0]}</div>
         <div>
           <div style="font-size:13px;font-weight:700;color:#C62828">⚠️ 스터디룸 초과 — ${a.name} (${a.seat})</div>
-          <div style="font-size:12px;color:#888;margin-top:2px">${timeStr} 입실 · 스터디룸 배정 불가 (12명 초과)</div>
+          <div style="font-size:12px;color:#888;margin-top:2px">${timeStr} 입실 · 스터디룸 배정 불가 (${3 * window.STUDYROOM_CAPACITY}명 초과)</div>
           <div style="font-size:12px;color:#C62828;margin-top:4px;font-weight:600">즉시 조치가 필요합니다</div>
         </div>
       </div>

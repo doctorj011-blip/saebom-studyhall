@@ -3788,6 +3788,9 @@ async function reserveSeat(seatNum, oldSeat, effDate) {
 
 
 // ── 스터디룸 신청 ──
+// 룸당 수용 인원. 관리앱(saebom_schedule_with_hours.html)의 STUDYROOM_CAPACITY와 반드시 같아야
+// 학생 신청분과 입실 자동배정분의 정원 판정이 어긋나지 않는다.
+const STUDYROOM_CAPACITY = 3;
 let studyroomUnsubscribe = null;
 
 // 오늘 운영 교시 목록 (일요일=null). 일반 신청 버튼과 단독 사용 모달이 공유한다.
@@ -3834,31 +3837,50 @@ function _lockedRoomsFor(reqs, periodNum) {
   return s;
 }
 
+// 해당 교시의 신청 현황을 읽어 배정 가능 상태를 계산한다.
+//   allLocked  : 세 룸 모두 1인 단독 사용 중 → 신청 불가
+//   openCounts : 단독 사용 룸과 정원(STUDYROOM_CAPACITY)이 찬 룸을 뺀, 배정 가능 룸별 신청자 명단
+// 신청 시작(applyStudyroom)과 배정 직전(submitStudyroomReq) 양쪽에서 쓴다.
+async function _studyroomAvailability(db, periodNum) {
+  const snap = await window._fsGetDocs(window._fsCollection(db, 'studyroom_requests'));
+  const today = studyroomDayKey();
+  const periodReqs = [];
+  snap.forEach(d => {
+    const r = d.data();
+    if (r.date === today && r.period === periodNum && r.status !== 'rejected') periodReqs.push(r);
+  });
+  // 단독 사용 승인된 룸은 배정 대상에서 제외
+  const locked = _lockedRoomsFor(periodReqs, periodNum);
+  const availRooms = [1,2,3].filter(r => !locked.has(r));
+  const roomCounts = {};
+  availRooms.forEach(r => roomCounts[r] = []);
+  periodReqs.forEach(r => { if (roomCounts[r.room]) roomCounts[r.room].push(r.name); });
+  const openCounts = {};
+  availRooms.forEach(r => { if (roomCounts[r].length < STUDYROOM_CAPACITY) openCounts[r] = roomCounts[r]; });
+  return {
+    periodReqs,
+    allLocked: !availRooms.length,
+    openCounts,
+    totalCount: availRooms.reduce((a,r) => a + roomCounts[r].length, 0)
+  };
+}
+
 async function applyStudyroom(periodNum) {
   const db = window._db;
   if (!db || !currentStudent) return;
   try {
-    const snap = await window._fsGetDocs(window._fsCollection(db, 'studyroom_requests'));
-    const today = studyroomDayKey();
-    const periodReqs = [];
-    snap.forEach(d => {
-      const r = d.data();
-      if (r.date === today && r.period === periodNum && r.status !== 'rejected') periodReqs.push(r);
-    });
-    if (periodReqs.some(r => r.name === currentStudent.name)) { alert(`이미 ${periodNum}교시 스터디룸을 신청하셨습니다.`); return; }
-    // 단독 사용 승인된 룸은 배정 대상에서 제외
-    const locked = _lockedRoomsFor(periodReqs, periodNum);
-    const availRooms = [1,2,3].filter(r => !locked.has(r));
-    if (!availRooms.length) { alert(`${periodNum}교시는 모든 스터디룸이 1인 단독 사용 중이라 신청할 수 없습니다.`); return; }
-    const roomCounts = {};
-    availRooms.forEach(r => roomCounts[r] = []);
-    periodReqs.forEach(r => { if (roomCounts[r.room]) roomCounts[r.room].push(r.name); });
-    const totalCount = availRooms.reduce((a,r) => a + roomCounts[r].length, 0);
-    showStudyroomModal(periodNum, totalCount, roomCounts);
+    const st = await _studyroomAvailability(db, periodNum);
+    if (st.periodReqs.some(r => r.name === currentStudent.name)) { alert(`이미 ${periodNum}교시 스터디룸을 신청하셨습니다.`); return; }
+    if (st.allLocked) { alert(`${periodNum}교시는 모든 스터디룸이 1인 단독 사용 중이라 신청할 수 없습니다.`); return; }
+    if (!Object.keys(st.openCounts).length) {
+      alert(`${periodNum}교시는 스터디룸 정원이 모두 찼습니다. (룸당 ${STUDYROOM_CAPACITY}명)\n다른 교시를 선택해주세요.`);
+      return;
+    }
+    showStudyroomModal(periodNum, st.totalCount);
   } catch(e) { alert('오류: ' + e.message); }
 }
 
-function showStudyroomModal(periodNum, totalCount, roomCounts) {
+function showStudyroomModal(periodNum, totalCount) {
   document.getElementById('studyroom-apply-modal')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'studyroom-apply-modal';
@@ -3873,7 +3895,7 @@ function showStudyroomModal(periodNum, totalCount, roomCounts) {
     <div style="display:flex;gap:8px;margin-top:12px">
       <button onclick="document.getElementById('studyroom-apply-modal').remove()"
         style="flex:1;padding:10px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">취소</button>
-      <button onclick="submitStudyroomReq(${periodNum},${JSON.stringify(roomCounts).replace(/"/g,'&quot;')})"
+      <button onclick="submitStudyroomReq(${periodNum})"
         style="flex:2;padding:10px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">신청하기</button>
     </div>
   </div>`;
@@ -3882,18 +3904,24 @@ function showStudyroomModal(periodNum, totalCount, roomCounts) {
   setTimeout(() => document.getElementById('studyroom-reason-input')?.focus(), 100);
 }
 
-async function submitStudyroomReq(periodNum, roomCounts) {
+async function submitStudyroomReq(periodNum) {
   const db = window._db;
   const reason = document.getElementById('studyroom-reason-input')?.value.trim();
   if (!reason) { alert('사용 사유를 입력해주세요'); return; }
   document.getElementById('studyroom-apply-modal')?.remove();
-  // roomCounts에는 단독 사용(lock) 룸이 이미 빠져 있음 — 남은 룸 중 인원이 적은 곳으로
-  const rooms = Object.keys(roomCounts).map(Number).sort((a,b) => a-b);
-  let assignRoom = rooms[0], minCount = (roomCounts[assignRoom]||[]).length;
-  rooms.forEach(r => {
-    if ((roomCounts[r]||[]).length < minCount) { minCount = (roomCounts[r]||[]).length; assignRoom = r; }
-  });
   try {
+    // 사유를 적는 동안 다른 학생이 마지막 자리를 채웠을 수 있어 배정 직전에 다시 확인한다
+    const st = await _studyroomAvailability(db, periodNum);
+    // openCounts에는 단독 사용(lock) 룸과 정원이 찬 룸이 빠져 있음 — 남은 룸 중 인원이 적은 곳으로
+    const rooms = Object.keys(st.openCounts).map(Number).sort((a,b) => a-b);
+    if (!rooms.length) {
+      alert(`${periodNum}교시는 방금 스터디룸 정원이 모두 찼습니다. (룸당 ${STUDYROOM_CAPACITY}명)\n다른 교시를 선택해주세요.`);
+      return;
+    }
+    let assignRoom = rooms[0], minCount = st.openCounts[assignRoom].length;
+    rooms.forEach(r => {
+      if (st.openCounts[r].length < minCount) { minCount = st.openCounts[r].length; assignRoom = r; }
+    });
     await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
       name: currentStudent.name, seat: currentStudent.seat,
       period: periodNum, room: assignRoom, reason,
