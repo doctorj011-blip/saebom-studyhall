@@ -13,6 +13,7 @@ rules_version = '2';
 //   - 2026-07-14  통합본을 파일로 이관 + 냉방 컬렉션 3개 추가(ac_config·ac_commands·ac_state)
 //   - 2026-07-16  pendingSeats 추가 — 자리변경 예약(학생앱 미래 적용일)이 캐치올에 막혀
 //                 permission-denied로 조용히 죽어 있던 것을 수정
+//   - 2026-07-17  handover_notes 추가 — 조교 서면 인수인계 메모(관리자앱 📝 인수인계 탭)
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -91,6 +92,20 @@ service cloud.firestore {
     match /notices/{id} {
       allow read: if true;
       allow write: if id == 'list';
+    }
+
+    // 조교 인수인계 메모 (문서 ID = {운영일}_{근무조}). 삭제는 막는다 —
+    // 인수인계 기록이 사라지면 "안 남겼다/못 봤다"를 확인할 방법이 없어진다.
+    match /handover_notes/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['date', 'shift', 'author', 'body'])
+        && request.resource.data.date is string
+        && request.resource.data.shift in ['morning', 'afternoon', 'night']
+        && request.resource.data.author is string
+        && request.resource.data.author.size() <= 20
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 3000;
+      allow delete: if false;
     }
 
     // 설정: 앱이 실제로 쓰는 문서만 허용

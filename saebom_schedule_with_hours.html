@@ -735,6 +735,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn" onclick="showSection('hours',this)">사용시간</button>
     <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
+    <button class="tab-btn" onclick="showSection('handover',this)">📝 인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
     <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
@@ -1178,6 +1179,47 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- 조교 인수인계 (서면) -->
+<div id="sec-handover" class="section">
+  <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+
+    <!-- 앞 조 인수인계 (미확인이면 상단 고정) -->
+    <div id="handover-inbox"></div>
+
+    <!-- 인수인계 남기기 -->
+    <div class="card">
+      <div style="font-size:15px;font-weight:700;color:#1E1B4B;margin-bottom:4px">📝 인수인계 남기기</div>
+      <div style="font-size:11px;color:#888;margin-bottom:12px">근무 끝나기 전에 남겨 주세요. 다음 조교는 이 메모로만 상황을 압니다.</div>
+
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="ho-shift-sel" style="flex:1;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#fff">
+          <option value="morning">🌅 오전조 (등원~점심)</option>
+          <option value="afternoon">☀️ 오후조 (점심~저녁)</option>
+          <option value="night">🌙 야간조 (저녁~마감)</option>
+        </select>
+        <input id="ho-author-inp" type="text" autocomplete="off" placeholder="이름" style="width:110px;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;box-sizing:border-box;background:#fff">
+      </div>
+      <div id="ho-date-note" style="font-size:11px;color:#6C5DD3;margin-bottom:8px"></div>
+
+      <textarea id="ho-body-inp" autocomplete="off" rows="7" placeholder="예)&#10;· 지도한 학생: 12번 김OO 계속 졸아서 3회 깨움&#10;· 안 온 학생: 27번 이OO (연락 없음)&#10;· 퇴실 안 찍고 간 학생: 8번 박OO&#10;· 시설: 3번 자리 스탠드 깜빡임&#10;· 원장님께 보고함: 없음" style="width:100%;padding:9px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;line-height:1.6;margin-bottom:8px"></textarea>
+
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <button onclick="hoInsertTemplate()" style="padding:5px 11px;background:#EEF2FF;border:1px solid #8F82E4;border-radius:8px;font-size:11px;color:#4A3FA8;font-weight:600;cursor:pointer">＋ 항목 양식 넣기</button>
+        <button onclick="hoInsertAbsent()" style="padding:5px 11px;background:#EEF2FF;border:1px solid #8F82E4;border-radius:8px;font-size:11px;color:#4A3FA8;font-weight:600;cursor:pointer">＋ 지금 미입실 학생 넣기</button>
+      </div>
+
+      <button id="ho-submit-btn" onclick="submitHandover()" style="width:100%;padding:10px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">인수인계 남기기</button>
+    </div>
+
+    <!-- 최근 인수인계 -->
+    <div class="card">
+      <div style="font-size:13px;font-weight:700;color:#1E1B4B;margin-bottom:12px">📋 최근 인수인계 (7일)</div>
+      <div id="ho-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
   </div>
 </div>
 
@@ -2027,6 +2069,7 @@ window.showSection = function(id,btn){
   document.getElementById('sec-'+id).classList.add('active');
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); }
+  if (id === 'handover') { hoResetForm(); loadHandover(); }
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
   if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
@@ -6447,6 +6490,230 @@ async function uploadNoticeImage(dataURL, noticeId, idx) {
   return await getDownloadURL(storageRef);
 }
 
+// ══ 조교 인수인계 (서면) ══════════════════════════════════════════════
+// 조교는 점심·저녁에 교대하며 서로 만나지 못한다. 인수인계는 오직 이 메모로만
+// 이뤄지므로, 다음 조가 '확인'을 누르기 전까지 메모를 화면에서 내리지 않는다.
+// 문서 ID = {운영일}_{근무조}. 운영일 경계는 앱 전반과 동일한 새벽 3시
+// (studyroomDayKey) 기준 — 11교시(자정~1시) 근무가 다음 날로 넘어가지 않게.
+const HO_SHIFTS = {
+  morning:   { label: '오전조', icon: '🌅', span: '등원~점심', order: 0 },
+  afternoon: { label: '오후조', icon: '☀️', span: '점심~저녁', order: 1 },
+  night:     { label: '야간조', icon: '🌙', span: '저녁~마감', order: 2 }
+};
+const HO_AUTHOR_KEY = 'saebom_handover_author';
+
+// 지금이 어느 근무조인지 — 교대 시점은 점심(12:30)과 저녁(17:00)
+function _hoShiftNow() {
+  const opDate = studyroomDayKey();                 // 새벽 3시 경계 운영일
+  const n = new Date();
+  const mins = n.getHours() * 60 + n.getMinutes();
+  if (n.getHours() < 3) return { date: opDate, shift: 'night' };  // 자정~새벽 = 전날 야간조
+  if (mins < 12 * 60 + 30) return { date: opDate, shift: 'morning' };
+  if (mins < 17 * 60)      return { date: opDate, shift: 'afternoon' };
+  return { date: opDate, shift: 'night' };
+}
+// 바로 앞 근무조 (야간조의 앞은 '어제 오후조'가 아니라 같은 날 오후조)
+function _hoPrevShift(date, shift) {
+  if (shift === 'afternoon') return { date, shift: 'morning' };
+  if (shift === 'night')     return { date, shift: 'afternoon' };
+  const d = new Date(date + 'T12:00:00');           // 오전조의 앞 = 어제 야간조
+  d.setDate(d.getDate() - 1);
+  return { date: sessIsoDate(d.getTime()), shift: 'night' };
+}
+const _hoId = (date, shift) => `${date}_${shift}`;
+const _hoEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+function _hoWhen(ms) {
+  if (!ms) return '';
+  const d = new Date(ms);
+  return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+window.hoResetForm = function () {
+  const cur = _hoShiftNow();
+  const sel = document.getElementById('ho-shift-sel');
+  if (sel) sel.value = cur.shift;
+  const au = document.getElementById('ho-author-inp');
+  if (au && !au.value) { try { au.value = localStorage.getItem(HO_AUTHOR_KEY) || ''; } catch (e) {} }
+  const note = document.getElementById('ho-date-note');
+  if (note) note.textContent = `${cur.date} · ${HO_SHIFTS[cur.shift].icon} ${HO_SHIFTS[cur.shift].label} 근무 기준으로 저장됩니다`;
+};
+
+window.hoInsertTemplate = function () {
+  const t = document.getElementById('ho-body-inp');
+  if (!t) return;
+  const tpl = [
+    '· 지도한 학생: ',
+    '· 안 온 학생: ',
+    '· 퇴실 안 찍고 간 학생: ',
+    '· 시설 이상: ',
+    '· 원장님께 보고한 건: ',
+    '· 다음 조가 꼭 챙길 것: '
+  ].join('\n');
+  t.value = t.value.trim() ? t.value.replace(/\s*$/, '\n') + tpl : tpl;
+  t.focus();
+};
+
+// 지금 시각 기준 미입실 학생을 메모에 자동으로 채워 준다 (조교가 일일이 안 적게)
+window.hoInsertAbsent = function () {
+  const t = document.getElementById('ho-body-inp');
+  if (!t) return;
+  const day = (typeof getTodayDayName === 'function') ? getTodayDayName() : null;
+  const names = [];
+  try {
+    (window.STUDENTS || []).forEach(s => {
+      if (window.isTestStudent && window.isTestStudent(s.name)) return;
+      if ((window.PRESENT || []).includes(s.name)) return;
+      const sched = day && s.schedule ? (s.schedule[day] || '-') : '-';
+      if (sched === '-' || !sched) return;
+      names.push(`${s.seat} ${s.name}`);
+    });
+  } catch (e) { console.error('미입실 수집 실패:', e); }
+  if (!names.length) { showAdminToast('현재 미입실 학생이 없습니다'); return; }
+  const line = '· 현재 미입실: ' + names.join(', ');
+  t.value = t.value.trim() ? t.value.replace(/\s*$/, '\n') + line : line;
+  t.focus();
+};
+
+window.submitHandover = async function () {
+  const shift = document.getElementById('ho-shift-sel').value;
+  const author = document.getElementById('ho-author-inp').value.trim();
+  const body = document.getElementById('ho-body-inp').value.trim();
+  if (!author) { showAdminToast('⚠️ 이름을 입력하세요'); return; }
+  if (!body) { showAdminToast('⚠️ 인수인계 내용을 입력하세요'); return; }
+  if (!window._adminDb) { showAdminToast('⚠️ Firebase 연결 필요'); return; }
+
+  const date = _hoShiftNow().date;
+  const btn = document.getElementById('ho-submit-btn');
+  btn.disabled = true; btn.textContent = '저장 중...';
+  try {
+    const { doc, getDoc, setDoc } = window._fs;
+    const id = _hoId(date, shift);
+    const ref = doc(window._adminDb, 'handover_notes', id);
+    // 같은 조가 이미 남겼으면 덮어쓰기 전에 확인 (교대조 1건 원칙)
+    const prev = await getDoc(ref);
+    if (prev.exists() && !confirm(`${date} ${HO_SHIFTS[shift].label} 인수인계가 이미 있습니다.\n덮어쓸까요?`)) {
+      btn.disabled = false; btn.textContent = '인수인계 남기기';
+      return;
+    }
+    await setDoc(ref, {
+      date, shift, shiftLabel: HO_SHIFTS[shift].label,
+      author, body,
+      createdAt: Date.now(),
+      ackBy: null, ackAt: null            // 다음 조가 확인하면 채워진다
+    });
+    try { localStorage.setItem(HO_AUTHOR_KEY, author); } catch (e) {}
+    document.getElementById('ho-body-inp').value = '';
+    showAdminToast('✅ 인수인계를 남겼습니다');
+    loadHandover();
+  } catch (e) {
+    console.error('인수인계 저장 실패:', e);
+    showAdminToast('❌ 저장 실패 — 다시 시도하세요');
+  } finally {
+    btn.disabled = false; btn.textContent = '인수인계 남기기';
+  }
+};
+
+window.ackHandover = async function (id) {
+  const who = (document.getElementById('ho-author-inp').value || '').trim()
+    || (() => { try { return localStorage.getItem(HO_AUTHOR_KEY) || ''; } catch (e) { return ''; } })();
+  if (!who) { showAdminToast('⚠️ 먼저 아래에 이름을 입력하세요'); return; }
+  try {
+    const { doc, updateDoc } = window._fs;
+    await updateDoc(doc(window._adminDb, 'handover_notes', id), { ackBy: who, ackAt: Date.now() });
+    showAdminToast('✅ 확인했습니다');
+    loadHandover();
+  } catch (e) {
+    console.error('확인 처리 실패:', e);
+    showAdminToast('❌ 확인 처리 실패');
+  }
+};
+
+// 최근 7일 인수인계 로드 → 앞 조 미확인 카드 + 목록 + 탭 배지
+// ★ waitDb() 필수: 탭 복원은 로드 800ms 뒤에 일어나는데 그때 Firestore(_adminDb)가
+//   아직 안 붙어 있을 수 있다. 여기서 그냥 return 하면 인수인계 탭이 조용히 빈 화면으로
+//   남아 조교가 앞 조 메모를 못 보고 지나간다 — 이 기능이 존재하는 이유가 무너진다.
+async function loadHandover() {
+  const db = await window.waitDb();
+  if (!db) { console.warn('[인수인계] Firestore 연결 실패 — 로드 보류'); return; }
+  try {
+    const { collection, query, where, getDocs } = window._fs;
+    const since = sessIsoDate(Date.now() - 7 * 86400000);
+    const snap = await getDocs(query(collection(db, 'handover_notes'), where('date', '>=', since)));
+    const items = [];
+    snap.forEach(d => items.push(Object.assign({ id: d.id }, d.data())));
+    items.sort((a, b) => (b.date === a.date)
+      ? (HO_SHIFTS[b.shift]?.order ?? 0) - (HO_SHIFTS[a.shift]?.order ?? 0)
+      : (a.date < b.date ? 1 : -1));
+    window._handoverItems = items;
+
+    // ── 앞 조 인수인계 (미확인이면 상단에 크게) ──
+    const cur = _hoShiftNow();
+    const prev = _hoPrevShift(cur.date, cur.shift);
+    const prevNote = items.find(n => n.id === _hoId(prev.date, prev.shift));
+    const inbox = document.getElementById('handover-inbox');
+    if (inbox) {
+      if (prevNote && !prevNote.ackBy) {
+        const m = HO_SHIFTS[prevNote.shift];
+        inbox.innerHTML = `
+          <div class="card" style="border:2px solid #E53935;background:#FFF6F6">
+            <div style="font-size:14px;font-weight:800;color:#C62828;margin-bottom:2px">🔔 앞 조 인수인계 — 아직 확인 안 함</div>
+            <div style="font-size:11px;color:#999;margin-bottom:10px">${prevNote.date} · ${m.icon} ${m.label} · ${_hoEsc(prevNote.author)} · ${_hoWhen(prevNote.createdAt)} 작성</div>
+            <div style="font-size:13px;color:#222;line-height:1.75;white-space:pre-wrap;word-break:break-word;background:#fff;border:1px solid #F0C4C4;border-radius:8px;padding:11px 12px">${_hoEsc(prevNote.body)}</div>
+            <button onclick="ackHandover('${prevNote.id}')" style="width:100%;margin-top:10px;padding:11px;background:#E53935;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">읽었습니다 · 확인</button>
+          </div>`;
+      } else if (prevNote) {
+        const m = HO_SHIFTS[prevNote.shift];
+        inbox.innerHTML = `
+          <div class="card" style="border:1px solid #B4D9C0;background:#F4FBF6">
+            <div style="font-size:12px;font-weight:700;color:#2F7A4A;margin-bottom:6px">✅ 앞 조 인수인계 확인함 <span style="font-weight:400;color:#8aa">(${_hoEsc(prevNote.ackBy)} · ${_hoWhen(prevNote.ackAt)})</span></div>
+            <div style="font-size:11px;color:#999;margin-bottom:8px">${prevNote.date} · ${m.icon} ${m.label} · ${_hoEsc(prevNote.author)}</div>
+            <div style="font-size:12.5px;color:#333;line-height:1.7;white-space:pre-wrap;word-break:break-word">${_hoEsc(prevNote.body)}</div>
+          </div>`;
+      } else {
+        inbox.innerHTML = `
+          <div class="card" style="background:#FAFAFA">
+            <div style="font-size:12px;color:#999;text-align:center;padding:6px">
+              앞 조(${HO_SHIFTS[prev.shift].label}, ${prev.date}) 인수인계가 아직 없습니다.
+            </div>
+          </div>`;
+      }
+    }
+
+    // ── 최근 목록 ──
+    const list = document.getElementById('ho-list');
+    if (list) {
+      list.innerHTML = items.length ? items.map(n => {
+        const m = HO_SHIFTS[n.shift] || { icon: '', label: n.shiftLabel || n.shift };
+        const ack = n.ackBy
+          ? `<span style="font-size:10px;color:#2F7A4A;font-weight:700">✅ ${_hoEsc(n.ackBy)} 확인</span>`
+          : `<span style="font-size:10px;color:#E53935;font-weight:700">● 미확인</span>`;
+        return `
+          <div style="background:#F8FAFF;border:1px solid #C7BFF0;border-radius:10px;padding:10px 12px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:5px">
+              <div style="font-size:12px;font-weight:700;color:#1E1B4B">${n.date} · ${m.icon} ${m.label} <span style="font-weight:400;color:#888">— ${_hoEsc(n.author)}</span></div>
+              ${ack}
+            </div>
+            <div style="font-size:12px;color:#333;line-height:1.7;white-space:pre-wrap;word-break:break-word">${_hoEsc(n.body)}</div>
+          </div>`;
+      }).join('') : '<div style="font-size:12px;color:#aaa;text-align:center;padding:16px">최근 7일 인수인계 없음</div>';
+    }
+    _hoUpdateBadge(prevNote);
+  } catch (e) { console.error('인수인계 로드 실패:', e); }
+}
+window.loadHandover = loadHandover;
+
+// 탭 배지 — '내가 지금 읽어야 할' 앞 조 메모가 미확인일 때만 켠다.
+// (7일치 미확인을 전부 세면, 아무도 확인하지 않고 지나간 옛 메모 때문에
+//  배지가 영영 빨간 채로 남아 경고로서 의미를 잃는다.)
+function _hoUpdateBadge(prevNote) {
+  const badge = document.getElementById('handover-badge');
+  if (!badge) return;
+  const on = !!(prevNote && !prevNote.ackBy);
+  badge.textContent = '!';
+  badge.style.display = on ? 'inline-block' : 'none';
+}
+
 // ── 공지사항 관리 함수 ──
 async function loadNoticesAdmin() {
   if (!window._adminDb) return;
@@ -7909,6 +8176,8 @@ loadTodayCheckinFromFirebase();
 setTimeout(() => { try { window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e)); } catch(e) {} }, 20000);
 // 예약 퇴원(withdrawAt) 자동 처리 — 키오스크가 2시에 꺼져 있었어도 로드 시 소급 처리된다.
 setTimeout(() => { try { window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e)); } catch(e) {} }, 25000);
+// 인수인계 미확인 배지 — 조교가 탭을 열지 않아도 앞 조 메모가 남아 있음을 알아채게 한다.
+setTimeout(() => { try { window.loadHandover && window.loadHandover(); } catch(e) {} }, 3000);
 
 // ── 입퇴실 실시간 감시 (다중 기기 동기화) — 세션 스냅샷 선언적 재구성 ──
 // 이벤트 증분 패치(구 checkin_logs 방식)는 폐기: 스냅샷이 올 때마다 캐시를 통째로
