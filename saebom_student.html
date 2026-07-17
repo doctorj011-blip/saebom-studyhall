@@ -1154,6 +1154,7 @@ body{
     <div id="tab-daily" style="display:none">
       <div class="section-label">TODAY · 오늘 일정</div>
       <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
+      <div id="weekly-goal-card"></div>
       <div id="merit-card"></div>
       <div id="penalty-card"></div>
       <div class="day-tabs" id="student-day-tabs"></div>
@@ -1680,6 +1681,38 @@ function renderPenaltyCard() {
     </div>`;
 }
 
+// ── 주간 목표순공 설정 카드 (학생이 직접 목표 시간 설정) ──
+// 목표 이상 순공하면 상점 3점 자동 부여(미달 벌점 없음). students/{좌석}.weeklyGoalH 에 merge 저장.
+function renderWeeklyGoalCard() {
+  const el = document.getElementById('weekly-goal-card');
+  if (!el || !currentStudent) return;
+  const g = Number(currentStudent.weeklyGoalH) || 0;
+  el.innerHTML = `
+    <div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:700;color:#4338A8">🎯 주간 목표순공</div>
+        <div style="font-size:11px;color:#6366F1;margin-top:2px">${g ? `주 ${g}시간 · 달성하면 상점 3점` : '목표를 정하면 달성 시 상점 3점'}</div>
+      </div>
+      <button onclick="setStudentWeeklyGoal()" style="flex:0 0 auto;padding:7px 14px;background:#6366F1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${g ? `${g}h 변경` : '목표 설정'}</button>
+    </div>`;
+}
+
+window.setStudentWeeklyGoal = async function() {
+  if (!currentStudent) return;
+  const cur = Number(currentStudent.weeklyGoalH) || 0;
+  const raw = prompt('주간 목표순공(시간)을 입력하세요.\n\n한 주(월~토) 순공 시간이 목표 이상이면\n상점 3점이 자동 부여됩니다. (미달 시 벌점 없음)', cur ? String(cur) : '');
+  if (raw === null) return; // 취소
+  const num = Math.max(0, Math.min(80, Math.round(Number(raw) || 0)));
+  currentStudent.weeklyGoalH = num;
+  try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+  renderWeeklyGoalCard();
+  try {
+    const seatKey = String(currentStudent.seat || '').replace('번', '');
+    await window._fsSetDoc(window._fsDoc(window._db, 'students', seatKey), { weeklyGoalH: num }, { merge: true });
+    if (window.showToast) showToast(num ? `✅ 주간 목표 ${num}시간으로 설정됐습니다` : '주간 목표를 해제했습니다');
+  } catch(e) { console.error('주간 목표 저장 실패:', e); alert('저장 실패: ' + (e.message || e)); }
+};
+
 // ── 내 상점 조회/표시 (오늘 일정 탭 상단, 벌점 카드 위) ──
 // merits/{autoId} 문서 — 관리자가 수동 부여. { name, seatKey, date, day, points, reason, canceled }
 let _meritDocs = null;
@@ -1782,7 +1815,8 @@ async function tryLogin() {
             phone: v.phone || '', parent: v.parent || '',
             loginPin: v.loginPin || '',
             schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
-            hours: v.hours || {}
+            hours: v.hours || {},
+            weeklyGoalH: Number(v.weeklyGoalH) || 0
           });
         }
       });
@@ -2140,6 +2174,7 @@ function enterApp() {
   document.getElementById('home-name').textContent = currentStudent.name;
   document.getElementById('home-seat').textContent = currentStudent.seat + ' · 새봄 면학관';
   try { document.getElementById('topbar-usersub').textContent = currentStudent.name + ' · ' + currentStudent.seat; } catch(e) {}
+  try { renderWeeklyGoalCard(); } catch(e) {}
 
   // 오늘 요일로 초기화
   const todayIdx = new Date().getDay();

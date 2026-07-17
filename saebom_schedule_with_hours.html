@@ -9820,15 +9820,13 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
   });
 }
 
-// ── 주간 목표순공 자동판정 (달성 상점 1점 / 미달 벌점 1점) ──
+// ── 주간 목표순공 자동판정 (달성 상점 3점, 미달 벌점 없음) ──
 // 매주 지난 주(월~토) 순공(attendance_sessions durationMin 합)을 학생별 목표(weeklyGoalH)와 비교.
 // 유효목표 = 목표시간 − 그 주 '승인변경으로 빠진 교시'의 예정분(이중처벌 방지). 무단결석 교시는 차감 안 함.
-//   실제 ≥ 유효목표(100%) → merits +1(type:'auto')
-//   실제 < 유효목표의 80%  → penalties +1(type:'weekly_short')
-//   80~100% → 없음
+//   실제 ≥ 유효목표(100%) → merits +3(type:'auto') / 미달 시 벌점 없음(긍정 강화만)
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_weekly_goal_done 로 멱등, 취소상태 보존.
 const WEEKLY_START_ISO = '2026-07-22'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
-const WEEKLY_SHORT_POINTS = 1, WEEKLY_MERIT_POINTS = 1;
+const WEEKLY_MERIT_POINTS = 3;
 const _WEEKLY_DN = ['일','월','화','수','목','금','토'];
 function _periodDurMin(pn){ const w = NOSHOW_PERIOD_TIMES[pn]; return w ? (w[1] - w[0]) : 0; }
 function _mondayOf(dateLike){ const x = new Date(dateLike); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return x; } // 월=주 시작
@@ -9919,28 +9917,12 @@ async function _assessWeekGoals(monDate, weekIso){
       const adjGoalMin = Math.max(0, goalH*60 - deductMin);
       if (adjGoalMin <= 0) return; // 그 주 예정이 전부 승인결석 → 대상 아님
       const actualMin = minByName[st.name] || 0;
-      const ratio = actualMin / adjGoalMin;
-      if (ratio >= 1)      writes.push(_writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin));
-      else if (ratio < 0.8) writes.push(_writeWeeklyShort(st, seatKey, weekIso, satIso, dayNames[5], adjGoalMin, actualMin));
+      if (actualMin >= adjGoalMin) writes.push(_writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin)); // 달성만 보상, 미달 벌점 없음
     });
     await Promise.all(writes);
     await _markWeeklyDone(weekIso, { at: Date.now(), students: writes.length });
     console.log(`[주간목표] ${weekIso} 판정 완료 — ${writes.length}명`);
   } catch(e){ console.error('주간 목표 판정 실패:', weekIso, e); } // 완료표시 안 남김 → 다음 시작 때 재시도(멱등)
-}
-
-// 미달 벌점 → penalties/{토요일}_{좌석} periods['wk'] (교시 없는 주간 항목). 취소상태 보존.
-async function _writeWeeklyShort(st, seatKey, weekIso, satIso, dayName, adjGoalMin, actualMin){
-  const ref = doc(db, 'penalties', `${satIso}_${seatKey}`);
-  let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
-  const periods = { ...(prev.periods || {}) };
-  const wasCanceled = !!(periods['wk'] && periods['wk'].canceled);
-  periods['wk'] = {
-    type: 'weekly_short', points: WEEKLY_SHORT_POINTS,
-    reason: `주간 목표순공 미달 (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
-    week: weekIso, canceled: wasCanceled, at: Date.now()
-  };
-  await setDoc(ref, { name: st.name, seat: st.seat, seatKey, date: satIso, day: dayName, periods, updatedAt: serverTimestamp() });
 }
 
 // 달성 상점 → merits/{고정ID} (멱등). 취소상태 보존.
