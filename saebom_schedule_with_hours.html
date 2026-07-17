@@ -969,10 +969,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 <div id="sec-hours" class="section">
   <div class="hours-toolbar">
     <div class="month-tabs" id="month-tabs"></div>
-    <div class="view-toggle">
-      <button class="view-btn active" id="view-table-btn" onclick="setView('table',this)"><i class="ti ti-list" aria-hidden="true"></i> 목록</button>
-      <button class="view-btn" id="view-chart-btn" onclick="setView('chart',this)"><i class="ti ti-chart-bar" aria-hidden="true"></i> 차트</button>
-    </div>
   </div>
 
   <div class="range-bar" id="hours-range-bar">
@@ -996,17 +992,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div style="height:10px"></div>
     <div style="overflow-x:auto">
       <table class="hours-table" id="hours-table"></table>
-    </div>
-  </div>
-
-  <div id="hours-chart-view" style="display:none">
-    <div class="chart-area">
-      <div class="card-title" style="margin-bottom:12px"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 학생별 사용시간 <span id="chart-month-label" style="color:var(--color-text-tertiary)"></span></div>
-      <div class="bar-chart" id="bar-chart"></div>
-    </div>
-    <div class="chart-area">
-      <div class="card-title" style="margin-bottom:12px"><i class="ti ti-trending-up" style="font-size:14px" aria-hidden="true"></i> 월별 추이 (상위 5명)</div>
-      <div id="trend-chart"></div>
     </div>
   </div>
 </div>
@@ -1719,7 +1704,6 @@ window.waitDb = function(timeoutMs = 15000) {
 const MONTHS=_recentMonths(3);
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
 let currentMonth=_curYm();
-let currentView='table';
 
 let ALERTS = []; // 동적으로 계산됨
 const PRESENT=[];
@@ -2818,24 +2802,12 @@ window.saveSettingsFromTab = function() {
   if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
 };
 
-window.setView = function(v,btn){
-  // 차트는 월별 데이터 기준 → 기간 조회 모드였다면 해제하고 월별로 복귀
-  if (v==='chart' && window._hoursRangeMode) window.resetHoursRange();
-  currentView=v;
-  document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('hours-table-view').style.display=v==='table'?'block':'none';
-  document.getElementById('hours-chart-view').style.display=v==='chart'?'block':'none';
-  if(v==='chart') buildHoursChart();
-}
-
 window.selectMonth = function(m,el){
   if (window._hoursRangeMode) window.resetHoursRange(true); // 월 탭 클릭 시 기간 모드 해제
   currentMonth=m;
   document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
   el.classList.add('active');
   buildHoursTable();
-  if(currentView==='chart') buildHoursChart();
 }
 
 function getHoursChip(h){
@@ -2963,7 +2935,6 @@ function buildHoursTable(){
   });
 
   let html=`<thead><tr>
-    <th style="width:32px">순위</th>
     <th>이름</th><th>좌석</th>
     <th>벌점현황</th>
     <th>1일 사용시간</th>
@@ -2974,7 +2945,6 @@ function buildHoursTable(){
 
   sorted.forEach((s,i)=>{
     const h=_readHour(s.hours,currentMonth);
-    const rankClass=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
     const todayMin = todayHoursMap[s.name] || 0;
     const todayH = Math.floor(todayMin / 60);
     const todayM = todayMin % 60;
@@ -2983,7 +2953,6 @@ function buildHoursTable(){
       : '—';
     const todayColor = todayMin >= 180 ? '#27500A' : todayMin >= 60 ? '#4338A8' : '#9CA3AF';
     html+=`<tr>
-      <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
       <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(s.name).replace(/'/g,"\\'")}')">${s.name}</span></td>
       <td><span class="seat-badge">${s.seat}</span></td>
       <td data-penalty-name="${String(s.name).replace(/"/g,'&quot;')}" data-penalty-seat="${String(s.seat).replace(/"/g,'&quot;')}">${_penaltyBadge(0, s.seat)}</td>
@@ -3109,7 +3078,6 @@ window.queryHoursRange = async function(){
     window._hoursRangeMode = true;
     document.getElementById('hours-range-reset').style.display = '';
     document.querySelectorAll('.month-tab').forEach(t => t.classList.remove('active'));
-    if (currentView !== 'table') window.setView('table', document.getElementById('view-table-btn'));
     statusEl.textContent = '';
     renderHoursRangeTable({ totalMin, daysSet, seatOf }, startISO, endISO, dates.length);
   } catch(e) {
@@ -3142,7 +3110,6 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
   `;
 
   let html = `<thead><tr>
-    <th style="width:32px">순위</th>
     <th>이름</th><th>좌석</th>
     <th>벌점현황</th>
     <th>총 사용시간</th>
@@ -3150,11 +3117,9 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
     <th>일평균</th>
   </tr></thead><tbody>`;
   rows.forEach((r, i) => {
-    const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const dayAvg = r.days > 0 ? Math.round(r.min / r.days) : 0;
     const totalH = Math.round(r.min / 60 * 10) / 10;
     html += `<tr>
-      <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
       <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(r.name).replace(/'/g,"\\'")}')">${r.name}</span>${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
       <td><span class="seat-badge">${r.seat}</span></td>
       <td data-penalty-name="${String(r.name).replace(/"/g,'&quot;')}" data-penalty-seat="${String(r.seat).replace(/"/g,'&quot;')}">${_penaltyBadge(0, r.seat)}</td>
@@ -3450,50 +3415,6 @@ window.togglePenaltyCancel = async function(docId, pn) {
     alert('처리 실패: ' + (e.message || e));
   }
 };
-
-function buildHoursChart(){
-  const sorted=STUDENTS.filter(s=>!window.isTestStudent(s.name) && !window.isAdminSeat(s.seat)).sort((a,b)=>_readHour(b.hours,currentMonth)-_readHour(a.hours,currentMonth));
-  const maxH=Math.max(...sorted.map(s=>_readHour(s.hours,currentMonth)), 1);
-  const chartH=120;
-  document.getElementById('chart-month-label').textContent=`— ${_ymLabel(currentMonth)}`;
-
-  document.getElementById('bar-chart').innerHTML=sorted.map(s=>{
-    const h=_readHour(s.hours,currentMonth);
-    const barH=Math.round(h/maxH*chartH);
-    const color=h>=180?'#6C5DD3':h>=120?'#5546C4':'#C62828';
-    return `<div class="bar-col">
-      <div class="bar-val">${h}</div>
-      <div class="bar-body" style="height:${barH}px;background:${color}"></div>
-      <div class="bar-label">${s.name.slice(0,2)}</div>
-    </div>`;
-  }).join('');
-
-  const top5=sorted.slice(0,5);
-  const colors=['#6C5DD3','#5546C4','#4338A8','#993556','#534AB7'];
-  document.getElementById('trend-chart').innerHTML=`
-    <div style="display:flex;flex-direction:column;gap:8px">
-      ${top5.map((s,i)=>`
-        <div style="display:flex;align-items:center;gap:8px">
-          <span style="font-size:11px;width:50px;color:var(--color-text-secondary);flex-shrink:0">${s.name}</span>
-          <div style="flex:1;display:flex;align-items:center;gap:4px">
-            ${MONTHS.map(m=>{
-              const h=_readHour(s.hours,m.k);
-              const w=Math.round(h/250*100);
-              return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:2px">
-                <div style="width:100%;height:18px;background:var(--color-background-secondary);border-radius:3px;overflow:hidden">
-                  <div style="height:100%;width:${w}%;background:${colors[i]};border-radius:3px"></div>
-                </div>
-                <span style="font-size:9px;color:var(--color-text-tertiary)">${h}h</span>
-              </div>`;
-            }).join('')}
-          </div>
-        </div>`).join('')}
-      <div style="display:flex;align-items:center;gap:4px;margin-left:58px">
-        ${MONTHS.map(m=>`<div style="flex:1;text-align:center;font-size:10px;color:var(--color-text-tertiary)">${m.label}</div>`).join('')}
-      </div>
-    </div>
-  `;
-}
 
 function getCellContent(sched, pidx) {
   if (!sched || sched === '-') return '<span class="cell-empty">—</span>';
