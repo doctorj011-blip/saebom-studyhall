@@ -3463,15 +3463,16 @@ async function _renderPenaltyList(filterSeatKey) {
           const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
           const isNoShow = p.type === 'noshow';
           const isManual = p.type === 'manual';
+          const isAutoReason = p.type === 'weekly_short'; // 교시 없는 자동 벌점(사유 기반)
           if (!p.canceled) { total += pts; if (doc.date.slice(0,7) === curYm) monthTotal += pts; }
           const dl = p.deadline ? new Date(p.deadline) : null;
           const ch = p.changedAt ? new Date(p.changedAt) : null;
           const fmt = d => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '?';
           let when, label, meta;
-          if (isManual) {
+          if (isManual || isAutoReason) {
             when = '';
-            label = `<b style="color:#8B1A1A">${String(p.reason || '수기 벌점').replace(/</g,'&lt;')}</b>`;
-            meta = '· ✍️ 수기 부과';
+            label = `<b style="color:#8B1A1A">${String(p.reason || (isManual?'수기 벌점':'자동 벌점')).replace(/</g,'&lt;')}</b>`;
+            meta = isManual ? '· ✍️ 수기 부과' : '· 🤖 자동 판정';
           } else {
             when = `<b>${pn}교시</b> `;
             label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)` : `${p.to==='absent'?'불참':'해제'} 변경`;
@@ -6672,6 +6673,8 @@ setInterval(() => {
     if (window.renderStudyroomBoard) window.renderStudyroomBoard();
     // 어제(및 놓친 날짜) 무단결석 벌점 판정 — 11교시 종료(01:00) 이후라 판정 가능
     if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
+    // 지난 주(월~토) 목표순공 자동판정 — 월요일 새벽이면 방금 끝난 주가 확정됨
+    if (window.assessWeeklyGoals) window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e));
     // 예약 퇴원(withdrawAt) 대상 자동 처리 — 날짜가 지난 학생을 보관함으로
     if (window.autoWithdrawExpired) window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e));
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
@@ -8469,6 +8472,7 @@ loadStudentsFromFirebase();
 loadTodayCheckinFromFirebase();
 // 무단결석 벌점 판정 — 지난 날짜분 소급(멱등·기기간 완료표시 공유). 학생 로드가 끝난 뒤 여유를 두고 실행.
 setTimeout(() => { try { window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e)); } catch(e) {} }, 20000);
+setTimeout(() => { try { window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e)); } catch(e) {} }, 25000);
 // 예약 퇴원(withdrawAt) 자동 처리 — 키오스크가 2시에 꺼져 있었어도 로드 시 소급 처리된다.
 setTimeout(() => { try { window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e)); } catch(e) {} }, 25000);
 // 인수인계 미확인 배지 — 조교가 탭을 열지 않아도 앞 조 메모가 남아 있음을 알아채게 한다.
@@ -8936,7 +8940,7 @@ function renderPenaltyBoard() {
       const st = (byStudent[sk] = byStudent[sk] || { name: d.name || '?', seatKey: sk, pts: 0, items: [] });
       const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
       if (!p.canceled) { st.pts += pts; totalPts += pts; }
-      st.items.push({ docId: d.id, pn, pts, isNoShow, isManual: p.type === 'manual', isToday, canceled: !!p.canceled, reason: p.reason || '', to: p.to });
+      st.items.push({ docId: d.id, pn, pts, isNoShow, isManual: p.type === 'manual', isWeekly: p.type === 'weekly_short', isToday, canceled: !!p.canceled, reason: p.reason || '', to: p.to });
     });
   });
 
@@ -8956,9 +8960,11 @@ function renderPenaltyBoard() {
       const fg = it.canceled ? '#9CA3AF' : (it.isNoShow ? '#8B1A1A' : '#9A5B00');
       const label = it.isManual
         ? `✍️ ${it.reason || '수기 벌점'}`
-        : it.isNoShow
-          ? `${it.isToday ? '' : '어제 '}${it.pn}교시 무단결석`
-          : `${it.pn}교시 ${it.to === 'absent' ? '불참' : '해제'} 변경${it.reason ? ` · ${it.reason}` : ''}`;
+        : it.isWeekly
+          ? `🤖 ${it.reason || '주간 목표순공 미달'}`
+          : it.isNoShow
+            ? `${it.isToday ? '' : '어제 '}${it.pn}교시 무단결석`
+            : `${it.pn}교시 ${it.to === 'absent' ? '불참' : '해제'} 변경${it.reason ? ` · ${it.reason}` : ''}`;
       return `<button onclick="window.penaltyBoardToggle('${it.docId}','${it.pn}',${it.canceled})"
         title="클릭하면 이 벌점을 ${it.canceled ? '다시 부과' : '취소'}합니다"
         style="background:${bg};color:${fg};border:1px solid ${it.canceled ? '#E5E7EB' : 'transparent'};border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;${it.canceled ? 'text-decoration:line-through' : ''}">${label} <b>${it.pts}점</b>${it.canceled ? ' (취소됨)' : ''}</button>`;
@@ -9811,6 +9817,141 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
     name: name, seat: seat, seatKey: seatKey,
     date: dIso, day: dayName, periods: periods,
     updatedAt: serverTimestamp()
+  });
+}
+
+// ── 주간 목표순공 자동판정 (달성 상점 1점 / 미달 벌점 1점) ──
+// 매주 지난 주(월~토) 순공(attendance_sessions durationMin 합)을 학생별 목표(weeklyGoalH)와 비교.
+// 유효목표 = 목표시간 − 그 주 '승인변경으로 빠진 교시'의 예정분(이중처벌 방지). 무단결석 교시는 차감 안 함.
+//   실제 ≥ 유효목표(100%) → merits +1(type:'auto')
+//   실제 < 유효목표의 80%  → penalties +1(type:'weekly_short')
+//   80~100% → 없음
+// 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_weekly_goal_done 로 멱등, 취소상태 보존.
+const WEEKLY_START_ISO = '2026-07-22'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
+const WEEKLY_SHORT_POINTS = 1, WEEKLY_MERIT_POINTS = 1;
+const _WEEKLY_DN = ['일','월','화','수','목','금','토'];
+function _periodDurMin(pn){ const w = NOSHOW_PERIOD_TIMES[pn]; return w ? (w[1] - w[0]) : 0; }
+function _mondayOf(dateLike){ const x = new Date(dateLike); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return x; } // 월=주 시작
+
+async function _weeklyDoneMap(){
+  try { const s = await getDoc(doc(db, 'students', '_meta_weekly_goal_done')); return s.exists() ? (s.data().weeks || {}) : {}; }
+  catch(e){ return {}; }
+}
+async function _markWeeklyDone(weekIso, info){
+  try { await setDoc(doc(db, 'students', '_meta_weekly_goal_done'), { name:'', weeks:{ [weekIso]: info } }, { merge:true }); }
+  catch(e){ console.warn('주간 판정 완료표시 실패:', e); }
+}
+
+window.assessWeeklyGoals = async function(){
+  for (let i = 0; i < 100 && !(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr); i++) await new Promise(r => setTimeout(r, 300));
+  if (!(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr)) return;
+  const now = Date.now();
+  const done = await _weeklyDoneMap();
+  const startMon = _mondayOf(WEEKLY_START_ISO + 'T00:00:00');
+  const thisMon  = _mondayOf(new Date());
+  for (let wk = new Date(startMon); wk < thisMon; wk.setDate(wk.getDate() + 7)) {
+    const weekIso = SH.sessIsoDate(wk.getTime()); // 주 키 = 그 주 월요일 ISO
+    if (done[weekIso]) continue;
+    if (now < wk.getTime() + 7*24*3600*1000 + 2*3600*1000) continue; // 다음 월요일 02:00 이후에만(11교시 자정넘김 여유)
+    await _assessWeekGoals(new Date(wk), weekIso);
+  }
+};
+
+async function _assessWeekGoals(monDate, weekIso){
+  try {
+    // 그 주 월~토 ISO + 판정 요일명, 세션 조회는 토요일 11교시 자정넘김 대비 일요일까지 포함
+    const dayIsos = [], dayNames = [];
+    for (let i = 0; i < 6; i++){ const d = new Date(monDate); d.setDate(d.getDate()+i); dayIsos.push(SH.sessIsoDate(d.getTime())); dayNames.push(_WEEKLY_DN[d.getDay()]); }
+    const satDate = new Date(monDate); satDate.setDate(satDate.getDate()+5);
+    const satIso = dayIsos[5];
+    const sun = new Date(monDate); sun.setDate(sun.getDate()+6);
+    const queryIsos = [...dayIsos, SH.sessIsoDate(sun.getTime())];
+
+    // 1) 순공 집계 (inDate 'in' 30개 청크)
+    const chunks = []; for (let i = 0; i < queryIsos.length; i += 30) chunks.push(queryIsos.slice(i, i+30));
+    const snaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, SESS_COL), where('inDate', 'in', c)))));
+    let sessCount = 0; const minByName = {};
+    snaps.forEach(snap => snap.forEach(x => {
+      const s = x.data(); if (!s.studentName || typeof s.inTs !== 'number') return;
+      if (dayIsos.includes(s.inDate)) sessCount++;
+      let m = 0;
+      if (s.status === 'closed' && typeof s.durationMin === 'number') m = s.durationMin;
+      else if (s.status === 'open') { let away = s.awayMs || 0; if (s.awayStartTs) away += Math.max(0, Math.min(Date.now(), sessCapTs(s.inTs)) - s.awayStartTs); m = sessDurationMin(s.inTs, Date.now(), away); }
+      minByName[s.studentName] = (minByName[s.studentName] || 0) + m;
+    }));
+    if (sessCount === 0) { await _markWeeklyDone(weekIso, { skipped:'세션 없음', at: Date.now() }); return; } // 휴관주 추정
+
+    // 2) base 스케줄 + 그 주 daily_reports (승인변경 차감용)
+    const [baseSnap, ...rptSnaps] = await Promise.all([
+      getDocs(collection(db, 'schedule_base')),
+      ...chunks.map(c => getDocs(query(collection(db, 'daily_reports'), where('date', 'in', c))))
+    ]);
+    const rptMap = {}; // seatKey → { dateIso: scheduleStr }
+    rptSnaps.forEach(snap => snap.forEach(x => {
+      const r = x.data(); if (typeof r.schedule !== 'string') return;
+      const id = x.id, cut = id.lastIndexOf('_');
+      const seatKey = id.slice(cut+1), date = id.slice(0, cut);
+      (rptMap[seatKey] = rptMap[seatKey] || {})[date] = r.schedule;
+    }));
+
+    // 3) 학생별 판정
+    const writes = [];
+    baseSnap.forEach(bdoc => {
+      const seatKey = bdoc.id;
+      if ((parseInt(seatKey) || 0) >= 54) return; // 관리자석
+      const st = (window.STUDENTS || []).find(s => (s.seat || '').replace(/[^0-9]/g, '') === seatKey);
+      if (!st) return;
+      const goalH = Number(st.weeklyGoalH) || 0;
+      if (goalH <= 0) return; // 목표 미설정 → 판정 제외
+      if (window.isTestStudent && window.isTestStudent(st.name)) return;
+      const bd = bdoc.data();
+      // 차감: base 출석예정이었으나 effective(daily_reports)에서 빠진 교시의 예정분
+      let deductMin = 0;
+      for (let i = 0; i < 6; i++){
+        const baseStr = bd[dayNames[i]] || '-';
+        const bp = window.parseScheduleStr(baseStr);
+        if (!bp || !bp.periods || !bp.periods.size) continue;
+        const effStr = (rptMap[seatKey] && rptMap[seatKey][dayIsos[i]] !== undefined) ? rptMap[seatKey][dayIsos[i]] : baseStr;
+        const ep = window.parseScheduleStr(effStr);
+        const effPeriods = (ep && ep.periods) ? ep.periods : new Set();
+        bp.periods.forEach(pn => { if (!effPeriods.has(pn)) deductMin += _periodDurMin(pn); });
+      }
+      const adjGoalMin = Math.max(0, goalH*60 - deductMin);
+      if (adjGoalMin <= 0) return; // 그 주 예정이 전부 승인결석 → 대상 아님
+      const actualMin = minByName[st.name] || 0;
+      const ratio = actualMin / adjGoalMin;
+      if (ratio >= 1)      writes.push(_writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin));
+      else if (ratio < 0.8) writes.push(_writeWeeklyShort(st, seatKey, weekIso, satIso, dayNames[5], adjGoalMin, actualMin));
+    });
+    await Promise.all(writes);
+    await _markWeeklyDone(weekIso, { at: Date.now(), students: writes.length });
+    console.log(`[주간목표] ${weekIso} 판정 완료 — ${writes.length}명`);
+  } catch(e){ console.error('주간 목표 판정 실패:', weekIso, e); } // 완료표시 안 남김 → 다음 시작 때 재시도(멱등)
+}
+
+// 미달 벌점 → penalties/{토요일}_{좌석} periods['wk'] (교시 없는 주간 항목). 취소상태 보존.
+async function _writeWeeklyShort(st, seatKey, weekIso, satIso, dayName, adjGoalMin, actualMin){
+  const ref = doc(db, 'penalties', `${satIso}_${seatKey}`);
+  let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
+  const periods = { ...(prev.periods || {}) };
+  const wasCanceled = !!(periods['wk'] && periods['wk'].canceled);
+  periods['wk'] = {
+    type: 'weekly_short', points: WEEKLY_SHORT_POINTS,
+    reason: `주간 목표순공 미달 (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
+    week: weekIso, canceled: wasCanceled, at: Date.now()
+  };
+  await setDoc(ref, { name: st.name, seat: st.seat, seatKey, date: satIso, day: dayName, periods, updatedAt: serverTimestamp() });
+}
+
+// 달성 상점 → merits/{고정ID} (멱등). 취소상태 보존.
+async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin){
+  const ref = doc(db, 'merits', `auto_wk_${weekIso}_${seatKey}`);
+  let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
+  await setDoc(ref, {
+    name: st.name, seatKey, date: satIso, day: _WEEKLY_DN[new Date(satIso + 'T00:00:00').getDay()],
+    points: WEEKLY_MERIT_POINTS, type: 'auto',
+    reason: `주간 목표순공 달성 (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
+    canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
 
