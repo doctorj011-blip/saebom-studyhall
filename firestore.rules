@@ -79,6 +79,19 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 상점: 관리자가 수동 부여 (사용시간 탭 상점현황). 벌점과 동일한 개방 정책.
+    match /merits/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['name', 'seatKey', 'date', 'points'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 30
+        && request.resource.data.seatKey is string
+        && request.resource.data.date is string
+        && request.resource.data.points is int
+        && request.resource.data.points > 0;
+      allow delete: if false;
+    }
+
     // 좌석 상태: 태블릿 디텍터가 쓰고 대시보드가 읽음
     match /seat_status/{seat} { allow read, write: if true; }
 
