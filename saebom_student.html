@@ -3912,6 +3912,12 @@ async function submitStudyroomReq(periodNum) {
   try {
     // 사유를 적는 동안 다른 학생이 마지막 자리를 채웠을 수 있어 배정 직전에 다시 확인한다
     const st = await _studyroomAvailability(db, periodNum);
+    // 같은 구간에 내 신청이 먼저 들어갔을 수도 있다(면학관 입실 자동배정·다른 기기).
+    // applyStudyroom의 중복 검사는 모달을 열 때뿐이라, 이 검사가 없으면 문서가 2건이 된다.
+    if (st.periodReqs.some(r => r.name === currentStudent.name)) {
+      alert(`이미 ${periodNum}교시 스터디룸 신청이 되어 있습니다.`);
+      return;
+    }
     // openCounts에는 단독 사용(lock) 룸과 정원이 찬 룸이 빠져 있음 — 남은 룸 중 인원이 적은 곳으로
     const rooms = Object.keys(st.openCounts).map(Number).sort((a,b) => a-b);
     if (!rooms.length) {

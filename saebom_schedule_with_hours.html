@@ -776,7 +776,10 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <div class="card" id="studyroom-board-section" style="display:none">
         <div class="card-title" style="justify-content:space-between">
           <span><i class="ti ti-layout-grid" style="font-size:14px;color:#7C3AED"></i> 오늘 스터디룸 신청 현황</span>
-          <span id="studyroom-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+          <span style="display:flex;align-items:center;gap:8px">
+            <span id="studyroom-board-dup"></span>
+            <span id="studyroom-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+          </span>
         </div>
         <div id="studyroom-board-body" style="overflow-x:auto"></div>
       </div>
@@ -1713,7 +1716,7 @@ window.waitDb = function(timeoutMs = 15000) {
   });
 };
 
-const MONTHS=_recentMonths(5);
+const MONTHS=_recentMonths(3);
 let currentDay=DAYS[Math.min(Math.max(new Date().getDay()-1,0),5)];
 let currentMonth=_curYm();
 let currentView='table';
@@ -2851,6 +2854,76 @@ function getTrend(s,m){
   return '<span class="trend-same">±0</span>';
 }
 
+// ── 벌점 현황 (사용시간 표에 표시) ──
+// penalties/{YYYY-MM-DD}_{seatKey} 문서를 통째로 캐시(60초)한 뒤, 현재 보기의 조회 기간에 맞춰
+// 학생별 유효 벌점(취소되지 않은 교시 점수 합)을 집계한다.
+//  · 월별 보기  → 그 달 1일~말일(이번 달이면 오늘까지)
+//  · 기간조회 모드 → 기간조회에 입력한 시작~종료일 (기간조회와 연동)
+let _penaltyDocsCache = null, _penaltyDocsTs = 0, _penaltyDocsLock = null;
+async function loadPenaltyDocs(force){
+  if (!force && _penaltyDocsCache && Date.now() - _penaltyDocsTs < 60000) return _penaltyDocsCache;
+  if (_penaltyDocsLock) return _penaltyDocsLock;
+  _penaltyDocsLock = (async () => {
+    try {
+      const db = await window.waitDb();
+      if (!db) return _penaltyDocsCache || [];
+      const { collection, getDocs } = window._fs;
+      const snap = await getDocs(collection(db, 'penalties'));
+      const arr = []; snap.forEach(d => arr.push({ id: d.id, ...d.data() }));
+      _penaltyDocsCache = arr; _penaltyDocsTs = Date.now();
+      return arr;
+    } catch(e) { console.error('벌점 조회 실패:', e); return _penaltyDocsCache || []; }
+    finally { _penaltyDocsLock = null; }
+  })();
+  return _penaltyDocsLock;
+}
+// 현재 보기(월별/기간조회)의 조회 기간을 ISO(YYYY-MM-DD)로 반환
+function _penaltyViewRange(){
+  if (window._hoursRangeMode) {
+    return { startISO: document.getElementById('hours-range-start').value,
+             endISO:   document.getElementById('hours-range-end').value };
+  }
+  const [y, m] = String(currentMonth).split('-').map(Number);
+  const now = new Date();
+  const isCur = (y === now.getFullYear() && m === now.getMonth()+1);
+  const lastDay = isCur ? now.getDate() : new Date(y, m, 0).getDate();
+  return { startISO: `${y}-${String(m).padStart(2,'0')}-01`,
+           endISO:   `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}` };
+}
+// 기간 내 학생별 유효 벌점 합계 → { 이름: 점수 }. date는 패딩 ISO라 문자열 비교로 범위 판정.
+function _aggregatePenalties(docs, startISO, endISO){
+  const byName = {};
+  docs.forEach(doc => {
+    if (!doc.date) return;
+    if (startISO && doc.date < startISO) return;
+    if (endISO && doc.date > endISO) return;
+    let pts = 0;
+    Object.values(doc.periods || {}).forEach(p => { if (!p.canceled) pts += (p.points || 1); });
+    if (pts <= 0) return;
+    const nm = doc.name || '?';
+    byName[nm] = (byName[nm] || 0) + pts;
+  });
+  return byName;
+}
+// 벌점 배지 HTML — 0점이면 '—', 있으면 빨간 배지(클릭 시 해당 학생 벌점 모달)
+function _penaltyBadge(pts, seat){
+  if (!pts || pts <= 0) return '<span style="color:#9CA3AF;font-size:11px">—</span>';
+  const sk = String(seat).replace(/'/g,"\\'");
+  return `<span onclick="showPenaltyModal('${sk}')" title="벌점 상세 보기" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px;background:#FEF0F0;color:#C62828;border:1px solid #F5C6C6;border-radius:8px;padding:2px 8px;font-size:11.5px;font-weight:700">⚠️ ${pts}점</span>`;
+}
+// 표가 그려진 뒤 벌점 셀(data-penalty-name)을 현재 기간 기준으로 채운다 (fire-and-forget)
+async function applyPenaltyBadges(){
+  const cells = document.querySelectorAll('#hours-table td[data-penalty-name]');
+  if (!cells.length) return;
+  const { startISO, endISO } = _penaltyViewRange();
+  const docs = await loadPenaltyDocs();
+  const byName = _aggregatePenalties(docs, startISO, endISO);
+  document.querySelectorAll('#hours-table td[data-penalty-name]').forEach(td => {
+    const nm = td.getAttribute('data-penalty-name');
+    td.innerHTML = _penaltyBadge(byName[nm] || 0, td.getAttribute('data-penalty-seat') || '');
+  });
+}
+
 function buildHoursTable(){
   // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
   if (window._hoursRangeMode) return;
@@ -2892,16 +2965,15 @@ function buildHoursTable(){
   let html=`<thead><tr>
     <th style="width:32px">순위</th>
     <th>이름</th><th>좌석</th>
+    <th>벌점현황</th>
     <th>1일 사용시간</th>
     <th>${_ymLabel(currentMonth)} 사용시간</th>
-    <th style="width:100px">그래프</th>
     <th>전월 대비</th>
     ${MONTHS.map(m=>`<th>${m.label}</th>`).join('')}
   </tr></thead><tbody>`;
 
   sorted.forEach((s,i)=>{
     const h=_readHour(s.hours,currentMonth);
-    const pct=Math.round(h/maxH*100);
     const rankClass=i===0?'rank-1':i===1?'rank-2':i===2?'rank-3':'';
     const todayMin = todayHoursMap[s.name] || 0;
     const todayH = Math.floor(todayMin / 60);
@@ -2914,15 +2986,16 @@ function buildHoursTable(){
       <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
       <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(s.name).replace(/'/g,"\\'")}')">${s.name}</span></td>
       <td><span class="seat-badge">${s.seat}</span></td>
+      <td data-penalty-name="${String(s.name).replace(/"/g,'&quot;')}" data-penalty-seat="${String(s.seat).replace(/"/g,'&quot;')}">${_penaltyBadge(0, s.seat)}</td>
       <td style="font-weight:600;color:${todayColor}">${todayStr}</td>
       <td>${getHoursChip(h)}</td>
-      <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
       <td>${getTrend(s,currentMonth)}</td>
       ${MONTHS.map(m=>{const hv=_readHour(s.hours,m.k);return `<td style="font-size:11px;color:var(--color-text-secondary)">${hv||'—'}</td>`;}).join('')}
     </tr>`;
   });
   html+='</tbody>';
   document.getElementById('hours-table').innerHTML=html;
+  applyPenaltyBadges();
 }
 
 // 사용시간 탭이 열려 있는 동안 1분마다 자동 갱신 — 입실 중인 학생의 1일 사용시간이 실시간으로 올라간다
@@ -3057,7 +3130,6 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
   });
   rows.sort((a, b) => b.min - a.min);
 
-  const maxMin = Math.max(...rows.map(r => r.min), 1);
   const active = rows.filter(r => r.min > 0);
   const avgMin = active.length ? Math.round(active.reduce((a, r) => a + r.min, 0) / active.length) : 0;
   const label = `${startISO.replace(/-/g,'.')} ~ ${endISO.replace(/-/g,'.')}`;
@@ -3072,13 +3144,12 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
   let html = `<thead><tr>
     <th style="width:32px">순위</th>
     <th>이름</th><th>좌석</th>
+    <th>벌점현황</th>
     <th>총 사용시간</th>
-    <th style="width:100px">그래프</th>
     <th>출석일수</th>
     <th>일평균</th>
   </tr></thead><tbody>`;
   rows.forEach((r, i) => {
-    const pct = Math.round(r.min / maxMin * 100);
     const rankClass = i === 0 ? 'rank-1' : i === 1 ? 'rank-2' : i === 2 ? 'rank-3' : '';
     const dayAvg = r.days > 0 ? Math.round(r.min / r.days) : 0;
     const totalH = Math.round(r.min / 60 * 10) / 10;
@@ -3086,14 +3157,15 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
       <td><span class="rank-badge ${rankClass}">${i+1}</span></td>
       <td style="font-weight:500"><span class="hours-name-link" onclick="showStudentSessionsModal('${String(r.name).replace(/'/g,"\\'")}')">${r.name}</span>${r.former ? ' <span style="font-size:10px;color:var(--color-text-tertiary)">(퇴원)</span>' : ''}</td>
       <td><span class="seat-badge">${r.seat}</span></td>
+      <td data-penalty-name="${String(r.name).replace(/"/g,'&quot;')}" data-penalty-seat="${String(r.seat).replace(/"/g,'&quot;')}">${_penaltyBadge(0, r.seat)}</td>
       <td style="font-weight:600">${_fmtRangeMin(r.min)}${r.min > 0 ? ` <span style="font-size:10px;color:var(--color-text-tertiary)">(${totalH}h)</span>` : ''}</td>
-      <td><div class="hours-bar-wrap"><div class="hours-bar" style="width:${pct}%"></div></div></td>
       <td>${r.days > 0 ? r.days + '일' : '—'}</td>
       <td style="color:var(--color-text-secondary)">${_fmtRangeMin(dayAvg)}</td>
     </tr>`;
   });
   html += '</tbody>';
   document.getElementById('hours-table').innerHTML = html;
+  applyPenaltyBadges();
 }
 
 window.resetHoursRange = function(skipRebuild){
@@ -3367,6 +3439,9 @@ window.togglePenaltyCancel = async function(docId, pn) {
     if (!periods[pn]) return;
     periods[pn] = { ...periods[pn], canceled: !periods[pn].canceled };
     await setDoc(ref, { ...data, periods: periods });
+    // 사용시간 탭 벌점 배지 캐시 무효화 후 즉시 갱신
+    _penaltyDocsTs = 0;
+    try { applyPenaltyBadges(); } catch(e){}
     // 모달이 열려 있을 때만 재렌더 — 대시보드 현황판에서 호출되면 모달을 띄우지 않는다
     // (현황판은 penalties onSnapshot으로 스스로 갱신된다)
     if (document.getElementById('penalty-modal-overlay')) showPenaltyModal(_penaltyModalFilter);
@@ -4733,6 +4808,17 @@ function autoAssignStudyroom(student, curPeriod) {
   if (myLock && studyRoomStudents[myLock]) {
     if (!studyRoomStudents[myLock].includes(student.name)) studyRoomStudents[myLock].push(student.name);
     return myLock;
+  }
+  // 이 교시에 이미 승인된 신청(학생앱 수동신청 또는 앞선 입실의 자동배정)이 있으면 문서를 새로
+  // 만들지 않고 그 룸으로 안내만 한다. 아래 메모리 명단 검사는 퇴실 시 이름이 빠져 재입실 때
+  // 기존 신청을 못 봤고, 그래서 수동신청과 별개의 auto_ 문서가 하나 더 생겨 현황판에 같은 학생이
+  // 두 번 떴다(자동배정끼리는 문서 ID가 고정이라 덮어써서 드러나지 않던 구멍이다).
+  const myApproved = window._myApprovedRoom ? window._myApprovedRoom(student.name, curPeriod) : null;
+  if (myApproved) {
+    if (studyRoomStudents[myApproved] && !studyRoomStudents[myApproved].includes(student.name)) {
+      studyRoomStudents[myApproved].push(student.name);
+    }
+    return myApproved;
   }
   if (Object.values(studyRoomStudents).flat().includes(student.name)) return null;
   const locked = window._lockedRoomsForPeriod ? window._lockedRoomsForPeriod(curPeriod) : new Set();
@@ -6365,7 +6451,7 @@ setInterval(() => {
     // 미입실 알림을 계산하거나 스케줄 표가 고착되는 것을 방지
     currentDay = getTodayDayName();
     currentMonth = _curYm();
-    MONTHS.splice(0, MONTHS.length, ..._recentMonths(5));
+    MONTHS.splice(0, MONTHS.length, ..._recentMonths(3));
     const _dn = ['일','월','화','수','목','금','토'];
     const _lbl = document.getElementById('today-label');
     if (_lbl) _lbl.textContent = `${now.getMonth()+1}월 ${now.getDate()}일 (${_dn[now.getDay()]})`;
@@ -8339,6 +8425,16 @@ window._myLockedRoom = function(name, period) {
     r.lock && r.status === 'approved' && r.date === today && r.period === period && r.name === name);
   return hit ? hit.room : null;
 };
+// 이 학생이 해당 교시에 이미 승인받은 룸 번호 (학생앱 수동신청·앞선 입실의 자동배정 모두 포함, 없으면 null)
+// 자동배정 중복 방지의 판정 기준. 메모리 명단(studyRoomStudents)은 퇴실 시 이름이 빠지고
+// _syncStudyRoomStudents도 퇴실자의 신청을 제외하므로, 재입실 때는 기존 신청을 볼 수 없다.
+// 그래서 판정은 신청 문서 미러(_knownStudyroomReqs)를 직접 봐야 한다.
+window._myApprovedRoom = function(name, period) {
+  const today = window.studyroomDayKey();
+  const hit = Object.values(_knownStudyroomReqs).find(r =>
+    r.status === 'approved' && r.date === today && r.period === period && r.name === name && r.room);
+  return hit ? hit.room : null;
+};
 
 // 교시 전환·새벽 3시 운영일 전환에 맞춰 매분 배치도(현재/대기)·현황판 갱신
 setInterval(() => {
@@ -8422,6 +8518,68 @@ function renderStudyroomAlerts() {
   }).join('');
 }
 
+// ── 스터디룸 중복 신청 문서 정리 ──
+// 한 학생이 같은 (운영일·교시)에 신청 문서를 2건 이상 갖는 경우가 있었다: 학생앱 수동신청은
+// 랜덤 ID(addDoc), 입실 자동배정은 고정 ID(auto_날짜_좌석_p교시)라 서로를 덮어쓰지 못한다.
+// 생성 쪽 구멍은 _myApprovedRoom 가드로 막았고, 여기서는 그때까지 쌓인 문서를 지운다.
+// 남길 문서는 학생이 사유를 적어 낸 쪽 우선(자동배정은 사유가 '자동배정'이라 정보가 적다).
+let _studyroomDupIds = [];
+const _dupRankOf = r => (r.lock ? 3 : r.auto ? 1 : 2);   // 단독 > 수동신청 > 자동배정
+const _dupKindOf = r => (r.lock ? '단독' : r.auto ? '자동배정' : '수동신청');
+
+// (운영일·교시·학생)별 대표 문서와, 그 외 삭제 대상을 계산한다. 화면 접기와 실제 삭제가
+// 같은 기준을 쓰도록 양쪽이 이 함수를 공유한다.
+function _studyroomDupScan(reqs) {
+  const best = {};
+  reqs.forEach(r => {
+    if (!(r.room >= 1 && r.room <= 3)) return;   // 룸 미배정(승인 대기 단독)은 중복 판정 대상 아님
+    const k = `${r.date}|${r.period}|${r.name}`;
+    if (!best[k] || _dupRankOf(r) > _dupRankOf(best[k])) best[k] = r;
+  });
+  const keep = new Set(Object.values(best).map(r => r.id));
+  const dups = reqs.filter(r => r.room >= 1 && r.room <= 3 && !keep.has(r.id));
+  return { best, keep, dups };
+}
+
+function _renderStudyroomDupBtn() {
+  const el = document.getElementById('studyroom-board-dup');
+  if (!el) return;
+  const n = _studyroomDupIds.length;
+  el.innerHTML = n
+    ? `<button onclick="cleanupDuplicateStudyroomReqs()" title="같은 학생이 같은 교시에 중복으로 들어간 신청 문서를 지웁니다 (학생당 1건은 남습니다)"
+        style="border:1px solid #FDBA74;background:#FFF7ED;color:#B45309;font-size:11px;font-weight:700;border-radius:6px;padding:3px 8px;cursor:pointer">🧹 중복 ${n}건 정리</button>`
+    : '';
+}
+
+// 오늘분 정리는 현황판 버튼이 호출한다. 지난 날짜까지 한 번에 쓸어내려면 관리자앱 콘솔에서
+// cleanupDuplicateStudyroomReqs({ allDates: true }) 를 호출한다.
+window.cleanupDuplicateStudyroomReqs = async function(opts) {
+  const allDates = !!(opts && opts.allDates);
+  const today = window.studyroomDayKey();
+  const scope = Object.values(_knownStudyroomReqs)
+    .filter(r => r.status !== 'rejected' && (allDates || r.date === today));
+  const { best, dups } = _studyroomDupScan(scope);
+  if (!dups.length) { showAdminToast('정리할 중복 신청이 없습니다'); return; }
+
+  const line = v => {
+    const kept = best[`${v.date}|${v.period}|${v.name}`];
+    const moved = kept.room !== v.room ? ' ⚠️ 룸 다름' : '';
+    return `· ${v.date} ${v.period}교시 ${v.name}(${v.seat}) — ${_dupKindOf(v)} ${v.room}번 삭제 / ${_dupKindOf(kept)} ${kept.room}번 유지${moved}`;
+  };
+  const preview = dups.slice(0, 12).map(line).join('\n') + (dups.length > 12 ? `\n… 외 ${dups.length - 12}건` : '');
+  if (!confirm(`중복 신청 ${dups.length}건을 삭제합니다. 학생·교시당 1건은 남습니다.\n\n${preview}\n\n삭제한 문서는 되돌릴 수 없습니다. 진행할까요?`)) return;
+
+  let ok = 0;
+  for (const v of dups) {
+    try {
+      await deleteDoc(doc(db, 'studyroom_requests', v.id));
+      ok++;
+      console.log('[스터디룸 중복 삭제]', v.id, v);   // 무엇을 지웠는지는 콘솔에 남긴다
+    } catch(e) { console.error('스터디룸 중복 삭제 실패:', v.id, e); }
+  }
+  showAdminToast(ok === dups.length ? `🧹 중복 신청 ${ok}건 정리 완료` : `🧹 ${ok}/${dups.length}건 정리 — 실패분은 콘솔 확인`);
+};
+
 // ── 오늘 스터디룸 신청 현황판 (교시 × 룸 표) ──
 function renderStudyroomBoard() {
   const section = document.getElementById('studyroom-board-section');
@@ -8435,13 +8593,22 @@ function renderStudyroomBoard() {
   if (!todays.length) {
     section.style.display = 'block';
     if (summary) summary.textContent = '';
+    _studyroomDupIds = [];
+    _renderStudyroomDupBtn();
     body.innerHTML = '<div style="text-align:center;color:#B9A9D9;font-size:12px;padding:18px 0">오늘 스터디룸을 신청한 학생이 없습니다.</div>';
     return;
   }
 
+  // 한 학생이 같은 교시에 문서를 2건 이상 가진 경우(수동신청 + 입실 자동배정) 대표 1건만 그린다.
+  // 문서 자체를 지우는 건 '중복 정리' 버튼의 몫이고, 여기서는 이미 쌓인 중복이 명단을
+  // 부풀려 보이지 않게만 한다.
+  const dupIds = new Set(_studyroomDupScan(todays).dups.map(r => r.id));
+  const shown = todays.filter(r => !dupIds.has(r.id));
+  _studyroomDupIds = [...dupIds];
+
   // 교시별 · 룸별 그룹핑
   const byPeriod = {};
-  todays.forEach(r => {
+  shown.forEach(r => {
     const p = r.period;
     if (!byPeriod[p]) byPeriod[p] = { 1:[], 2:[], 3:[] };
     if (!byPeriod[p][r.room]) byPeriod[p][r.room] = [];
@@ -8450,9 +8617,10 @@ function renderStudyroomBoard() {
   const periods = Object.keys(byPeriod).map(Number).sort((a,b) => a - b);
   section.style.display = 'block';
   if (summary) {
-    const pend = todays.filter(r => r.status === 'pending').length;
-    summary.textContent = `신청 ${todays.length}건` + (pend ? ` · 대기 ${pend}건` : '');
+    const pend = shown.filter(r => r.status === 'pending').length;
+    summary.textContent = `신청 ${shown.length}건` + (pend ? ` · 대기 ${pend}건` : '');
   }
+  _renderStudyroomDupBtn();
 
   const th = 'padding:7px 8px;font-size:11px;font-weight:700;color:#7C3AED;background:#F3E8FF;border:1px solid #E9D5FF;text-align:center';
   const td = 'padding:6px 8px;border:1px solid #EDE4F7;vertical-align:top;min-width:90px';
