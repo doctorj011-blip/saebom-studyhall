@@ -491,6 +491,7 @@ body{letter-spacing:-0.012em;
 .tab-btn:hover{background:rgba(255,255,255,.30)}
 .tab-btn:active{transform:scale(.95)}
 .tab-btn.active{background:#fff;color:#4A3FA8;box-shadow:0 3px 12px rgba(30,27,75,.30);transform:translateY(-.5px)}
+.tab-divider{width:1px;height:16px;background:rgba(255,255,255,.30);border-radius:1px;margin:0 7px;align-self:center;flex:0 0 auto}
 .checkin-shortcut-btn{background:rgba(255,255,255,.18)!important;color:#fff!important;border-color:rgba(255,255,255,.45)!important}
 .checkin-shortcut-btn.active{background:#fff!important;color:#4A3FA8!important}
 
@@ -729,18 +730,20 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn checkin-shortcut-btn active" onclick="showSection('checkin',this)" style="margin-left:8px;background:rgba(255,255,255,0.35);color:#1E1B4B;font-weight:600;border:1px solid rgba(255,255,255,0.6)">입실·퇴실</button>
   </div>
   <div class="topbar-tabs">
+    <!-- 앞 4개 = 근무 중 상시로 보는 탭. 구분선 뒤는 필요할 때만 여는 탭. -->
     <button class="tab-btn" onclick="showSection('dashboard',this)">대시보드</button>
     <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
-    <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
-    <button class="tab-btn" onclick="showSection('hours',this)">사용시간</button>
-    <button class="tab-btn" onclick="showSection('students',this)">학생관리</button>
-    <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
     <button class="tab-btn" onclick="showSection('handover',this)">📝 인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
+    <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
+    <span class="tab-divider" aria-hidden="true"></span>
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
     <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
-    <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자내역</button>
+    <button class="tab-btn" onclick="showSection('students',this)">관리</button>
+    <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
+    <button class="tab-btn" onclick="showSection('hours',this)">시간</button>
+    <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자</button>
     <button class="tab-btn" onclick="showSection('billing',this)">💳 수납</button>
-    <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 관리자설정</button>
+    <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 설정</button>
   </div>
 </div>
 
