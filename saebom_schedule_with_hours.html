@@ -4212,6 +4212,13 @@ function buildStudentList(filter=''){
       const isAdmin = parseInt(s.seat) >= 54;
       const hColor = h>=180?'#27500A':h>=120?'#4338A8':'#A32D2D';
       const hBg = h>=180?'#E8F5E9':h>=120?'#EEF2FF':'#FCEBEB';
+      // 주간 목표 칩(승인제): 학생 신청(weeklyGoalReq)이 있으면 '승인대기' 표시
+      const _wG = Number(s.weeklyGoalH)||0, _wReq = s.weeklyGoalReq;
+      const _wHasReq = (typeof _wReq === 'number' && _wReq !== _wG);
+      const _wBg = _wHasReq?'#FFF4E5':(_wG?'#EAF7EE':'#F3F4F6');
+      const _wFg = _wHasReq?'#9A5B00':(_wG?'#1E7A46':'#9CA3AF');
+      const _wBd = _wHasReq?'solid #F5C88A':(_wG?'solid #A7E0BC':'dashed #D1D5DB');
+      const _wTxt = _wHasReq?`🎯 승인대기 ${_wReq}h`:(_wG?`🎯 주간 ${_wG}h`:'🎯 목표 설정');
 
       if (isAdmin) {
         // 관리자 카드: 회색 계열, 이용시간 미표시, 근무요일 표시
@@ -4247,7 +4254,7 @@ function buildStudentList(filter=''){
           ${s.expiry ? `<div style="font-size:10px;color:${new Date(s.expiry)<new Date()?'#C62828':'#888'};margin-bottom:3px">📅 ${s.startDate?s.startDate+' ~ ':''}${s.expiry}${new Date(s.expiry)<new Date()?' (만료)':''}</div>` : ''}
           <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
             <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
-            <span onclick="setWeeklyGoal(${idx},event)" title="주간 목표순공(시간) 설정 — 자동 상·벌점 기준" style="font-size:11px;font-weight:600;background:${s.weeklyGoalH?'#EAF7EE':'#F3F4F6'};color:${s.weeklyGoalH?'#1E7A46':'#9CA3AF'};border:1px ${s.weeklyGoalH?'solid #A7E0BC':'dashed #D1D5DB'};border-radius:20px;padding:2px 8px;display:inline-block;cursor:pointer">🎯 ${s.weeklyGoalH?`주간 ${s.weeklyGoalH}h`:'목표 설정'}</span>
+            <span onclick="openWeeklyGoalAdmin(${idx},event)" title="주간 목표순공 승인/설정 — 자동 상점 기준" style="font-size:11px;font-weight:600;background:${_wBg};color:${_wFg};border:1px ${_wBd};border-radius:20px;padding:2px 8px;display:inline-block;cursor:pointer">${_wTxt}</span>
           </div>
         </div>
       </div>`;
@@ -4264,23 +4271,61 @@ window.toggleGender = function(idx, e) {
   if (document.getElementById('fp-room')) buildFloorplan();
 };
 
-// 주간 목표순공(시간) 설정 — 자동 상·벌점 판정 기준. students/{좌석}.weeklyGoalH 에 부분 갱신 저장.
-window.setWeeklyGoal = async function(idx, e) {
-  e.stopPropagation(); // 카드 클릭(스케줄 모달) 방지
+// 주간 목표순공 승인/설정 모달 (승인제) — 학생 신청(weeklyGoalReq)을 관리자가 승인/거절하거나 직접 설정.
+// 엔진이 쓰는 값은 승인된 weeklyGoalH 뿐. 승인/거절/직접설정 시 weeklyGoalReq는 null로 정리.
+window.openWeeklyGoalAdmin = function(idx, e) {
+  if (e) e.stopPropagation(); // 카드 클릭(스케줄 모달) 방지
   const s = STUDENTS[idx];
-  const cur = Number(s.weeklyGoalH) || 0;
-  const raw = prompt(`${s.name} 주간 목표순공(시간)\n\n목표 대비 실제 순공이 80% 미만이면 벌점 1점,\n달성하면 상점 1점이 자동 부여됩니다.\n(0 또는 빈칸 = 목표 없음, 판정 제외)`, cur ? String(cur) : '');
-  if (raw === null) return; // 취소
-  const num = Math.max(0, Math.min(80, Math.round(Number(raw) || 0))); // 0~80시간
-  s.weeklyGoalH = num;
-  buildStudentList(document.getElementById('student-search').value);
+  const g = Number(s.weeklyGoalH) || 0;
+  const req = s.weeklyGoalReq;
+  const hasReq = (typeof req === 'number' && req !== g);
+  const old = document.getElementById('wg-modal-overlay'); if (old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'wg-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(94vw,400px);box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:0.5px solid #eee;background:#EEF2FF">
+        <div style="font-size:14.5px;font-weight:700;color:#1E1B4B">🎯 주간 목표순공 <span style="font-size:12px;font-weight:500;color:#4A3FA8">${s.name} · ${s.seat}번</span></div>
+        <button onclick="document.getElementById('wg-modal-overlay').remove()" style="background:rgba(0,0,0,0.08);border:none;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer">✕</button>
+      </div>
+      <div style="padding:16px 18px">
+        <div style="font-size:12.5px;color:#374151;margin-bottom:12px">현재 승인된 목표: <b style="color:#1E7A46">${g ? `주 ${g}시간` : '없음'}</b></div>
+        ${hasReq ? `
+          <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:11px 13px;margin-bottom:12px">
+            <div style="font-size:12.5px;color:#9A5B00;margin-bottom:8px">학생 신청: <b>주 ${req}시간</b></div>
+            <div style="display:flex;gap:6px">
+              <button onclick="wgApprove(${idx})" style="flex:1;padding:7px;background:#16A34A;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✓ 승인</button>
+              <button onclick="wgReject(${idx})" style="flex:1;padding:7px;background:#fff;color:#C62828;border:1px solid #F5C6C6;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">✕ 거절</button>
+            </div>
+          </div>` : ''}
+        <div style="font-size:11.5px;color:#6B7280;margin-bottom:5px">관리자 직접 설정 (승인 없이 바로 적용)</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input id="wg-direct-input" type="number" min="0" max="80" value="${g||''}" placeholder="시간" style="width:70px;padding:7px 9px;border:1px solid #C7D2FE;border-radius:8px;font-size:13px">
+          <span style="font-size:12px;color:#6B7280">시간</span>
+          <button onclick="wgSetDirect(${idx})" style="flex:1;padding:7px;background:#6366F1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">직접 설정</button>
+        </div>
+      </div>
+    </div>`;
+  overlay.addEventListener('click', ev => { if (ev.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+};
+
+async function _wgSave(idx, patch, localPatch) {
+  const s = STUDENTS[idx];
+  Object.assign(s, localPatch);
+  const ov = document.getElementById('wg-modal-overlay'); if (ov) ov.remove();
+  buildStudentList(document.getElementById('student-search') ? document.getElementById('student-search').value : '');
   try {
-    const cleanSeat = String(s.seat).replace('번','');
-    await updateDoc(doc(db, 'students', cleanSeat), { weeklyGoalH: num, updatedAt: serverTimestamp() });
-  } catch(err) {
-    console.error('주간 목표 저장 실패:', err);
-    alert('저장 실패: ' + (err.message || err));
-  }
+    await updateDoc(doc(db, 'students', String(s.seat).replace('번','')), { ...patch, updatedAt: serverTimestamp() });
+  } catch(err) { console.error('주간 목표 저장 실패:', err); alert('저장 실패: ' + (err.message || err)); }
+}
+window.wgApprove   = function(idx){ const req = Number(STUDENTS[idx].weeklyGoalReq)||0; _wgSave(idx, { weeklyGoalH: req,  weeklyGoalReq: null }, { weeklyGoalH: req,  weeklyGoalReq: null }); };
+window.wgReject    = function(idx){ _wgSave(idx, { weeklyGoalReq: null }, { weeklyGoalReq: null }); };
+window.wgSetDirect = function(idx){
+  const el = document.getElementById('wg-direct-input');
+  const num = Math.max(0, Math.min(80, Math.round(Number(el && el.value) || 0)));
+  _wgSave(idx, { weeklyGoalH: num, weeklyGoalReq: null }, { weeklyGoalH: num, weeklyGoalReq: null });
 };
 
 function filterStudents(){
@@ -8024,7 +8069,8 @@ async function saveStudentToFirebase(student) {
     hours: student.hours || {},
     fee: student.fee || 0,
     feeMemo: student.feeMemo || '',
-    weeklyGoalH: Number(student.weeklyGoalH) || 0, // 주간 목표순공(시간) — 자동판정 기준
+    weeklyGoalH: Number(student.weeklyGoalH) || 0, // 주간 목표순공(시간) — 관리자 승인된 값, 자동판정 기준
+    ...(typeof student.weeklyGoalReq === 'number' ? { weeklyGoalReq: student.weeklyGoalReq } : {}), // 승인 대기 신청 보존(없으면 필드 생략)
     awayAt: (window._awayStudents && window._awayStudents[student.name]) || '', // 외출 상태 보존
     // 앱 UI가 직접 다루지 않는 필드 보존 — setDoc은 문서를 통째로 덮어쓰므로 명시하지 않으면
     // 관리자가 학생 정보를 저장하는 순간 사라진다(예약 퇴원·예약 승계가 조용히 깨짐).
@@ -8234,7 +8280,8 @@ function _parseStudentDoc(v) {
     gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
     schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
     hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
-    weeklyGoalH: Number(v.weeklyGoalH) || 0 // 주간 목표순공(시간) — 자동판정 기준
+    weeklyGoalH: Number(v.weeklyGoalH) || 0, // 주간 목표순공(시간) — 관리자 승인된 값, 자동판정 기준
+    weeklyGoalReq: (typeof v.weeklyGoalReq === 'number' ? v.weeklyGoalReq : null) // 학생 신청(승인 대기) 값
   };
 }
 
@@ -8255,7 +8302,8 @@ async function loadStudentsFromFirebase() {
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
           hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
-          weeklyGoalH: Number(v.weeklyGoalH) || 0, // 주간 목표순공(시간) — 자동판정 기준
+          weeklyGoalH: Number(v.weeklyGoalH) || 0, // 주간 목표순공(시간) — 관리자 승인된 값, 자동판정 기준
+          weeklyGoalReq: (typeof v.weeklyGoalReq === 'number' ? v.weeklyGoalReq : null), // 학생 신청(승인 대기)
           awayAt: v.awayAt || '',
           // 저장(setDoc)이 문서를 통째로 덮어쓰므로, 앱이 직접 쓰지 않는 필드도 들고 있어야
           // 관리자 편집 시 유실되지 않는다. loginPin=지정 로그인번호, withdrawAt=예약 퇴원일,
@@ -8344,7 +8392,8 @@ async function loadStudentsFromFirebase() {
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
         schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
         hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
-        weeklyGoalH: Number(v.weeklyGoalH) || 0, // 주간 목표순공(시간) — 자동판정 기준
+        weeklyGoalH: Number(v.weeklyGoalH) || 0, // 주간 목표순공(시간) — 관리자 승인된 값, 자동판정 기준
+        weeklyGoalReq: (typeof v.weeklyGoalReq === 'number' ? v.weeklyGoalReq : null), // 학생 신청(승인 대기)
         awayAt: v.awayAt || '',
         // 로드 매핑과 동일하게 앱이 직접 안 쓰는 필드도 유지 — 여기서 빠뜨리면 스냅샷이 올 때
         // 로컬 학생 객체에서 사라지고, 다음 저장(setDoc)에 반영돼 실제 문서에서도 지워진다.
@@ -9820,13 +9869,14 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
   });
 }
 
-// ── 주간 목표순공 자동판정 (달성 상점 3점, 미달 벌점 없음) ──
+// ── 주간 목표순공 자동판정 (달성 상점 2점, 미달 벌점 없음) ──
 // 매주 지난 주(월~토) 순공(attendance_sessions durationMin 합)을 학생별 목표(weeklyGoalH)와 비교.
+// weeklyGoalH = 관리자 승인된 목표만(학생 신청 weeklyGoalReq는 승인 전까지 판정에 안 쓰임).
 // 유효목표 = 목표시간 − 그 주 '승인변경으로 빠진 교시'의 예정분(이중처벌 방지). 무단결석 교시는 차감 안 함.
-//   실제 ≥ 유효목표(100%) → merits +3(type:'auto') / 미달 시 벌점 없음(긍정 강화만)
+//   실제 ≥ 유효목표(100%) → merits +2(type:'auto') / 미달 시 벌점 없음(긍정 강화만)
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_weekly_goal_done 로 멱등, 취소상태 보존.
 const WEEKLY_START_ISO = '2026-07-22'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
-const WEEKLY_MERIT_POINTS = 3;
+const WEEKLY_MERIT_POINTS = 2;
 const _WEEKLY_DN = ['일','월','화','수','목','금','토'];
 function _periodDurMin(pn){ const w = NOSHOW_PERIOD_TIMES[pn]; return w ? (w[1] - w[0]) : 0; }
 function _mondayOf(dateLike){ const x = new Date(dateLike); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return x; } // 월=주 시작
