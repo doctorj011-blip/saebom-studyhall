@@ -10093,10 +10093,15 @@ async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actua
 
 // ── 주기(월간) 상점 자동판정 — 개근 3점 / 순공 상위25%·전월대비향상 2점 ──
 // 주기: 1주기=7/22~8/31 연속, 이후 매 달력월. 주기 종료 후(다음날부터) 소급 판정.
-//  · 개근 = 그 주기 무단결석(type:noshow, 미취소) 0건 AND 실제 이용(순공>0) → merits +3
-//  · 순공 우수 = 그 주기 순공 상위 25% 또는 전월(직전 주기) 대비 순공 향상 → merits +2 (첫 주기는 상위25%만)
+//  · 개근 = 무단결석 0건 AND 순공>0 AND base 예정 교시 이수율 80%↑ → merits +3
+//      이수율을 함께 보는 이유: 무단결석은 '예정인데 안 온' 경우만 찍히므로, 스케줄을 미리
+//      다 빼두면 무단결석 0건이 되어 사실상 안 다닌 학생이 개근 3점(=상쇄 1회분)을 가져간다.
+//  · 순공 우수 = 그 주기 순공 상위 25%(경계 동점 포함) 또는 직전 주기 대비 향상 → merits +2
+//      향상 비교는 운영일당 평균 기준 — 1주기(6주)와 9월(4주)처럼 길이가 다르면 총량 비교가 무의미.
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_cycle_merit_done 로 멱등, 취소상태 보존.
 const CYCLE1 = { start:'2026-07-22', end:'2026-08-31', id:'2026-C1', label2:'7/22~8/31' };
+// 개근 최소 이수율 — base 고정 시간표에 잡아둔 교시 중 실제로 이수한 비율의 하한.
+const CYCLE_ATTEND_MIN_RATE = 0.8;
 function _nextCycle(cyc){
   let y, m;
   if (cyc.id === '2026-C1') { y = 2026; m = 9; } // 1주기 다음은 9월
@@ -10150,9 +10155,53 @@ async function _noshowCountByName(startISO, endISO){
   return cnt;
 }
 
+// 주기 내 운영일수(일요일 제외) — 길이가 다른 주기끼리 순공을 비교할 때 정규화 분모.
+function _cycleOpDays(cyc){
+  let n = 0; const d = new Date(cyc.start+'T00:00:00'), e = new Date(cyc.end+'T00:00:00');
+  while (d <= e) { if (d.getDay() !== 0) n++; d.setDate(d.getDate()+1); }
+  return n;
+}
+
+// 주기 내 base 예정 교시 수와 승인변경으로 빠진 교시 수 — 개근 자격(예정 교시 이수율) 판정용.
+// 분모를 effective가 아닌 base(고정 시간표)로 두는 이유: 스케줄을 미리 다 빼버린 학생이
+// '무단결석 0건'만으로 개근 3점을 받는 구멍을 막기 위함. → seatKey → { base, dropped }
+async function _cycleScheduleLoad(cyc){
+  const dates = [], dayNames = [];
+  const d = new Date(cyc.start+'T00:00:00'), end = new Date(cyc.end+'T00:00:00');
+  while (d <= end) { if (d.getDay() !== 0) { dates.push(SH.sessIsoDate(d.getTime())); dayNames.push(_WEEKLY_DN[d.getDay()]); } d.setDate(d.getDate()+1); }
+  const chunks = []; for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i+30));
+  const [baseSnap, ...rptSnaps] = await Promise.all([
+    getDocs(collection(db, 'schedule_base')),
+    ...chunks.map(c => getDocs(query(collection(db, 'daily_reports'), where('date', 'in', c))))
+  ]);
+  const rptMap = {}; // seatKey → { dateIso: scheduleStr }
+  rptSnaps.forEach(snap => snap.forEach(x => {
+    const r = x.data(); if (typeof r.schedule !== 'string') return;
+    const id = x.id, cut = id.lastIndexOf('_');
+    const seatKey = id.slice(cut+1), date = id.slice(0, cut);
+    (rptMap[seatKey] = rptMap[seatKey] || {})[date] = r.schedule;
+  }));
+  const out = {};
+  baseSnap.forEach(bdoc => {
+    const seatKey = bdoc.id, bd = bdoc.data();
+    let base = 0, dropped = 0;
+    for (let i = 0; i < dates.length; i++){
+      const baseStr = bd[dayNames[i]] || '-';
+      const bp = window.parseScheduleStr(baseStr);
+      if (!bp || !bp.periods || !bp.periods.size) continue;
+      const effStr = (rptMap[seatKey] && rptMap[seatKey][dates[i]] !== undefined) ? rptMap[seatKey][dates[i]] : baseStr;
+      const ep = window.parseScheduleStr(effStr);
+      const effPeriods = (ep && ep.periods) ? ep.periods : new Set();
+      bp.periods.forEach(pn => { base++; if (!effPeriods.has(pn)) dropped++; });
+    }
+    out[seatKey] = { base, dropped };
+  });
+  return out;
+}
+
 window.assessCycleMerits = async function(){
-  for (let i = 0; i < 100 && !(window.STUDENTS && window.STUDENTS.length); i++) await new Promise(r => setTimeout(r, 300));
-  if (!(window.STUDENTS && window.STUDENTS.length)) return;
+  for (let i = 0; i < 100 && !(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr); i++) await new Promise(r => setTimeout(r, 300));
+  if (!(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr)) return;
   const todayISO = SH.sessIsoDate(Date.now());
   const done = await _cycleDoneMap();
   let cyc = { ...CYCLE1 };
@@ -10167,22 +10216,32 @@ async function _assessCycleMerits(cyc){
   try {
     const studyMin = await _sumStudyMin(cyc.start, cyc.end);
     const noshowCnt = await _noshowCountByName(cyc.start, cyc.end);
+    const schedLoad = await _cycleScheduleLoad(cyc);
     const prev = _prevCycleOf(cyc);
     const prevMin = prev ? await _sumStudyMin(prev.start, prev.end) : null;
+    // 주기 길이가 다르면(1주기 6주 vs 9월 4주) 총량 비교는 무의미 → 운영일당 평균으로 정규화
+    const curDays = _cycleOpDays(cyc), prevDays = prev ? _cycleOpDays(prev) : 0;
     // 현재 명부(실재·비테스트·비관리자)만 대상
     const roster = (window.STUDENTS || []).filter(s => s.name && (parseInt(s.seat)||0) < 54 && !(window.isTestStudent && window.isTestStudent(s.name)));
-    // 순공 상위 25% (순공>0 학생 기준)
+    // 순공 상위 25% (순공>0 학생 기준). 경계값 동점자는 모두 포함 — 정렬 우연으로 2점이 갈리지 않게.
     const active = roster.map(s => ({ s, min: studyMin[s.name] || 0 })).filter(o => o.min > 0).sort((a, b) => b.min - a.min);
     const topK = Math.ceil(active.length * 0.25);
-    const topSet = new Set(active.slice(0, topK).map(o => o.s.name));
+    const cutoffMin = topK > 0 ? active[topK-1].min : Infinity;
+    const topSet = new Set(active.filter(o => o.min >= cutoffMin).map(o => o.s.name));
     const writes = [];
     roster.forEach(s => {
       const seatKey = (s.seat || '').replace(/[^0-9]/g, '');
       const mine = studyMin[s.name] || 0;
-      // 개근: 무단결석 0건 AND 실제 이용(순공>0)
-      if ((noshowCnt[s.name] || 0) === 0 && mine > 0) writes.push(_writeCycleMerit(s, seatKey, cyc, 'attend', 3, `${cyc.label2} 개근`));
-      // 순공 우수: 상위25% OR 전월대비 향상
-      const improved = prevMin ? (mine > (prevMin[s.name] || 0)) : false;
+      // 개근: 무단결석 0건 AND 실제 이용(순공>0) AND base 예정 교시 이수율 80%↑
+      //   이수율 = (base 예정 − 승인변경으로 뺀 것 − 무단결석) / base 예정.
+      //   base가 0(고정 시간표 자체가 빈 좌석)이면 판정 대상 아님 — 빈 스케줄로 개근 따먹기 차단.
+      const sl = schedLoad[seatKey] || { base: 0, dropped: 0 };
+      const attRate = sl.base > 0 ? (sl.base - sl.dropped - (noshowCnt[s.name] || 0)) / sl.base : 0;
+      if ((noshowCnt[s.name] || 0) === 0 && mine > 0 && sl.base > 0 && attRate >= CYCLE_ATTEND_MIN_RATE)
+        writes.push(_writeCycleMerit(s, seatKey, cyc, 'attend', 3, `${cyc.label2} 개근 (이수율 ${Math.round(attRate*100)}%)`));
+      // 순공 우수: 상위25% OR 직전 주기 대비 향상(운영일당 평균 기준)
+      const improved = (prevMin && prevDays > 0 && curDays > 0)
+        ? ((mine / curDays) > ((prevMin[s.name] || 0) / prevDays)) : false;
       const isTop = topSet.has(s.name);
       if (isTop || improved) {
         const why = (isTop && improved) ? '상위25%·전월대비 향상' : (isTop ? '상위25%' : '전월대비 향상');
