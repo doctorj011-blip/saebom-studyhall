@@ -958,6 +958,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   <div class="sched-toolbar">
     <button id="class-edit-btn" class="class-edit-btn" onclick="toggleClassEdit()"><i class="ti ti-layout-grid-add" aria-hidden="true"></i> 반 편집</button>
     <button class="class-edit-btn" style="border-color:#C62828;color:#C62828" onclick="showPenaltyModal()">⚠️ 벌점 현황</button>
+    <button class="class-edit-btn" style="border-color:#4338A8;color:#4338A8" onclick="showCycleRankModal()">🏆 주기 순위</button>
     <span id="class-edit-hint" class="class-edit-hint" style="display:none">셀을 드래그해 묶으면 반이 생성됩니다 · 반을 누르면 수정/삭제</span>
   </div>
   <div id="schedule-scroll" style="overflow-x:auto">
@@ -1687,6 +1688,7 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
   window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-22'&&t<='2026-08-31')return{start:'2026-07-22',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
   window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
+  window._computeOffset=(M,P)=>{M=Math.max(0,Math.round(M||0));P=Math.max(0,Math.round(P||0));const r=Math.min(Math.floor(M/3),Math.floor(P/2));return{rounds:r,spent:r*3,cleared:r*2,netMerit:M-r*3,netDemerit:P-r*2,rawMerit:M,rawDemerit:P};};
 }
 
 // ── Firebase DB 준비 대기 (전 화면 공용) ──
@@ -3670,6 +3672,100 @@ window.toggleMeritCancel = async function(docId){
     if (document.getElementById('merit-modal-overlay')) await _renderMeritModalBody(data.seatKey, data.name);
     try { applyMeritBadges(); } catch(e){}
   } catch(e){ console.error('상점 취소/복구 실패:', e); alert('처리 실패: ' + (e.message || e)); }
+};
+
+// ── 주기 순위·상쇄 현황 모달 ──
+// 이번 주기 상점총합 M·벌점총합 P로 자동 상쇄(_computeOffset) 계산 → 잔여 상점 순위 시상(1등10/2등5/3등3만원).
+// 단계별 조치(10/18/30)는 상쇄와 무관한 원 벌점 누계(P)로 별도 표시.
+window.showCycleRankModal = async function(){
+  const old = document.getElementById('rank-modal-overlay'); if (old) old.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'rank-modal-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center';
+  const cyc = window._meritCycle();
+  overlay.innerHTML = `
+    <div style="background:#fff;border-radius:16px;width:min(96vw,620px);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#EEF2FF">
+        <div style="font-size:15px;font-weight:700;color:#1E1B4B">🏆 주기 순위 · 상쇄 현황 <span style="font-size:12px;font-weight:500;color:#4A3FA8">${cyc.label==='이번 주기'?'7/22~8/31':cyc.start.replace(/-/g,'.')+'~'+cyc.end.replace(/-/g,'.')}</span></div>
+        <button onclick="document.getElementById('rank-modal-overlay').remove()" style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+      </div>
+      <div id="rank-modal-body" style="overflow-y:auto;padding:14px 16px"><div style="text-align:center;padding:32px;color:#aaa;font-size:13px">집계 중...</div></div>
+    </div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+  const bodyEl = overlay.querySelector('#rank-modal-body');
+  try {
+    const db = await window.waitDb();
+    const { collection, getDocs } = window._fs;
+    const [mSnap, pSnap] = await Promise.all([getDocs(collection(db, 'merits')), getDocs(collection(db, 'penalties'))]);
+    const meritByName = {}, penByName = {}, seatOf = {};
+    mSnap.forEach(d => { const v = d.data(); if (v.canceled || !v.name) return; if (!window._inMeritCycle(v.date, cyc)) return; meritByName[v.name] = (meritByName[v.name]||0) + (Number(v.points)||0); if (v.seatKey!=null) seatOf[v.name] = v.seatKey; });
+    pSnap.forEach(d => { const v = d.data(); if (!v.name || !window._inMeritCycle(v.date, cyc)) return; let s = 0; Object.values(v.periods||{}).forEach(p => { if (!p.canceled) s += (p.points||1); }); penByName[v.name] = (penByName[v.name]||0) + s; if (v.seatKey!=null && seatOf[v.name]==null) seatOf[v.name] = v.seatKey; });
+
+    // 대상 = 현재 명부(실재·비테스트·비관리자) + 주기 내 기록이 있는 이름
+    const roster = new Map();
+    (window.STUDENTS||[]).forEach(s => { if (s.name && (parseInt(s.seat)||0)<54 && !(window.isTestStudent && window.isTestStudent(s.name))) roster.set(s.name, (s.seat||'').replace(/[^0-9]/g,'')); });
+    Object.keys(Object.assign({}, meritByName, penByName)).forEach(nm => { if (!roster.has(nm) && !(window.isTestStudent && window.isTestStudent(nm))) roster.set(nm, seatOf[nm] || '—'); });
+
+    const rows = [...roster.entries()].map(([name, seat]) => {
+      const off = window._computeOffset(meritByName[name]||0, penByName[name]||0);
+      return { name, seat, ...off };
+    }).filter(r => r.rawMerit > 0 || r.rawDemerit > 0);
+    rows.sort((a, b) => (b.netMerit - a.netMerit) || ((parseInt(a.seat)||999) - (parseInt(b.seat)||999)));
+
+    const PRIZE = ['10만원', '5만원', '3만원'];
+    const totalRounds = rows.reduce((a, r) => a + r.rounds, 0);
+    const prized = rows.filter(r => r.netMerit > 0).slice(0, 3).length;
+
+    let prizeIdx = 0;
+    const trs = rows.map(r => {
+      const gotPrize = r.netMerit > 0 && prizeIdx < 3;
+      const rank = gotPrize ? (prizeIdx + 1) : null;
+      const prize = gotPrize ? PRIZE[prizeIdx] : '';
+      if (gotPrize) prizeIdx++;
+      const rankCell = rank
+        ? `<span style="display:inline-flex;flex-direction:column;align-items:center;line-height:1.1"><b style="font-size:14px;color:#4338A8">${rank}등</b><span style="font-size:10px;font-weight:700;color:#1E7A46">${prize}</span></span>`
+        : `<span style="font-size:11px;color:#C4C2D4">—</span>`;
+      const step = r.rawDemerit >= 30 ? '<span style="background:#FCE8E6;color:#B3261E;border-radius:6px;padding:1px 6px;font-size:10.5px;font-weight:700">이용제한 검토</span>'
+                 : r.rawDemerit >= 18 ? '<span style="background:#FEEFD9;color:#8A5200;border-radius:6px;padding:1px 6px;font-size:10.5px;font-weight:700">대면상담</span>'
+                 : r.rawDemerit >= 10 ? '<span style="background:#FEF6E0;color:#8A5200;border-radius:6px;padding:1px 6px;font-size:10.5px;font-weight:700">1차경고</span>' : '';
+      const seatNum = (parseInt(r.seat)||0);
+      return `<tr style="border-top:1px solid #F1F0F7">
+        <td style="padding:8px 6px;text-align:center;width:52px">${rankCell}</td>
+        <td style="padding:8px 6px"><span onclick="showMeritModal('${String(r.seat).replace(/'/g,"\\'")}','${String(r.name).replace(/'/g,"\\'")}')" style="cursor:pointer;font-weight:600;color:#1F2937">${r.name}</span> <span style="font-size:11px;color:#9CA3AF">${r.seat}${seatNum?'번':''}</span></td>
+        <td style="padding:8px 6px;text-align:right;font-variant-numeric:tabular-nums"><b style="color:#1E7A46">${r.netMerit}</b><span style="font-size:10.5px;color:#9CA3AF"> / ${r.rawMerit}</span></td>
+        <td style="padding:8px 6px;text-align:right;font-variant-numeric:tabular-nums"><b style="color:${r.netDemerit?'#B3261E':'#9CA3AF'}">${r.netDemerit}</b><span style="font-size:10.5px;color:#9CA3AF"> / ${r.rawDemerit}</span></td>
+        <td style="padding:8px 6px;text-align:center;font-size:11px;color:${r.rounds?'#4338A8':'#C4C2D4'}">${r.rounds?r.rounds+'회':'—'}</td>
+        <td style="padding:8px 6px;text-align:center">${step}</td>
+      </tr>`;
+    }).join('');
+
+    bodyEl.innerHTML = `
+      <div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px">
+        <span style="background:#F3F4F6;border-radius:8px;padding:5px 10px;font-size:12px">대상 <b>${rows.length}명</b></span>
+        <span style="background:#EAF7EE;border-radius:8px;padding:5px 10px;font-size:12px;color:#1E7A46">시상 <b>${prized}명</b></span>
+        <span style="background:#EEF2FF;border-radius:8px;padding:5px 10px;font-size:12px;color:#4338A8">상쇄 누적 <b>${totalRounds}회</b></span>
+      </div>
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12.5px">
+          <thead><tr style="color:#6B7280;font-size:11px;text-align:left">
+            <th style="padding:4px 6px;text-align:center">순위·상금</th>
+            <th style="padding:4px 6px">이름</th>
+            <th style="padding:4px 6px;text-align:right">상점 잔여/받음</th>
+            <th style="padding:4px 6px;text-align:right">벌점 잔여/받음</th>
+            <th style="padding:4px 6px;text-align:center">상쇄</th>
+            <th style="padding:4px 6px;text-align:center">조치</th>
+          </tr></thead>
+          <tbody>${trs || '<tr><td colspan="6" style="text-align:center;padding:24px;color:#aaa">이번 주기 기록이 없습니다</td></tr>'}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px;font-size:11px;color:#9CA3AF;line-height:1.7">
+        · <b>상점 잔여</b> = 받은 상점에서 벌점 상쇄에 쓴 만큼 뺀 값. <b>시상은 잔여 상점 순</b>입니다.<br>
+        · <b>벌점 잔여</b> = 상쇄로 지워지고 남은 벌점 / <b>받음</b> = 실제 받은 원 누계.<br>
+        · <b>조치 단계(경고10·상담18·제한30)는 상쇄와 무관하게 '받은' 벌점으로 판단</b>합니다.<br>
+        · 잔여 상점이 같으면 순위가 애매할 수 있으니 시상 전 확인하세요.
+      </div>`;
+  } catch(e){ console.error('주기 순위 집계 실패:', e); bodyEl.innerHTML = `<div style="text-align:center;padding:28px;color:#C62828;font-size:13px">❌ 집계 실패: ${e.message||e}</div>`; }
 };
 
 function getCellContent(sched, pidx) {

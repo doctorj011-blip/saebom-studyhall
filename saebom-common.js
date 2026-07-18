@@ -27,6 +27,18 @@ window._meritCycle = function(refISO) {
 };
 window._inMeritCycle = function(dateISO, cyc) { return !!dateISO && dateISO >= cyc.start && dateISO <= cyc.end; };
 
+// ── 벌점 자동 상쇄(계산식) ──
+// 주기 상점총합 M, 벌점총합 P(둘 다 미취소 기준)로 상쇄를 그때그때 계산(원장 없음, 멱등).
+// 규칙: 벌점 잔여 2점 이상 + 상점 3점 모이면 상점3→벌점2 소거, 무제한 반복. 오래된 벌점부터(표시는 미구현).
+//   rounds = min(⌊M/3⌋, ⌊P/2⌋). netMerit=보상·순위용 잔여 상점, netDemerit=잔여 벌점.
+//   ⚠️ 단계별 조치(10/18/30)는 rawDemerit(P, 상쇄 무관 원누계)로 판단할 것.
+window._computeOffset = function(M, P) {
+  M = Math.max(0, Math.round(M || 0)); P = Math.max(0, Math.round(P || 0));
+  const rounds = Math.min(Math.floor(M / 3), Math.floor(P / 2));
+  return { rounds, spent: rounds * 3, cleared: rounds * 2,
+           netMerit: M - rounds * 3, netDemerit: P - rounds * 2, rawMerit: M, rawDemerit: P };
+};
+
 // 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)
 window._normalizeHours = function(hours) {
   if (!hours || typeof hours !== 'object') return {};

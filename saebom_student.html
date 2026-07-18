@@ -1155,6 +1155,7 @@ body{
       <div class="section-label">TODAY · 오늘 일정</div>
       <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
       <div id="weekly-goal-card"></div>
+      <div id="score-offset-note"></div>
       <div id="merit-card"></div>
       <div id="penalty-card"></div>
       <div class="day-tabs" id="student-day-tabs"></div>
@@ -1447,6 +1448,7 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
   window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-22'&&t<='2026-08-31')return{start:'2026-07-22',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
   window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
+  window._computeOffset=(M,P)=>{M=Math.max(0,Math.round(M||0));P=Math.max(0,Math.round(P||0));const r=Math.min(Math.floor(M/3),Math.floor(P/2));return{rounds:r,spent:r*3,cleared:r*2,netMerit:M-r*3,netDemerit:P-r*2,rawMerit:M,rawDemerit:P};};
 }
 
 // ── 교시 데이터 ──
@@ -1665,6 +1667,7 @@ function renderPenaltyCard() {
       rows.push({ date: doc.date, day: doc.day, n: k, p: p });
     });
   });
+  window._cycPenTotal = monthTotal; renderOffsetNote();
   if (!rows.length) { el.innerHTML = ''; return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
@@ -1751,6 +1754,7 @@ function renderMeritCard() {
     if (window._inMeritCycle(doc.date, cyc)) monthTotal += pts;
     rows.push({ date: doc.date, day: doc.day, pts: pts, reason: doc.reason });
   });
+  window._cycMeritTotal = monthTotal; renderOffsetNote();
   if (!rows.length) { el.innerHTML = ''; return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(5,150,105,0.14)">
@@ -1764,6 +1768,19 @@ function renderMeritCard() {
         <span style="font-size:12px;font-weight:700;color:#059669">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
       </div>
       <div style="margin-top:4px">${list}</div>
+    </div>`;
+}
+
+// 상점↔벌점 자동 상쇄 요약 — 이번 주기 상점총합·벌점총합으로 계산(계산식). 상쇄가 있을 때만 표시.
+function renderOffsetNote() {
+  const el = document.getElementById('score-offset-note');
+  if (!el) return;
+  const off = window._computeOffset(window._cycMeritTotal || 0, window._cycPenTotal || 0);
+  if (!off.rounds) { el.innerHTML = ''; return; }
+  el.innerHTML = `
+    <div style="background:#F5F3FF;border:1.5px solid #DDD6FE;border-radius:10px;padding:11px 14px;margin-bottom:12px;font-size:12px;color:#4338A8">
+      <div>🔄 <b>상점으로 벌점 상쇄 ${off.rounds}회</b> — 상점 ${off.spent}점으로 벌점 ${off.cleared}점을 지웠어요.</div>
+      <div style="margin-top:3px;color:#5B4FC7">상점 잔여 <b>${off.netMerit}점</b> · 벌점 잔여 <b>${off.netDemerit}점</b> <span style="color:#9CA3AF">(순위는 상점 잔여로)</span></div>
     </div>`;
 }
 
