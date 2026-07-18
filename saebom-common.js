@@ -15,6 +15,18 @@ window._recentMonths = function(n) { const out = [], d = new Date(); for (let i 
 window._ymLabel = function(key) { return parseInt(String(key).split('-')[1], 10) + '월'; };
 window._readHour = function(hours, key) { return (hours && hours[key] != null) ? hours[key] : 0; };
 
+// ── 상·벌점 집계 주기 ──
+// 시범/1주기는 7/22~8/31 '한 주기'로 연속 집계(8/1에 초기화되지 않음). 그 외 날짜는 해당 달력월.
+// 상·벌점 카드/모달의 '이번 주기/이번 달' 합계와 누적조치 판정 기준. 날짜는 ISO(YYYY-MM-DD) 문자열 비교.
+window._meritCycle = function(refISO) {
+  const today = refISO || (function () { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
+  if (today >= '2026-07-22' && today <= '2026-08-31') return { start: '2026-07-22', end: '2026-08-31', label: '이번 주기' };
+  const ym = today.slice(0, 7), y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+  const lastDay = new Date(y, m, 0).getDate();
+  return { start: ym + '-01', end: ym + '-' + String(lastDay).padStart(2, '0'), label: '이번 달' };
+};
+window._inMeritCycle = function(dateISO, cyc) { return !!dateISO && dateISO >= cyc.start && dateISO <= cyc.end; };
+
 // 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)
 window._normalizeHours = function(hours) {
   if (!hours || typeof hours !== 'object') return {};

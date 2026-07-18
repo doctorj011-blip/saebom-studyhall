@@ -1445,6 +1445,8 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
   window._loginKey=(s)=>!s?'':(s.loginPin?String(s.loginPin).replace(/\D/g,'').slice(0,4):window._phoneLast4(s.phone));
   window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
+  window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-22'&&t<='2026-08-31')return{start:'2026-07-22',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
+  window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
 }
 
 // ── 교시 데이터 ──
@@ -1651,8 +1653,7 @@ async function loadMyPenalties() {
 function renderPenaltyCard() {
   const el = document.getElementById('penalty-card');
   if (!el || !_penaltyDocs) return;
-  const t = new Date();
-  const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+  const cyc = window._meritCycle();
   let total = 0, monthTotal = 0;
   const rows = [];
   _penaltyDocs.forEach(doc => {
@@ -1660,7 +1661,7 @@ function renderPenaltyCard() {
       const p = doc.periods[k];
       if (p.canceled) return; // 관리자가 취소한 벌점은 표시하지 않음
       total += (p.points || 1); // 무단결석=2점, 늦은 변경(구 기록 포함)=1점
-      if (doc.date.slice(0,7) === curYm) monthTotal += (p.points || 1);
+      if (window._inMeritCycle(doc.date, cyc)) monthTotal += (p.points || 1);
       rows.push({ date: doc.date, day: doc.day, n: k, p: p });
     });
   });
@@ -1674,7 +1675,7 @@ function renderPenaltyCard() {
     <div style="background:var(--red-pale);border:1.5px solid var(--red-border);border-radius:10px;padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:13px;font-weight:700;color:var(--red)">⚠️ 벌점</span>
-        <span style="font-size:12px;font-weight:700;color:var(--red)">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+        <span style="font-size:12px;font-weight:700;color:var(--red)">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
       </div>
       <div style="margin-top:4px">${list}</div>
       <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전까지 변경하면 벌점이 없습니다. 늦은 변경은 교시당 1점, 변경 없이 안 오면(무단결석) 교시당 2점입니다.</div>
@@ -1739,8 +1740,7 @@ async function loadMyMerits() {
 function renderMeritCard() {
   const el = document.getElementById('merit-card');
   if (!el || !_meritDocs) return;
-  const t = new Date();
-  const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+  const cyc = window._meritCycle();
   let total = 0, monthTotal = 0;
   const rows = [];
   _meritDocs.forEach(doc => {
@@ -1748,7 +1748,7 @@ function renderMeritCard() {
     const pts = Number(doc.points) || 0;
     if (pts <= 0) return;
     total += pts;
-    if (String(doc.date).slice(0,7) === curYm) monthTotal += pts;
+    if (window._inMeritCycle(doc.date, cyc)) monthTotal += pts;
     rows.push({ date: doc.date, day: doc.day, pts: pts, reason: doc.reason });
   });
   if (!rows.length) { el.innerHTML = ''; return; }
@@ -1761,7 +1761,7 @@ function renderMeritCard() {
     <div style="background:#ECFDF5;border:1.5px solid #A7F3D0;border-radius:10px;padding:12px 14px;margin-bottom:12px">
       <div style="display:flex;justify-content:space-between;align-items:center">
         <span style="font-size:13px;font-weight:700;color:#059669">🎁 상점</span>
-        <span style="font-size:12px;font-weight:700;color:#059669">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+        <span style="font-size:12px;font-weight:700;color:#059669">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
       </div>
       <div style="margin-top:4px">${list}</div>
     </div>`;

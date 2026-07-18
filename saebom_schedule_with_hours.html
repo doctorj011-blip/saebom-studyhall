@@ -1685,6 +1685,8 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
   window._loginKey=(s)=>!s?'':(s.loginPin?String(s.loginPin).replace(/\D/g,'').slice(0,4):window._phoneLast4(s.phone));
   window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
+  window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-22'&&t<='2026-08-31')return{start:'2026-07-22',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
+  window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
 }
 
 // ── Firebase DB 준비 대기 (전 화면 공용) ──
@@ -3449,8 +3451,7 @@ async function _renderPenaltyList(filterSeatKey) {
       const k = doc.seatKey || doc.seat || '?';
       (byStudent[k] = byStudent[k] || []).push(doc);
     });
-    const t = new Date();
-    const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+    const cyc = window._meritCycle();
 
     const blocks = Object.keys(byStudent).sort((a, b) => (parseInt(a)||999) - (parseInt(b)||999)).map(sk => {
       const list = byStudent[sk].sort((a, b) => a.date < b.date ? 1 : -1);
@@ -3464,7 +3465,7 @@ async function _renderPenaltyList(filterSeatKey) {
           const isNoShow = p.type === 'noshow';
           const isManual = p.type === 'manual';
           const isAutoReason = p.type === 'weekly_short'; // 교시 없는 자동 벌점(사유 기반)
-          if (!p.canceled) { total += pts; if (doc.date.slice(0,7) === curYm) monthTotal += pts; }
+          if (!p.canceled) { total += pts; if (window._inMeritCycle(doc.date, cyc)) monthTotal += pts; }
           const dl = p.deadline ? new Date(p.deadline) : null;
           const ch = p.changedAt ? new Date(p.changedAt) : null;
           const fmt = d => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '?';
@@ -3493,7 +3494,7 @@ async function _renderPenaltyList(filterSeatKey) {
       return `<div style="border:1px solid #eee;border-radius:12px;padding:10px 14px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
           <span style="font-size:13.5px;font-weight:700;color:#1F2937">${name} <span style="font-size:11px;font-weight:500;color:#9CA3AF">${sk}번</span></span>
-          <span style="font-size:12px;font-weight:700;color:#C62828">이번 달 ${monthTotal}점 · 전체 ${total}점</span>
+          <span style="font-size:12px;font-weight:700;color:#C62828">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
         </div>${rows.join('')}
       </div>`;
     });
@@ -3615,10 +3616,9 @@ async function _renderMeritModalBody(seatKey, name){
     const list = docs.filter(d => String(d.seatKey) === String(seatKey) || (d.name && d.name === name))
                      .sort((a,b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
     if (!list.length) { bodyEl.innerHTML = `<div style="text-align:center;padding:24px;color:#aaa;font-size:13px">부여된 상점이 없습니다</div>`; return; }
-    const t = new Date();
-    const curYm = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}`;
+    const cyc = window._meritCycle();
     let total = 0, monthTotal = 0;
-    list.forEach(d => { if (!d.canceled) { const p = Number(d.points)||0; total += p; if (String(d.date).slice(0,7) === curYm) monthTotal += p; } });
+    list.forEach(d => { if (!d.canceled) { const p = Number(d.points)||0; total += p; if (window._inMeritCycle(d.date, cyc)) monthTotal += p; } });
     const rows = list.map(d => {
       const p = Number(d.points)||0;
       return `<div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:7px 0;border-top:1px solid #F3F4F6;${d.canceled?'opacity:0.5':''}">
@@ -3629,7 +3629,7 @@ async function _renderMeritModalBody(seatKey, name){
         <button onclick="toggleMeritCancel('${d.id}')" style="flex:0 0 auto;padding:3px 8px;border:1px solid ${d.canceled?'#059669':'#D1D5DB'};background:#fff;color:${d.canceled?'#059669':'#6B7280'};border-radius:6px;font-size:11px;cursor:pointer">${d.canceled?'복구':'취소'}</button>
       </div>`;
     }).join('');
-    bodyEl.innerHTML = `<div style="display:flex;justify-content:flex-end;gap:10px;font-size:12px;font-weight:700;color:#059669;margin-bottom:2px">이번 달 ${monthTotal}점 · 전체 ${total}점</div>${rows}`;
+    bodyEl.innerHTML = `<div style="display:flex;justify-content:flex-end;gap:10px;font-size:12px;font-weight:700;color:#059669;margin-bottom:2px">${cyc.label} ${monthTotal}점 · 전체 ${total}점</div>${rows}`;
   } catch(e){ bodyEl.innerHTML = `<div style="text-align:center;padding:24px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message||e}</div>`; }
 }
 
@@ -9880,6 +9880,7 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
 //   실제 ≥ 유효목표(100%) → merits +2(type:'auto') / 미달 시 벌점 없음(긍정 강화만)
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_weekly_goal_done 로 멱등, 취소상태 보존.
 const WEEKLY_START_ISO = '2026-07-22'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
+const WEEKLY_END_ISO = '2026-08-31';   // 1주기 종료 — 이 날짜 이후로 끝나는 주는 판정 안 함(다음 주기 정해지면 연장)
 const WEEKLY_MERIT_POINTS = 2;
 const _WEEKLY_DN = ['일','월','화','수','목','금','토'];
 function _periodDurMin(pn){ const w = NOSHOW_PERIOD_TIMES[pn]; return w ? (w[1] - w[0]) : 0; }
@@ -9904,6 +9905,7 @@ window.assessWeeklyGoals = async function(){
   for (let wk = new Date(startMon); wk < thisMon; wk.setDate(wk.getDate() + 7)) {
     const weekIso = SH.sessIsoDate(wk.getTime()); // 주 키 = 그 주 월요일 ISO
     if (done[weekIso]) continue;
+    if (SH.sessIsoDate(wk.getTime() + 5*24*3600*1000) > WEEKLY_END_ISO) continue; // 그 주 토요일이 주기 종료 이후면 판정 안 함
     if (now < wk.getTime() + 7*24*3600*1000 + 2*3600*1000) continue; // 다음 월요일 02:00 이후에만(11교시 자정넘김 여유)
     await _assessWeekGoals(new Date(wk), weekIso);
   }
