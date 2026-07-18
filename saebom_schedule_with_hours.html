@@ -6724,6 +6724,8 @@ setInterval(() => {
     if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
     // 지난 주(월~토) 목표순공 자동판정 — 월요일 새벽이면 방금 끝난 주가 확정됨
     if (window.assessWeeklyGoals) window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e));
+    // 끝난 주기(1주기 7/22~8/31, 이후 월간) 개근·순공 상점 판정 — 주기 종료 다음날부터
+    if (window.assessCycleMerits) window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e));
     // 예약 퇴원(withdrawAt) 대상 자동 처리 — 날짜가 지난 학생을 보관함으로
     if (window.autoWithdrawExpired) window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e));
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
@@ -8526,6 +8528,7 @@ loadTodayCheckinFromFirebase();
 // 무단결석 벌점 판정 — 지난 날짜분 소급(멱등·기기간 완료표시 공유). 학생 로드가 끝난 뒤 여유를 두고 실행.
 setTimeout(() => { try { window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e)); } catch(e) {} }, 20000);
 setTimeout(() => { try { window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e)); } catch(e) {} }, 25000);
+setTimeout(() => { try { window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e)); } catch(e) {} }, 30000);
 // 예약 퇴원(withdrawAt) 자동 처리 — 키오스크가 2시에 꺼져 있었어도 로드 시 소급 처리된다.
 setTimeout(() => { try { window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e)); } catch(e) {} }, 25000);
 // 인수인계 미확인 배지 — 조교가 탭을 열지 않아도 앞 조 메모가 남아 있음을 알아채게 한다.
@@ -9990,6 +9993,120 @@ async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actua
     points: WEEKLY_MERIT_POINTS, type: 'auto',
     reason: `주간 목표순공 달성 (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
     canceled: !!prev.canceled, createdAt: new Date().toISOString()
+  });
+}
+
+// ── 주기(월간) 상점 자동판정 — 개근 3점 / 순공 상위25%·전월대비향상 2점 ──
+// 주기: 1주기=7/22~8/31 연속, 이후 매 달력월. 주기 종료 후(다음날부터) 소급 판정.
+//  · 개근 = 그 주기 무단결석(type:noshow, 미취소) 0건 AND 실제 이용(순공>0) → merits +3
+//  · 순공 우수 = 그 주기 순공 상위 25% 또는 전월(직전 주기) 대비 순공 향상 → merits +2 (첫 주기는 상위25%만)
+// 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_cycle_merit_done 로 멱등, 취소상태 보존.
+const CYCLE1 = { start:'2026-07-22', end:'2026-08-31', id:'2026-C1', label2:'7/22~8/31' };
+function _nextCycle(cyc){
+  let y, m;
+  if (cyc.id === '2026-C1') { y = 2026; m = 9; } // 1주기 다음은 9월
+  else { const p = cyc.start.split('-').map(Number); if (p[1] === 12) { y = p[0]+1; m = 1; } else { y = p[0]; m = p[1]+1; } }
+  const ym = `${y}-${String(m).padStart(2,'0')}`, last = new Date(y, m, 0).getDate();
+  return { start:`${ym}-01`, end:`${ym}-${String(last).padStart(2,'0')}`, id: ym, label2:`${m}월` };
+}
+function _prevCycleOf(cyc){
+  if (cyc.id === '2026-C1') return null;
+  if (cyc.start === '2026-09-01') return CYCLE1; // 9월의 직전 주기 = 1주기
+  const p = cyc.start.split('-').map(Number); let py = p[0], pm = p[1]-1; if (pm === 0) { py = p[0]-1; pm = 12; }
+  const ym = `${py}-${String(pm).padStart(2,'0')}`, last = new Date(py, pm, 0).getDate();
+  return { start:`${ym}-01`, end:`${ym}-${String(last).padStart(2,'0')}`, id: ym, label2:`${pm}월` };
+}
+async function _cycleDoneMap(){
+  try { const s = await getDoc(doc(db, 'students', '_meta_cycle_merit_done')); return s.exists() ? (s.data().cycles || {}) : {}; }
+  catch(e){ return {}; }
+}
+async function _markCycleDone(id, info){
+  try { await setDoc(doc(db, 'students', '_meta_cycle_merit_done'), { name:'', cycles:{ [id]: info } }, { merge:true }); }
+  catch(e){ console.warn('주기 상점 완료표시 실패:', e); }
+}
+
+// 기간(ISO start~end) 순공(분) 학생별 합계 — attendance_sessions durationMin, inDate 'in' 30일 청크
+async function _sumStudyMin(startISO, endISO){
+  const dates = []; const d = new Date(startISO+'T00:00:00'), end = new Date(endISO+'T00:00:00');
+  while (d <= end) { dates.push(SH.sessIsoDate(d.getTime())); d.setDate(d.getDate()+1); }
+  const chunks = []; for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i+30));
+  const snaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, SESS_COL), where('inDate', 'in', c)))));
+  const byName = {};
+  snaps.forEach(snap => snap.forEach(x => {
+    const s = x.data(); if (!s.studentName || typeof s.inTs !== 'number') return;
+    let m = 0;
+    if (s.status === 'closed' && typeof s.durationMin === 'number') m = s.durationMin;
+    else if (s.status === 'open') { let away = s.awayMs || 0; if (s.awayStartTs) away += Math.max(0, Math.min(Date.now(), sessCapTs(s.inTs)) - s.awayStartTs); m = sessDurationMin(s.inTs, Date.now(), away); }
+    byName[s.studentName] = (byName[s.studentName] || 0) + m;
+  }));
+  return byName;
+}
+// 기간 내 무단결석(미취소) 건수 학생별
+async function _noshowCountByName(startISO, endISO){
+  const dates = []; const d = new Date(startISO+'T00:00:00'), end = new Date(endISO+'T00:00:00');
+  while (d <= end) { dates.push(SH.sessIsoDate(d.getTime())); d.setDate(d.getDate()+1); }
+  const chunks = []; for (let i = 0; i < dates.length; i += 30) chunks.push(dates.slice(i, i+30));
+  const snaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, 'penalties'), where('date', 'in', c)))));
+  const cnt = {};
+  snaps.forEach(snap => snap.forEach(x => {
+    const dd = x.data(); if (!dd.name) return;
+    Object.values(dd.periods || {}).forEach(p => { if (p.type === 'noshow' && !p.canceled) cnt[dd.name] = (cnt[dd.name] || 0) + 1; });
+  }));
+  return cnt;
+}
+
+window.assessCycleMerits = async function(){
+  for (let i = 0; i < 100 && !(window.STUDENTS && window.STUDENTS.length); i++) await new Promise(r => setTimeout(r, 300));
+  if (!(window.STUDENTS && window.STUDENTS.length)) return;
+  const todayISO = SH.sessIsoDate(Date.now());
+  const done = await _cycleDoneMap();
+  let cyc = { ...CYCLE1 };
+  for (let guard = 0; guard < 24; guard++) {
+    if (cyc.end >= todayISO) break; // 아직 안 끝난(현재/미래) 주기 — 판정 안 함
+    if (!done[cyc.id]) await _assessCycleMerits(cyc);
+    cyc = _nextCycle(cyc);
+  }
+};
+
+async function _assessCycleMerits(cyc){
+  try {
+    const studyMin = await _sumStudyMin(cyc.start, cyc.end);
+    const noshowCnt = await _noshowCountByName(cyc.start, cyc.end);
+    const prev = _prevCycleOf(cyc);
+    const prevMin = prev ? await _sumStudyMin(prev.start, prev.end) : null;
+    // 현재 명부(실재·비테스트·비관리자)만 대상
+    const roster = (window.STUDENTS || []).filter(s => s.name && (parseInt(s.seat)||0) < 54 && !(window.isTestStudent && window.isTestStudent(s.name)));
+    // 순공 상위 25% (순공>0 학생 기준)
+    const active = roster.map(s => ({ s, min: studyMin[s.name] || 0 })).filter(o => o.min > 0).sort((a, b) => b.min - a.min);
+    const topK = Math.ceil(active.length * 0.25);
+    const topSet = new Set(active.slice(0, topK).map(o => o.s.name));
+    const writes = [];
+    roster.forEach(s => {
+      const seatKey = (s.seat || '').replace(/[^0-9]/g, '');
+      const mine = studyMin[s.name] || 0;
+      // 개근: 무단결석 0건 AND 실제 이용(순공>0)
+      if ((noshowCnt[s.name] || 0) === 0 && mine > 0) writes.push(_writeCycleMerit(s, seatKey, cyc, 'attend', 3, `${cyc.label2} 개근`));
+      // 순공 우수: 상위25% OR 전월대비 향상
+      const improved = prevMin ? (mine > (prevMin[s.name] || 0)) : false;
+      const isTop = topSet.has(s.name);
+      if (isTop || improved) {
+        const why = (isTop && improved) ? '상위25%·전월대비 향상' : (isTop ? '상위25%' : '전월대비 향상');
+        writes.push(_writeCycleMerit(s, seatKey, cyc, 'study', 2, `${cyc.label2} 순공 우수 (${why})`));
+      }
+    });
+    await Promise.all(writes);
+    await _markCycleDone(cyc.id, { at: Date.now(), students: writes.length });
+    console.log(`[주기상점] ${cyc.id} 판정 완료 — ${writes.length}건`);
+  } catch(e){ console.error('주기 상점 판정 실패:', cyc.id, e); } // 완료표시 안 남김 → 다음 시작 때 재시도(멱등)
+}
+
+// 주기 상점 → merits/{고정ID}(멱등, 취소상태 보존). 주기 종료일(cyc.end)에 귀속.
+async function _writeCycleMerit(s, seatKey, cyc, kind, points, reason){
+  const ref = doc(db, 'merits', `auto_${kind}_${cyc.id}_${seatKey}`);
+  let prev = {}; try { const x = await getDoc(ref); if (x.exists()) prev = x.data(); } catch(e){}
+  await setDoc(ref, {
+    name: s.name, seatKey, date: cyc.end, day: _WEEKLY_DN[new Date(cyc.end + 'T00:00:00').getDay()],
+    points, type: 'auto', reason, canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
 
