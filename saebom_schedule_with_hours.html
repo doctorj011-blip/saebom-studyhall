@@ -4732,18 +4732,22 @@ window.checkinConfirm = function() {
   let isDuringPeriod = false;
   if (!isCheckout && !window.isAdminSeat(student.seat)) {
     const curPeriod = getCurrentPeriod();
-    // 7교시(18:00) 이후에만 스터디룸 안내 적용
+    // 평일은 7교시(18:00) 이후에만, 토요일은 예약제라 1~11교시 전 시간 스터디룸 안내 적용
     const now = new Date();
     let curMin = now.getHours() * 60 + now.getMinutes();
     if (now.getHours() < 3) curMin += 1440; // 자정 넘김(11교시)도 전날 밤으로 취급
     const is7thOrLater = curMin >= 18 * 60; // 18:00 이후
+    // 운영일 기준(새벽 3시 경계) 요일 — getCurrentPeriod의 effDay와 동일. 토요일이면 종일 예약제
+    const effDay = now.getHours() < 3 ? (now.getDay() + 6) % 7 : now.getDay();
+    const isSat = effDay === 6;
 
-    if (curPeriod && is7thOrLater) {
-      // 교시 중 + 6시 이후 입실 — 스터디룸 배정 (단독 사용 룸 제외, 본인 단독 룸 우선)
+    if (curPeriod && (isSat || is7thOrLater)) {
+      // 교시 중 입실 — 스터디룸 배정 (단독 사용 룸 제외, 본인 단독 룸 우선)
+      // 평일은 18:00 이후만, 토요일은 오전 1교시부터 배정
       isDuringPeriod = true;
       assignedRoom = autoAssignStudyroom(student, curPeriod);
     }
-    // 6시 이전이거나 쉬는 시간이면 스터디룸 배정 없음
+    // 평일 6시 이전이거나 쉬는 시간이면 스터디룸 배정 없음
   }
 
   let doneMsg = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
@@ -11270,11 +11274,14 @@ window.adminForceCheckin = function(name) {
   todayRecords.push({ studentName: name, seat: student.seat, inTime: timeStr, outTime: null });
   if (!PRESENT.includes(name)) PRESENT.push(name);
 
-  // 18시 이후 교시 중 입실이면 스터디룸 자동 배정 (학생 직접 입실과 동일)
+  // 평일은 18시 이후, 토요일은 예약제라 오전 1교시부터 교시 중 입실 시 스터디룸 자동 배정 (학생 직접 입실과 동일)
   let assignedRoom = null;
   const curPeriod = getCurrentPeriod();
-  const curMin = now.getHours() * 60 + now.getMinutes();
-  if (curPeriod && curMin >= 18 * 60 && !window.isAdminSeat(student.seat)) {
+  let curMin = now.getHours() * 60 + now.getMinutes();
+  if (now.getHours() < 3) curMin += 1440; // 자정 넘김(11교시)도 전날 밤으로 취급
+  const effDay = now.getHours() < 3 ? (now.getDay() + 6) % 7 : now.getDay();
+  const isSat = effDay === 6;
+  if (curPeriod && (isSat || curMin >= 18 * 60) && !window.isAdminSeat(student.seat)) {
     // 단독 사용(lock) 룸 제외·본인 단독 룸 우선 — 키오스크 입실과 동일 로직
     assignedRoom = autoAssignStudyroom(student, curPeriod);
   }
