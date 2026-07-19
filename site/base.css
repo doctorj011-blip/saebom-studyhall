@@ -375,6 +375,20 @@ a:focus-visible, summary:focus-visible, button:focus-visible {
 .ps-what { font-size: 14.5px; font-weight: 700; margin-top: 9px; }
 .ps-when { font-size: 12.5px; color: var(--on-dark-mute); margin-top: 3px; }
 
+/* 해마다 이어진다는 걸 보여주는 연도 띠 */
+.years { margin: 28px 0 6px; }
+.yr {
+  display: grid; grid-template-columns: 92px 1fr; gap: 24px;
+  padding: 20px 0; border-top: 1px solid rgba(235,226,208,.16); align-items: baseline;
+}
+.yr:first-child { border-top: 0; }
+.yr-when {
+  font-family: var(--display); font-size: 21px; font-weight: 800;
+  color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: -0.02em;
+}
+.yr-what b { display: block; font-size: 15.5px; font-weight: 700; margin-bottom: 4px; line-height: 1.5; }
+.yr-what span { font-size: 14px; color: var(--on-dark-mute); line-height: 1.7; }
+
 .school-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0 6px; }
 .school {
   background: rgba(235,226,208,.06); border: 1px solid rgba(232,181,32,.22);
