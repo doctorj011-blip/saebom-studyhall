@@ -415,6 +415,26 @@ a.telno { cursor: pointer; }
 .yr-what b { display: block; font-size: 15.5px; font-weight: 700; margin-bottom: 4px; line-height: 1.5; }
 .yr-what span { font-size: 14px; color: var(--on-dark-mute); line-height: 1.7; }
 
+/* 1등급이 나온 학교 — 인원수 대신 '넓이'를 보여준다 */
+.schools-wide { margin: 22px 0 6px; }
+.sw-head {
+  display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.sw-count {
+  font-family: var(--display); font-size: 34px; font-weight: 800;
+  color: var(--gold); line-height: 1; letter-spacing: -0.03em;
+}
+.sw-count small { font-size: 16px; font-weight: 700; margin-left: 2px; }
+.sw-label { font-size: 15px; font-weight: 700; }
+.sw-when { font-size: 13px; color: var(--on-dark-mute); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-block; padding: 8px 15px;
+  background: rgba(235,226,208,.07); border: 1px solid rgba(232,181,32,.28);
+  border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--on-dark);
+}
+.sw-note { font-size: 13px; color: var(--on-dark-mute); margin-top: 14px; line-height: 1.7; }
+
 .school-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0 6px; }
 .school {
   background: rgba(235,226,208,.06); border: 1px solid rgba(232,181,32,.22);
