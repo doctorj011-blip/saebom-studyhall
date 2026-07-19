@@ -107,11 +107,18 @@ a:focus-visible, summary:focus-visible, button:focus-visible {
   content: ""; display: block; height: 1.5px; margin-top: 4px;
   background: var(--gold); border-radius: 1px;
 }
-.site-nav a.nav-call {
+.site-nav a.nav-call, .site-nav .nav-call {
   font-weight: 700; color: var(--ink);
   background: var(--gold); padding: 8px 16px; border-radius: 999px;
+  font-size: 13.5px; white-space: nowrap;
+  font-variant-numeric: tabular-nums; letter-spacing: 0;
 }
 .site-nav a.nav-call:hover { background: #F2C233; color: var(--ink); }
+
+/* 전화번호 — PC에선 그냥 읽고 복사하는 글자, 모바일에선 site.js가 링크로 바꾼다 */
+.telno { cursor: text; }
+a.telno { cursor: pointer; }
+.tel-big.telno { cursor: text; }
 
 /* 이용 자격 배지 — 헛걸음 없도록 첫 화면에서 알린다 */
 .eligibility {
