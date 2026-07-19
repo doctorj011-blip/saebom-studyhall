@@ -12450,7 +12450,7 @@ window.apcSaveComment = async function() {
   const input = document.getElementById('apc-comment-input');
   if (!input || !_apcCurrentDate || !_apcSeat) return;
   const text = input.value.trim();
-  if (!text) return;
+  if (!text) { window.apcCloseModal(); return; }   // 쓸 내용이 없으면 닫기 버튼처럼 동작
   const docId = _apcSeat + '_' + _apcCurrentDate;
   const now = new Date();
   const timeStr = now.getFullYear() + '.' + String(now.getMonth()+1).padStart(2,'0') + '.' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
