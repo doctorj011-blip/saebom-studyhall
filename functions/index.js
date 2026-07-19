@@ -571,6 +571,15 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 5. 타임테이블 자체가 없거나 색칠이 전혀 없을 때만 minutes를 null로 둔다.
 - total_minutes: 플래너에 총 학습시간이 적혀 있으면 그 값을 우선 사용하고,
   없으면 위에서 센 과목별 시간의 합을 쓴다.
+
+[시간대별 기록(hourly) — 위에서 센 색칠을 시간대별로도 남길 것]
+- 타임테이블의 각 줄이 몇 시인지 읽고, 그 시간대에 칠해진 과목과 분을 hourly에 넣는다.
+- hour 는 24시간제 정수(오전 6시=6, 오후 3시=15, 자정=0, 새벽 1시=1).
+  오전/오후 표기가 없으면 학습 흐름상 자연스러운 쪽으로 판단한다
+  (예: 6~12 다음에 1,2,3이 이어지면 그것은 13,14,15시다).
+- 한 시간대에 두 과목이 칠해져 있으면 각각 따로 항목을 만든다.
+- 각 항목의 minutes 합은 subjects[].minutes 합과 일치해야 한다.
+- 타임테이블이 없거나 시간대를 못 읽으면 hourly 는 빈 배열로 둔다.
 - materials: 플래너에 적힌 교재·인강을 각각 하나의 항목으로 뽑을 것
   · name 은 페이지·범위·분량을 뺀 순수 이름으로 정규화 (예: "자이스토리 21년 3회 26~29p" → "자이스토리",
     "화이트라벨 24~31p" → "화이트라벨", "어휘끝 34~38 암기" → "어휘끝")
@@ -605,6 +614,20 @@ const PLANNER_AI_SCHEMA = {
             additionalProperties: false
           }
         },
+        hourly: {
+          type: 'array',
+          description: '시간대별 학습 기록 — 타임테이블 색칠을 시간 단위로 분해한 것. 집중 시간대·과목 배치 분석의 원천',
+          items: {
+            type: 'object',
+            properties: {
+              hour: { type: 'integer', description: '24시간제 시각 (0~23)' },
+              subject: { type: 'string', enum: ['국어', '수학', '영어', '과학', '사회', '한국사', '제2외국어', '기타'] },
+              minutes: { type: 'integer', description: '그 시간대에 해당 과목을 공부한 분' }
+            },
+            required: ['hour', 'subject', 'minutes'],
+            additionalProperties: false
+          }
+        },
         materials: {
           type: 'array',
           description: '플래너에 등장한 교재·인강 목록(이름만 정규화). 학년별 인기 교재 추천의 원천',
@@ -620,7 +643,7 @@ const PLANNER_AI_SCHEMA = {
           }
         }
       },
-      required: ['total_minutes', 'planned_count', 'completed_count', 'subjects', 'materials'],
+      required: ['total_minutes', 'planned_count', 'completed_count', 'subjects', 'hourly', 'materials'],
       additionalProperties: false
     }
   },
