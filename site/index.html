@@ -13,9 +13,9 @@
 <meta property="og:title" content="새봄면학관 — 24시간 관리형 자습 공간">
 <meta property="og:description" content="수원 영통 · 1인 지정 좌석 · 조교 상주 · 입퇴실 알림톡 · 학습 플래너 관리">
 <meta property="og:url" content="https://saebom-studyhall.web.app/">
-<meta property="og:image" content="https://saebom-studyhall.web.app/nabi.jpg">
-<meta property="og:image:width" content="720">
-<meta property="og:image:height" content="1080">
+<meta property="og:image" content="https://saebom-studyhall.web.app/photos/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:locale" content="ko_KR">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#101E27">
@@ -442,12 +442,63 @@
 
     <div class="sec-head" style="margin:56px 0 24px">
       <h3 class="sec-title" style="font-size:clamp(21px,3.4vw,26px);margin-bottom:8px">앉게 될 자리를 먼저 보세요</h3>
-      <p class="sec-lead">방문 상담 때 좌석을 직접 보고 고르실 수 있습니다.</p>
+      <p class="sec-lead">사진을 누르면 크게 볼 수 있습니다. 방문 상담 때 좌석을 직접 보고 고르실 수 있습니다.</p>
     </div>
-    <div class="photos">
-      <div class="photo-slot">사진 자리 ①<br>열람실 전경</div>
-      <div class="photo-slot">사진 자리 ②<br>지정 좌석</div>
-      <div class="photo-slot">사진 자리 ③<br>스터디룸</div>
+
+    <div class="lead-shot">
+      <img src="photos/lead-hall.jpg" alt="새봄면학관 열람실 전경 — 1인 지정 좌석이 줄지어 있는 모습" width="1500" height="1000">
+      <div class="lead-cap">열람실 · 1인 지정 좌석</div>
+    </div>
+
+    <div class="gallery">
+      <button class="shot" data-full="photos/01-entrance-full.jpg">
+        <img src="photos/01-entrance.jpg" alt="등록 학생 전용 자동문 입구" loading="lazy">
+        <span class="shot-label">입구 · 등록 학생 전용 자동문</span>
+      </button>
+      <button class="shot" data-full="photos/02-corridor-full.jpg">
+        <img src="photos/02-corridor.jpg" alt="입구에서 열람실로 들어오는 복도" loading="lazy">
+        <span class="shot-label">입구에서 들어오는 길</span>
+      </button>
+      <button class="shot" data-full="photos/03-hall-lounge-full.jpg">
+        <img src="photos/03-hall-lounge.jpg" alt="열람실과 유리로 나뉜 상담실" loading="lazy">
+        <span class="shot-label">열람실과 상담실</span>
+      </button>
+      <button class="shot" data-full="photos/04-garden-seats-full.jpg">
+        <img src="photos/04-garden-seats.jpg" alt="화단 옆에 놓인 좌석" loading="lazy">
+        <span class="shot-label">화단 옆 좌석</span>
+      </button>
+      <button class="shot" data-full="photos/05-hall-aisle-full.jpg">
+        <img src="photos/05-hall-aisle.jpg" alt="열람실 통로와 좌석 배열" loading="lazy">
+        <span class="shot-label">열람실 통로</span>
+      </button>
+      <button class="shot" data-full="photos/06-hall-partition-full.jpg">
+        <img src="photos/06-hall-partition.jpg" alt="구역을 나누는 파티션" loading="lazy">
+        <span class="shot-label">구역을 나누는 파티션</span>
+      </button>
+      <button class="shot" data-full="photos/07-seats-30s-full.jpg">
+        <img src="photos/07-seats-30s.jpg" alt="번호가 붙은 1인 지정 좌석이 줄지어 있는 모습" loading="lazy">
+        <span class="shot-label">1인 지정 좌석</span>
+      </button>
+      <button class="shot" data-full="photos/08-seats-40s-full.jpg">
+        <img src="photos/08-seats-40s.jpg" alt="좌석마다 붙은 번호" loading="lazy">
+        <span class="shot-label">좌석마다 붙은 번호</span>
+      </button>
+      <button class="shot" data-full="photos/09-studyroom-doors-full.jpg">
+        <img src="photos/09-studyroom-doors.jpg" alt="스터디룸 입구 문" loading="lazy">
+        <span class="shot-label">스터디룸 입구</span>
+      </button>
+      <button class="shot" data-full="photos/10-studyroom-2-full.jpg">
+        <img src="photos/10-studyroom-2.jpg" alt="스터디룸 2 출입문" loading="lazy">
+        <span class="shot-label">스터디룸 2</span>
+      </button>
+      <button class="shot" data-full="photos/11-studyroom-hall-full.jpg">
+        <img src="photos/11-studyroom-hall.jpg" alt="스터디룸과 열람실이 함께 보이는 모습" loading="lazy">
+        <span class="shot-label">스터디룸과 열람실</span>
+      </button>
+      <button class="shot" data-full="photos/12-signwall-seats-full.jpg">
+        <img src="photos/12-signwall-seats.jpg" alt="열람실 안쪽 새봄면학관 사인월" loading="lazy">
+        <span class="shot-label">열람실 안쪽 사인월</span>
+      </button>
     </div>
   </div>
 </section>
@@ -833,6 +884,7 @@
     setInterval(paint, 30000);
   })();
 </script>
+<script src="gallery.js" defer></script>
 
 </body>
 </html>
