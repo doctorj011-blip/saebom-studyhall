@@ -1269,11 +1269,19 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <div id="notice-form-title" style="font-size:15px;font-weight:700;color:#1E1B4B">📢 새 공지 작성</div>
         <button id="notice-cancel-edit-btn" onclick="noticeResetForm()" style="display:none;padding:5px 12px;background:#F3F4F6;border:none;border-radius:8px;font-size:12px;color:#555;cursor:pointer">✕ 취소</button>
       </div>
-      <select id="notice-badge-sel" style="width:100%;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;margin-bottom:8px;background:#fff">
-        <option value="important">🔴 중요</option>
-        <option value="general">🟡 공지</option>
-        <option value="event">🔵 이벤트</option>
-      </select>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <select id="notice-badge-sel" style="flex:1;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#fff">
+          <option value="important">🔴 중요</option>
+          <option value="general">🟡 공지</option>
+          <option value="event">🔵 이벤트</option>
+        </select>
+        <!-- 공지를 어느 앱에 띄울지. 기존 공지(대상 없음)는 양쪽 모두로 취급한다. -->
+        <select id="notice-audience-sel" title="이 공지를 볼 대상" style="flex:1;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#fff">
+          <option value="both">👥 학생 + 학부모</option>
+          <option value="student">🎒 학생만</option>
+          <option value="parent">👨‍👩‍👧 학부모만</option>
+        </select>
+      </div>
       <input id="notice-title-inp" type="text" autocomplete="new-password" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#fff">
       <textarea id="notice-body-inp" autocomplete="off" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#fff;font-family:inherit;margin-bottom:8px"></textarea>
 
@@ -6953,6 +6961,7 @@ window.noticeResetForm = function() {
   document.getElementById('notice-submit-btn').textContent = '공지 발행';
   document.getElementById('notice-cancel-edit-btn').style.display = 'none';
   document.getElementById('notice-badge-sel').value = 'general';
+  document.getElementById('notice-audience-sel').value = 'both';
   document.getElementById('notice-title-inp').value = '';
   document.getElementById('notice-body-inp').value = '';
   noticeClearImage();
@@ -7230,6 +7239,11 @@ async function loadNoticesAdmin() {
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
           <div style="min-width:0;flex:1;cursor:pointer" onclick="noticeToggleBody(${i})">
             <span style="font-size:10px;font-weight:700;color:#6C5DD3;margin-right:6px">${n.badgeLabel||n.badge}</span>
+            ${(() => {
+              const MAP = { both: ['👥 학생+학부모', '#6B7280'], student: ['🎒 학생만', '#1565C0'], parent: ['👨‍👩‍👧 학부모만', '#B45309'] };
+              const m = MAP[n.audience || 'both'] || MAP.both;
+              return `<span style="font-size:9.5px;font-weight:700;color:${m[1]};border:1px solid ${m[1]};border-radius:8px;padding:1px 5px;margin-right:6px">${m[0]}</span>`;
+            })()}
             <span style="font-size:12px;font-weight:600">${n.title}</span>
             <span style="font-size:11px;color:#8F82E4;margin-left:6px">👁 보기</span>
             <div style="font-size:11px;color:#aaa;margin-top:2px">${n.date||''}${(n.images||[]).length ? ` · 📎 ${n.images.length}장` : ''}</div>
@@ -7262,6 +7276,7 @@ window.editNotice = function(i) {
   document.getElementById('notice-submit-btn').textContent = '수정 완료';
   document.getElementById('notice-cancel-edit-btn').style.display = 'inline-block';
   document.getElementById('notice-badge-sel').value = n.badge || 'general';
+  document.getElementById('notice-audience-sel').value = n.audience || 'both';   // 옛 공지는 양쪽 대상
   document.getElementById('notice-title-inp').value = n.title || '';
   document.getElementById('notice-body-inp').value = n.body || '';
   // 기존 이미지를 { url } 형태로 채워서 썸네일 표시
@@ -7272,6 +7287,7 @@ window.editNotice = function(i) {
 
 window.publishNotice = async function() {
   const badge = document.getElementById('notice-badge-sel').value;
+  const audience = document.getElementById('notice-audience-sel').value || 'both';
   const badgeLabel = badge === 'important' ? '중요' : badge === 'general' ? '공지' : '이벤트';
   const title = document.getElementById('notice-title-inp').value.trim();
   const body = document.getElementById('notice-body-inp').value.trim();
@@ -7300,7 +7316,7 @@ window.publishNotice = async function() {
       }
     }
 
-    const noticeObj = { id: noticeId, badge, badgeLabel, title, preview: body.slice(0,40), body,
+    const noticeObj = { id: noticeId, badge, badgeLabel, audience, title, preview: body.slice(0,40), body,
       date: isEdit ? (window._adminNotices[window._noticeEditIdx].date || today) : today,
       ...(imageUrls.length ? { images: imageUrls } : {}) };
 

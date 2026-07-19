@@ -1428,7 +1428,9 @@ function loadNotices() {
     window._doc(window._db, 'notices', 'list'),
     (snap) => {
       if (snap.exists() && snap.data().items) {
-        _ppNotices = [...snap.data().items].reverse();
+        // 대상이 '학생만'인 공지는 학부모앱에 띄우지 않는다.
+        // audience가 없는 옛 공지는 양쪽 대상으로 취급(기존 동작 유지).
+        _ppNotices = snap.data().items.filter(n => (n.audience || 'both') !== 'student').reverse();
       } else {
         _ppNotices = [];
       }

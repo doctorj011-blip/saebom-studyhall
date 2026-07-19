@@ -2996,7 +2996,9 @@ function loadNoticesFromFirebase() {
     // 실시간 감지: 공지가 추가/수정되면 즉시 반영
     window._fsOnSnapshot(window._fsDoc(db, 'notices', 'list'), (snap) => {
       if (snap.exists() && snap.data().items) {
-        const items = snap.data().items;
+        // 대상이 '학부모만'인 공지는 학생앱에 띄우지 않는다.
+        // audience가 없는 옛 공지는 양쪽 대상으로 취급(기존 동작 유지).
+        const items = snap.data().items.filter(n => (n.audience || 'both') !== 'parent');
         NOTICES.length = 0;
         // 최신순 정렬
         [...items].reverse().forEach(n => NOTICES.push(n));
