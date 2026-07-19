@@ -113,6 +113,19 @@ a:focus-visible, summary:focus-visible, button:focus-visible {
 }
 .site-nav a.nav-call:hover { background: #F2C233; color: var(--ink); }
 
+/* 이용 자격 배지 — 헛걸음 없도록 첫 화면에서 알린다 */
+.eligibility {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 7px 16px; margin-bottom: 20px;
+  border: 1px solid rgba(232,181,32,.5); border-radius: 999px;
+  font-size: 13px; font-weight: 600; color: var(--gold);
+  background: rgba(232,181,32,.08);
+}
+.eligibility::before {
+  content: ""; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gold); flex-shrink: 0;
+}
+
 /* ── 버튼 ───────────────────────────────── */
 .cta-row { display: flex; flex-wrap: wrap; gap: 12px; }
 .btn {
