@@ -12991,9 +12991,14 @@ window.saRender = async function() {
 
   // ── ⑥ 또래 교재·인강 추천 — 같은 학년 학생들이 실제로 쓰는 것 중 이 학생이 안 쓰는 것 ──
   const myGrade = (stu && stu.grade) || '';
-  const gradeOf = {};   // 좌석키 → 학년
-  _apcStudents().forEach(s => { gradeOf[_apcSeatKey(s.seat)] = s.grade || ''; });
-  const peers = myGrade ? peerAll.filter(v => gradeOf[v.seat] === myGrade) : peerAll;
+  const gradeOf = {}, isRealStudent = {};   // 좌석키 → 학년 / 실제 학생 여부
+  _apcStudents().forEach(s => {
+    const k = _apcSeatKey(s.seat);
+    gradeOf[k] = s.grade || '';
+    // 테스트·관리 계정(정원혁 등)의 플래너는 또래 통계에 섞이면 안 된다
+    isRealStudent[k] = !(window.isTestStudent && window.isTestStudent(s.name));
+  });
+  const peers = peerAll.filter(v => isRealStudent[v.seat] && (myGrade ? gradeOf[v.seat] === myGrade : true));
   const mat = {};   // 이름 → {kind, subject, seats:Set}
   peers.forEach(v => {
     (((v.stats || {}).materials) || []).forEach(m => {
