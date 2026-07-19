@@ -37,6 +37,11 @@ body {
   line-height: 1.75;
   letter-spacing: -0.01em;
   -webkit-font-smoothing: antialiased;
+
+  /* 한국어 줄바꿈 — 브라우저 기본값은 글자 단위로 끊어서
+     '남깁니 / 다.' 처럼 낱말이 잘린다. 어절 단위로 넘기게 한다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;   /* 단, 끊을 데 없는 긴 문자열(URL 등)은 예외로 끊어준다 */
 }
 img { max-width: 100%; display: block; }
 a { color: inherit; }
