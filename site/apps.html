@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>학생앱 · 학부모앱 안내 — 새봄면학관</title>
+<meta name="description" content="새봄면학관 학생앱과 학부모앱 안내. 시간표, 학습현황, 플래너 제출, 스터디룸 신청, 상·벌점 확인. SEE EYES 집중 관리 기능과 개인정보 처리 방식까지.">
+<link rel="canonical" href="https://saebom-studyhall.web.app/apps.html">
+
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="새봄면학관">
+<meta property="og:title" content="학생앱 · 학부모앱 안내 — 새봄면학관">
+<meta property="og:description" content="학생은 스스로 관리하고, 학부모님은 같은 기록을 그대로 보십니다.">
+<meta property="og:url" content="https://saebom-studyhall.web.app/apps.html">
+<meta property="og:image" content="https://saebom-studyhall.web.app/nabi.jpg">
+<meta property="og:locale" content="ko_KR">
+<meta name="theme-color" content="#101E27">
+
+<link rel="icon" type="image/jpeg" href="nabi-logo.jpg">
+<link rel="apple-touch-icon" href="nabi-logo.jpg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<link rel="stylesheet" href="base.css">
+
+<style>
+  /* 이 페이지 전용 */
+  .guarantee { list-style: none; margin: 22px 0; }
+  .guarantee li {
+    display: grid; grid-template-columns: 26px 1fr; gap: 14px;
+    padding: 14px 0; border-bottom: 1px solid rgba(232,181,32,.16);
+    font-size: 15px; align-items: start;
+  }
+  .guarantee li:last-child { border-bottom: 0; }
+  .guarantee .mark { color: var(--gold); font-weight: 700; line-height: 1.6; }
+  .guarantee b { display: block; font-weight: 700; margin-bottom: 2px; }
+  .guarantee span { font-size: 14px; color: var(--on-dark-mute); }
+
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 24px 0; }
+  .flow-step {
+    background: rgba(235,226,208,.06); border: 1px solid rgba(232,181,32,.22);
+    border-radius: 4px; padding: 20px;
+  }
+  .flow-no {
+    font-size: 11.5px; font-weight: 700; letter-spacing: .14em;
+    color: var(--gold); display: block; margin-bottom: 8px;
+  }
+  .flow-step b { display: block; font-size: 15px; margin-bottom: 5px; }
+  .flow-step span { font-size: 13.5px; color: var(--on-dark-mute); }
+
+  @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="index.html">
+      <img src="nabi-logo.jpg" alt="">
+      <b>새봄<i>면학관</i></b>
+    </a>
+    <nav class="site-nav">
+      <a href="index.html#care">관리 방식</a>
+      <a href="planner.html">플래너 작성법</a>
+      <a href="rules.html">상·벌점</a>
+      <a class="nav-call" href="tel:01041301139">전화 문의</a>
+    </nav>
+  </div>
+</header>
+
+<div class="page-hero">
+  <div class="wrap--narrow">
+    <a class="crumb" href="index.html">← 새봄면학관</a>
+    <h1>학생앱 · 학부모앱</h1>
+    <p>
+      학생은 자기 시간표와 플래너를 스스로 관리하고, 학부모님은 그 기록을 그대로 보십니다.
+      같은 데이터를 보기 때문에 "얘가 뭐라고 했는지"를 두고 어긋날 일이 없습니다.
+      앱스토어에서 내려받을 필요 없이, 등록 시 안내해 드리는 링크로 바로 열립니다.
+    </p>
+  </div>
+</div>
+
+<!-- ── 학생앱 ────────────────────────────── -->
+<section class="band band--day" id="student">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:20px">
+      <span class="eyebrow">학생용</span>
+      <h2 class="sec-title">학생앱</h2>
+      <p class="sec-lead">
+        오늘 몇 교시에 오는지, 이번 달 얼마나 공부했는지, 플래너를 냈는지를 학생이 직접 관리합니다.
+        관리받는 대상이 아니라 자기 기록의 주인이 되게 하는 것이 목적입니다.
+      </p>
+    </div>
+
+    <div class="applist">
+      <div><b>오늘 일정</b><span>그날 사정이 생기면 당일 시간표를 직접 수정합니다. 상·벌점 카드도 이 화면에 있습니다.</span></div>
+      <div><b>주간 시간표</b><span>요일별 고정 시간표. 미리 제출해 두면 그대로 운영됩니다.</span></div>
+      <div><b>학습현황</b><span>이번 달 순공부시간, 최고 기록, 다른 학생들 사이에서의 순위.</span></div>
+      <div><b>플래너</b><span>매일 쓴 플래너를 사진으로 제출하고, 월별로 쌓인 기록과 선생님 피드백을 봅니다.</span></div>
+      <div><b>스터디룸 신청</b><span>교시별로 스터디룸을 신청하고 배정 결과를 확인합니다.</span></div>
+      <div><b>자리 선택</b><span>배치도에서 자기 좌석을 고릅니다.</span></div>
+      <div><b>공지 · 이벤트</b><span>면학관 공지와 진행 중인 이벤트를 확인합니다.</span></div>
+      <div><b>SEE EYES</b><span>집중 상태를 스스로 확인하는 선택 기능. 아래에 따로 설명드립니다.</span></div>
+    </div>
+
+    <div class="note">
+      <h4>시간표를 늦게 바꾸면 벌점이 있습니다</h4>
+      <p>
+        교시 시작 5시간 전까지 바꾸면 아무 일도 없습니다. 그 이후에 참석을 취소하면 교시당 −1점,
+        아예 말없이 안 오면 교시당 −2점입니다. 앱에서 바꾸기 전에 경고가 먼저 뜹니다.
+        <a href="rules.html" style="color:var(--gold-warm);font-weight:600">상·벌점 제도 보기 →</a>
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ── 학부모앱 ──────────────────────────── -->
+<section class="band band--day-alt" id="parent">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:20px">
+      <span class="eyebrow">학부모용</span>
+      <h2 class="sec-title">학부모앱</h2>
+      <p class="sec-lead">
+        입퇴실 알림톡이 "지금 왔다"를 알려드린다면, 학부모앱은 "이번 달을 어떻게 보내고 있는지"를 보여드립니다.
+        학생이 보는 것과 같은 기록입니다.
+      </p>
+    </div>
+
+    <div class="applist">
+      <div><b>학습현황</b><span>오늘·이번 달 공부한 시간. 자리에 실제로 앉아 있던 시간만 계산하며 외출 시간은 빠집니다.</span></div>
+      <div><b>스케줄</b><span>아이가 이번 주 몇 교시에 오기로 되어 있는지, 오늘 무엇이 바뀌었는지.</span></div>
+      <div><b>플래너</b><span>아이가 제출한 플래너 사진과 선생님이 남긴 피드백을 그대로 봅니다.</span></div>
+      <div><b>상·벌점</b><span>받은 점수와 사유, 날짜, 이번 주기 합계.</span></div>
+      <div><b>공지 · 이벤트</b><span>면학관에서 드리는 안내를 확인합니다.</span></div>
+      <div><b>SEE EYES 동의</b><span>학생이 SEE EYES를 쓰려면 보호자 동의가 함께 필요합니다.</span></div>
+    </div>
+
+    <div class="cta-row" style="margin-top:26px">
+      <a class="btn btn--dark" href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_parent.html" target="_blank" rel="noopener">학부모앱 열기</a>
+    </div>
+    <p class="sec-lead" style="margin-top:14px;font-size:14px">
+      등록하신 분만 로그인할 수 있습니다. 로그인 방법은 등록 시 안내해 드립니다.
+    </p>
+  </div>
+</section>
+
+<!-- ── SEE EYES ──────────────────────────── -->
+<section class="band band--ink" id="seeeyes">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:20px">
+      <span class="eyebrow">선택 기능</span>
+      <h2 class="sec-title">SEE EYES — 학습 집중 관리</h2>
+      <p class="sec-lead">
+        학생 본인이 원할 때만 켜는 기능입니다. 앞에 둔 카메라로 지금 집중하고 있는지, 졸고 있는지,
+        자리를 비웠는지를 판단해 학생 본인과 관리 화면에 알려줍니다.
+        졸음은 본인이 제일 늦게 아는 일이라, 옆에서 한 번 짚어주는 것만으로도 달라지는 학생이 있습니다.
+      </p>
+    </div>
+
+    <h3 class="sec-title" style="font-size:21px;margin-bottom:6px">영상은 남지 않습니다</h3>
+    <p class="sec-lead" style="margin-bottom:6px">
+      학부모님께서 가장 먼저 확인하실 부분이라고 생각합니다. 처리 방식은 이렇습니다.
+    </p>
+
+    <ul class="guarantee">
+      <li>
+        <span class="mark">✓</span>
+        <div>
+          <b>영상을 저장하지 않습니다</b>
+          <span>녹화 파일이 만들어지지 않습니다. 나중에 돌려볼 영상이 아예 존재하지 않습니다.</span>
+        </div>
+      </li>
+      <li>
+        <span class="mark">✓</span>
+        <div>
+          <b>영상을 밖으로 보내지 않습니다</b>
+          <span>분석은 학생이 쓰는 기기 안에서 즉시 이뤄집니다. 영상이 서버로 올라가지 않습니다.</span>
+        </div>
+      </li>
+      <li>
+        <span class="mark">✓</span>
+        <div>
+          <b>넘어가는 것은 상태값뿐입니다</b>
+          <span>관리 화면으로 전달되는 것은 '집중 / 졸음 / 이탈' 세 가지 판정 결과입니다. 분석에 쓰는 눈 개폐율·고개 각도·시선 방향 같은 값도 기기 안에서만 계산되고 사라집니다.</span>
+        </div>
+      </li>
+      <li>
+        <span class="mark">✓</span>
+        <div>
+          <b>끄면 그 순간 멈춥니다</b>
+          <span>카메라를 끄면 감지가 즉시 중단됩니다.</span>
+        </div>
+      </li>
+      <li>
+        <span class="mark">✓</span>
+        <div>
+          <b>안 써도 불이익이 없습니다</b>
+          <span>동의를 거부하면 SEE EYES 기능만 사용되지 않을 뿐, 다른 어떤 불이익도 없습니다. 상·벌점과도 무관합니다.</span>
+        </div>
+      </li>
+      <li>
+        <span class="mark">✓</span>
+        <div>
+          <b>언제든 철회할 수 있습니다</b>
+          <span>철회하면 감지가 중단됩니다. 다시 쓰려면 동의 절차를 처음부터 진행합니다.</span>
+        </div>
+      </li>
+    </ul>
+
+    <h3 class="sec-title" style="font-size:21px;margin:44px 0 6px">쓰려면 동의가 두 번 필요합니다</h3>
+    <div class="flow">
+      <div class="flow-step">
+        <span class="flow-no">1단계</span>
+        <b>학생 본인 동의</b>
+        <span>학생앱에서 수집·이용 내용을 읽고 직접 동의합니다.</span>
+      </div>
+      <div class="flow-step">
+        <span class="flow-no">2단계</span>
+        <b>보호자 동의</b>
+        <span>학부모앱에서 보호자께서 한 번 더 동의하셔야 켜집니다.</span>
+      </div>
+      <div class="flow-step">
+        <span class="flow-no">그다음</span>
+        <b>사용 시작</b>
+        <span>두 동의가 모두 확인되어야 기능이 열립니다.</span>
+      </div>
+    </div>
+
+    <div class="note note--dark">
+      <h4 style="color:var(--on-dark)">수집·이용 고지</h4>
+      <p><b style="color:var(--on-dark)">목적</b> — 학습 집중 관리. 졸음·집중·이탈 상태 확인 및 안내.</p>
+      <p><b style="color:var(--on-dark)">항목</b> — 카메라 영상을 실시간 분석해 산출하는 특징값(눈 개폐율·고개 각도·시선 방향 등)과 판정 상태값(집중/졸음/이탈).</p>
+      <p><b style="color:var(--on-dark)">보유 기간</b> — 학습 관리 목적 달성 시 또는 동의 철회 시까지.</p>
+      <p><b style="color:var(--on-dark)">제공받는 자</b> — 새봄면학관 관리자. 학습 집중 모니터링 목적.</p>
+      <p style="margin-top:12px">※ 만 14세 미만 학생은 관련 법령에 따라 보호자(법정대리인)의 동의가 필요합니다.</p>
+    </div>
+
+    <p class="sec-lead" style="margin-top:26px">
+      더 궁금한 점이 있으시면 언제든
+      <a href="tel:01041301139" style="color:var(--gold);font-weight:600">010-4130-1139</a>로 물어봐 주세요.
+    </p>
+  </div>
+</section>
+
+<!-- ── 이어서 ────────────────────────────── -->
+<section class="band band--day">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:24px">
+      <span class="eyebrow">이어서 읽기</span>
+      <h2 class="sec-title">학생에게 요구하는 두 가지</h2>
+    </div>
+    <div class="app-row">
+      <a class="app-card" href="planner.html" style="background:#fff;border-color:var(--parchment-2)">
+        <h3 style="color:var(--on-light)">플래너 작성법</h3>
+        <p style="color:var(--on-light-mute)">규칙 다섯 개, 하루 3분. 왜 교재 이름과 숫자를 쓰게 하는지.</p>
+        <span class="go" style="color:var(--gold-warm)">읽어보기 →</span>
+      </a>
+      <a class="app-card" href="rules.html" style="background:#fff;border-color:var(--parchment-2)">
+        <h3 style="color:var(--on-light)">상·벌점 제도</h3>
+        <p style="color:var(--on-light-mute)">늦게라도 하면 1점, 말없이 빠지면 2점.</p>
+        <span class="go" style="color:var(--gold-warm)">읽어보기 →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-links">
+      <a href="index.html">홈</a>
+      <a href="planner.html">플래너 작성법</a>
+      <a href="rules.html">상·벌점 제도</a>
+      <a href="index.html#refund">환불 규정</a>
+    </div>
+    <strong>새봄면학관</strong><br>
+    대표자 정원혁 · 사업자등록번호 792-20-02099<br>
+    경기도 수원시 영통구 반달로29, 3층 1호 (영통동)<br>
+    <a href="tel:01041301139">010-4130-1139</a> · <a href="mailto:doctorj011@gmail.com">doctorj011@gmail.com</a><br>
+    © 2026 새봄면학관
+  </div>
+</footer>
+
+</body>
+</html>
