@@ -10,7 +10,9 @@
  *   · 켤 때: 재실 발생 즉시 ON
  *   · 끌 때: 재실 0이 offGraceMin 분 동안 "계속" 유지될 때만 OFF (잠깐 출입은 안 끔)
  *   · 한 번 켜지면 minOnMin 분은 유지(최소 운전시간)
- *   · 운영시간(opStart~opEnd) 밖에는 항상 OFF
+ *   · 운영시간(opStart~opEnd) 밖에는 항상 OFF (평일=저녁 opStart, 주말=weekendOpStart 오전 시작)
+ *   · 주말은 정식 시작 전 조기 가동 창(weekendPreOpenStart~weekendOpStart)에 입실 구역만 먼저 냉방
+ *   · 정식 종료(opEnd) 후 lateHardOff 까지: 남은 학생 있으면 열람실 '1대만'(재실 최다·동수면 에어컨2) → lateHardOff에 전체 OFF
  *   · 끄기 직전 dryOffMin 분 송풍 건조 후 전원 차단(코일 곰팡이·냄새 방지) — 자동/수동 OFF 공통
  * 제어 단위(zone): 열람실(hall)=전체 재실 기준 / 스터디룸(studyroom)=해당 방 배정+재실 기준
  *
@@ -99,6 +101,9 @@ async function acConfig() {
     auto: c.auto !== false,                      // 기본 자동 ON
     country: c.country || 'KR', region: c.region || 'kic',
     opStart: c.opStart || '06:00', opEnd: c.opEnd || '24:00',
+    // 주말(토·일) 전용: 오전부터 운영. weekendOpStart=정식 시작, weekendPreOpenStart=조기 가동(입실 구역만) 시작.
+    weekendOpStart: c.weekendOpStart || '08:30',
+    weekendPreOpenStart: c.weekendPreOpenStart || '08:00',
     offGraceMin: c.offGraceMin != null ? c.offGraceMin : 20,   // 무인 지속 → 절전(setback) 전환 유예
     hardOffMin: c.hardOffMin != null ? c.hardOffMin : 60,      // 무인 지속 → 완전 OFF (2단 공실 2단계)
     minOnMin: c.minOnMin != null ? c.minOnMin : 20,            // 최소 운전시간(완전 OFF 억제)
@@ -106,8 +111,9 @@ async function acConfig() {
     onTemp: c.onTemp != null ? c.onTemp : 24,
     setbackTemp: c.setbackTemp != null ? c.setbackTemp : 28,   // 절전(무인/마감여열) 시 목표온도 — 압축기 idle
     preCloseMin: c.preCloseMin != null ? c.preCloseMin : 20,   // 마감 전 여열 coast 시작(냉방 중단)
-    lateAfter: c.lateAfter || '23:50',                         // 이 시각 이후: zone 인원 lateMinCount 미만이면 OFF
-    lateMinCount: c.lateMinCount != null ? c.lateMinCount : 2, // 마감 임박 시 zone 유지 최소 인원
+    // 정식 종료(opEnd) 후 ~ lateHardOff 까지: 남은 학생이 있으면 열람실 에어컨 '1대만' 유지(재실 최다·동수면 에어컨2).
+    //   lateHardOff 시각엔 무조건 전체 OFF — 깜빡 미퇴실 시 밤샘 가동 방지.
+    lateHardOff: c.lateHardOff || '01:00',
     onMode: c.onMode || 'COOL', onFan: c.onFan || 'AUTO',
     // 끄기 전 송풍 건조 — 냉방으로 젖은 코일을 말려 곰팡이·냄새 방지(LG 자동건조와 같은 원리).
     //   ※ 기기 프로필에 AIR_CLEAN(자동건조)이 없어 FAN으로 직접 구현. AIR_DRY는 '제습'이라 코일이 오히려 젖는다.
@@ -124,19 +130,39 @@ async function acConfig() {
   };
 }
 function _hhmm(s) { const p = String(s).split(':').map(Number); return (p[0] || 0) * 60 + (p[1] || 0); }
+// 요일별 정식 시작 시각 — 주말(토·일)은 오전, 평일은 저녁(기존 opStart 그대로).
+//   date는 KST 시프트된 값이라 getDay()도 KST 요일(0=일 … 6=토).
+function _isWeekend(date) { const d = date.getDay(); return d === 0 || d === 6; }
+function _effStart(cfg, date) { return _isWeekend(date) ? cfg.weekendOpStart : cfg.opStart; }
+// 주말 조기 가동 창: 정식 시작 전(weekendPreOpenStart~weekendOpStart) — 입실 구역만 켠다. 평일은 없음.
+function _preOpenWindow(cfg, date) {
+  if (!_isWeekend(date)) return false;
+  const now = date.getHours() * 60 + date.getMinutes();
+  return now >= _hhmm(cfg.weekendPreOpenStart) && now < _hhmm(cfg.weekendOpStart);
+}
 function _withinOp(cfg, date) {
   const now = date.getHours() * 60 + date.getMinutes();
-  const start = _hhmm(cfg.opStart);
+  const start = _hhmm(_effStart(cfg, date));
   let end = _hhmm(cfg.opEnd); if (end === 0) end = 24 * 60;   // '24:00'
   return start <= end ? (now >= start && now < end) : (now >= start || now < end);
 }
-// 마감(opEnd)까지 남은 분. 운영시간 밖이면 null.
-function _minsUntilOpEnd(cfg, date) {
+// [start,end) 시각 범위 판정(자정 넘김 지원).
+function _inWrapRange(startMin, endMin, nowMin) {
+  return startMin <= endMin ? (nowMin >= startMin && nowMin < endMin) : (nowMin >= startMin || nowMin < endMin);
+}
+// 마감 단일가동 tail: 정식 종료(opEnd) ~ lateHardOff 구간이면 true. 이 구간엔 열람실 에어컨 1대만.
+function _inLateTail(cfg, date) {
+  const s = _hhmm(cfg.opEnd) || 24 * 60;
+  const e = _hhmm(cfg.lateHardOff) || 24 * 60;
+  return _inWrapRange(s, e, date.getHours() * 60 + date.getMinutes());
+}
+// 실제 완전 종료(lateHardOff)까지 남은 분 — 여열 coast 판정용. 운영 시작~lateHardOff를 연속으로 봄.
+function _minsToHardOff(cfg, date) {
   const now = date.getHours() * 60 + date.getMinutes();
-  const start = _hhmm(cfg.opStart);
-  let end = _hhmm(cfg.opEnd); if (end === 0) end = 24 * 60;
+  const start = _hhmm(_effStart(cfg, date));
+  let end = _hhmm(cfg.lateHardOff); if (end === 0) end = 24 * 60;
   if (start <= end) return (now >= start && now < end) ? end - now : null;
-  if (now >= start) return (24 * 60 - now) + end;   // 자정 넘김 운영: 익일 end까지
+  if (now >= start) return (24 * 60 - now) + end;
   if (now < end) return end - now;
   return null;
 }
@@ -196,6 +222,12 @@ function _hallCount(z, presentSeats, totalPresent) {
   const lo = Math.min(r[0], r[1]), hi = Math.max(r[0], r[1]); let c = 0;
   for (const s of presentSeats) { if (s >= lo && s <= hi) c++; }
   return c;
+}
+// 마감 단일가동 동수 시 우선 켤 구역 = '에어컨2'(좌석 1~25). 이름 우선, 없으면 좌석범위 시작이 낮은 쪽.
+function _isLatePreferred(z) {
+  if (String(z.name || '').replace(/\s/g, '') === '에어컨2') return true;
+  const r = _hallSeatRange(z);
+  return !!(r && Math.min(r[0], r[1]) <= 1);
 }
 // 교시 시각(분, 자정 기준) — 앱 PERIODS와 동일. 평일 예약은 7~10교시(저녁)만 사용.
 //   11교시(24:00~25:00)는 현재 운영시간(~24:00) 밖이라 사실상 미사용.
@@ -281,12 +313,25 @@ async function acEvaluate(reason) {
   const srSched = await acStudyroomSchedule(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const op = _withinOp(cfg, now);
-  const minsToClose = _minsUntilOpEnd(cfg, now);
-  const preClose = minsToClose != null && minsToClose <= cfg.preCloseMin;   // ⑤ 마감 여열 coast 구간
-  // 마감 임박 구간: opEnd - lateAfter 만큼 남았을 때부터. (남은시간으로 계산해 자정경계·오버나잇 안전)
-  let _opEndMin = _hhmm(cfg.opEnd); if (_opEndMin === 0) _opEndMin = 24 * 60;
-  const lateWinMin = Math.max(0, _opEndMin - _hhmm(cfg.lateAfter));
-  const late = minsToClose != null && minsToClose <= lateWinMin;   // ⑥ 소수인원 zone OFF 구간
+  const preOpen = _preOpenWindow(cfg, now);   // 주말 정식 시작 전 조기 가동 창(입실 구역만)
+  const lateTail = _inLateTail(cfg, now);     // 정식 종료(opEnd)~lateHardOff: 열람실 1대만 유지
+  const minsToHardOff = _minsToHardOff(cfg, now);
+  const preClose = minsToHardOff != null && minsToHardOff <= cfg.preCloseMin;   // 완전 종료(lateHardOff) 직전 여열 coast
+
+  // 마감 단일가동: 열람실 구역 중 재실 최다 1곳만 켠다(동수/재실만 있으면 에어컨2 우선). tail 구간에서만 계산.
+  let lateWinnerId = null;
+  if (lateTail) {
+    let best = null;
+    for (const id of zoneIds) {
+      const z = cfg.zones[id] || {};
+      if (z.type === 'studyroom') continue;
+      const c = _hallCount(z, presentSeats, totalPresent);
+      if (c <= 0) continue;
+      const pref = _isLatePreferred(z);
+      if (!best || c > best.c || (c === best.c && pref && !best.pref)) best = { id, c, pref };
+    }
+    lateWinnerId = best ? best.id : null;
+  }
 
   const ref = db.collection('ac_state').doc('main');
   const stSnap = await ref.get();
@@ -320,11 +365,20 @@ async function acEvaluate(reason) {
 
     // 목표 프로파일 결정
     //   [스터디룸] 예약 교시 기반: 진행중 교시=인원별 냉방 / 빈 교시(뒤 예약 있음)=브리지 / 남은 예약 없음=OFF
-    //   [열람실]  마감 임박(late)+인원<lateMinCount → OFF · 재실 → 냉방(마감구간 setback) · 무인 2단(offGrace→setback→hardOff)
+    //   [열람실]  정식 종료 후 tail=재실 최다 1대만 · 재실 → 냉방 · 무인 2단(offGrace→setback→hardOff)
     let profile;   // { power, mode?, temp?, fan? }
-    if (!op) { profile = { power: false }; zs.emptySince = null; }
+    if (!op) {
+      // 운영시간 밖.
+      if (preOpen && occupied) {
+        // 주말 조기 가동: 입실 구역만 먼저 냉방.
+        zs.emptySince = null; profile = { power: true, mode: cfg.onMode, temp: cfg.onTemp };
+      } else if (lateTail && !isSr && deviceId === lateWinnerId) {
+        // 정식 종료(opEnd)~lateHardOff: 재실 최다 열람실 1대만 유지(끝 preCloseMin은 여열 coast).
+        zs.emptySince = null;
+        profile = { power: true, mode: cfg.onMode, temp: preClose ? cfg.setbackTemp : cfg.onTemp };
+      } else { profile = { power: false }; zs.emptySince = null; }
+    }
     else if (isSr) { profile = srProf.profile; }
-    else if (late && count < cfg.lateMinCount) { profile = { power: false }; zs.emptySince = null; }
     else if (occupied) {
       zs.emptySince = null;
       profile = preClose ? { power: true, mode: cfg.onMode, temp: cfg.setbackTemp }
@@ -462,6 +516,110 @@ exports.acOnCommand = onDocumentCreated(
     } catch (e) {
       logger.error('acOnCommand', { message: e.message });
       await snap.ref.set({ error: e.message, doneAt: new Date().toISOString() }, { merge: true });
+    }
+  }
+);
+
+// ══════════════════════════════════════════════════════════════
+// 📓🤖 플래너 AI 검사 — Claude API (인증 없는 정적 앱이라 에어컨과 같은
+// Firestore 문서 트리거 패턴: 관리앱이 planner_ai_requests/{좌석}_{날짜} 를
+// 만들면 여기서 사진을 내려받아 Claude에게 보내고, 결과를
+// planner_ai_reviews/{좌석}_{날짜} 에 쓴다(관리앱이 onSnapshot으로 수신).
+// API 키는 Secret(ANTHROPIC_API_KEY)으로만 사용 → 클라이언트에 절대 노출되지 않음.
+//   설정: firebase functions:secrets:set ANTHROPIC_API_KEY
+// 모델·프롬프트는 ai_config/planner 문서로 덮어쓸 수 있다(없으면 기본값).
+// ══════════════════════════════════════════════════════════════
+const Anthropic = require('@anthropic-ai/sdk');
+const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
+
+const PLANNER_AI_MODEL = 'claude-opus-4-8';
+const PLANNER_AI_PROMPT = `당신은 학생 자기주도학습 공간 "새봄면학관"의 담당 선생님입니다.
+학생이 제출한 하루치 스터디 플래너 사진을 검사하고 코멘트를 작성합니다.
+
+검사 기준:
+1. 작성 충실도 — 계획이 구체적으로 적혀 있는가(과목·교재·분량), 빈칸이 많지 않은가
+2. 실행 체크 — 계획 대비 완료 표시(체크/취소선 등)가 되어 있는가
+3. 시간 관리 — 시간 배분이 기록되어 있는가
+
+코멘트 작성 규칙:
+- 학생에게 직접 말하듯 존댓말로, 2~4문장
+- 잘한 점 1가지를 먼저 구체적으로 칭찬하고, 개선할 점 1가지를 부드럽게 제안
+- 사진에서 실제로 읽은 내용(과목명, 교재명 등)을 언급해서 "진짜 읽고 쓴" 코멘트가 되게 할 것
+- 글씨를 알아보기 어렵거나 사진이 흐리면 그 사실을 quality에 반영하고 추측하지 말 것`;
+
+const PLANNER_AI_SCHEMA = {
+  type: 'object',
+  properties: {
+    quality: { type: 'string', enum: ['우수', '양호', '보통', '부실', '판독불가'], description: '플래너 작성 상태 종합 평가' },
+    summary: { type: 'string', description: '플래너 내용 요약(관리자용, 2~3문장) — 무슨 과목/교재를 얼마나 계획하고 실행했는지' },
+    comment: { type: 'string', description: '학생에게 보여줄 코멘트(존댓말 2~4문장)' }
+  },
+  required: ['quality', 'summary', 'comment'],
+  additionalProperties: false
+};
+
+exports.plannerAiReview = onDocumentCreated(
+  { document: 'planner_ai_requests/{id}', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, memory: '512MiB' },
+  async (event) => {
+    const snap = event.data; if (!snap) return;
+    const req = snap.data() || {};
+    const seat = req.seat, dateStr = req.date;
+    const reviewRef = db.collection('planner_ai_reviews').doc(`${seat}_${dateStr}`);
+    try {
+      if (!seat || !dateStr) throw new Error('seat/date 누락');
+
+      // 사진 URL은 학생앱이 planners/{좌석}_{날짜} 문서에 넣어둔 다운로드 URL을 그대로 쓴다(Storage SDK 불필요)
+      const pSnap = await db.collection('planners').doc(`${seat}_${dateStr}`).get();
+      const url = pSnap.exists ? (pSnap.data() || {}).url : null;
+      if (!url) throw new Error('제출된 플래너 사진이 없습니다');
+
+      await reviewRef.set({ seat, date: dateStr, name: req.name || null, status: 'running', startedAt: new Date().toISOString() }, { merge: true });
+
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`사진 다운로드 실패 (HTTP ${res.status})`);
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 20 * 1024 * 1024) throw new Error('사진이 너무 큽니다(20MB 초과)');
+      const mediaType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+
+      // 모델/프롬프트 덮어쓰기(선택) — ai_config/planner { model, prompt }
+      const cfgSnap = await db.collection('ai_config').doc('planner').get();
+      const cfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
+      const model = cfg.model || PLANNER_AI_MODEL;
+      const sysPrompt = cfg.prompt || PLANNER_AI_PROMPT;
+
+      const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
+      const msg = await client.messages.create({
+        model,
+        max_tokens: 2048,
+        system: sysPrompt,
+        output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: buf.toString('base64') } },
+            { type: 'text', text: `학생: ${req.name || seat + '번'} / 학습일: ${dateStr}\n이 플래너를 검사하고 결과를 작성해 주세요.` }
+          ]
+        }]
+      });
+
+      if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
+      const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
+      const out = JSON.parse(text);
+
+      await reviewRef.set({
+        seat, date: dateStr, name: req.name || null,
+        status: 'done',
+        quality: out.quality, summary: out.summary, comment: out.comment,
+        model,
+        usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens },
+        doneAt: new Date().toISOString()
+      });
+      logger.info('plannerAiReview 완료', { seat, date: dateStr, quality: out.quality });
+    } catch (e) {
+      logger.error('plannerAiReview', { seat, date: dateStr, message: e.message });
+      await reviewRef.set({ seat: seat || null, date: dateStr || null, status: 'error', error: e.message, doneAt: new Date().toISOString() }, { merge: true });
+    } finally {
+      await snap.ref.delete().catch(() => {});   // 요청 문서는 1회용 — 처리 후 정리
     }
   }
 );

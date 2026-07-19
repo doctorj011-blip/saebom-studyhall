@@ -135,6 +135,10 @@ service cloud.firestore {
     match /planners/{id}         { allow read, write: if true; }
     match /planner_comments/{id} { allow read, write: if true; }
 
+    // 플래너 AI 검사 — 관리앱이 요청 생성(create만), 결과는 서버(Cloud Function)만 쓴다
+    match /planner_ai_requests/{id} { allow read, create: if true; }
+    match /planner_ai_reviews/{id}  { allow read: if true; }
+
     // 자동문 원격 명령: current 문서만, action=open, 30초 이내
     match /door_commands/{id} {
       allow read: if true;
