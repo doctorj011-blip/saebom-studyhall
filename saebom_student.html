@@ -1881,6 +1881,13 @@ function loginAsStudent(s) {
 // 흐름: 뒷 4자리 입력 → 재원생에 없고 초대 명단에 있으면 → 공석 배치도에서 자리 선택 →
 //       students/{좌석} 생성(관리자 등록과 동일 스키마) → 그대로 로그인.
 // 좌석 문서는 트랜잭션으로 선점해 두 명이 같은 자리를 동시에 눌러도 한 명만 성공한다.
+// 자리 선택 창구(로컬 KST, 'YYYY-MM-DDTHH:mm'). 창구 밖에서는 자리 선택이 막힌다 —
+// 안내한 시각 전에 미리 접속한 학생이 자리를 선점하면 형평성이 깨지기 때문.
+// settings/summerInvites 에 signupOpenAt·signupCloseAt 을 넣으면 그 값이 우선한다
+// (콘솔에서 즉시 변경 가능 — 재배포 없이 창구를 늘리거나 닫을 수 있다).
+// 빈 문자열로 두면 그 방향 제한이 사라진다(둘 다 비우면 상시 개방).
+const SIGNUP_WINDOW = { open: '2026-07-20T00:00', close: '2026-07-20T12:00' };
+
 let _loginCandidates = [];
 let _signupInvite = null;
 let _signupGender = 'f';
@@ -1920,7 +1927,13 @@ async function findInvitesByLast4(last4, already) {
 
     return hits
       .filter(i => !registeredNames.has(i.name))
-      .map(i => ({ ...i, startDate: d.startDate || '', reservedSeat: reserved.get(i.name) || '' }));
+      .map(i => ({
+        ...i, startDate: d.startDate || '', reservedSeat: reserved.get(i.name) || '',
+        // 자리 선택 창구 — 필드가 '있으면' 그 값이 우선(''도 유효한 값 = 그 방향 제한 해제),
+        // 아예 없을 때만 코드 기본값을 쓴다. (|| 로 쓰면 ''가 기본값으로 되살아난다)
+        signupOpenAt:  typeof d.signupOpenAt  === 'string' ? d.signupOpenAt  : SIGNUP_WINDOW.open,
+        signupCloseAt: typeof d.signupCloseAt === 'string' ? d.signupCloseAt : SIGNUP_WINDOW.close,
+      }));
   } catch(e) { console.warn('초대 명단 조회 실패:', e); return []; }
 }
 
@@ -2004,11 +2017,51 @@ window.cancelChoose = function() {
   pinBuffer = ''; updatePinDisplay(); hideLoginError();
 };
 
+// 'YYYY-MM-DDTHH:mm' → 로컬(KST) 기준 ms. Date(문자열) 파싱은 브라우저별로 UTC로
+// 해석되는 경우가 있어 직접 분해한다. 형식이 어긋나면 NaN → 게이트를 열어 둔다(가용성 우선).
+function _parseLocalDT(s) {
+  const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/);
+  if (!m) return NaN;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]).getTime();
+}
+function _fmtDT(s) {
+  const t = _parseLocalDT(s);
+  if (isNaN(t)) return s;
+  let d = new Date(t);
+  const h = d.getHours(), mm = d.getMinutes();
+  // 자정·정오를 '오전 12시/오후 12시'로 쓰면 학생이 헷갈린다 — 밤/낮으로 명시한다.
+  // 정각 자정(00:00)은 '20일 밤 12시'라고 쓰면 하루 뒤로 읽히므로 전날 밤으로 표기한다
+  //   (2026-07-20T00:00 → "7월 19일(일) 밤 12시" = 안내 문구의 '오늘밤 24시'와 일치).
+  let hh;
+  if (h === 0 && mm === 0) { hh = '밤 12시'; d = new Date(t - 86400000); }
+  else if (h === 0)  hh = `밤 12시`;
+  else if (h === 12) hh = '낮 12시';
+  else if (h < 12)   hh = `오전 ${h}시`;
+  else               hh = `오후 ${h - 12}시`;
+  const dn = ['일','월','화','수','목','금','토'][d.getDay()];
+  return `${d.getMonth()+1}월 ${d.getDate()}일(${dn}) ${hh}` + (mm ? ` ${mm}분` : '');
+}
+
 function startSignup(invite, loginPin) {
   // 이미 퇴원예정 자리를 예약해 둔 학생 — 중복 등록 방지
   if (invite.reservedSeat) {
     alert(`${invite.name}님은 이미 ${invite.reservedSeat}번 자리를 예약했어요.\n그 자리를 쓰던 학생이 나가면 자동으로 배정되고, 그때부터 로그인할 수 있어요.`);
     return;
+  }
+  // 자리 선택 창구 — 열리기 전/닫힌 뒤에는 선착순 선점을 막는다(형평성).
+  // 모든 신규등록 경로(pickCandidate·verifySubmit)가 이 함수로 모이므로 여기 한 곳이면 충분하다.
+  if (invite.signupOpenAt || invite.signupCloseAt) {
+    const now = Date.now();
+    const openMs  = invite.signupOpenAt  ? _parseLocalDT(invite.signupOpenAt)  : NaN;
+    const closeMs = invite.signupCloseAt ? _parseLocalDT(invite.signupCloseAt) : NaN;
+    if (!isNaN(openMs) && now < openMs) {
+      alert(`아직 자리 선택 시간이 아니에요.\n\n🕛 ${_fmtDT(invite.signupOpenAt)}부터 열려요.\n그때 다시 접속해 주세요!`);
+      return;
+    }
+    if (!isNaN(closeMs) && now > closeMs) {
+      alert(`자리 선택이 마감됐어요.\n(마감: ${_fmtDT(invite.signupCloseAt)})\n\n면학관으로 문의해 주세요.`);
+      return;
+    }
   }
   _signupInvite = invite;
   _signupLoginPin = loginPin || '';
