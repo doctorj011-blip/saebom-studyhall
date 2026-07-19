@@ -360,6 +360,49 @@ a:focus-visible, summary:focus-visible, button:focus-visible {
 .info-table td small { display: block; font-size: 13px; color: var(--on-dark-mute); margin-top: 3px; }
 .info-table a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 
+/* ── 운영 주체 · 학원 실적 ───────────────── */
+.proof-stats {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 1px; background: rgba(232,181,32,.22); margin: 30px 0 8px;
+}
+.proof-stats > div { background: var(--ink); padding: 26px 22px; }
+.ps-num {
+  font-family: var(--display); font-size: clamp(30px, 5vw, 42px);
+  font-weight: 800; color: var(--gold); line-height: 1.05;
+  letter-spacing: -0.03em; font-variant-numeric: tabular-nums;
+}
+.ps-num small { font-size: 17px; font-weight: 700; margin-left: 2px; }
+.ps-what { font-size: 14.5px; font-weight: 700; margin-top: 9px; }
+.ps-when { font-size: 12.5px; color: var(--on-dark-mute); margin-top: 3px; }
+
+.school-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 20px 0 6px; }
+.school {
+  background: rgba(235,226,208,.06); border: 1px solid rgba(232,181,32,.22);
+  border-radius: 4px; padding: 18px 18px 16px;
+}
+.school h4 {
+  font-family: var(--display); font-size: 16px; font-weight: 800;
+  color: var(--gold); margin-bottom: 10px; letter-spacing: -0.02em;
+}
+.school dl { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; }
+.school dt { font-size: 13px; color: var(--on-dark-mute); }
+.school dd { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.school p { font-size: 12.5px; color: var(--on-dark-mute); margin-top: 10px; line-height: 1.6; }
+
+.source-note {
+  margin-top: 26px; padding: 16px 18px;
+  border: 1px dashed rgba(235,226,208,.28); border-radius: 4px;
+  font-size: 13px; color: var(--on-dark-mute); line-height: 1.8;
+}
+.source-note b { color: var(--on-dark); font-weight: 700; }
+.source-note a { color: var(--gold); font-weight: 600; }
+
+@media (max-width: 900px) {
+  .proof-stats { grid-template-columns: 1fr; }
+  .school-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) { .school-grid { grid-template-columns: 1fr; } }
+
 /* ── 하루 흐름 (관리 절차) ───────────────── */
 .flowline { margin: 8px 0; }
 .fl-item {
