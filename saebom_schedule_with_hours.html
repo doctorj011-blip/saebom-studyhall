@@ -12472,9 +12472,9 @@ window.apcSaveComment = async function() {
     });
     input.value = '';
     _apcSetEditMode(null);
-    await _apcLoadComments(_apcCurrentDate);
     _apcCmtCount[_apcSeat] = existing.length;
     _apcRender();   // 그리드의 💬 배지 즉시 반영
+    window.apcCloseModal();   // 저장했으면 할 일이 끝난 것 — 모달을 닫는다
     showAdminToast(editing ? '✅ 코멘트가 수정됐습니다' : '✅ 코멘트가 저장됐습니다');
   } catch(e) {
     showAdminToast('❌ 저장 실패: ' + e.message);
