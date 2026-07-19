@@ -51,6 +51,25 @@
   .flow-step span { font-size: 13.5px; color: var(--on-dark-mute); }
 
   @media (max-width: 900px) { .flow { grid-template-columns: 1fr; } }
+
+  /* 설치 안내 — 메뉴의 어느 항목인지 보여주는 예시 그림.
+     실제 화면 캡처 대신 메뉴만 다시 그렸다(검색어·광고 등 무관한 내용이 섞이지 않게). */
+  .shot { margin: 13px 0 2px; }
+  .shot svg {
+    display: block; width: 100%; max-width: 244px; height: auto;
+    border-radius: 13px; box-shadow: 0 10px 26px rgba(0,0,0,.34);
+  }
+  .shot figcaption {
+    font-size: 12.5px; line-height: 1.5; color: var(--on-dark-mute); margin-top: 9px;
+  }
+  /* SVG 안 텍스트도 본문과 같은 서체를 쓴다(뷰박스 좌표계라 px가 함께 확대된다) */
+  .shot .s-lbl { font-family: var(--body); font-size: 12.5px; font-weight: 500; fill: #3B3227; }
+  .shot .s-lbl.is-on { font-weight: 800; fill: var(--umber); }
+  .shot .s-ico {
+    fill: none; stroke: #9A9186; stroke-width: 1.4;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .shot .s-ico.is-on { stroke: var(--gold-warm); stroke-width: 1.7; }
 </style>
 </head>
 <body>
@@ -173,7 +192,32 @@
         <ol>
           <li>안내받은 <b>주소를 복사</b>해 브라우저 주소창에 붙여넣고 접속합니다.</li>
           <li>화면 <b>우측 상단의 점 세 개</b> <kbd>⋮</kbd> 를 누릅니다.</li>
-          <li>메뉴를 아래로 내리면 <kbd>설치 및 바로가기 만들기</kbd> 가 있습니다. 이걸 누릅니다.</li>
+          <li>메뉴를 아래로 내리면 <kbd>설치 및 바로가기 만들기</kbd> 가 있습니다. 이걸 누릅니다.
+            <figure class="shot">
+              <svg viewBox="0 0 268 210" role="img"
+                   aria-label="안드로이드 브라우저 메뉴. 아래쪽 '설치 및 바로가기 만들기' 항목이 표시되어 있습니다.">
+                <rect x="6" y="6" width="256" height="198" rx="14" fill="#F7F5F0"/>
+                <rect x="12" y="90" width="244" height="30" rx="8"
+                      fill="#E8B520" fill-opacity=".16" stroke="#C8900A" stroke-width="1.5"/>
+
+                <g class="s-ico"><circle cx="26.5" cy="32" r="2.1"/><circle cx="34.5" cy="37" r="2.1"/><circle cx="26.5" cy="42" r="2.1"/><path d="M28.4 33.2l4.2 2.7M28.4 40.8l4.2-2.7"/></g>
+                <text class="s-lbl" x="52" y="41.4">공유…</text>
+
+                <g class="s-ico"><circle cx="29.6" cy="69.4" r="4.6"/><path d="M33.1 72.9l3.2 3"/></g>
+                <text class="s-lbl" x="52" y="75.4">페이지에서 찾기</text>
+
+                <g class="s-ico is-on"><path d="M30 98.5v8.2M26.4 103.1l3.6 3.6 3.6-3.6M24.8 110.8h10.4"/></g>
+                <text class="s-lbl is-on" x="52" y="109.4">설치 및 바로가기 만들기</text>
+
+                <g class="s-ico"><rect x="24.8" y="133.6" width="10.4" height="7.6" rx="1.2"/><path d="M28 143.6h4"/></g>
+                <text class="s-lbl" x="52" y="143.4">데스크톱 사이트</text>
+
+                <g class="s-ico"><circle cx="30" cy="173" r="4.8"/><circle cx="30" cy="173" r="1.5"/></g>
+                <text class="s-lbl" x="52" y="177.4">설정</text>
+              </svg>
+              <figcaption>메뉴를 아래로 내리면 이 항목이 있습니다.</figcaption>
+            </figure>
+          </li>
           <li>홈 화면에 아이콘이 생깁니다. 이제 아이콘을 눌러 바로 들어가세요.</li>
         </ol>
       </div>
@@ -188,8 +232,56 @@
         <p class="inst-sub">사파리(Safari)로 열어야 합니다</p>
         <ol>
           <li>사파리에서 <b>주소를 복사</b>해 붙여넣고 접속합니다.</li>
-          <li>주소창 옆의 <b>점 세 개</b> <kbd>···</kbd> 를 누르고 <kbd>공유</kbd> 를 선택합니다.</li>
-          <li>메뉴를 아래로 내리면 <kbd>홈 화면에 추가</kbd> 가 있습니다. 이걸 누릅니다.</li>
+          <li>주소창 옆의 <b>점 세 개</b> <kbd>···</kbd> 를 누르고 <kbd>공유</kbd> 를 선택합니다.
+            <figure class="shot">
+              <svg viewBox="0 0 268 142" role="img"
+                   aria-label="사파리 점 세 개 메뉴. 맨 위 '공유' 항목이 표시되어 있습니다.">
+                <rect x="6" y="6" width="256" height="130" rx="14" fill="#F7F5F0"/>
+                <rect x="12" y="22" width="244" height="30" rx="8"
+                      fill="#E8B520" fill-opacity=".16" stroke="#C8900A" stroke-width="1.5"/>
+
+                <g class="s-ico is-on"><path d="M30 43.2V30.4M26.6 33.8L30 30.4l3.4 3.4M24.6 37.8v6.6h10.8v-6.6"/></g>
+                <text class="s-lbl is-on" x="52" y="41.4">공유</text>
+
+                <g class="s-ico"><path d="M26 64.8h8v13.4l-4-3.3-4 3.3z"/></g>
+                <text class="s-lbl" x="52" y="75.4">북마크에 추가</text>
+
+                <g class="s-ico"><path d="M25.2 99.6h9.6v11.2h-9.6z"/><path d="M30 99.6v11.2"/></g>
+                <text class="s-lbl" x="52" y="109.4">북마크를 추가할 폴더…</text>
+              </svg>
+              <figcaption>점 세 개를 누르면 나오는 메뉴입니다.</figcaption>
+            </figure>
+          </li>
+          <li>메뉴를 아래로 내리면 <kbd>홈 화면에 추가</kbd> 가 있습니다. 이걸 누릅니다.
+            <figure class="shot">
+              <svg viewBox="0 0 268 238" role="img"
+                   aria-label="사파리 공유 화면. 아래쪽 '홈 화면에 추가' 항목이 표시되어 있습니다.">
+                <rect x="6" y="6" width="256" height="226" rx="14" fill="#F7F5F0"/>
+
+                <rect x="36" y="22" width="34" height="34" rx="9" fill="#D9D3C8"/>
+                <rect x="90" y="22" width="34" height="34" rx="9" fill="#CFE0E6"/>
+                <rect x="144" y="22" width="34" height="34" rx="9" fill="#E3D7C2"/>
+                <rect x="198" y="22" width="34" height="34" rx="9" fill="#D5DCE2"/>
+                <path d="M22 76h224" stroke="#E4DED2" stroke-width="1"/>
+
+                <rect x="12" y="191" width="244" height="30" rx="8"
+                      fill="#E8B520" fill-opacity=".16" stroke="#C8900A" stroke-width="1.5"/>
+
+                <g class="s-ico"><rect x="27" y="99" width="9" height="10.6" rx="1.4"/><path d="M24.6 105.8V96.8h8.2"/></g>
+                <text class="s-lbl" x="52" y="108.4">복사</text>
+
+                <g class="s-ico"><path d="M30 132.6l1.7 3.9 3.9.3-3 2.6 1 3.9-3.6-2.2-3.6 2.2 1-3.9-3-2.6 3.9-.3z"/></g>
+                <text class="s-lbl" x="52" y="142.4">즐겨찾기에 추가</text>
+
+                <g class="s-ico"><circle cx="29.6" cy="170.4" r="4.6"/><path d="M33.1 173.9l3.2 3"/></g>
+                <text class="s-lbl" x="52" y="176.4">페이지에서 찾기</text>
+
+                <g class="s-ico is-on"><rect x="24.8" y="200.8" width="10.4" height="10.4" rx="2.6"/><path d="M30 203.4v5.2M27.4 206h5.2"/></g>
+                <text class="s-lbl is-on" x="52" y="210.4">홈 화면에 추가</text>
+              </svg>
+              <figcaption>목록을 아래로 내리면 이 항목이 있습니다.</figcaption>
+            </figure>
+          </li>
           <li>홈 화면에 아이콘이 생깁니다. 이제 아이콘을 눌러 바로 들어가세요.</li>
         </ol>
       </div>
