@@ -8,12 +8,16 @@
     "ignore": ["**/.*"],
     "headers": [
       {
-        "source": "**/*.@(jpg|png|ico|webp)",
+        "source": "**/*.@(jpg|jpeg|png|ico|webp|svg)",
         "headers": [{ "key": "Cache-Control", "value": "public, max-age=604800" }]
       },
       {
-        "source": "/index.html",
-        "headers": [{ "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }]
+        "source": "**/*.@(html|css|js)",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
+      },
+      {
+        "source": "/",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
       }
     ]
   },
