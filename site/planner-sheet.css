@@ -1,0 +1,110 @@
+/* ══════════════════════════════════════════════════════════
+   일간 플래너 지면 재현 — 실제 종이가 어떻게 생겼는지 보여준다.
+   규칙 1~5가 이 지면의 ①~⑤ 위치를 가리키므로 규칙보다 먼저 온다.
+   ══════════════════════════════════════════════════════════ */
+
+.sheet {
+  background: #fff; border: 1px solid var(--parchment-2);
+  border-radius: 4px; padding: 26px 24px 22px;
+  box-shadow: 0 18px 40px rgba(42,33,23,.07);
+  color: var(--on-light);
+}
+.sheet-grid { display: grid; grid-template-columns: 1.25fr 1fr; gap: 22px; }
+
+/* 번호 마커 ①~⑤ */
+.pmark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 21px; height: 21px; border-radius: 50%;
+  background: var(--ink); color: var(--gold);
+  font-size: 12px; font-weight: 700; flex-shrink: 0;
+  font-family: var(--body); vertical-align: middle;
+}
+
+.sh-box { border: 1px solid #DED6C6; border-radius: 3px; padding: 10px 12px; }
+.sh-cap {
+  font-size: 11px; color: var(--on-light-mute); margin-bottom: 6px;
+  display: flex; align-items: center; gap: 7px;
+}
+.sh-date { font-size: 14px; font-weight: 700; letter-spacing: .06em; }
+.sh-date u { text-decoration: none; border-bottom: 1px solid #C9BFA9; padding: 0 6px; }
+
+.sh-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14.5px; font-weight: 700; margin: 16px 0 8px;
+}
+
+/* 오늘 해야 하는 공부 표 */
+.sh-plan { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sh-plan th, .sh-plan td {
+  border: 1px solid #DED6C6; padding: 6px 8px;
+  font-size: 12.5px; height: 27px;
+}
+.sh-plan th { background: #F7F2E6; font-weight: 600; font-size: 11.5px; }
+.sh-plan col.c-sub { width: 20%; }
+.sh-plan col.c-chk { width: 18%; }
+.sh-plan td.chk { text-align: center; font-weight: 700; }
+.sh-plan td.chk.o { color: #2E7D53; }
+.sh-plan td.chk.t { color: #B8860B; }
+.sh-plan td.chk.x { color: var(--bad); }
+.sh-plan td.body { font-family: 'Courier New', monospace; letter-spacing: -.2px; }
+
+/* 메모 / 한마디 */
+.sh-memo { border: 1px solid #DED6C6; border-radius: 3px; padding: 11px 12px; min-height: 96px; }
+.sh-memo p { font-size: 12.5px; line-height: 1.85; margin: 0 0 7px; }
+.sh-memo p:last-child { margin-bottom: 0; }
+
+/* TIME PLAN */
+.tp-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.tp-total {
+  border: 1px solid #DED6C6; border-radius: 3px; padding: 5px 10px;
+  font-size: 11px; color: var(--on-light-mute);
+}
+.tp-total b { font-size: 14px; color: var(--on-light); letter-spacing: .04em; }
+.tp-unit { font-size: 10.5px; color: var(--on-light-mute); text-align: center; margin-bottom: 3px; }
+.tp {
+  width: 100%; border-collapse: collapse; table-layout: fixed;
+  font-variant-numeric: tabular-nums;
+}
+.tp td { border: 1px solid #DED6C6; height: 19px; padding: 0; }
+.tp td.h {
+  width: 26px; border: 0; border-right: 1px solid #DED6C6;
+  font-size: 10.5px; color: var(--on-light-mute); text-align: right;
+  padding-right: 6px;
+}
+.tp td.lunch, .tp td.acad {
+  text-align: center; font-size: 11px; color: var(--on-light-mute);
+}
+.tp td.acad { border-style: dashed; }
+/* 과목 색 — 규칙 3의 색과 같다 */
+.tp td.k { background: #A9D9D2; }  /* 국어 · 청록 */
+.tp td.e { background: #F2B49A; }  /* 영어 · 주황 */
+.tp td.m { background: #CDB5DD; }  /* 수학 · 보라 */
+
+.sheet-foot {
+  text-align: center; font-size: 12px; color: var(--on-light-mute);
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--parchment-2);
+}
+
+/* 지면 아래 설명 */
+.sheet-note {
+  font-size: 14px; color: var(--on-light-mute); line-height: 1.8;
+  margin-top: 18px;
+}
+.sheet-note b { color: var(--on-light); font-weight: 700; }
+
+/* 각 번호가 무엇인지 */
+.legend { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 20px; }
+.lg { display: flex; gap: 9px; align-items: flex-start; }
+.lg span { font-size: 12.5px; color: var(--on-light-mute); line-height: 1.5; }
+.lg b { display: block; color: var(--on-light); font-size: 13px; font-weight: 700; margin-bottom: 2px; }
+
+@media (max-width: 900px) {
+  .sheet-grid { grid-template-columns: 1fr; gap: 20px; }
+  .legend { grid-template-columns: 1fr 1fr; gap: 14px; }
+}
+@media (max-width: 560px) {
+  .sheet { padding: 18px 14px 16px; }
+  .legend { grid-template-columns: 1fr; }
+  .sh-plan th, .sh-plan td { font-size: 11.5px; padding: 5px 5px; }
+  .tp td { height: 17px; }
+}

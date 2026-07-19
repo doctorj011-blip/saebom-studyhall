@@ -24,6 +24,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="base.css">
+<link rel="stylesheet" href="planner-sheet.css">
 
 <style>
   /* 이 페이지 전용 — 구성 요약과 과목 색 */
@@ -120,8 +121,108 @@
   </div>
 </section>
 
+<!-- ── 일간 페이지 한눈에 ─────────────────── -->
+<section class="band band--day-alt" id="sheet">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:24px">
+      <span class="eyebrow">한눈에</span>
+      <h2 class="sec-title">일간 페이지, 어디에 뭘 쓰나</h2>
+      <p class="sec-lead">
+        아래는 실제로 잘 쓴 하루예요. 번호 ①~⑤는 종이 위의 위치이고,
+        이어지는 규칙 다섯 개도 같은 번호를 따라갑니다.
+      </p>
+    </div>
+
+    <div class="sheet">
+      <div class="sheet-grid">
+
+        <!-- 왼쪽 -->
+        <div>
+          <div class="sh-box">
+            <div class="sh-cap"><span class="pmark">1</span> 오늘날짜 요일</div>
+            <div class="sh-date">20<u>26</u>년 <u>7</u>월 <u>17</u>일 <u>금</u>요일</div>
+          </div>
+
+          <div class="sh-title"><span class="pmark">2</span> 오늘 해야 하는 공부</div>
+          <table class="sh-plan">
+            <colgroup><col class="c-sub"><col><col class="c-chk"></colgroup>
+            <tr><th>과목</th><th>내용</th><th>확인</th></tr>
+            <tr><td>국어</td><td class="body">100인지혜 문법 162~175p</td><td class="chk o">O</td></tr>
+            <tr><td>국어</td><td class="body">고전시가 프린트 1장</td><td class="chk o">O</td></tr>
+            <tr><td>영어</td><td class="body">어휘끝 unit 44~46</td><td class="chk o">O</td></tr>
+            <tr><td>영어</td><td class="body">화이트라벨 unit 2개</td><td class="chk t">△</td></tr>
+            <tr><td>수학</td><td class="body">고쟁이 수2 470~536번</td><td class="chk x">X</td></tr>
+            <tr><td>&nbsp;</td><td></td><td></td></tr>
+            <tr><td>&nbsp;</td><td></td><td></td></tr>
+            <tr><td>&nbsp;</td><td></td><td></td></tr>
+          </table>
+
+          <div class="sh-title"><span class="pmark">4</span> 오늘 계획에서 하지 못한 것들(대책) + 즉흥적 메모</div>
+          <div class="sh-memo">
+            <p>수학 X — 국어에 4시간 써서 시간이 없었음.<br>내일은 수학을 1번 줄에 놓고 먼저 한다.</p>
+            <p>화이트라벨 △ — 2개 중 1개만. 나머지는 내일.</p>
+            <p>(즉흥) 영어학원에서 모의고사 1회분 추가로 품</p>
+          </div>
+
+          <div class="sh-title"><span class="pmark">5</span> 오늘의 나에게 하는 한마디</div>
+          <div class="sh-memo" style="min-height:64px">
+            <p>문법은 아침에 해야 안 졸린다.<br>밥 먹고 바로 앉으면 안 졸림 — 이번 주 3번째 확인.</p>
+          </div>
+        </div>
+
+        <!-- 오른쪽 · TIME PLAN -->
+        <div>
+          <div class="tp-head">
+            <div class="sh-title" style="margin:0"><span class="pmark">3</span> TIME PLAN</div>
+            <div class="tp-total">총 공부시간<br><b>7 h 30 m</b></div>
+          </div>
+          <div class="tp-unit">30min</div>
+          <table class="tp">
+            <tr><td class="h">6</td><td></td><td></td></tr>
+            <tr><td class="h">7</td><td></td><td></td></tr>
+            <tr><td class="h">8</td><td></td><td></td></tr>
+            <tr><td class="h">9</td><td class="k"></td><td class="k"></td></tr>
+            <tr><td class="h">10</td><td class="k"></td><td class="k"></td></tr>
+            <tr><td class="h">11</td><td class="k"></td><td class="e"></td></tr>
+            <tr><td class="h">12</td><td class="lunch" colspan="2">점심</td></tr>
+            <tr><td class="h">1</td><td class="e"></td><td class="e"></td></tr>
+            <tr><td class="h">2</td><td class="e"></td><td></td></tr>
+            <tr><td class="h">3</td><td class="k"></td><td></td></tr>
+            <tr><td class="h">4</td><td class="acad" colspan="2" rowspan="2">영어학원</td></tr>
+            <tr><td class="h">5</td></tr>
+            <tr><td class="h">6</td><td></td><td></td></tr>
+            <tr><td class="h">7</td><td></td><td></td></tr>
+            <tr><td class="h">8</td><td class="m"></td><td class="m"></td></tr>
+            <tr><td class="h">9</td><td class="m"></td><td class="m"></td></tr>
+            <tr><td class="h">10</td><td class="m"></td><td></td></tr>
+            <tr><td class="h">11</td><td></td><td></td></tr>
+            <tr><td class="h">12</td><td></td><td></td></tr>
+            <tr><td class="h">1</td><td></td><td></td></tr>
+            <tr><td class="h">2</td><td></td><td></td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="sheet-foot">매일의 반복이 나를 성장시킨다.</div>
+    </div>
+
+    <p class="sheet-note">
+      색칠한 칸만 <b>순공(혼자 공부한 시간)</b>이에요. 점심과 영어학원은 칠하지 않고 글자만 썼기 때문에
+      총 공부시간 7h 30m에 들어가지 않아요. <b>칠한 칸이 15개라서 15 ÷ 2 = 7h 30m</b>이에요.
+    </p>
+
+    <div class="legend">
+      <div class="lg"><span class="pmark">1</span><span><b>날짜</b>요일까지</span></div>
+      <div class="lg"><span class="pmark">2</span><span><b>할 일</b>교재와 숫자</span></div>
+      <div class="lg"><span class="pmark">3</span><span><b>시간</b>순공만 색칠</span></div>
+      <div class="lg"><span class="pmark">4</span><span><b>못한 것</b>이유와 대책</span></div>
+      <div class="lg"><span class="pmark">5</span><span><b>한마디</b>발견 한 줄</span></div>
+    </div>
+  </div>
+</section>
+
 <!-- ── 규칙 5개 ──────────────────────────── -->
-<section class="band band--day-alt">
+<section class="band band--day">
   <div class="wrap--narrow">
     <div class="sec-head" style="margin-bottom:20px">
       <span class="eyebrow">규칙</span>
