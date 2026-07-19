@@ -354,7 +354,153 @@ a:focus-visible, summary:focus-visible, button:focus-visible {
 .info-table td small { display: block; font-size: 13px; color: var(--on-dark-mute); margin-top: 3px; }
 .info-table a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
 
-/* ── 사진 자리 ───────────────────────────── */
+/* ── 하루 흐름 (관리 절차) ───────────────── */
+.flowline { margin: 8px 0; }
+.fl-item {
+  display: grid; grid-template-columns: 104px 1fr; gap: 24px;
+  padding: 22px 0; border-top: 1px solid rgba(235,226,208,.16);
+  align-items: baseline;
+}
+.fl-item:first-child { border-top: 0; }
+.fl-when {
+  font-family: var(--display); font-size: 15px; font-weight: 700;
+  color: var(--gold); font-variant-numeric: tabular-nums; letter-spacing: -0.01em;
+}
+.fl-what b { display: block; font-size: 16.5px; font-weight: 700; margin-bottom: 4px; }
+.fl-what span { font-size: 14.5px; color: var(--on-dark-mute); }
+.fl-tag {
+  display: inline-block; margin-left: 8px; padding: 2px 9px;
+  border: 1px solid rgba(232,181,32,.45); border-radius: 999px;
+  font-size: 11.5px; font-weight: 600; color: var(--gold);
+  vertical-align: 2px; letter-spacing: 0;
+}
+
+/* ── 자주 묻는 질문 ──────────────────────── */
+.faq details summary { font-size: 15.5px; font-weight: 600; padding: 19px 4px; }
+.faq details summary::before {
+  content: "Q"; font-family: var(--display); font-weight: 800;
+  color: var(--gold-warm); margin-right: 12px; font-size: 15px;
+}
+.faq .faq-a { padding: 0 4px 22px 32px; font-size: 14.5px; color: var(--on-light-mute); }
+.faq .faq-a p + p { margin-top: 10px; }
+.faq .faq-a a { color: var(--gold-warm); font-weight: 600; }
+
+/* ── 중간 유도 띠 ────────────────────────── */
+.cta-band {
+  background: var(--ink); color: var(--on-dark);
+  padding: 46px 0; text-align: center; position: relative; overflow: hidden;
+}
+.cta-band::before {
+  content: ""; position: absolute; inset: 0;
+  background: radial-gradient(60% 120% at 50% 0%, rgba(232,181,32,.16), transparent 70%);
+  pointer-events: none;
+}
+.cta-band .wrap { position: relative; }
+.cta-band h2 {
+  font-family: var(--display); font-size: clamp(21px, 3.4vw, 27px);
+  font-weight: 800; letter-spacing: -0.02em; margin-bottom: 8px;
+}
+.cta-band p { font-size: 14.5px; color: var(--on-dark-mute); margin-bottom: 22px; }
+.cta-band .cta-row { justify-content: center; }
+
+/* ── 모바일 고정 하단 버튼 ───────────────── */
+.sticky-cta { display: none; }
+@media (max-width: 760px) {
+  .sticky-cta {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(16,30,39,.95);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(232,181,32,.25);
+  }
+  .sticky-cta a {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    padding: 13px 10px; border-radius: 999px;
+    font-size: 14.5px; font-weight: 700; text-decoration: none;
+  }
+  .sticky-cta .sc-call { background: var(--gold); color: var(--ink); }
+  .sticky-cta .sc-book { border: 1.5px solid rgba(235,226,208,.35); color: var(--on-dark); }
+  body { padding-bottom: 76px; }
+}
+
+/* ── 대표 사진 ───────────────────────────── */
+.lead-shot {
+  position: relative; border-radius: 4px; overflow: hidden;
+  background: var(--parchment-2); margin-bottom: 14px;
+}
+.lead-shot img {
+  width: 100%; aspect-ratio: 3 / 2; object-fit: cover;
+  transition: transform .5s cubic-bezier(.2,.8,.2,1);
+}
+.lead-shot:hover img { transform: scale(1.02); }
+.lead-cap {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 34px 24px 18px; color: #fff; font-size: 14px; font-weight: 600;
+  background: linear-gradient(180deg, transparent, rgba(16,30,39,.78));
+}
+
+/* ── 갤러리 ─────────────────────────────── */
+.gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.shot {
+  position: relative; display: block; padding: 0; border: 0;
+  border-radius: 3px; overflow: hidden; cursor: zoom-in;
+  background: var(--parchment-2); font: inherit;
+}
+.shot img {
+  width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block;
+  transition: transform .4s cubic-bezier(.2,.8,.2,1), opacity .2s;
+}
+.shot:hover img { transform: scale(1.05); }
+.shot--tall img { aspect-ratio: 3 / 4; }
+.shot-label {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  padding: 22px 12px 9px; color: #fff; font-size: 12px; font-weight: 600;
+  text-align: left; opacity: 0; transition: opacity .2s;
+  background: linear-gradient(180deg, transparent, rgba(16,30,39,.8));
+}
+.shot:hover .shot-label, .shot:focus-visible .shot-label { opacity: 1; }
+
+/* ── 라이트박스 ─────────────────────────── */
+.lightbox {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(9,17,22,.96);
+  display: none; align-items: center; justify-content: center;
+  padding: 40px 20px;
+}
+.lightbox[open], .lightbox.is-open { display: flex; }
+.lightbox img {
+  max-width: 100%; max-height: calc(100vh - 140px);
+  object-fit: contain; border-radius: 3px;
+}
+.lb-cap {
+  position: absolute; bottom: 26px; left: 0; right: 0;
+  text-align: center; color: var(--on-dark-mute); font-size: 14px;
+}
+.lb-btn {
+  position: absolute; background: rgba(235,226,208,.10);
+  border: 1px solid rgba(235,226,208,.22); color: var(--on-dark);
+  width: 46px; height: 46px; border-radius: 50%;
+  font-size: 20px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .15s, border-color .15s;
+}
+.lb-btn:hover { background: rgba(232,181,32,.18); border-color: var(--gold); }
+.lb-close { top: 22px; right: 22px; }
+.lb-prev { left: 22px; top: 50%; transform: translateY(-50%); }
+.lb-next { right: 22px; top: 50%; transform: translateY(-50%); }
+
+@media (max-width: 900px) {
+  .gallery { grid-template-columns: repeat(2, 1fr); }
+  .lightbox { padding: 20px 12px; }
+  .lb-prev { left: 10px; } .lb-next { right: 10px; }
+  .shot-label { opacity: 1; }
+}
+@media (max-width: 560px) {
+  .lead-shot img { aspect-ratio: 4 / 3; }
+}
+
+/* ── 사진 자리(플레이스홀더) ─────────────── */
 .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .photo-slot {
   aspect-ratio: 4 / 3; border-radius: 3px;
