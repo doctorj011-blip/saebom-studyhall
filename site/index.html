@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>새봄면학관 — 24시간 관리형 자습 공간 (수원 영통)</title>
+<meta name="description" content="수원 영통 새봄면학관. 24시간 개방, 1인 지정 좌석, 입퇴실 카카오 알림톡, 학습 플래너 관리. 학생은 공부에 집중하고 학부모님은 확인할 수 있는 자습 공간입니다.">
+<link rel="canonical" href="https://saebom-studyhall.web.app/">
+
+<!-- 카카오톡·문자로 링크를 보냈을 때 뜨는 미리보기 -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="새봄면학관">
+<meta property="og:title" content="새봄면학관 — 24시간 관리형 자습 공간">
+<meta property="og:description" content="수원 영통 · 1인 지정 좌석 · 입퇴실 알림톡 · 학습 플래너 관리">
+<meta property="og:url" content="https://saebom-studyhall.web.app/">
+<meta property="og:image" content="https://saebom-studyhall.web.app/nabi.jpg">
+<meta property="og:image:width" content="720">
+<meta property="og:image:height" content="1080">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#101E27">
+
+<link rel="icon" type="image/jpeg" href="nabi-logo.jpg">
+<link rel="apple-touch-icon" href="nabi-logo.jpg">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "LocalBusiness",
+  "name": "새봄면학관",
+  "image": "https://saebom-studyhall.web.app/nabi.jpg",
+  "url": "https://saebom-studyhall.web.app/",
+  "telephone": "+82-10-4130-1139",
+  "email": "doctorj011@gmail.com",
+  "address": {
+    "@type": "PostalAddress",
+    "streetAddress": "반달로29, 3층 1호",
+    "addressLocality": "수원시 영통구",
+    "addressRegion": "경기도",
+    "addressCountry": "KR"
+  },
+  "openingHoursSpecification": {
+    "@type": "OpeningHoursSpecification",
+    "dayOfWeek": ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],
+    "opens": "00:00",
+    "closes": "23:59"
+  }
+}
+</script>
+
+<style>
+  :root {
+    /* 나비 유화에서 뽑은 색 */
+    --ink:         #101E27;  /* 그림의 가장 어두운 바탕 */
+    --deep:        #17323F;  /* 청록 바탕 */
+    --teal:        #23515E;  /* 붓결 중간톤 */
+    --gold:        #E8B520;  /* 날개 */
+    --gold-warm:   #C8900A;  /* 앱과 공유하는 브랜드 골드 */
+    --umber:       #8A5A22;  /* 나비 몸통 */
+    --parchment:   #F5ECDA;  /* 종이 */
+    --parchment-2: #EFE3CB;
+    --on-dark:      #EBE2D0;
+    --on-dark-mute: #A9B7BC;
+    --on-light:      #2A2117;
+    --on-light-mute: #6F6353;
+
+    --display: 'Nanum Myeongjo', 'Batang', serif;
+    --body: 'Pretendard Variable', Pretendard, -apple-system, 'Malgun Gothic', sans-serif;
+
+    --measure: 1040px;
+    --gutter: 24px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--body);
+    background: var(--parchment);
+    color: var(--on-light);
+    line-height: 1.75;
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+  img { max-width: 100%; display: block; }
+  a { color: inherit; }
+
+  .wrap { max-width: var(--measure); margin: 0 auto; padding: 0 var(--gutter); }
+
+  a:focus-visible, summary:focus-visible, button:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ── 섹션 밴드 ───────────────────────────── */
+  .band { padding: 84px 0; }
+  .band--night { background: var(--deep); color: var(--on-dark); }
+  .band--ink { background: var(--ink); color: var(--on-dark); }
+  .band--day { background: var(--parchment); color: var(--on-light); }
+  .band--day-alt { background: var(--parchment-2); color: var(--on-light); }
+
+  /* ── 섹션 제목 ───────────────────────────── */
+  .eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: 0.18em;
+    color: var(--gold); display: block; margin-bottom: 12px;
+  }
+  .band--day .eyebrow, .band--day-alt .eyebrow { color: var(--umber); }
+  .sec-title {
+    font-family: var(--display);
+    font-size: clamp(26px, 4.2vw, 36px);
+    font-weight: 800; line-height: 1.4; letter-spacing: -0.02em;
+    margin-bottom: 14px;
+  }
+  .sec-lead { font-size: 15.5px; color: var(--on-light-mute); max-width: 46em; }
+  .band--night .sec-lead, .band--ink .sec-lead { color: var(--on-dark-mute); }
+  .sec-head { margin-bottom: 44px; }
+
+  /* ── 헤더 ───────────────────────────────── */
+  .site-header {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(16,30,39,.92);
+    -webkit-backdrop-filter: saturate(140%) blur(10px);
+    backdrop-filter: saturate(140%) blur(10px);
+    border-bottom: 1px solid rgba(232,181,32,.22);
+  }
+  .site-header .wrap {
+    display: flex; align-items: center; justify-content: space-between;
+    height: 64px;
+  }
+  .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+  .brand img {
+    width: 34px; height: 34px; border-radius: 50%; object-fit: cover;
+    border: 1.5px solid rgba(232,181,32,.55);
+  }
+  .brand b {
+    font-family: var(--display); font-size: 19px; font-weight: 800;
+    color: var(--on-dark); letter-spacing: -0.02em;
+  }
+  .brand b i { font-style: normal; color: var(--gold); }
+  .site-nav { display: flex; align-items: center; gap: 26px; }
+  .site-nav a {
+    font-size: 13.5px; font-weight: 500; color: var(--on-dark-mute);
+    text-decoration: none; transition: color .15s;
+  }
+  .site-nav a:hover { color: var(--gold); }
+  .site-nav a.nav-call {
+    font-weight: 700; color: var(--ink);
+    background: var(--gold); padding: 8px 16px; border-radius: 999px;
+  }
+  .site-nav a.nav-call:hover { background: #F2C233; color: var(--ink); }
+
+  /* ── 히어로 ─────────────────────────────── */
+  .hero { background: var(--ink); color: var(--on-dark); position: relative; overflow: hidden; }
+  /* 램프불빛 — 24시간 켜져 있는 자리 */
+  .hero::before {
+    content: ""; position: absolute; inset: 0;
+    background: radial-gradient(58% 62% at 68% 34%, rgba(232,181,32,.20), transparent 68%);
+    pointer-events: none;
+  }
+  .hero-inner {
+    position: relative;
+    max-width: var(--measure); margin: 0 auto; padding: 0 var(--gutter);
+    display: grid; grid-template-columns: 1.15fr .85fr;
+    gap: 56px; align-items: center; min-height: 560px;
+  }
+  .hero-text { padding: 72px 0; }
+  .hero h1 {
+    font-family: var(--display);
+    font-size: clamp(32px, 5.4vw, 52px);
+    font-weight: 800; line-height: 1.32; letter-spacing: -0.03em;
+    margin-bottom: 22px;
+  }
+  .hero h1 em { font-style: normal; color: var(--gold); }
+  .hero p.lede {
+    font-size: 16.5px; color: var(--on-dark-mute);
+    max-width: 30em; margin-bottom: 34px;
+  }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 12px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 14px 24px; border-radius: 999px;
+    font-size: 15px; font-weight: 700; text-decoration: none;
+    transition: transform .12s ease, box-shadow .12s ease, background .15s, border-color .15s, color .15s;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn--gold { background: var(--gold); color: var(--ink); box-shadow: 0 8px 22px rgba(232,181,32,.28); }
+  .btn--gold:hover { background: #F2C233; }
+  .btn--ghost { background: transparent; color: var(--on-dark); border: 1.5px solid rgba(235,226,208,.32); }
+  .btn--ghost:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* 나비 그림 — 액자 없이, 기울이지 않고, 크게 */
+  .hero-art { position: relative; align-self: stretch; display: flex; }
+  .hero-art img {
+    width: 100%; height: 100%; object-fit: cover; object-position: center 42%;
+    min-height: 560px;
+  }
+  .hero-art::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, var(--ink) 0%, rgba(16,30,39,.35) 22%, transparent 55%);
+    pointer-events: none;
+  }
+
+  /* ── 시그니처: 24시간 띠 ─────────────────── */
+  .clock-band {
+    background: var(--ink); color: var(--on-dark);
+    border-top: 1px solid rgba(232,181,32,.22);
+    padding: 34px 0 38px;
+  }
+  .clock-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 18px;
+  }
+  .clock-title { font-family: var(--display); font-size: 18px; font-weight: 700; letter-spacing: -0.02em; }
+  .clock-now { font-size: 13px; color: var(--on-dark-mute); font-variant-numeric: tabular-nums; }
+  .clock-now b { color: var(--gold); font-weight: 700; }
+  .ticks { display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; align-items: end; height: 46px; }
+  .tick {
+    background: rgba(235,226,208,.16); border-radius: 2px; height: 16px;
+    transition: height .4s cubic-bezier(.2,.8,.2,1), background .4s;
+  }
+  .tick.is-near { background: rgba(232,181,32,.45); height: 28px; }
+  .tick.is-now { background: var(--gold); height: 46px; box-shadow: 0 0 18px rgba(232,181,32,.5); }
+  .clock-scale {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    margin-top: 10px; font-size: 11.5px; color: var(--on-dark-mute);
+    font-variant-numeric: tabular-nums;
+  }
+  .clock-scale span + span { text-align: center; }
+  .clock-scale span:last-child { text-align: right; }
+
+  /* ── 관리 방식 카드 ──────────────────────── */
+  .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: rgba(235,226,208,.14); }
+  .card { background: var(--deep); padding: 32px 26px 34px; }
+  .card .ic { color: var(--gold); margin-bottom: 16px; height: 26px; }
+  .card h3 {
+    font-family: var(--display); font-size: 17.5px; font-weight: 700;
+    margin-bottom: 9px; letter-spacing: -0.02em;
+  }
+  .card p { font-size: 14px; color: var(--on-dark-mute); line-height: 1.75; }
+
+  /* ── 이용료 ─────────────────────────────── */
+  .price-row { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+  .price-card {
+    background: #fff; border: 1px solid var(--parchment-2);
+    border-top: 3px solid var(--gold-warm);
+    border-radius: 4px; padding: 34px 32px 30px;
+    box-shadow: 0 18px 40px rgba(42,33,23,.07);
+  }
+  .price-tag { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .price-tag .num {
+    font-family: var(--display); font-size: 44px; font-weight: 800;
+    color: var(--on-light); letter-spacing: -0.03em; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .price-tag .per { font-size: 15px; color: var(--on-light-mute); font-weight: 500; }
+  .price-sub { font-size: 13px; color: var(--on-light-mute); margin-bottom: 22px; }
+  .price-list { list-style: none; }
+  .price-list li {
+    font-size: 14.5px; padding: 10px 0 10px 24px; position: relative;
+    border-bottom: 1px solid var(--parchment-2);
+  }
+  .price-list li:last-child { border-bottom: 0; }
+  .price-list li::before {
+    content: ""; position: absolute; left: 4px; top: 21px;
+    width: 7px; height: 7px; border-radius: 50%; background: var(--gold-warm);
+  }
+  .price-note {
+    font-size: 13px; color: var(--on-light-mute);
+    margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--parchment-2);
+  }
+
+  /* ── 정보 테이블 ─────────────────────────── */
+  .info-table { width: 100%; border-collapse: collapse; }
+  .info-table th, .info-table td {
+    padding: 16px 4px; text-align: left; font-size: 15px;
+    border-bottom: 1px solid rgba(235,226,208,.16); vertical-align: top;
+  }
+  .info-table th { width: 128px; font-weight: 600; color: var(--gold); font-size: 14px; white-space: nowrap; }
+  .info-table td b { font-weight: 700; }
+  .info-table td small { display: block; font-size: 13px; color: var(--on-dark-mute); margin-top: 3px; }
+  .info-table a { color: var(--gold); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* ── 사진 자리 ───────────────────────────── */
+  .photos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  .photo-slot {
+    aspect-ratio: 4 / 3; border-radius: 3px;
+    background: var(--parchment-2);
+    border: 1px dashed rgba(138,90,34,.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; color: var(--on-light-mute); text-align: center; padding: 12px;
+  }
+
+  /* ── 앱 안내 ─────────────────────────────── */
+  .app-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .app-card {
+    background: var(--teal); border: 1px solid rgba(232,181,32,.25);
+    border-radius: 4px; padding: 26px 24px;
+    text-decoration: none; display: block;
+    transition: border-color .15s, transform .15s;
+  }
+  .app-card:hover { border-color: var(--gold); transform: translateY(-2px); }
+  .app-card h3 {
+    font-family: var(--display); font-size: 17px; font-weight: 700;
+    margin-bottom: 7px; color: var(--on-dark);
+  }
+  .app-card p { font-size: 13.5px; color: var(--on-dark-mute); margin-bottom: 14px; }
+  .app-card .go { font-size: 13.5px; font-weight: 700; color: var(--gold); }
+
+  /* ── 정책 / 약관 ─────────────────────────── */
+  .policy { font-size: 14.5px; }
+  .policy h3 { font-family: var(--display); font-size: 17px; font-weight: 700; margin: 26px 0 10px; letter-spacing: -0.02em; }
+  .policy h3:first-child { margin-top: 0; }
+  .policy ol, .policy ul { padding-left: 20px; }
+  .policy li { margin: 7px 0; }
+
+  details { border-top: 1px solid var(--parchment-2); }
+  details:last-of-type { border-bottom: 1px solid var(--parchment-2); }
+  details summary {
+    cursor: pointer; padding: 18px 4px; list-style: none;
+    font-size: 15.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::after { content: "+"; font-size: 20px; color: var(--umber); font-weight: 400; }
+  details[open] summary::after { content: "−"; }
+  .terms-body { padding: 0 4px 24px; font-size: 14px; color: var(--on-light-mute); }
+  .terms-body h4 { font-size: 14px; font-weight: 700; color: var(--on-light); margin: 16px 0 5px; }
+  .terms-body h4:first-child { margin-top: 0; }
+
+  /* ── 문의 ───────────────────────────────── */
+  .contact-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+  .tel-big {
+    font-family: var(--display); font-size: clamp(30px, 5vw, 42px);
+    font-weight: 800; color: var(--gold); letter-spacing: -0.02em;
+    text-decoration: none; display: inline-block; margin: 6px 0 18px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tel-big:hover { text-decoration: underline; text-underline-offset: 6px; }
+
+  /* ── 푸터 ───────────────────────────────── */
+  .site-footer {
+    background: var(--ink); color: var(--on-dark-mute);
+    padding: 40px 0 46px; font-size: 13px; line-height: 2;
+    border-top: 1px solid rgba(232,181,32,.18);
+  }
+  .site-footer strong { font-family: var(--display); color: var(--on-dark); font-size: 15px; font-weight: 700; }
+
+  /* ── 반응형 ─────────────────────────────── */
+  @media (max-width: 900px) {
+    .band { padding: 62px 0; }
+    .hero-inner { grid-template-columns: 1fr; gap: 0; min-height: 0; }
+    .hero-text { padding: 44px 0; order: 2; }
+    .hero-art { order: 1; margin: 0 calc(var(--gutter) * -1); }
+    .hero-art img { min-height: 0; height: 290px; object-position: center 38%; }
+    .hero-art::after { background: linear-gradient(180deg, transparent 40%, var(--ink) 100%); }
+    .cards { grid-template-columns: 1fr 1fr; }
+    .price-row, .contact-grid, .app-row { grid-template-columns: 1fr; gap: 28px; }
+    .photos { grid-template-columns: 1fr 1fr; }
+    .site-nav a:not(.nav-call) { display: none; }
+  }
+  @media (max-width: 560px) {
+    :root { --gutter: 18px; }
+    .cards { grid-template-columns: 1fr; }
+    .photos { grid-template-columns: 1fr; }
+    .ticks { gap: 2px; }
+    .info-table th { width: 92px; font-size: 13px; }
+    .info-table td { font-size: 14px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <img src="nabi-logo.jpg" alt="">
+      <b>새봄<i>면학관</i></b>
+    </a>
+    <nav class="site-nav">
+      <a href="#care">관리 방식</a>
+      <a href="#price">이용료</a>
+      <a href="#info">이용 안내</a>
+      <a href="#apps">학부모 앱</a>
+      <a href="#contact">오시는 길</a>
+      <a class="nav-call" href="tel:01041301139">전화 문의</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ── 히어로 ────────────────────────────── -->
+<div class="hero" id="top">
+  <div class="hero-inner">
+    <div class="hero-text">
+      <h1>혼자 앉아 있는 시간을,<br><em>혼자 두지 않습니다</em></h1>
+      <p class="lede">
+        수원 영통의 24시간 관리형 자습 공간입니다.
+        학생마다 자기 좌석이 있고, 들어오고 나간 시간은 학부모님 휴대폰으로 바로 전해집니다.
+      </p>
+      <div class="cta-row">
+        <a class="btn btn--gold" href="https://saebom-booking.web.app/" target="_blank" rel="noopener">상담 예약하기</a>
+        <a class="btn btn--ghost" href="tel:01041301139">010-4130-1139</a>
+      </div>
+    </div>
+    <div class="hero-art">
+      <img src="nabi.jpg" alt="새봄면학관의 상징인 노란 나비 그림">
+    </div>
+  </div>
+</div>
+
+<!-- ── 시그니처: 24시간 띠 ───────────────── -->
+<div class="clock-band">
+  <div class="wrap">
+    <div class="clock-head">
+      <div class="clock-title">문을 닫는 시간이 없습니다</div>
+      <div class="clock-now" id="clock-now">연중무휴 24시간 개방</div>
+    </div>
+    <div class="ticks" id="ticks" aria-hidden="true"></div>
+    <div class="clock-scale"><span>0시</span><span>6시</span><span>12시</span><span>18시</span></div>
+  </div>
+</div>
+
+<!-- ── 관리 방식 ─────────────────────────── -->
+<section class="band band--night" id="care" style="padding-bottom:0">
+  <div class="wrap sec-head">
+    <span class="eyebrow">관리 방식</span>
+    <h2 class="sec-title">공부는 학생이, 확인은 저희가</h2>
+    <p class="sec-lead">
+      자리를 빌려주는 곳이 아닙니다. 언제 왔고 얼마나 앉아 있었는지,
+      오늘 무엇을 하기로 했는지를 기록하고 관리합니다.
+    </p>
+  </div>
+  <div class="cards">
+
+    <div class="card">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M11 18.5h2"/><path d="M9 6.5h6"/>
+        </svg>
+      </div>
+      <h3>입퇴실 알림톡</h3>
+      <p>학생이 키오스크에서 입실·퇴실하면 학부모님 휴대폰으로 카카오 알림톡이 바로 발송됩니다. 몇 시에 왔고 몇 시에 갔는지 그때그때 확인하실 수 있습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 20v-4.5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2V20"/>
+          <path d="M6 13.5V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6.5"/>
+          <path d="M4 20h16"/>
+        </svg>
+      </div>
+      <h3>1인 지정 좌석</h3>
+      <p>학생마다 전용 좌석이 정해져 있습니다. 매일 같은 자리에 앉는 것만으로도 학습 습관이 훨씬 빨리 자리를 잡습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4.5 5.5A2 2 0 0 1 6.5 3.5H18a.5.5 0 0 1 .5.5v16a.5.5 0 0 1-.5.5H6.5a2 2 0 0 1-2-2z"/>
+          <path d="M4.5 17.5a2 2 0 0 1 2-2h12"/>
+          <path d="M8.5 8h6M8.5 11h4"/>
+        </svg>
+      </div>
+      <h3>학습 플래너 관리</h3>
+      <p>학생이 그날의 계획과 실행을 플래너에 적고, 선생님이 확인해 피드백을 남깁니다. 학부모님도 앱에서 그대로 보실 수 있습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/>
+        </svg>
+      </div>
+      <h3>미입실 안내</h3>
+      <p>오기로 한 시간에 입실 기록이 없으면 학부모님께 미입실 안내를 드립니다. 빠진 날이 그냥 지나가지 않습니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 3.5H6.5A1.5 1.5 0 0 0 5 5v14a1.5 1.5 0 0 0 1.5 1.5H14"/>
+          <path d="M14 3.5v17"/><path d="M17 12h4"/><path d="M18.5 9.5 21 12l-2.5 2.5"/>
+        </svg>
+      </div>
+      <h3>등록 학생만 출입</h3>
+      <p>등록된 학생만 열 수 있는 자동문으로 운영합니다. 외부인이 드나들지 않는 환경에서 공부합니다.</p>
+    </div>
+
+    <div class="card">
+      <div class="ic">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="9" cy="8" r="2.6"/><circle cx="16.5" cy="9" r="2.1"/>
+          <path d="M3.5 18.5c0-2.5 2.4-4.2 5.5-4.2s5.5 1.7 5.5 4.2"/>
+          <path d="M16.2 14.6c2.6.3 4.3 1.8 4.3 3.9"/>
+        </svg>
+      </div>
+      <h3>스터디룸 · 학습 상담</h3>
+      <p>같이 풀어야 하는 공부를 위한 스터디룸이 있고, 정기적으로 학습 상담을 진행합니다.</p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ── 공간 사진 ─────────────────────────── -->
+<section class="band band--day" id="space">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">공간</span>
+      <h2 class="sec-title">앉게 될 자리를 먼저 보세요</h2>
+      <p class="sec-lead">방문 상담 때 좌석을 직접 보고 고르실 수 있습니다.</p>
+    </div>
+    <div class="photos">
+      <div class="photo-slot">사진 자리 ①<br>열람실 전경</div>
+      <div class="photo-slot">사진 자리 ②<br>지정 좌석</div>
+      <div class="photo-slot">사진 자리 ③<br>스터디룸</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 이용료 ────────────────────────────── -->
+<section class="band band--day-alt" id="price">
+  <div class="wrap">
+    <div class="price-row">
+      <div>
+        <span class="eyebrow">이용료</span>
+        <h2 class="sec-title">월 단위 이용권 하나입니다</h2>
+        <p class="sec-lead">
+          별도의 입회비나 관리비는 없습니다. 좌석, 알림톡, 플래너 관리, 스터디룸이
+          모두 이용권 하나에 들어 있습니다.
+        </p>
+        <p class="sec-lead" style="margin-top:14px">
+          형제·자매가 함께 등록하는 경우 등 할인 제도가 있으니 전화로 문의해 주세요.
+        </p>
+      </div>
+      <div class="price-card">
+        <div class="price-tag"><span class="num">300,000</span><span class="per">원 / 월</span></div>
+        <p class="price-sub">부가세 포함 · 결제일 기준 1개월</p>
+        <ul class="price-list">
+          <li>1인 지정 좌석</li>
+          <li>입퇴실 · 미입실 알림톡</li>
+          <li>학습 플래너 관리와 피드백</li>
+          <li>스터디룸 이용</li>
+          <li>정수기 · 사물함 등 부대시설</li>
+        </ul>
+        <p class="price-note">결제 수단: 신용·체크카드, 계좌이체</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── 이용 안내 ─────────────────────────── -->
+<section class="band band--night" id="info">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">이용 안내</span>
+      <h2 class="sec-title">오시기 전에 알아두실 것</h2>
+    </div>
+    <table class="info-table">
+      <tr>
+        <th>이용 시간</th>
+        <td><b>연중무휴 24시간</b><small>시험 기간에도 시간 제한 없이 이용하실 수 있습니다.</small></td>
+      </tr>
+      <tr>
+        <th>출입 방법</th>
+        <td>등록 학생 전용 자동문<small>키오스크에서 본인 확인 후 입실·퇴실이 기록됩니다.</small></td>
+      </tr>
+      <tr>
+        <th>위치</th>
+        <td>
+          경기도 수원시 영통구 반달로29, 3층 1호 (영통동)
+          <small><a href="https://map.naver.com/p/search/%EC%88%98%EC%9B%90%EC%8B%9C%20%EC%98%81%ED%86%B5%EA%B5%AC%20%EB%B0%98%EB%8B%AC%EB%A1%9C29" target="_blank" rel="noopener">네이버 지도에서 보기</a></small>
+        </td>
+      </tr>
+      <tr>
+        <th>등록 문의</th>
+        <td><a href="tel:01041301139">010-4130-1139</a><small>상담은 전화 또는 온라인 예약으로 접수합니다.</small></td>
+      </tr>
+    </table>
+  </div>
+</section>
+
+<!-- ── 학부모 앱 ─────────────────────────── -->
+<section class="band band--ink" id="apps">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">등록 학생 · 학부모 전용</span>
+      <h2 class="sec-title">아이가 앉아 있는 시간을 직접 확인하세요</h2>
+      <p class="sec-lead">
+        등록하시면 학부모용 앱을 안내해 드립니다. 오늘의 입퇴실 기록, 이번 달 공부 시간,
+        학습 플래너와 선생님 피드백을 언제든 보실 수 있습니다.
+      </p>
+    </div>
+    <div class="app-row">
+      <a class="app-card" href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_parent.html" target="_blank" rel="noopener">
+        <h3>학부모 앱 열기</h3>
+        <p>입퇴실 기록, 공부 시간, 플래너와 피드백을 확인합니다. 등록 시 안내받으신 방법으로 로그인하세요.</p>
+        <span class="go">바로 가기 →</span>
+      </a>
+      <a class="app-card" href="https://saebom-booking.web.app/" target="_blank" rel="noopener">
+        <h3>상담 · 입학 테스트 예약</h3>
+        <p>방문 상담과 입학 테스트 일정을 온라인으로 예약합니다.</p>
+        <span class="go">예약하러 가기 →</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+<!-- ── 환불 규정 ─────────────────────────── -->
+<section class="band band--day" id="refund">
+  <div class="wrap">
+    <div class="sec-head">
+      <span class="eyebrow">환불</span>
+      <h2 class="sec-title">환불 규정</h2>
+    </div>
+    <div class="policy">
+      <h3>월 이용권 환불 기준</h3>
+      <ol>
+        <li>이용 개시일 이전에 요청하시면 <strong>전액 환불</strong>해 드립니다.</li>
+        <li>이용 개시 후에는 실제 이용 일수를 일할 계산해 공제하고 환불합니다. (일할 요금 = 월 이용료 ÷ 30일 × 이용 일수)</li>
+        <li>이용 기간의 2분의 1이 지난 후에는 환불이 제한될 수 있습니다.</li>
+      </ol>
+      <h3>환불 절차</h3>
+      <ul>
+        <li>환불 요청은 전화 또는 방문으로 접수합니다.</li>
+        <li>카드 결제 건은 결제 취소로, 계좌이체·현금 결제 건은 계좌 환불로 처리하며 접수일로부터 영업일 기준 3~5일 내에 완료됩니다.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ── 약관 ──────────────────────────────── -->
+<section class="band band--day-alt" id="terms">
+  <div class="wrap">
+    <div class="sec-head" style="margin-bottom:26px">
+      <span class="eyebrow">약관</span>
+      <h2 class="sec-title">이용약관 · 개인정보처리방침</h2>
+    </div>
+
+    <details>
+      <summary>이용약관</summary>
+      <div class="terms-body">
+        <h4>제1조 (목적)</h4>
+        <p>이 약관은 새봄면학관(이하 "면학관")이 제공하는 자습 공간 이용 서비스의 이용 조건과 절차, 이용자와 면학관의 권리·의무를 정합니다.</p>
+        <h4>제2조 (서비스 내용)</h4>
+        <p>면학관은 지정 좌석 자습 공간, 입퇴실 알림, 학습 플래너 관리, 스터디룸 등 부대시설을 제공합니다.</p>
+        <h4>제3조 (이용 계약)</h4>
+        <p>이용 계약은 학생 또는 보호자가 등록을 신청하고 면학관이 승낙하며 이용료를 결제한 때 성립합니다. 이용 기간은 결제일 기준 1개월 단위입니다.</p>
+        <h4>제4조 (이용자의 의무)</h4>
+        <p>이용자는 다른 학생의 학습을 방해하지 않아야 하며, 시설물을 훼손한 경우 배상 책임을 질 수 있습니다.</p>
+        <h4>제5조 (환불)</h4>
+        <p>환불은 이 홈페이지에 게시된 환불 규정에 따릅니다.</p>
+      </div>
+    </details>
+
+    <details>
+      <summary>개인정보처리방침</summary>
+      <div class="terms-body">
+        <h4>1. 수집 항목</h4>
+        <p>학생 이름, 학생·보호자 연락처, 이용 기간 정보를 수집합니다.</p>
+        <h4>2. 수집 목적</h4>
+        <p>좌석 배정 및 이용 관리, 입퇴실·미입실 알림 발송, 이용료 수납 관리 목적으로만 이용합니다.</p>
+        <h4>3. 보유 기간</h4>
+        <p>이용 종료(퇴원) 후 1년까지 보관하며 이후 지체 없이 파기합니다. 다만 관계 법령에 따라 보존이 필요한 결제 기록은 해당 법령이 정한 기간 동안 보관합니다.</p>
+        <h4>4. 제3자 제공</h4>
+        <p>알림톡 발송을 위한 메시지 발송 대행사 외에는 개인정보를 제3자에게 제공하지 않습니다.</p>
+        <h4>5. 문의</h4>
+        <p>개인정보 관련 문의는 010-4130-1139 또는 doctorj011@gmail.com으로 해주시기 바랍니다.</p>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- ── 문의 ──────────────────────────────── -->
+<section class="band band--night" id="contact">
+  <div class="wrap">
+    <div class="contact-grid">
+      <div>
+        <span class="eyebrow">문의</span>
+        <h2 class="sec-title">먼저 한번 보러 오세요</h2>
+        <p class="sec-lead">
+          등록 전에 공간을 직접 보시는 편이 좋습니다. 전화 주시면 방문 가능한 시간을 안내해 드립니다.
+        </p>
+        <a class="tel-big" href="tel:01041301139">010-4130-1139</a>
+        <div class="cta-row">
+          <a class="btn btn--gold" href="https://saebom-booking.web.app/" target="_blank" rel="noopener">상담 예약하기</a>
+        </div>
+      </div>
+      <div>
+        <table class="info-table">
+          <tr>
+            <th>주소</th>
+            <td>경기도 수원시 영통구<br>반달로29, 3층 1호 (영통동)</td>
+          </tr>
+          <tr>
+            <th>지도</th>
+            <td>
+              <a href="https://map.naver.com/p/search/%EC%88%98%EC%9B%90%EC%8B%9C%20%EC%98%81%ED%86%B5%EA%B5%AC%20%EB%B0%98%EB%8B%AC%EB%A1%9C29" target="_blank" rel="noopener">네이버 지도</a>
+              ·
+              <a href="https://map.kakao.com/?q=%EC%88%98%EC%9B%90%EC%8B%9C%20%EC%98%81%ED%86%B5%EA%B5%AC%20%EB%B0%98%EB%8B%AC%EB%A1%9C29" target="_blank" rel="noopener">카카오맵</a>
+            </td>
+          </tr>
+          <tr>
+            <th>이메일</th>
+            <td><a href="mailto:doctorj011@gmail.com">doctorj011@gmail.com</a></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <strong>새봄면학관</strong><br>
+    대표자 정원혁 · 사업자등록번호 792-20-02099<br>
+    경기도 수원시 영통구 반달로29, 3층 1호 (영통동)<br>
+    <a href="tel:01041301139">010-4130-1139</a> · <a href="mailto:doctorj011@gmail.com">doctorj011@gmail.com</a><br>
+    © 2026 새봄면학관
+  </div>
+</footer>
+
+<script>
+  // 24시간 띠 — 한국 시간 기준으로 지금 이 시각을 밝힌다.
+  (function () {
+    var ticks = document.getElementById('ticks');
+    var label = document.getElementById('clock-now');
+    if (!ticks) return;
+
+    for (var i = 0; i < 24; i++) {
+      var d = document.createElement('div');
+      d.className = 'tick';
+      ticks.appendChild(d);
+    }
+    var els = ticks.children;
+
+    function seoulHour() {
+      var parts = new Intl.DateTimeFormat('ko-KR', {
+        timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false
+      }).formatToParts(new Date());
+      var o = {};
+      parts.forEach(function (p) { o[p.type] = p.value; });
+      return { h: parseInt(o.hour, 10) % 24, m: o.minute };
+    }
+
+    function paint() {
+      var t = seoulHour();
+      for (var i = 0; i < 24; i++) {
+        var raw = Math.abs(i - t.h);
+        var diff = Math.min(raw, 24 - raw);
+        els[i].className = 'tick' + (diff === 0 ? ' is-now' : (diff === 1 ? ' is-near' : ''));
+      }
+      if (label) {
+        label.innerHTML = '지금 <b>' + String(t.h).padStart(2, '0') + ':' + t.m + '</b> · 열려 있습니다';
+      }
+    }
+
+    paint();
+    setInterval(paint, 30000);
+  })();
+</script>
+
+</body>
+</html>
