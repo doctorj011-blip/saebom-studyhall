@@ -82,6 +82,48 @@
     });
   }
 
+  /* ── 1-2. 메뉴 현재 위치 표시 ────────────
+     '관리 방식'·'공간'은 별도 페이지가 아니라 같은 페이지 안의 구간이라
+     페이지 단위로 붙이는 .is-here가 걸리지 않는다.
+     지금 보고 있는 구간을 따라 표시를 옮겨 준다. (하위 페이지는 링크가
+     index.html#... 이라 여기 걸리지 않고, 기존 페이지 표시가 유지된다.) */
+  (function () {
+    var links = [].slice.call(document.querySelectorAll('.site-nav a[href^="#"]'))
+      .filter(function (a) { return a.getAttribute('href').length > 1; });
+    var secs = links.map(function (a) {
+      return { a: a, el: document.querySelector(a.getAttribute('href')) };
+    }).filter(function (s) { return s.el; });
+    if (!secs.length) return;
+
+    var queued = false;
+    function update() {
+      queued = false;
+      var line = window.pageYOffset + 90;   // 고정 헤더 바로 아래를 기준선으로
+      var cur = null;
+      secs.forEach(function (s) {
+        var top = s.el.getBoundingClientRect().top + window.pageYOffset;
+        if (line >= top && line < top + s.el.offsetHeight) cur = s;
+      });
+      secs.forEach(function (s) {
+        s.a.classList[s === cur ? 'add' : 'remove']('is-here');
+      });
+    }
+    // ★ rAF는 반드시 window에 묶어 호출해야 한다.
+    //   var f = window.requestAnimationFrame; f(cb) 처럼 떼어 부르면
+    //   크롬이 'Illegal invocation'을 던져 첫 스크롤에서 바로 멈춘다.
+    var raf = window.requestAnimationFrame
+      ? function (cb) { window.requestAnimationFrame(cb); }
+      : function (cb) { setTimeout(cb, 16); };
+
+    window.addEventListener('scroll', function () {
+      if (queued) return;
+      queued = true;
+      raf(update);
+    }, { passive: true });
+    window.addEventListener('resize', update, { passive: true });
+    update();
+  })();
+
   /* ── 2. 스크롤 등장 ─────────────────── */
   if (reduced || !('IntersectionObserver' in window)) return;
 
