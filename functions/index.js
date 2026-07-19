@@ -555,7 +555,13 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 
 [stats 추출 규칙]
 - 플래너에서 확인되는 것만 기록하고, 확인 불가능한 값은 null(또는 0)로 둘 것
-- 과목명은 반드시 주어진 대분류로 매핑할 것 (예: 수학I·미적분→수학, 물리·화학→과학)`;
+- 과목명은 반드시 주어진 대분류로 매핑할 것 (예: 수학I·미적분→수학, 물리·화학→과학)
+- materials: 플래너에 적힌 교재·인강을 각각 하나의 항목으로 뽑을 것
+  · name 은 페이지·범위·분량을 뺀 순수 이름으로 정규화 (예: "자이스토리 21년 3회 26~29p" → "자이스토리",
+    "화이트라벨 24~31p" → "화이트라벨", "어휘끝 34~38 암기" → "어휘끝")
+  · kind: 문제집/교재류는 "문제집", 인터넷 강의·강좌·강사명이 드러나면 "인강"(예: 메가스터디·대성마이맥·이투스·EBS 강좌),
+    그 외 프린트·학교 부교재 등은 "기타"
+  · 같은 교재가 여러 번 나오면 한 번만 기록할 것`;
 
 const PLANNER_AI_SCHEMA = {
   type: 'object',
@@ -583,9 +589,23 @@ const PLANNER_AI_SCHEMA = {
             required: ['name', 'minutes', 'detail'],
             additionalProperties: false
           }
+        },
+        materials: {
+          type: 'array',
+          description: '플래너에 등장한 교재·인강 목록(이름만 정규화). 학년별 인기 교재 추천의 원천',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', description: '분량·페이지를 뺀 교재/강좌 이름' },
+              kind: { type: 'string', enum: ['문제집', '인강', '기타'] },
+              subject: { type: 'string', enum: ['국어', '수학', '영어', '과학', '사회', '한국사', '제2외국어', '기타'] }
+            },
+            required: ['name', 'kind', 'subject'],
+            additionalProperties: false
+          }
         }
       },
-      required: ['total_minutes', 'planned_count', 'completed_count', 'subjects'],
+      required: ['total_minutes', 'planned_count', 'completed_count', 'subjects', 'materials'],
       additionalProperties: false
     }
   },

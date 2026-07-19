@@ -1157,6 +1157,13 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none;min-width:150px">
         <option value="">학생 선택</option>
       </select>
+      <select id="sa-grade-sel" onchange="window.saSetGrade(this.value)" title="학년 — 또래 교재 추천에 사용됩니다"
+        style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none">
+        <option value="">학년 미지정</option>
+        <option value="중1">중1</option><option value="중2">중2</option><option value="중3">중3</option>
+        <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
+        <option value="N수">N수</option>
+      </select>
       <select id="sa-period-sel" onchange="window.saRender()"
         style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none">
         <option value="14">최근 2주</option>
@@ -1164,7 +1171,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <option value="60">최근 60일</option>
       </select>
     </div>
-    <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px">플래너 검사를 완료한 날의 데이터만 집계됩니다.</div>
+    <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px">플래너 검사를 완료한 날의 데이터와 입·퇴실 기록을 함께 집계합니다.</div>
     <div id="sa-content"><div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생을 선택하세요</div></div>
   </div>
 </div>
@@ -8228,6 +8235,7 @@ async function saveStudentToFirebase(student) {
     ...(student.loginPin   ? { loginPin:   String(student.loginPin) } : {}),
     ...(student.withdrawAt ? { withdrawAt: String(student.withdrawAt) } : {}),
     ...(student.nextStudent ? { nextStudent: student.nextStudent } : {}),
+    ...(student.grade ? { grade: String(student.grade) } : {}),   // 학년(학습분석 또래 비교) 보존
     updatedAt: serverTimestamp()
   });
 }
@@ -8460,7 +8468,8 @@ async function loadStudentsFromFirebase() {
           // 관리자 편집 시 유실되지 않는다. loginPin=지정 로그인번호, withdrawAt=예약 퇴원일,
           // nextStudent=그 자리를 예약한 신규생.
           loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
-          nextStudent: v.nextStudent || null
+          nextStudent: v.nextStudent || null,
+          grade: v.grade || ''   // 학년 — 학습분석의 또래 교재 추천 기준
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -8549,7 +8558,8 @@ async function loadStudentsFromFirebase() {
         // 로드 매핑과 동일하게 앱이 직접 안 쓰는 필드도 유지 — 여기서 빠뜨리면 스냅샷이 올 때
         // 로컬 학생 객체에서 사라지고, 다음 저장(setDoc)에 반영돼 실제 문서에서도 지워진다.
         loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
-        nextStudent: v.nextStudent || null
+        nextStudent: v.nextStudent || null,
+        grade: v.grade || ''   // 학년 — 학습분석의 또래 교재 추천 기준
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영
       if (!window._awayStudents) window._awayStudents = {};
@@ -12680,28 +12690,90 @@ window.studyAnalyticsInit = function() {
   if (sel.value) window.saRender();
 };
 
+// 선택된 학생 객체 (STUDENTS 원본 — grade 저장 대상)
+function _saStudent() {
+  const sel = document.getElementById('sa-student-sel');
+  if (!sel || !sel.value) return null;
+  return _apcStudents().find(s => _apcSeatKey(s.seat) === sel.value) || null;
+}
+
+// 학년 저장 — 또래 교재 추천의 그룹 기준. students/{좌석}.grade
+window.saSetGrade = async function(grade) {
+  const s = _saStudent();
+  if (!s) { showAdminToast('⚠️ 학생을 먼저 선택하세요'); return; }
+  try {
+    await setDoc(doc(db, 'students', String(s.seat)), { grade: grade || null }, { merge: true });
+    s.grade = grade || null;   // 로컬 캐시도 즉시 반영(onSnapshot이 곧 덮어씀)
+    showAdminToast(grade ? `✅ ${s.name} — ${grade}으로 저장했습니다` : '✅ 학년을 지웠습니다');
+    window.saRender();
+  } catch(e) {
+    showAdminToast('❌ 학년 저장 실패: ' + e.message);
+  }
+};
+
+// 기간 내 이 학생의 순공 시간(입·퇴실 세션) — { 'YYYY-MM-DD': 분 }
+async function _saAttendance(studentName, startISO, endISO) {
+  const out = {};
+  try {
+    const isoDates = _rangeDateStringsISO(startISO, endISO);
+    const chunks = [];
+    for (let i = 0; i < isoDates.length; i += 30) chunks.push(isoDates.slice(i, i + 30));
+    const snaps = await Promise.all(chunks.map(c =>
+      getDocs(query(collection(db, 'attendance_sessions'), where('inDate', 'in', c)))
+    ));
+    const now = Date.now();
+    snaps.forEach(snap => snap.forEach(d => {
+      const s = d.data();
+      if (!s || s.studentName !== studentName || typeof s.inTs !== 'number' || !s.inDate) return;
+      let min = 0;
+      if (s.status === 'closed' && s.outTs) {
+        min = (typeof s.durationMin === 'number') ? s.durationMin : sessDurationMin(s.inTs, s.outTs, s.awayMs || 0);
+      } else {
+        let away = s.awayMs || 0;
+        if (s.awayStartTs) away += Math.max(0, now - s.awayStartTs);
+        min = sessDurationMin(s.inTs, now, away);   // 재실 중이면 현재까지
+      }
+      out[s.inDate] = (out[s.inDate] || 0) + Math.max(0, min);
+    }));
+  } catch(e) {
+    console.warn('[analytics] 순공 조회 실패:', e.message || e);
+  }
+  return out;
+}
+
 window.saRender = async function() {
   const sel = document.getElementById('sa-student-sel');
   const box = document.getElementById('sa-content');
   if (!sel || !box) return;
   const seatKey = sel.value;
+  const gradeSel = document.getElementById('sa-grade-sel');
+  const stu = _saStudent();
+  if (gradeSel) gradeSel.value = (stu && stu.grade) || '';
   if (!seatKey) { box.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생을 선택하세요</div>'; return; }
   const days = parseInt((document.getElementById('sa-period-sel') || {}).value) || 30;
   box.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">불러오는 중...</div>';
 
-  let reviews = [];
+  // 기간: 오늘 포함 최근 N일
+  const today = new Date();
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutIso = _apcIso(cutoff), todayIso = _apcIso(today);
+
+  // 이 학생의 검사 결과 + 기간 내 전체 검사 결과(또래 추천용) + 순공 시간
+  let reviews = [], peerAll = [], attend = {};
   try {
-    const snap = await getDocs(query(collection(db, 'planner_ai_reviews'), where('seat', '==', seatKey)));
-    snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) reviews.push(v); });
+    const [mine, all, att] = await Promise.all([
+      getDocs(query(collection(db, 'planner_ai_reviews'), where('seat', '==', seatKey))),
+      getDocs(query(collection(db, 'planner_ai_reviews'), where('date', '>=', cutIso))),
+      stu ? _saAttendance(stu.name, cutIso, todayIso) : Promise.resolve({})
+    ]);
+    mine.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) reviews.push(v); });
+    all.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat && v.seat !== seatKey) peerAll.push(v); });
+    attend = att;
   } catch(e) {
     box.innerHTML = `<div style="color:#C62828;font-size:13px;text-align:center;padding:40px 0">조회 실패: ${_apcEsc(e.message || e)}</div>`;
     return;
   }
 
-  // 기간: 오늘 포함 최근 N일
-  const today = new Date();
-  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - (days - 1));
-  const cutIso = _apcIso(cutoff);
   reviews = reviews.filter(v => v.date >= cutIso).sort((a, b) => (a.date < b.date ? -1 : 1));
   const byDate = {}; reviews.forEach(v => { byDate[v.date] = v; });
 
@@ -12713,6 +12785,7 @@ window.saRender = async function() {
   // ── 집계 ──
   let totalMin = 0, minDays = 0, planned = 0, completed = 0;
   const subjTotal = {};   // 과목: {min, cnt}
+  const myMaterials = new Set();
   reviews.forEach(v => {
     const st = v.stats || {};
     if (st.total_minutes != null) { totalMin += st.total_minutes; minDays++; }
@@ -12724,25 +12797,90 @@ window.saRender = async function() {
       t.cnt++;
       if (s.minutes != null) t.min += s.minutes;
     });
+    (st.materials || []).forEach(m => { if (m && m.name) myMaterials.add(String(m.name).trim()); });
   });
   const doneRate = planned ? Math.round(completed / planned * 100) : null;
+  const attendTotal = Object.values(attend).reduce((a, b) => a + b, 0);
+  const attendDays = Object.keys(attend).length;
+  // 기록률 — 면학관에 머문 시간 중 플래너에 적힌 시간의 비율(검사한 날만 비교)
+  let cmpAttend = 0, cmpPlan = 0;
+  reviews.forEach(v => {
+    const pm = (v.stats || {}).total_minutes;
+    if (pm != null && attend[v.date]) { cmpAttend += attend[v.date]; cmpPlan += pm; }
+  });
+  const logRate = cmpAttend ? Math.round(cmpPlan / cmpAttend * 100) : null;
 
   // ── ① 요약 타일 ──
-  const tile = (label, val) => `
-    <div style="flex:1;min-width:110px;background:#F8FAFF;border:1px solid #E0E7FF;border-radius:10px;padding:10px 12px">
+  const tile = (label, val, sub) => `
+    <div style="flex:1;min-width:104px;background:#F8FAFF;border:1px solid #E0E7FF;border-radius:10px;padding:10px 12px">
       <div style="font-size:11px;color:#888;margin-bottom:3px">${label}</div>
       <div style="font-size:15px;font-weight:800;color:#1E1B4B">${val}</div>
+      ${sub ? `<div style="font-size:10px;color:#9CA3AF;margin-top:2px">${sub}</div>` : ''}
     </div>`;
   const tiles = `
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
       ${tile('검사한 날', reviews.length + '일')}
-      ${tile('총 학습시간', minDays ? _saFmtMin(totalMin) : '기록 없음')}
-      ${tile('하루 평균', minDays ? _saFmtMin(Math.round(totalMin / minDays)) : '기록 없음')}
+      ${tile('면학관 순공', attendDays ? _saFmtMin(attendTotal) : '기록 없음', attendDays ? `${attendDays}일 출석` : '')}
+      ${tile('플래너 기록', minDays ? _saFmtMin(totalMin) : '기록 없음', minDays ? `하루 평균 ${_saFmtMin(Math.round(totalMin / minDays))}` : '')}
+      ${tile('플래너 / 순공', logRate != null ? logRate + '%' : '비교 불가',
+        logRate == null ? '' : logRate > 120 ? '면학관 밖 학습 포함' : logRate < 60 ? '기록 누락 의심' : '대체로 일치')}
       ${tile('계획 완료율', doneRate != null ? doneRate + '%' : '기록 없음')}
     </div>`;
 
-  // ── ② 일별 학습시간 막대 (색 = 검사 등급) ──
-  const maxMin = Math.max(60, ...reviews.map(v => (v.stats || {}).total_minutes || 0));
+  // ── ② 진단 — 과목별 감소·공백, 기록률 ──
+  const half = Math.floor(days / 2);
+  const midIso = _apcIso(new Date(cutoff.getTime() + half * 86400000));
+  const halfAgg = which => {
+    const agg = {};
+    reviews.filter(v => which === 'early' ? v.date < midIso : v.date >= midIso).forEach(v => {
+      (((v.stats || {}).subjects) || []).forEach(s => {
+        if (!s || !s.name) return;
+        const t = agg[s.name] || (agg[s.name] = { min: 0, cnt: 0 });
+        t.cnt++; if (s.minutes != null) t.min += s.minutes;
+      });
+    });
+    return agg;
+  };
+  const early = halfAgg('early'), late = halfAgg('late');
+  const earlyDays = reviews.filter(v => v.date < midIso).length;
+  const lateDays = reviews.filter(v => v.date >= midIso).length;
+  const alerts = [];
+  if (earlyDays >= 2 && lateDays >= 2) {
+    // 검사일 수가 다를 수 있으니 '하루당' 값으로 비교한다
+    Object.keys(early).forEach(name => {
+      const e = early[name], l = late[name] || { min: 0, cnt: 0 };
+      const useMin = e.min > 0;
+      const eV = (useMin ? e.min : e.cnt) / earlyDays;
+      const lV = (useMin ? l.min : l.cnt) / lateDays;
+      if (eV <= 0) return;
+      const drop = Math.round((1 - lV / eV) * 100);
+      if (lV === 0) {
+        alerts.push({ lv: 'high', text: `<b>${_apcEsc(name)}</b> — 최근 ${lateDays}일 검사분에서 전혀 나타나지 않습니다 (이전 ${earlyDays}일에는 ${useMin ? _saFmtMin(e.min) : e.cnt + '회'})` });
+      } else if (drop >= 30) {
+        alerts.push({ lv: 'mid', text: `<b>${_apcEsc(name)}</b> 투자시간이 이전 절반 대비 <b>${drop}% 감소</b>했습니다 (하루 ${useMin ? _saFmtMin(Math.round(eV)) + ' → ' + _saFmtMin(Math.round(lV)) : eV.toFixed(1) + '회 → ' + lV.toFixed(1) + '회'})` });
+      }
+    });
+    Object.keys(late).forEach(name => {
+      if (early[name]) return;
+      const l = late[name];
+      alerts.push({ lv: 'good', text: `<b>${_apcEsc(name)}</b> — 최근에 새로 시작했습니다 (${l.min ? _saFmtMin(l.min) : l.cnt + '회'})` });
+    });
+  }
+  if (logRate != null && logRate < 60) {
+    alerts.push({ lv: 'mid', text: `면학관에 머문 시간의 <b>${logRate}%</b>만 플래너에 기록돼 있습니다 — 실제 학습량이 누락되고 있을 수 있습니다` });
+  }
+  const alertColors = { high: ['#FEF2F2', '#FCA5A5', '#B91C1C'], mid: ['#FFFBEB', '#FCD34D', '#B45309'], good: ['#F0FDF4', '#86EFAC', '#15803D'] };
+  const diagnostics = alerts.length ? `
+    <div style="margin-bottom:18px;display:flex;flex-direction:column;gap:6px">
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:2px">진단</div>
+      ${alerts.map(a => {
+        const [bg, bd, fg] = alertColors[a.lv];
+        return `<div style="background:${bg};border:1px solid ${bd};color:${fg};border-radius:8px;padding:7px 10px;font-size:12px;line-height:1.5">${a.lv === 'good' ? '↑' : a.lv === 'high' ? '!' : '▼'} ${a.text}</div>`;
+      }).join('')}
+    </div>` : '';
+
+  // ── ③ 일별: 순공(연회색) 위에 플래너 기록(등급색)을 겹쳐 괴리를 보여준다 ──
+  const dayMax = Math.max(60, ...reviews.map(v => (v.stats || {}).total_minutes || 0), ...Object.values(attend));
   const labelEvery = days > 31 ? 4 : 2;
   let bars = '';
   for (let i = 0; i < days; i++) {
@@ -12751,26 +12889,86 @@ window.saRender = async function() {
     const v = byDate[ds];
     const st = v ? (v.stats || {}) : null;
     const min = st && st.total_minutes != null ? st.total_minutes : null;
-    const h = v ? Math.max(8, Math.round((min || 0) / maxMin * 120)) : 0;
-    const color = v ? (_APC_AI_COLORS[v.quality] || '#6B7280') : 'transparent';
-    const tip = v ? `${ds} · ${v.quality || ''}${min != null ? ' · ' + _saFmtMin(min) : ' · 시간 기록 없음'}` : ds;
+    const att = attend[ds] || 0;
+    const hAtt = att ? Math.max(3, Math.round(att / dayMax * 120)) : 0;
+    const hPlan = min != null ? Math.max(3, Math.round(min / dayMax * 120)) : 0;
+    const color = v ? (_APC_AI_COLORS[v.quality] || '#6B7280') : '#C9CDD4';
+    const tipParts = [ds];
+    if (att) tipParts.push('순공 ' + _saFmtMin(att));
+    if (v) tipParts.push('검사 ' + (v.quality || ''));
+    if (min != null) tipParts.push('플래너 ' + _saFmtMin(min));
+    else if (v) tipParts.push('플래너 시간 기록 없음');
     const lbl = (i % labelEvery === 0) ? String(d.getDate()) : '';
     bars += `
-      <div title="${tip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
-        <div style="width:70%;max-width:16px;height:${h}px;background:${color};border-radius:3px 3px 0 0;${v && min == null ? 'opacity:0.35;' : ''}"></div>
+      <div title="${tipParts.join(' · ')}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
+        <div style="width:100%;height:120px;display:flex;align-items:flex-end;justify-content:center;position:relative">
+          ${hAtt ? `<div style="position:absolute;bottom:0;width:78%;max-width:18px;height:${hAtt}px;background:#E5E7EB;border-radius:3px 3px 0 0"></div>` : ''}
+          ${hPlan ? `<div style="position:absolute;bottom:0;width:46%;max-width:10px;height:${hPlan}px;background:${color};border-radius:2px 2px 0 0"></div>` : ''}
+          ${!hPlan && v ? `<div style="position:absolute;bottom:0;width:46%;max-width:10px;height:6px;background:${color};opacity:0.4;border-radius:2px 2px 0 0"></div>` : ''}
+        </div>
         <div style="font-size:8px;color:#B0B4BC;height:10px;overflow:hidden">${lbl}</div>
       </div>`;
   }
-  const legend = Object.entries(_APC_AI_COLORS).map(([q, c]) =>
-    `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#666"><span style="width:8px;height:8px;border-radius:2px;background:${c}"></span>${q}</span>`).join(' ');
+  const legend = `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#666"><span style="width:9px;height:9px;border-radius:2px;background:#E5E7EB"></span>면학관 순공</span> `
+    + Object.entries(_APC_AI_COLORS).map(([q, c]) =>
+      `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#666"><span style="width:9px;height:9px;border-radius:2px;background:${c}"></span>${q}</span>`).join(' ');
   const daily = `
     <div style="margin-bottom:20px">
-      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:8px">일별 학습시간 <span style="font-weight:500;color:#9CA3AF;font-size:11px">(막대 색 = 검사 등급, 연한 막대 = 시간 기록 없음)</span></div>
-      <div style="display:flex;align-items:flex-end;gap:1px;height:135px;border-bottom:1px solid #E5E7EB;padding-bottom:0">${bars}</div>
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:8px">일별 학습시간 <span style="font-weight:500;color:#9CA3AF;font-size:11px">(회색 = 면학관에 머문 시간, 안쪽 색막대 = 플래너 기록 / 색 = 검사 등급)</span></div>
+      <div style="display:flex;align-items:flex-end;gap:1px;border-bottom:1px solid #E5E7EB">${bars}</div>
       <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">${legend}</div>
     </div>`;
 
-  // ── ③ 과목별 학습시간 가로 막대 ──
+  // ── ④ 과목별 추이 꺾은선 (구간 평균) ──
+  const bucketDays = days <= 14 ? 3 : days <= 30 ? 5 : 10;
+  const nBuckets = Math.ceil(days / bucketDays);
+  const anyMinutes = Object.values(subjTotal).some(t => t.min > 0);
+  const subjNames = Object.keys(subjTotal).sort((a, b) => (subjTotal[b].min - subjTotal[a].min) || (subjTotal[b].cnt - subjTotal[a].cnt)).slice(0, 6);
+  const series = {}; subjNames.forEach(n => series[n] = new Array(nBuckets).fill(0));
+  const bucketHasData = new Array(nBuckets).fill(false);
+  reviews.forEach(v => {
+    const idx = Math.min(nBuckets - 1, Math.floor((new Date(v.date + 'T00:00:00') - cutoff) / 86400000 / bucketDays));
+    if (idx < 0) return;
+    bucketHasData[idx] = true;
+    (((v.stats || {}).subjects) || []).forEach(s => {
+      if (!s || !series[s.name]) return;
+      series[s.name][idx] += anyMinutes ? (s.minutes || 0) : 1;
+    });
+  });
+  const W = 620, H = 170, PADL = 40, PADR = 12, PADT = 12, PADB = 26;
+  const maxY = Math.max(1, ...subjNames.flatMap(n => series[n]));
+  const xAt = i => PADL + (nBuckets === 1 ? (W - PADL - PADR) / 2 : i * (W - PADL - PADR) / (nBuckets - 1));
+  const yAt = v => PADT + (1 - v / maxY) * (H - PADT - PADB);
+  // 눈금 — 값이 작을 때 반올림으로 라벨이 겹치지 않게 중복 제거
+  const seenLbl = new Set();
+  const gridY = [0, 0.5, 1].map(f => {
+    const v = maxY * f, y = yAt(v);
+    const lbl = anyMinutes ? (v >= 60 ? (v / 60).toFixed(v % 60 ? 1 : 0) + 'h' : Math.round(v) + 'm') : Math.round(v) + '회';
+    if (seenLbl.has(lbl)) return `<line x1="${PADL}" y1="${y}" x2="${W - PADR}" y2="${y}" stroke="#EEF0F4"/>`;
+    seenLbl.add(lbl);
+    return `<line x1="${PADL}" y1="${y}" x2="${W - PADR}" y2="${y}" stroke="#EEF0F4"/><text x="${PADL - 6}" y="${y + 3}" text-anchor="end" font-size="9" fill="#B0B4BC">${lbl}</text>`;
+  }).join('');
+  const xLabels = Array.from({ length: nBuckets }, (_, i) => {
+    const d = new Date(cutoff.getTime() + i * bucketDays * 86400000);
+    return `<text x="${xAt(i)}" y="${H - 8}" text-anchor="middle" font-size="9" fill="#B0B4BC">${d.getMonth() + 1}/${d.getDate()}</text>`;
+  }).join('');
+  const lines = subjNames.map(n => {
+    const c = _SA_SUBJ_COLORS[n] || '#6B7280';
+    const pts = series[n].map((v, i) => `${xAt(i)},${yAt(v)}`).join(' ');
+    const dots = series[n].map((v, i) => `<circle cx="${xAt(i)}" cy="${yAt(v)}" r="2.6" fill="${c}"/>`).join('');
+    return `<polyline points="${pts}" fill="none" stroke="${c}" stroke-width="2" stroke-linejoin="round"/>${dots}`;
+  }).join('');
+  const trendLegend = subjNames.map(n =>
+    `<span style="display:inline-flex;align-items:center;gap:4px;font-size:11px;color:#555"><span style="width:14px;height:3px;border-radius:2px;background:${_SA_SUBJ_COLORS[n] || '#6B7280'}"></span>${_apcEsc(n)}</span>`).join(' ');
+  const trend = subjNames.length ? `
+    <div style="margin-bottom:20px">
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:6px">과목별 학습시간 추이
+        <span style="font-weight:500;color:#9CA3AF;font-size:11px">(${bucketDays}일 구간 합계${anyMinutes ? '' : ' · 시간 기록이 없어 학습 횟수로 표시'})</span></div>
+      <div style="overflow-x:auto"><svg viewBox="0 0 ${W} ${H}" style="width:100%;min-width:420px;height:${H}px">${gridY}${xLabels}${lines}</svg></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:4px">${trendLegend}</div>
+    </div>` : '';
+
+  // ── ⑤ 과목별 총 학습시간 ──
   const subjRows = Object.entries(subjTotal).sort((a, b) => b[1].min - a[1].min || b[1].cnt - a[1].cnt);
   const maxSubj = Math.max(1, ...subjRows.map(([, t]) => t.min));
   const subjHtml = subjRows.map(([name, t]) => {
@@ -12786,12 +12984,53 @@ window.saRender = async function() {
       </div>`;
   }).join('');
   const subjects = `
-    <div>
-      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:8px">과목별 학습시간</div>
+    <div style="margin-bottom:20px">
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:8px">과목별 총 학습시간</div>
       <div style="display:flex;flex-direction:column;gap:7px">${subjHtml || '<div style="color:#aaa;font-size:12px">과목 데이터가 없습니다</div>'}</div>
     </div>`;
 
-  box.innerHTML = tiles + daily + subjects;
+  // ── ⑥ 또래 교재·인강 추천 — 같은 학년 학생들이 실제로 쓰는 것 중 이 학생이 안 쓰는 것 ──
+  const myGrade = (stu && stu.grade) || '';
+  const gradeOf = {};   // 좌석키 → 학년
+  _apcStudents().forEach(s => { gradeOf[_apcSeatKey(s.seat)] = s.grade || ''; });
+  const peers = myGrade ? peerAll.filter(v => gradeOf[v.seat] === myGrade) : peerAll;
+  const mat = {};   // 이름 → {kind, subject, seats:Set}
+  peers.forEach(v => {
+    (((v.stats || {}).materials) || []).forEach(m => {
+      if (!m || !m.name) return;
+      const key = String(m.name).trim();
+      if (!key || myMaterials.has(key)) return;   // 이미 쓰는 교재는 추천하지 않는다
+      const t = mat[key] || (mat[key] = { kind: m.kind || '기타', subject: m.subject || '기타', seats: new Set() });
+      t.seats.add(v.seat);
+    });
+  });
+  const recRows = Object.entries(mat).map(([name, t]) => ({ name, kind: t.kind, subject: t.subject, n: t.seats.size }))
+    .sort((a, b) => b.n - a.n).filter(r => r.n >= 1).slice(0, 8);
+  const kindBadge = k => {
+    const c = k === '인강' ? '#7C3AED' : k === '문제집' ? '#1565C0' : '#6B7280';
+    return `<span style="border:1px solid ${c};color:${c};font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">${k}</span>`;
+  };
+  const recHtml = recRows.length ? recRows.map(r => {
+    const sc = _SA_SUBJ_COLORS[r.subject] || '#6B7280';
+    return `
+      <div style="display:flex;align-items:center;gap:8px;background:#FAFBFF;border:1px solid #E9ECF5;border-radius:8px;padding:7px 10px">
+        <span style="font-size:11px;font-weight:700;color:${sc};width:44px;flex-shrink:0">${_apcEsc(r.subject)}</span>
+        <span style="font-size:12.5px;color:#1E1B4B;font-weight:600;flex:1">${_apcEsc(r.name)}</span>
+        ${kindBadge(r.kind)}
+        <span style="font-size:11px;color:#888;width:64px;text-align:right;flex-shrink:0">${r.n}명 사용</span>
+      </div>`;
+  }).join('') : `<div style="color:#aaa;font-size:12px">추천할 교재가 아직 없습니다. 다른 학생들의 플래너를 검사할수록 쌓입니다.</div>`;
+  const recNote = myGrade
+    ? `같은 학년(${_apcEsc(myGrade)}) 학생들이 쓰는 교재 중 이 학생 플래너에 없는 것`
+    : `학년을 지정하면 같은 학년끼리 비교합니다 — 지금은 전체 학생 기준`;
+  const recommend = `
+    <div>
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:4px">또래가 보는 교재·인강</div>
+      <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">${recNote}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${recHtml}</div>
+    </div>`;
+
+  box.innerHTML = tiles + diagnostics + daily + trend + subjects + recommend;
 };
 
 // 페이지 로드 시 localStorage에서 복원된 알림을 즉시 화면에 표시
