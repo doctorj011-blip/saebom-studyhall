@@ -12868,6 +12868,40 @@ window.saGoStudent = function(key) {
   window.saRender();
 };
 
+// ── 외부 수업(학원·과외) 파악 ──
+// 스케줄의 결석 사유(x7(수학학원) 등)가 유일한 학원 단서다. 사유는 자유 입력이라
+// "수학학원"처럼 과목이 드러나기도 하고 "학원"처럼 뭉뚱그려지기도 한다.
+// 브랜드명은 거의 안 적히므로 '어느 과목을 외부 수업으로 보강하는가' 수준까지만 본다.
+const _SA_DOW = ['월', '화', '수', '목', '금', '토'];
+const _SA_NONSTUDY = /귀가|가족|저녁|점심|식사|병원|조퇴|개인|휴식|상담|여행|경조|행사|봉사|시험|약속|치료/;
+const _SA_OWNCLASS = /새봄/;   // 우리 내부 수업 — 외부 학원으로 세면 안 된다
+function _saAcademySubject(reason) {
+  const r = String(reason || '').replace(/\s/g, '');
+  if (!r || _SA_NONSTUDY.test(r) || _SA_OWNCLASS.test(r)) return null;
+  if (/수학|기하|미적|확통|대수|수1|수2/.test(r)) return '수학';
+  if (/영어|영문|어법|어휘/.test(r)) return '영어';
+  if (/국어|논술|문학|독서|화작|언매/.test(r)) return '국어';
+  if (/과학|물리|화학|생명|지구/.test(r)) return '과학';
+  if (/한국사|국사/.test(r)) return '한국사';
+  if (/사탐|사회|통사|지리|윤리|경제|정치/.test(r)) return '사회';
+  if (/중국어|일본어|한문|제2외국어/.test(r)) return '제2외국어';
+  if (/학원|과외|수업|보충|강의/.test(r)) return '기타';   // 외부 수업이지만 과목 불명
+  return null;
+}
+// 한 학생이 주중에 외부 수업으로 빠지는 과목 → { 과목: 주당 교시 수 }
+function _saAcademyOf(stu) {
+  const out = {};
+  if (!stu || !stu.schedule || !window.parseScheduleStr) return out;
+  _SA_DOW.forEach(d => {
+    const p = window.parseScheduleStr(stu.schedule[d] || '-');
+    Object.values(p.absentReasons || {}).forEach(r => {
+      const subj = _saAcademySubject(r);
+      if (subj) out[subj] = (out[subj] || 0) + 1;
+    });
+  });
+  return out;
+}
+
 // 선택된 학생 객체 (STUDENTS 원본 — grade 저장 대상)
 function _saStudent() {
   const sel = document.getElementById('sa-student-sel');
@@ -13374,29 +13408,156 @@ window.saRender = async function() {
     });
   });
   const recRows = Object.entries(mat).map(([name, t]) => ({ name, kind: t.kind, subject: t.subject, n: t.seats.size }))
-    .sort((a, b) => b.n - a.n).filter(r => r.n >= 1).slice(0, 8);
-  const kindBadge = k => {
-    const c = k === '인강' ? '#7C3AED' : k === '문제집' ? '#1565C0' : '#6B7280';
-    return `<span style="border:1px solid ${c};color:${c};font-size:10px;font-weight:700;padding:1px 6px;border-radius:9px">${k}</span>`;
+    .sort((a, b) => b.n - a.n);
+
+  // ── 학습 스타일 진단 ──
+  // 네 축 모두 근거 수치를 함께 보여준다(라벨만 던지면 신뢰할 수 없다).
+  const myAcademy = _saAcademyOf(stu);                       // 내가 외부 수업으로 빠지는 과목
+  const myAcademyCnt = Object.values(myAcademy).reduce((a, b) => a + b, 0);
+  let myBookCnt = 0, myLectureCnt = 0;
+  reviews.forEach(v => {
+    (((v.stats || {}).materials) || []).forEach(m => {
+      if (!m) return;
+      if (m.kind === '인강') myLectureCnt++;
+      else if (m.kind === '문제집') myBookCnt++;
+      else if (m.kind === '학원') myLectureCnt++;   // 학원 교재도 '수업 기반'으로 본다
+    });
+  });
+  const guidedTotal = myLectureCnt + myAcademyCnt;
+  const styleDen = myBookCnt + guidedTotal;
+  const guidedRatio = styleDen ? guidedTotal / styleDen : null;
+
+  // 같은 과목이 몇 시간 연속으로 이어지는가 — 몰입형/분산형
+  let runSum = 0, runCnt = 0;
+  reviews.forEach(v => {
+    const hs = (((v.stats || {}).hourly) || []).slice().sort((a, b) => a.hour - b.hour);
+    let curSub = null, curLen = 0, prevHour = null;
+    hs.forEach(h => {
+      if (h.subject === curSub && prevHour != null && h.hour === prevHour + 1) curLen++;
+      else { if (curLen) { runSum += curLen; runCnt++; } curSub = h.subject; curLen = 1; }
+      prevHour = h.hour;
+    });
+    if (curLen) { runSum += curLen; runCnt++; }
+  });
+  const avgRun = runCnt ? runSum / runCnt : null;
+
+  // 활동 시간대 무게중심 (심야는 24시 이후로 펴서 평균이 왜곡되지 않게)
+  let hourWSum = 0, hourWCnt = 0;
+  Object.entries(hourAgg).forEach(([h, slot]) => {
+    const m = Object.values(slot).reduce((a, b) => a + b, 0);
+    const hh = Number(h) < 5 ? Number(h) + 24 : Number(h);
+    hourWSum += hh * m; hourWCnt += m;
+  });
+  const meanHour = hourWCnt ? hourWSum / hourWCnt : null;
+
+  const chips = [];
+  const chip = (label, detail, tone) => {
+    const c = { blue: ['#EEF2FF', '#C7D2FE', '#4C3FB8'], green: ['#F0FDF4', '#BBF7D0', '#4E9B6B'],
+                amber: ['#FFFBEB', '#FDE68A', '#B77C3C'], gray: ['#F5F6F8', '#E5E7EB', '#6B7280'] }[tone];
+    return `<div style="background:${c[0]};border:1px solid ${c[1]};border-radius:9px;padding:6px 10px">
+      <b style="color:${c[2]};font-size:12px">${label}</b>
+      <span style="color:#6B7280;font-size:11px;margin-left:5px">${detail}</span></div>`;
   };
-  const recHtml = recRows.length ? recRows.map(r => {
-    const sc = _saInk(r.subject);
-    return `
-      <div style="display:flex;align-items:center;gap:8px;background:#FAFBFF;border:1px solid #E9ECF5;border-radius:8px;padding:7px 10px">
-        <span style="font-size:11px;font-weight:700;color:${sc};width:44px;flex-shrink:0">${_apcEsc(r.subject)}</span>
-        <span style="font-size:12.5px;color:#1E1B4B;font-weight:600;flex:1">${_apcEsc(r.name)}</span>
-        ${kindBadge(r.kind)}
-        <span style="font-size:11px;color:#888;width:64px;text-align:right;flex-shrink:0">${r.n}명 사용</span>
-      </div>`;
-  }).join('') : `<div style="color:#aaa;font-size:12px">추천할 교재가 아직 없습니다. 다른 학생들의 플래너를 검사할수록 쌓입니다.</div>`;
+  if (guidedRatio != null) {
+    const pct = Math.round(guidedRatio * 100);
+    if (guidedRatio >= 0.6) chips.push(chip('강의 중심형', `수업·인강 비중 ${pct}%${myAcademyCnt ? ` · 외부 수업 주 ${myAcademyCnt}교시` : ''}`, 'amber'));
+    else if (guidedRatio <= 0.25) chips.push(chip('자기주도형', `문제집 위주 (수업·인강 비중 ${pct}%)`, 'green'));
+    else chips.push(chip('병행형', `문제집과 수업·인강을 함께 (수업 비중 ${pct}%)`, 'blue'));
+  }
+  if (avgRun != null) {
+    if (avgRun >= 2) chips.push(chip('몰입형', `한 과목을 평균 ${avgRun.toFixed(1)}시간 이어서`, 'blue'));
+    else chips.push(chip('분산형', `한 과목을 평균 ${avgRun.toFixed(1)}시간씩 나눠서`, 'blue'));
+  }
+  if (meanHour != null) {
+    const mh = meanHour >= 24 ? meanHour - 24 : meanHour;
+    const label = meanHour < 12 ? '오전형' : meanHour < 18 ? '오후형' : meanHour < 22 ? '저녁형' : '야간형';
+    chips.push(chip(label, `학습 무게중심 ${Math.floor(mh)}시경`, 'gray'));
+  }
+  if (doneRate != null) {
+    if (doneRate >= 85) chips.push(chip('계획 실행형', `계획 완료율 ${doneRate}%`, 'green'));
+    else if (doneRate < 60) chips.push(chip('계획 미달형', `계획 완료율 ${doneRate}% — 계획을 줄이거나 쪼갤 필요`, 'amber'));
+    else chips.push(chip('보통', `계획 완료율 ${doneRate}%`, 'gray'));
+  }
+
+  // 스타일에 따른 추천 방향 한 줄
+  let advice = '';
+  if (guidedRatio != null) {
+    if (guidedRatio >= 0.6) advice = '수업으로 배운 내용을 스스로 확인할 <b>문제집</b>을 먼저 권합니다.';
+    else if (guidedRatio <= 0.25) advice = '혼자 막히는 과목이 있다면 <b>인강</b>으로 해당 단원만 보완하는 편이 효율적입니다.';
+    else advice = '지금 균형은 무난합니다. 취약 과목만 골라 보강하세요.';
+  }
+  if (doneRate != null && doneRate < 60) {
+    advice += ' 계획 완료율이 낮아 <b>분량이 많은 교재보다 얇은 교재</b>가 맞습니다.';
+  }
+  if (avgRun != null && avgRun < 1.5) {
+    advice += ' 짧게 끊어 공부하므로 <b>강의 한 편이 짧은 인강</b>이 잘 맞습니다.';
+  }
+
+  // ── 분류별 추천 ──
+  // 문제집·인강은 또래 플래너에서, 학원은 또래 스케줄의 외부 수업에서 뽑는다.
+  const peerSeats = new Set(peers.map(v => v.seat));
+  const academyAgg = {};   // 과목 → 수강 학생 수
+  _apcStudents().forEach(s => {
+    if (window.isTestStudent && window.isTestStudent(s.name)) return;
+    const key = _apcSeatKey(s.seat);
+    if (key === seatKey) return;
+    if (myGrade && (s.grade || '') !== myGrade) return;
+    const a = _saAcademyOf(s);
+    Object.keys(a).forEach(sub => { academyAgg[sub] = (academyAgg[sub] || 0) + 1; });
+  });
+  const academyPeerTotal = _apcStudents().filter(s =>
+    !(window.isTestStudent && window.isTestStudent(s.name)) &&
+    _apcSeatKey(s.seat) !== seatKey && (!myGrade || (s.grade || '') === myGrade)).length;
+
+  const kindColor = { '문제집': '#4C7CB4', '인강': '#7C63B0', '학원': '#B77C3C' };
+  const listFor = kind => {
+    const rows = recRows.filter(r => r.kind === kind).slice(0, 5);
+    if (!rows.length) return `<div style="font-size:11.5px;color:#C9CDD4;padding:4px 2px">또래 기록에 아직 없습니다</div>`;
+    return rows.map(r => `
+      <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#FAFBFF;border:1px solid #EEF0F5;border-radius:7px">
+        <span style="font-size:10.5px;font-weight:700;color:${_saInk(r.subject)};width:38px;flex-shrink:0">${_apcEsc(r.subject)}</span>
+        <span style="font-size:12px;color:#1E1B4B;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_apcEsc(r.name)}</span>
+        <span style="font-size:10.5px;color:#9CA3AF;flex-shrink:0">${r.n}명</span>
+      </div>`).join('');
+  };
+  const academyRows = Object.entries(academyAgg)
+    .filter(([sub]) => !myAcademy[sub])          // 이미 다니는 과목은 빼고
+    .sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const academyHtml = academyPeerTotal === 0
+    ? `<div style="font-size:11.5px;color:#C9CDD4;padding:4px 2px">비교할 또래가 없습니다</div>`
+    : (academyRows.length ? academyRows.map(([sub, n]) => `
+        <div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:#FAFBFF;border:1px solid #EEF0F5;border-radius:7px">
+          <span style="font-size:10.5px;font-weight:700;color:${_saInk(sub)};width:38px;flex-shrink:0">${_apcEsc(sub)}</span>
+          <span style="font-size:12px;color:#1E1B4B;flex:1">외부 수업으로 보강</span>
+          <span style="font-size:10.5px;color:#9CA3AF;flex-shrink:0">${n}/${academyPeerTotal}명</span>
+        </div>`).join('')
+      : `<div style="font-size:11.5px;color:#C9CDD4;padding:4px 2px">또래가 다니는 과목은 이미 모두 수강 중입니다</div>`);
+
+  const myAcademyTxt = myAcademyCnt
+    ? Object.entries(myAcademy).map(([s, n]) => `${s} ${n}교시`).join(', ')
+    : '스케줄상 외부 수업 없음';
+
+  const col = (title, kind, inner, note) => `
+    <div style="flex:1;min-width:210px">
+      <div style="font-size:11.5px;font-weight:700;color:${kindColor[kind]};margin-bottom:5px">${title}</div>
+      <div style="display:flex;flex-direction:column;gap:4px">${inner}</div>
+      ${note ? `<div style="font-size:10.5px;color:#B0B4BC;margin-top:5px">${note}</div>` : ''}
+    </div>`;
+
   const recNote = myGrade
-    ? `같은 학년(${_apcEsc(myGrade)}) 학생들이 쓰는 교재 중 이 학생 플래너에 없는 것`
+    ? `같은 학년(${_apcEsc(myGrade)}) 또래 기준 · 이 학생이 이미 쓰는 것은 제외`
     : `학년을 지정하면 같은 학년끼리 비교합니다 — 지금은 전체 학생 기준`;
   const recommend = `
     <div>
-      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:4px">또래가 보는 교재·인강</div>
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:6px">학습 스타일과 맞춤 추천</div>
+      ${chips.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${chips.join('')}</div>` : ''}
+      ${advice ? `<div style="font-size:12px;color:#4B5563;background:#F8FAFF;border:1px solid #E0E7FF;border-radius:8px;padding:8px 11px;line-height:1.55;margin-bottom:10px">${advice}</div>` : ''}
       <div style="font-size:11px;color:#9CA3AF;margin-bottom:8px">${recNote}</div>
-      <div style="display:flex;flex-direction:column;gap:6px">${recHtml}</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        ${col('📘 문제집', '문제집', listFor('문제집'))}
+        ${col('🎧 인강', '인강', listFor('인강'))}
+        ${col('🏫 학원 (외부 수업)', '학원', academyHtml, `현재: ${_apcEsc(myAcademyTxt)}`)}
+      </div>
     </div>`;
 
   box.innerHTML = noReviewNote + tiles + diagnostics + daily + weekly + trend + hourPattern
