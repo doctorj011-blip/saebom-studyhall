@@ -782,9 +782,84 @@ details[open] summary::after { content: "−"; }
   .pull { padding: 24px 22px; }
 }
 
+/* ══════════════════════════════════════════
+   움직임 — iOS처럼 '누르면 반응한다'는 느낌.
+   스프링 곡선 하나로 통일해 제각각 놀지 않게 한다.
+   ══════════════════════════════════════════ */
+:root {
+  --spring: cubic-bezier(.34, 1.36, .48, 1);   /* 살짝 튕기는 곡선 */
+  --ease: cubic-bezier(.2, .7, .2, 1);
+}
+
+/* 스크롤하면 섹션이 아래에서 떠오른다 */
+.reveal { opacity: 0; transform: translateY(20px); will-change: opacity, transform; }
+.reveal.is-in {
+  opacity: 1; transform: none;
+  transition: opacity .75s var(--ease), transform .75s var(--ease);
+  transition-delay: var(--d, 0ms);
+}
+
+/* 누르면 눌리는 느낌 (iOS) */
+.btn, .app-card, .shot, .telcta, .sc-call,
+.site-nav a.nav-call, .lb-btn, details summary, .chip {
+  transition: transform .2s var(--spring), background .18s, border-color .18s, color .18s, box-shadow .2s;
+}
+.btn:active, .app-card:active, .telcta:active,
+.site-nav a.nav-call:active, .chip:active { transform: scale(.965); }
+.shot:active { transform: scale(.975); }
+.sc-call:active { transform: scale(.96); }
+.lb-btn:active { transform: scale(.9); }
+.lb-prev:active { transform: translateY(-50%) scale(.9); }
+.lb-next:active { transform: translateY(-50%) scale(.9); }
+
+/* 잘못 눌렀을 때 — 고개 젓듯 좌우로 */
+@keyframes nudge {
+  0%, 100% { transform: translateX(0); }
+  18% { transform: translateX(-7px); }
+  36% { transform: translateX(6px); }
+  54% { transform: translateX(-4px); }
+  72% { transform: translateX(2px); }
+}
+.is-nudging { animation: nudge .5s cubic-bezier(.36,.07,.19,.97); }
+
+/* 알림 토스트 */
+.toast {
+  position: fixed; left: 50%; bottom: 30px; z-index: 200;
+  transform: translate(-50%, 24px); opacity: 0; pointer-events: none;
+  background: var(--ink); color: var(--on-dark);
+  border: 1px solid rgba(232,181,32,.4);
+  padding: 13px 22px; border-radius: 999px;
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 12px 34px rgba(0,0,0,.4);
+  transition: transform .42s var(--spring), opacity .28s var(--ease);
+}
+.toast.is-on { transform: translate(-50%, 0); opacity: 1; }
+.toast b { color: var(--gold); font-variant-numeric: tabular-nums; }
+
+/* 라이트박스 — 사진이 살짝 커지며 들어온다 */
+.lightbox img { animation: lbIn .38s var(--spring); }
+@keyframes lbIn { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+
+/* FAQ·약관 펼칠 때 미끄러져 내려온다 */
+details[open] > .faq-a,
+details[open] > .terms-body { animation: slideDown .32s var(--ease); }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+details summary::after { transition: transform .25s var(--spring); }
+details[open] summary::after { transform: rotate(180deg); }
+
+/* 첫 화면 — 위에서부터 차례로 자리를 잡는다 */
+@keyframes heroIn { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+.hero-text > * { animation: heroIn .8s var(--ease) backwards; }
+.hero-text > *:nth-child(1) { animation-delay: .05s; }
+.hero-text > *:nth-child(2) { animation-delay: .16s; }
+.hero-text > *:nth-child(3) { animation-delay: .27s; }
+.hero-text > *:nth-child(4) { animation-delay: .38s; }
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* 움직임을 껐어도 내용은 반드시 보여야 한다 */
+  .reveal, .hero-text > * { opacity: 1 !important; transform: none !important; }
 }
 
 /* ── 인쇄 ───────────────────────────────── */
