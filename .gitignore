@@ -1,0 +1,6 @@
+# Firebase CLI 배포 캐시 (hosting 업로드 해시 등) — 커밋 대상 아님
+.firebase/
+
+# 의존성 / 로그
+node_modules/
+*.log
