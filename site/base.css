@@ -101,6 +101,12 @@ a:focus-visible, summary:focus-visible, button:focus-visible {
   text-decoration: none; transition: color .15s;
 }
 .site-nav a:hover { color: var(--gold); }
+/* 지금 보고 있는 페이지 표시 */
+.site-nav a.is-here { color: var(--gold); }
+.site-nav a.is-here::after {
+  content: ""; display: block; height: 1.5px; margin-top: 4px;
+  background: var(--gold); border-radius: 1px;
+}
 .site-nav a.nav-call {
   font-weight: 700; color: var(--ink);
   background: var(--gold); padding: 8px 16px; border-radius: 999px;
