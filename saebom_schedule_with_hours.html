@@ -735,6 +735,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
     <button class="tab-btn" onclick="showSection('handover',this)">📝 인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
+    <button class="tab-btn" onclick="showSection('analytics',this)">📈 학습분석</button>
     <span class="tab-divider" aria-hidden="true"></span>
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
     <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
@@ -1135,7 +1136,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <input type="date" id="apc-date-input" onchange="apcPickDate(this.value)"
         style="padding:5px 8px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#F8FAFF;color:#1E1B4B;outline:none;font-family:inherit">
       <button onclick="apcToday()" class="class-edit-btn" style="padding:6px 12px">오늘</button>
-      <button onclick="window.apcAiRunAll()" class="class-edit-btn" style="padding:6px 12px;background:#EEF2FF;border-color:#6C5DD3;color:#4C3FB8;font-weight:700">🤖 전체 AI 검사</button>
+      <button onclick="window.apcAiRunAll()" class="class-edit-btn" style="padding:6px 12px;background:#EEF2FF;border-color:#6C5DD3;color:#4C3FB8;font-weight:700">📋 전체 검사</button>
     </div>
 
     <!-- 요약 -->
@@ -1143,6 +1144,28 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 
     <!-- 썸네일 그리드 -->
     <div id="apc-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:12px"></div>
+  </div>
+</div>
+
+<!-- 📈 학습 분석 — 플래너 검사에서 추출한 과목·시간 데이터 기반 -->
+<div id="sec-analytics" class="section">
+  <div class="card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:700;color:#1E1B4B">📈 학습 분석</div>
+      <div style="flex:1"></div>
+      <select id="sa-student-sel" onchange="window.saRender()"
+        style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none;min-width:150px">
+        <option value="">학생 선택</option>
+      </select>
+      <select id="sa-period-sel" onchange="window.saRender()"
+        style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none">
+        <option value="14">최근 2주</option>
+        <option value="30" selected>최근 30일</option>
+        <option value="60">최근 60일</option>
+      </select>
+    </div>
+    <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px">플래너 검사를 완료한 날의 데이터만 집계됩니다.</div>
+    <div id="sa-content"><div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생을 선택하세요</div></div>
   </div>
 </div>
 
@@ -1162,12 +1185,12 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <!-- 코멘트 -->
       <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:10px">
-        <!-- AI 검사 -->
+        <!-- 플래너 검사 -->
         <div style="border:1.5px solid #C7D2FE;background:#F5F7FF;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div style="font-size:12px;font-weight:700;color:#1E1B4B">🤖 AI 검사</div>
+            <div style="font-size:12px;font-weight:700;color:#1E1B4B">📋 플래너 검사</div>
             <button id="apc-ai-btn" onclick="window.apcAiRun()"
-              style="background:#6C5DD3;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">AI 검사 실행</button>
+              style="background:#6C5DD3;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">검사하기</button>
           </div>
           <div id="apc-ai-result" style="display:none"></div>
         </div>
@@ -1176,8 +1199,12 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <div style="display:flex;flex-direction:column;gap:6px">
           <textarea id="apc-comment-input" placeholder="코멘트를 입력하세요..."
             style="width:100%;padding:8px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;background:#F8FAFF;color:#333;outline:none;resize:vertical;min-height:72px;box-sizing:border-box;font-family:inherit"></textarea>
-          <button onclick="window.apcSaveComment()"
-            style="background:#6C5DD3;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-end">저장</button>
+          <div style="display:flex;gap:6px;align-self:flex-end">
+            <button id="apc-comment-cancel" onclick="window.apcCancelEdit()"
+              style="display:none;background:#F3F4F6;color:#555;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">취소</button>
+            <button id="apc-comment-save" onclick="window.apcSaveComment()"
+              style="background:#6C5DD3;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">저장</button>
+          </div>
         </div>
       </div>
     </div>
@@ -2082,6 +2109,7 @@ window.showSection = function(id,btn){
   if (id === 'smslog') { loadSmsLog(); }
   if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
+  if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
 
@@ -12253,14 +12281,14 @@ async function _apcLoad() {
   }
 }
 
-// AI 상태 → 그리드 배지 표시 (색은 quality별)
+// 검사 상태 → 그리드 배지 표시 (색은 quality별)
 const _APC_AI_COLORS = { '우수': '#15803D', '양호': '#1565C0', '보통': '#B45309', '부실': '#C62828', '판독불가': '#6B7280' };
 function _apcAiBadge(ai) {
   if (!ai) return '';
   let label, color;
-  if (ai.status === 'done')       { label = '🤖 ' + (ai.quality || '완료'); color = _APC_AI_COLORS[ai.quality] || '#6B7280'; }
-  else if (ai.status === 'error') { label = '🤖 ⚠️'; color = '#C62828'; }
-  else                            { label = '🤖 …'; color = '#6B7280'; }
+  if (ai.status === 'done')       { label = ai.quality || '검사 완료'; color = _APC_AI_COLORS[ai.quality] || '#6B7280'; }
+  else if (ai.status === 'error') { label = '⚠️ 검사 실패'; color = '#C62828'; }
+  else                            { label = '검사 중'; color = '#6B7280'; }
   return `<div style="position:absolute;bottom:5px;left:5px;background:#fff;border:1px solid ${color};color:${color};font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px">${label}</div>`;
 }
 
@@ -12325,7 +12353,7 @@ function _apcRender() {
 
   gridEl.innerHTML = cards.join('');
   if (sumEl) {
-    sumEl.innerHTML = `제출 <b style="color:#6C5DD3">${done}</b> · 미제출 <b style="color:#C62828">${students.length - done}</b> · 코멘트 <b>${cmted}</b> · AI 검사 <b style="color:#4C3FB8">${aied}</b> <span style="color:#C9CDD4">/ 전체 ${students.length}명</span>`;
+    sumEl.innerHTML = `제출 <b style="color:#6C5DD3">${done}</b> · 미제출 <b style="color:#C62828">${students.length - done}</b> · 코멘트 <b>${cmted}</b> · 검사 <b style="color:#4C3FB8">${aied}</b> <span style="color:#C9CDD4">/ 전체 ${students.length}명</span>`;
   }
 }
 
@@ -12348,6 +12376,7 @@ window.apcOpen = function(seatKey) {
   }
   const input = document.getElementById('apc-comment-input');
   if (input) input.value = '';
+  _apcSetEditMode(null);
   modal.style.display = 'flex';
   _apcLoadComments(_apcDate);
   _apcAiWatch(seatKey, _apcDate);
@@ -12360,6 +12389,8 @@ window.apcCloseModal = function() {
 };
 
 // 코멘트 로드
+let _apcComments = [];       // 마지막으로 불러온 코멘트 배열 (수정 기능이 참조)
+let _apcEditIdx = null;      // 수정 중인 코멘트 인덱스 (null이면 새 코멘트 작성 모드)
 async function _apcLoadComments(ds) {
   const list = document.getElementById('apc-comments-list');
   if (!list) return;
@@ -12367,22 +12398,21 @@ async function _apcLoadComments(ds) {
   try {
     const docId = _apcSeat + '_' + ds;
     const snap = await getDoc(doc(db, 'planner_comments', docId));
-    if (snap.exists()) {
-      const comments = snap.data().comments || [];
-      if (comments.length === 0) {
-        list.innerHTML = '<div style="color:#aaa;font-size:12px">아직 코멘트가 없습니다</div>';
-      } else {
-        list.innerHTML = comments.map((c, i) => `
-          <div style="background:#EEF2FF;border:1px solid #8F82E4;border-radius:8px;padding:8px 10px;position:relative">
-            <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
-            <div style="display:flex;justify-content:space-between;align-items:center">
-              <div style="font-size:11px;color:#888">${c.time || ''}</div>
+    _apcComments = snap.exists() ? (snap.data().comments || []) : [];
+    if (_apcComments.length === 0) {
+      list.innerHTML = '<div style="color:#aaa;font-size:12px">아직 코멘트가 없습니다</div>';
+    } else {
+      list.innerHTML = _apcComments.map((c, i) => `
+        <div style="background:#EEF2FF;border:1px solid #8F82E4;border-radius:8px;padding:8px 10px;position:relative">
+          <div style="font-size:13px;color:#333;white-space:pre-wrap;margin-bottom:4px">${c.text.replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:11px;color:#888">${c.time || ''}</div>
+            <div style="display:flex;gap:10px">
+              <button onclick="window.apcEditComment(${i})" style="background:none;border:none;color:#4C3FB8;font-size:11px;cursor:pointer;padding:0">수정</button>
               <button onclick="window.apcDeleteComment(${i})" style="background:none;border:none;color:#C62828;font-size:11px;cursor:pointer;padding:0">삭제</button>
             </div>
-          </div>`).join('');
-      }
-    } else {
-      list.innerHTML = '<div style="color:#aaa;font-size:12px">아직 코멘트가 없습니다</div>';
+          </div>
+        </div>`).join('');
     }
   } catch(e) {
     list.innerHTML = '<div style="color:#C62828;font-size:12px">로드 실패</div>';
@@ -12390,7 +12420,32 @@ async function _apcLoadComments(ds) {
   }
 }
 
-// 코멘트 저장
+// 수정 모드 켜기/끄기 — 입력란·버튼 라벨을 함께 전환
+function _apcSetEditMode(idx) {
+  _apcEditIdx = idx;
+  const save = document.getElementById('apc-comment-save');
+  const cancel = document.getElementById('apc-comment-cancel');
+  if (save) save.textContent = idx == null ? '저장' : '수정 저장';
+  if (cancel) cancel.style.display = idx == null ? 'none' : 'inline-block';
+}
+
+window.apcEditComment = function(idx) {
+  const c = _apcComments[idx];
+  if (!c) return;
+  const input = document.getElementById('apc-comment-input');
+  if (!input) return;
+  input.value = c.text || '';
+  input.focus();
+  _apcSetEditMode(idx);
+};
+
+window.apcCancelEdit = function() {
+  const input = document.getElementById('apc-comment-input');
+  if (input) input.value = '';
+  _apcSetEditMode(null);
+};
+
+// 코멘트 저장 — 새 코멘트 추가 또는 수정 모드면 해당 코멘트 교체
 window.apcSaveComment = async function() {
   const input = document.getElementById('apc-comment-input');
   if (!input || !_apcCurrentDate || !_apcSeat) return;
@@ -12403,7 +12458,12 @@ window.apcSaveComment = async function() {
     const ref2 = doc(db, 'planner_comments', docId);
     const snap = await getDoc(ref2);
     const existing = snap.exists() ? (snap.data().comments || []) : [];
-    existing.push({ text, time: timeStr });
+    const editing = _apcEditIdx != null && existing[_apcEditIdx];
+    if (editing) {
+      existing[_apcEditIdx] = { text, time: timeStr + ' (수정됨)' };
+    } else {
+      existing.push({ text, time: timeStr });
+    }
     await setDoc(ref2, {
       seat: _apcSeat,
       date: _apcCurrentDate,
@@ -12411,10 +12471,11 @@ window.apcSaveComment = async function() {
       updatedAt: serverTimestamp()
     });
     input.value = '';
+    _apcSetEditMode(null);
     await _apcLoadComments(_apcCurrentDate);
     _apcCmtCount[_apcSeat] = existing.length;
     _apcRender();   // 그리드의 💬 배지 즉시 반영
-    showAdminToast('✅ 코멘트가 저장됐습니다');
+    showAdminToast(editing ? '✅ 코멘트가 수정됐습니다' : '✅ 코멘트가 저장됐습니다');
   } catch(e) {
     showAdminToast('❌ 저장 실패: ' + e.message);
   }
@@ -12432,6 +12493,7 @@ window.apcDeleteComment = async function(idx) {
     const comments = snap.data().comments || [];
     comments.splice(idx, 1);
     await setDoc(ref2, { seat: _apcSeat, date: _apcCurrentDate, comments, updatedAt: serverTimestamp() });
+    _apcSetEditMode(null);   // 수정 중이던 인덱스가 밀릴 수 있으니 수정 모드 해제
     await _apcLoadComments(_apcCurrentDate);
     _apcCmtCount[_apcSeat] = comments.length;
     _apcRender();   // 그리드의 💬 배지 즉시 반영
@@ -12470,14 +12532,14 @@ function _apcAiRenderPanel(v) {
   btn.disabled = false;
   if (!v) {
     box.style.display = 'none'; box.innerHTML = '';
-    btn.textContent = 'AI 검사 실행';
+    btn.textContent = '검사하기';
     if (!sub || !sub.url) { btn.disabled = true; btn.textContent = '사진 없음'; }
     return;
   }
   box.style.display = 'block';
   if (v.status === 'running' || v.status === 'requested') {
     btn.textContent = '검사 중...'; btn.disabled = true;
-    box.innerHTML = `<div style="font-size:12px;color:#6B7280">🤖 AI가 플래너를 읽고 있습니다... (보통 30초~1분)</div>`;
+    box.innerHTML = `<div style="font-size:12px;color:#6B7280">플래너를 검사하고 있습니다... (보통 30초~1분)</div>`;
     return;
   }
   if (v.status === 'error') {
@@ -12499,19 +12561,19 @@ function _apcAiRenderPanel(v) {
     </div>`;
 }
 
-// 모달의 [AI 검사 실행 / 다시 검사]
+// 모달의 [검사하기 / 다시 검사]
 window.apcAiRun = async function() {
   if (!_apcSeat || !_apcCurrentDate) return;
   const sub = _apcSubs[_apcSeat];
   if (!sub || !sub.url) { showAdminToast('⚠️ 제출된 사진이 없어 검사할 수 없습니다'); return; }
   const cur = _apcAi[_apcSeat];
-  if (cur && cur.status === 'done' && !confirm('이미 검사한 플래너입니다. 다시 검사할까요? (API 비용이 다시 발생합니다)')) return;
+  if (cur && cur.status === 'done' && !confirm('이미 검사한 플래너입니다. 다시 검사할까요?')) return;
   const s = _apcStudents().find(x => _apcSeatKey(x.seat) === _apcSeat);
   try {
     const btn = document.getElementById('apc-ai-btn');
     if (btn) { btn.textContent = '검사 중...'; btn.disabled = true; }
     await _apcAiRequest(_apcSeat, _apcCurrentDate, s ? s.name : null);
-    showAdminToast('🤖 AI 검사를 요청했습니다');
+    showAdminToast('📋 검사를 요청했습니다');
   } catch(e) {
     showAdminToast('❌ 요청 실패: ' + e.message);
     _apcAiRenderPanel(_apcAi[_apcSeat] || null);
@@ -12527,7 +12589,7 @@ window.apcAiCopy = function() {
   showAdminToast('✏️ 입력란에 복사했습니다 — 수정 후 저장을 눌러주세요');
 };
 
-// 상단 [🤖 전체 AI 검사] — 제출했지만 아직 검사 안 된 학생만 일괄 요청
+// 상단 [📋 전체 검사] — 제출했지만 아직 검사 안 된 학생만 일괄 요청
 window.apcAiRunAll = async function() {
   if (!_apcDate) return;
   const targets = _apcStudents().filter(s => {
@@ -12538,7 +12600,7 @@ window.apcAiRunAll = async function() {
   });
   if (!targets.length) { showAdminToast('검사할 플래너가 없습니다 (미제출이거나 이미 검사됨)'); return; }
   const [y, m, d] = _apcDate.split('-').map(Number);
-  if (!confirm(`${m}월 ${d}일 플래너 ${targets.length}건을 AI 검사할까요?\n(건당 API 비용이 발생합니다)`)) return;
+  if (!confirm(`${m}월 ${d}일 플래너 ${targets.length}건을 검사할까요?`)) return;
   try {
     for (const s of targets) {
       const key = _apcSeatKey(s.seat);
@@ -12546,7 +12608,7 @@ window.apcAiRunAll = async function() {
       await _apcAiRequest(key, _apcDate, s.name);
     }
     _apcRender();
-    showAdminToast(`🤖 ${targets.length}건 검사를 요청했습니다 — 완료되면 배지가 나타납니다`);
+    showAdminToast(`📋 ${targets.length}건 검사를 요청했습니다 — 완료되면 배지가 나타납니다`);
     // 결과는 잠시 후 일괄 재조회로 반영 (개별 onSnapshot은 모달에서만)
     setTimeout(async () => { await _apcLoad(); _apcRender(); }, 45000);
     setTimeout(async () => { await _apcLoad(); _apcRender(); }, 120000);
@@ -12595,6 +12657,142 @@ window.adminPlannerInit = async function() {
 
 // students 컬렉션이 갱신될 때 호출된다(탭이 닫혀 있어도 안전 — DOM 없으면 _apcRender가 그냥 빠진다).
 window.adminPlannerRefreshList = function() { if (_apcDate) _apcRender(); };
+
+// ══════════════════════════════════════
+// 📈 학습 분석 — 플래너 검사(stats)로 쌓이는 과목·시간 데이터를 차트로
+// ══════════════════════════════════════
+const _SA_SUBJ_COLORS = { '국어': '#C62828', '수학': '#1565C0', '영어': '#15803D', '과학': '#7C3AED', '사회': '#B45309', '한국사': '#0E7490', '제2외국어': '#DB2777', '기타': '#6B7280' };
+const _saFmtMin = m => {
+  if (m == null || isNaN(m)) return '-';
+  const h = Math.floor(m / 60), mm = Math.round(m % 60);
+  return h ? `${h}시간${mm ? ' ' + mm + '분' : ''}` : `${mm}분`;
+};
+
+window.studyAnalyticsInit = function() {
+  const sel = document.getElementById('sa-student-sel');
+  if (!sel) return;
+  const cur = sel.value;
+  const opts = _apcStudents().map(s => {
+    const key = _apcSeatKey(s.seat);
+    return `<option value="${key}" ${key === cur ? 'selected' : ''}>${_apcEsc(s.name)} (${_apcEsc(s.seat)}번)</option>`;
+  });
+  sel.innerHTML = '<option value="">학생 선택</option>' + opts.join('');
+  if (sel.value) window.saRender();
+};
+
+window.saRender = async function() {
+  const sel = document.getElementById('sa-student-sel');
+  const box = document.getElementById('sa-content');
+  if (!sel || !box) return;
+  const seatKey = sel.value;
+  if (!seatKey) { box.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생을 선택하세요</div>'; return; }
+  const days = parseInt((document.getElementById('sa-period-sel') || {}).value) || 30;
+  box.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">불러오는 중...</div>';
+
+  let reviews = [];
+  try {
+    const snap = await getDocs(query(collection(db, 'planner_ai_reviews'), where('seat', '==', seatKey)));
+    snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) reviews.push(v); });
+  } catch(e) {
+    box.innerHTML = `<div style="color:#C62828;font-size:13px;text-align:center;padding:40px 0">조회 실패: ${_apcEsc(e.message || e)}</div>`;
+    return;
+  }
+
+  // 기간: 오늘 포함 최근 N일
+  const today = new Date();
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutIso = _apcIso(cutoff);
+  reviews = reviews.filter(v => v.date >= cutIso).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const byDate = {}; reviews.forEach(v => { byDate[v.date] = v; });
+
+  if (!reviews.length) {
+    box.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">이 기간에 검사된 플래너가 없습니다.<br>플래너 탭에서 검사를 실행하면 데이터가 쌓입니다.</div>';
+    return;
+  }
+
+  // ── 집계 ──
+  let totalMin = 0, minDays = 0, planned = 0, completed = 0;
+  const subjTotal = {};   // 과목: {min, cnt}
+  reviews.forEach(v => {
+    const st = v.stats || {};
+    if (st.total_minutes != null) { totalMin += st.total_minutes; minDays++; }
+    planned += st.planned_count || 0;
+    completed += st.completed_count || 0;
+    (st.subjects || []).forEach(s => {
+      if (!s || !s.name) return;
+      const t = subjTotal[s.name] || (subjTotal[s.name] = { min: 0, cnt: 0 });
+      t.cnt++;
+      if (s.minutes != null) t.min += s.minutes;
+    });
+  });
+  const doneRate = planned ? Math.round(completed / planned * 100) : null;
+
+  // ── ① 요약 타일 ──
+  const tile = (label, val) => `
+    <div style="flex:1;min-width:110px;background:#F8FAFF;border:1px solid #E0E7FF;border-radius:10px;padding:10px 12px">
+      <div style="font-size:11px;color:#888;margin-bottom:3px">${label}</div>
+      <div style="font-size:15px;font-weight:800;color:#1E1B4B">${val}</div>
+    </div>`;
+  const tiles = `
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+      ${tile('검사한 날', reviews.length + '일')}
+      ${tile('총 학습시간', minDays ? _saFmtMin(totalMin) : '기록 없음')}
+      ${tile('하루 평균', minDays ? _saFmtMin(Math.round(totalMin / minDays)) : '기록 없음')}
+      ${tile('계획 완료율', doneRate != null ? doneRate + '%' : '기록 없음')}
+    </div>`;
+
+  // ── ② 일별 학습시간 막대 (색 = 검사 등급) ──
+  const maxMin = Math.max(60, ...reviews.map(v => (v.stats || {}).total_minutes || 0));
+  const labelEvery = days > 31 ? 4 : 2;
+  let bars = '';
+  for (let i = 0; i < days; i++) {
+    const d = new Date(cutoff); d.setDate(cutoff.getDate() + i);
+    const ds = _apcIso(d);
+    const v = byDate[ds];
+    const st = v ? (v.stats || {}) : null;
+    const min = st && st.total_minutes != null ? st.total_minutes : null;
+    const h = v ? Math.max(8, Math.round((min || 0) / maxMin * 120)) : 0;
+    const color = v ? (_APC_AI_COLORS[v.quality] || '#6B7280') : 'transparent';
+    const tip = v ? `${ds} · ${v.quality || ''}${min != null ? ' · ' + _saFmtMin(min) : ' · 시간 기록 없음'}` : ds;
+    const lbl = (i % labelEvery === 0) ? String(d.getDate()) : '';
+    bars += `
+      <div title="${tip}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0">
+        <div style="width:70%;max-width:16px;height:${h}px;background:${color};border-radius:3px 3px 0 0;${v && min == null ? 'opacity:0.35;' : ''}"></div>
+        <div style="font-size:8px;color:#B0B4BC;height:10px;overflow:hidden">${lbl}</div>
+      </div>`;
+  }
+  const legend = Object.entries(_APC_AI_COLORS).map(([q, c]) =>
+    `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;color:#666"><span style="width:8px;height:8px;border-radius:2px;background:${c}"></span>${q}</span>`).join(' ');
+  const daily = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:8px">일별 학습시간 <span style="font-weight:500;color:#9CA3AF;font-size:11px">(막대 색 = 검사 등급, 연한 막대 = 시간 기록 없음)</span></div>
+      <div style="display:flex;align-items:flex-end;gap:1px;height:135px;border-bottom:1px solid #E5E7EB;padding-bottom:0">${bars}</div>
+      <div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap">${legend}</div>
+    </div>`;
+
+  // ── ③ 과목별 학습시간 가로 막대 ──
+  const subjRows = Object.entries(subjTotal).sort((a, b) => b[1].min - a[1].min || b[1].cnt - a[1].cnt);
+  const maxSubj = Math.max(1, ...subjRows.map(([, t]) => t.min));
+  const subjHtml = subjRows.map(([name, t]) => {
+    const c = _SA_SUBJ_COLORS[name] || '#6B7280';
+    const w = t.min ? Math.max(3, Math.round(t.min / maxSubj * 100)) : 3;
+    return `
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="width:64px;font-size:12px;font-weight:700;color:${c};text-align:right;flex-shrink:0">${_apcEsc(name)}</div>
+        <div style="flex:1;background:#F3F4F6;border-radius:5px;height:16px;overflow:hidden">
+          <div style="width:${w}%;height:100%;background:${c};border-radius:5px"></div>
+        </div>
+        <div style="width:110px;font-size:11px;color:#666;flex-shrink:0">${t.min ? _saFmtMin(t.min) : '시간 기록 없음'} · ${t.cnt}회</div>
+      </div>`;
+  }).join('');
+  const subjects = `
+    <div>
+      <div style="font-size:12.5px;font-weight:700;color:#1E1B4B;margin-bottom:8px">과목별 학습시간</div>
+      <div style="display:flex;flex-direction:column;gap:7px">${subjHtml || '<div style="color:#aaa;font-size:12px">과목 데이터가 없습니다</div>'}</div>
+    </div>`;
+
+  box.innerHTML = tiles + daily + subjects;
+};
 
 // 페이지 로드 시 localStorage에서 복원된 알림을 즉시 화면에 표시
 document.addEventListener('DOMContentLoaded', function() {

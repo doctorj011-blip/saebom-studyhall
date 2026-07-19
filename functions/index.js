@@ -533,30 +533,89 @@ const Anthropic = require('@anthropic-ai/sdk');
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const PLANNER_AI_MODEL = 'claude-opus-4-8';
-const PLANNER_AI_PROMPT = `당신은 학생 자기주도학습 공간 "새봄면학관"의 담당 선생님입니다.
-학생이 제출한 하루치 스터디 플래너 사진을 검사하고 코멘트를 작성합니다.
+const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"에서 학생들의 학습을 오래 지도해 온 담임 선생님입니다.
+학생이 제출한 하루치 스터디 플래너 사진을 검사하고, 플래너 아래에 직접 적어주는 짧은 피드백을 남깁니다.
 
-검사 기준:
-1. 작성 충실도 — 계획이 구체적으로 적혀 있는가(과목·교재·분량), 빈칸이 많지 않은가
+[검사 기준]
+1. 작성 충실도 — 과목·교재·분량이 구체적으로 적혀 있는가, 빈칸이 많지 않은가
 2. 실행 체크 — 계획 대비 완료 표시(체크/취소선 등)가 되어 있는가
-3. 시간 관리 — 시간 배분이 기록되어 있는가
+3. 시간 관리 — 시간 배분 기록(타임테이블 등)이 있는가
 
-코멘트 작성 규칙:
-- 학생에게 직접 말하듯 존댓말로, 2~4문장
-- 잘한 점 1가지를 먼저 구체적으로 칭찬하고, 개선할 점 1가지를 부드럽게 제안
-- 사진에서 실제로 읽은 내용(과목명, 교재명 등)을 언급해서 "진짜 읽고 쓴" 코멘트가 되게 할 것
-- 글씨를 알아보기 어렵거나 사진이 흐리면 그 사실을 quality에 반영하고 추측하지 말 것`;
+[코멘트 작성 규칙]
+- 담임 선생님이 손으로 적어주는 피드백처럼 자연스럽고 따뜻한 존댓말, 2~4문장
+- 학습 내용에 집중할 것: 사진에서 실제로 읽은 과목·교재·분량을 근거로 구체적으로 말할 것
+- 잘한 점을 먼저 짚고, 학습 전략 관점의 제안을 딱 한 가지만 부드럽게 덧붙일 것
+  (예: 과목 간 균형, 취약 과목의 배치 시간대, 복습 주기, 암기 분량 나누기)
+- 짧은 격려로 마무리하되 과장하지 말 것
+- [이전 검사 기록]이 주어지면 지난번과 비교해 학습량이 늘었는지/줄었는지/유지되는지를
+  한 문장으로 자연스럽게 녹여 말할 것 (수치를 기계적으로 나열하지 말 것)
+- 피할 것: 기계적인 나열·번호 매기기, 감탄사 남발, 같은 문형 반복, 과도한 칭찬,
+  이모티콘, "AI"·"분석"·"평가"·"데이터" 같은 단어 — 사람이 쓴 글처럼 읽혀야 함
+- 글씨를 알아보기 어렵거나 사진이 흐리면 추측하지 말고 quality에 반영할 것
+
+[stats 추출 규칙]
+- 플래너에서 확인되는 것만 기록하고, 확인 불가능한 값은 null(또는 0)로 둘 것
+- 과목명은 반드시 주어진 대분류로 매핑할 것 (예: 수학I·미적분→수학, 물리·화학→과학)`;
 
 const PLANNER_AI_SCHEMA = {
   type: 'object',
   properties: {
     quality: { type: 'string', enum: ['우수', '양호', '보통', '부실', '판독불가'], description: '플래너 작성 상태 종합 평가' },
     summary: { type: 'string', description: '플래너 내용 요약(관리자용, 2~3문장) — 무슨 과목/교재를 얼마나 계획하고 실행했는지' },
-    comment: { type: 'string', description: '학생에게 보여줄 코멘트(존댓말 2~4문장)' }
+    comment: { type: 'string', description: '학생에게 보여줄 코멘트(존댓말 2~4문장)' },
+    stats: {
+      type: 'object',
+      description: '플래너에서 읽어낸 학습 데이터 — 학습 분석 그래프의 원천',
+      properties: {
+        total_minutes: { anyOf: [{ type: 'integer' }, { type: 'null' }], description: '플래너에서 확인되는 총 학습시간(분). 확인 불가면 null' },
+        planned_count: { type: 'integer', description: '계획 항목 수 (확인 불가면 0)' },
+        completed_count: { type: 'integer', description: '완료 체크된 항목 수 (확인 불가면 0)' },
+        subjects: {
+          type: 'array',
+          description: '과목별 학습 내역',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string', enum: ['국어', '수학', '영어', '과학', '사회', '한국사', '제2외국어', '기타'] },
+              minutes: { anyOf: [{ type: 'integer' }, { type: 'null' }], description: '해당 과목 학습시간(분). 확인 불가면 null' },
+              detail: { type: 'string', description: '교재·범위 짧은 요약 (예: 자이스토리 24~31p)' }
+            },
+            required: ['name', 'minutes', 'detail'],
+            additionalProperties: false
+          }
+        }
+      },
+      required: ['total_minutes', 'planned_count', 'completed_count', 'subjects'],
+      additionalProperties: false
+    }
   },
-  required: ['quality', 'summary', 'comment'],
+  required: ['quality', 'summary', 'comment', 'stats'],
   additionalProperties: false
 };
+
+// 같은 학생의 이전 검사 기록(최근 4건) — "지난번보다 늘었다/줄었다" 비교 근거로 프롬프트에 넣는다.
+async function plannerAiHistory(seat, beforeDate) {
+  try {
+    const hs = await db.collection('planner_ai_reviews').where('seat', '==', seat).get();
+    const list = hs.docs.map(d => d.data())
+      .filter(v => v.status === 'done' && v.date && v.date < beforeDate)
+      .sort((a, b) => (a.date < b.date ? 1 : -1))
+      .slice(0, 4);
+    if (!list.length) return '';
+    const lines = list.map(h => {
+      const st = h.stats || {};
+      const subj = (st.subjects || []).map(s => s.name + (s.minutes != null ? ` ${s.minutes}분` : '')).join(', ');
+      const parts = [h.quality || ''];
+      if (st.total_minutes != null) parts.push(`총 ${st.total_minutes}분`);
+      if (subj) parts.push(subj);
+      return `- ${h.date}: ${parts.filter(Boolean).join(', ')} — ${h.summary || ''}`;
+    });
+    return '\n\n[이전 검사 기록 — 최근순]\n' + lines.join('\n');
+  } catch (e) {
+    logger.warn('plannerAiHistory 조회 실패', { seat, message: e.message });
+    return '';
+  }
+}
 
 exports.plannerAiReview = onDocumentCreated(
   { document: 'planner_ai_requests/{id}', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, memory: '512MiB' },
@@ -587,6 +646,8 @@ exports.plannerAiReview = onDocumentCreated(
       const model = cfg.model || PLANNER_AI_MODEL;
       const sysPrompt = cfg.prompt || PLANNER_AI_PROMPT;
 
+      const history = await plannerAiHistory(seat, dateStr);
+
       const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
       const msg = await client.messages.create({
         model,
@@ -597,7 +658,7 @@ exports.plannerAiReview = onDocumentCreated(
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mediaType, data: buf.toString('base64') } },
-            { type: 'text', text: `학생: ${req.name || seat + '번'} / 학습일: ${dateStr}\n이 플래너를 검사하고 결과를 작성해 주세요.` }
+            { type: 'text', text: `학생: ${req.name || seat + '번'} / 학습일: ${dateStr}\n이 플래너를 검사하고 결과를 작성해 주세요.${history}` }
           ]
         }]
       });
@@ -610,6 +671,7 @@ exports.plannerAiReview = onDocumentCreated(
         seat, date: dateStr, name: req.name || null,
         status: 'done',
         quality: out.quality, summary: out.summary, comment: out.comment,
+        stats: out.stats || null,
         model,
         usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens },
         doneAt: new Date().toISOString()
