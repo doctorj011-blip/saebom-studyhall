@@ -516,7 +516,7 @@ a.telno { cursor: pointer; }
 .sticky-cta { display: none; }
 @media (max-width: 760px) {
   .sticky-cta {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+    display: grid; grid-template-columns: 1fr; gap: 8px;
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
     padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
     background: rgba(16,30,39,.95);
