@@ -1686,7 +1686,7 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._phoneLast4=(p)=>String(p||'').replace(/\D/g,'').slice(-4);
   window._loginKey=(s)=>!s?'':(s.loginPin?String(s.loginPin).replace(/\D/g,'').slice(0,4):window._phoneLast4(s.phone));
   window._phoneMid4=(p)=>{const d=String(p||'').replace(/\D/g,'');return d.length===11?d.slice(3,7):'';};
-  window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-22'&&t<='2026-08-31')return{start:'2026-07-22',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
+  window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-20'&&t<='2026-08-31')return{start:'2026-07-20',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
   window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
   window._computeOffset=(M,P)=>{M=Math.max(0,Math.round(M||0));P=Math.max(0,Math.round(P||0));const r=Math.min(Math.floor(M/3),Math.floor(P/2));return{rounds:r,spent:r*3,cleared:r*2,netMerit:M-r*3,netDemerit:P-r*2,rawMerit:M,rawDemerit:P};};
 }
@@ -3686,7 +3686,7 @@ window.showCycleRankModal = async function(){
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;width:min(96vw,620px);max-height:86vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#EEF2FF">
-        <div style="font-size:15px;font-weight:700;color:#1E1B4B">🏆 주기 순위 · 상쇄 현황 <span style="font-size:12px;font-weight:500;color:#4A3FA8">${cyc.label==='이번 주기'?'7/22~8/31':cyc.start.replace(/-/g,'.')+'~'+cyc.end.replace(/-/g,'.')}</span></div>
+        <div style="font-size:15px;font-weight:700;color:#1E1B4B">🏆 주기 순위 · 상쇄 현황 <span style="font-size:12px;font-weight:500;color:#4A3FA8">${cyc.label==='이번 주기'?'7/20~8/31':cyc.start.replace(/-/g,'.')+'~'+cyc.end.replace(/-/g,'.')}</span></div>
         <button onclick="document.getElementById('rank-modal-overlay').remove()" style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
       </div>
       <div id="rank-modal-body" style="overflow-y:auto;padding:14px 16px"><div style="text-align:center;padding:32px;color:#aaa;font-size:13px">집계 중...</div></div>
@@ -6819,7 +6819,7 @@ setInterval(() => {
     if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
     // 지난 주(월~토) 목표순공 자동판정 — 월요일 새벽이면 방금 끝난 주가 확정됨
     if (window.assessWeeklyGoals) window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e));
-    // 끝난 주기(1주기 7/22~8/31, 이후 월간) 개근·순공 상점 판정 — 주기 종료 다음날부터
+    // 끝난 주기(1주기 7/20~8/31, 이후 월간) 개근·순공 상점 판정 — 주기 종료 다음날부터
     if (window.assessCycleMerits) window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e));
     // 예약 퇴원(withdrawAt) 대상 자동 처리 — 날짜가 지난 학생을 보관함으로
     if (window.autoWithdrawExpired) window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e));
@@ -9977,7 +9977,7 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
 // 유효목표 = 목표시간 − 그 주 '승인변경으로 빠진 교시'의 예정분(이중처벌 방지). 무단결석 교시는 차감 안 함.
 //   실제 ≥ 유효목표(100%) → merits +2(type:'auto') / 미달 시 벌점 없음(긍정 강화만)
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_weekly_goal_done 로 멱등, 취소상태 보존.
-const WEEKLY_START_ISO = '2026-07-22'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
+const WEEKLY_START_ISO = '2026-07-20'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
 const WEEKLY_END_ISO = '2026-08-31';   // 1주기 종료 — 이 날짜 이후로 끝나는 주는 판정 안 함(다음 주기 정해지면 연장)
 const WEEKLY_MERIT_POINTS = 2;
 const _WEEKLY_DN = ['일','월','화','수','목','금','토'];
@@ -10092,14 +10092,14 @@ async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actua
 }
 
 // ── 주기(월간) 상점 자동판정 — 개근 3점 / 순공 상위25%·전월대비향상 2점 ──
-// 주기: 1주기=7/22~8/31 연속, 이후 매 달력월. 주기 종료 후(다음날부터) 소급 판정.
+// 주기: 1주기=7/20~8/31 연속, 이후 매 달력월. 주기 종료 후(다음날부터) 소급 판정.
 //  · 개근 = 무단결석 0건 AND 순공>0 AND base 예정 교시 이수율 80%↑ → merits +3
 //      이수율을 함께 보는 이유: 무단결석은 '예정인데 안 온' 경우만 찍히므로, 스케줄을 미리
 //      다 빼두면 무단결석 0건이 되어 사실상 안 다닌 학생이 개근 3점(=상쇄 1회분)을 가져간다.
 //  · 순공 우수 = 그 주기 순공 상위 25%(경계 동점 포함) 또는 직전 주기 대비 향상 → merits +2
 //      향상 비교는 운영일당 평균 기준 — 1주기(6주)와 9월(4주)처럼 길이가 다르면 총량 비교가 무의미.
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_cycle_merit_done 로 멱등, 취소상태 보존.
-const CYCLE1 = { start:'2026-07-22', end:'2026-08-31', id:'2026-C1', label2:'7/22~8/31' };
+const CYCLE1 = { start:'2026-07-20', end:'2026-08-31', id:'2026-C1', label2:'7/20~8/31' };
 // 개근 최소 이수율 — base 고정 시간표에 잡아둔 교시 중 실제로 이수한 비율의 하한.
 const CYCLE_ATTEND_MIN_RATE = 0.8;
 function _nextCycle(cyc){

@@ -16,11 +16,12 @@ window._ymLabel = function(key) { return parseInt(String(key).split('-')[1], 10)
 window._readHour = function(hours, key) { return (hours && hours[key] != null) ? hours[key] : 0; };
 
 // ── 상·벌점 집계 주기 ──
-// 시범/1주기는 7/22~8/31 '한 주기'로 연속 집계(8/1에 초기화되지 않음). 그 외 날짜는 해당 달력월.
+// 1주기는 7/20~8/31 '한 주기'로 연속 집계(8/1에 초기화되지 않음). 그 외 날짜는 해당 달력월.
+// (당초 7/22 시작이었으나 신규생 7/20 등원에 맞춰 시범기간 없이 7/20 정식 시작으로 앞당김)
 // 상·벌점 카드/모달의 '이번 주기/이번 달' 합계와 누적조치 판정 기준. 날짜는 ISO(YYYY-MM-DD) 문자열 비교.
 window._meritCycle = function(refISO) {
   const today = refISO || (function () { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); })();
-  if (today >= '2026-07-22' && today <= '2026-08-31') return { start: '2026-07-22', end: '2026-08-31', label: '이번 주기' };
+  if (today >= '2026-07-20' && today <= '2026-08-31') return { start: '2026-07-20', end: '2026-08-31', label: '이번 주기' };
   const ym = today.slice(0, 7), y = +ym.slice(0, 4), m = +ym.slice(5, 7);
   const lastDay = new Date(y, m, 0).getDate();
   return { start: ym + '-01', end: ym + '-' + String(lastDay).padStart(2, '0'), label: '이번 달' };
