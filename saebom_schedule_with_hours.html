@@ -3611,6 +3611,11 @@ window.showPenaltyModal = async function(filterSeatKey) {
       <div id="penalty-modal-body" style="overflow-y:auto;padding:14px 16px">
         <div style="text-align:center;padding:32px;color:#aaa;font-size:13px">불러오는 중...</div>
       </div>
+      <div style="flex:0 0 auto;padding:10px 16px;border-top:0.5px solid #eee;background:#FAFAFA;display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <span style="font-size:11px;color:#9CA3AF;line-height:1.35">누적 벌점을 0점으로 되돌립니다<br>(기록이 지워지며 되돌릴 수 없음)</span>
+        <button onclick="resetPenalties(${filterSeatKey ? `'${String(filterSeatKey).replace(/'/g, "\\'")}'` : ''})"
+          style="flex:0 0 auto;padding:6px 12px;border:1px solid #C62828;background:#fff;color:#C62828;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🧹 ${filterSeatKey ? '이 학생' : '전체'} 벌점 초기화</button>
+      </div>
     </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
@@ -3763,6 +3768,61 @@ window.togglePenaltyCancel = async function(docId, pn) {
   } catch(e) {
     console.error('벌점 취소/복구 실패:', e);
     alert('처리 실패: ' + (e.message || e));
+  }
+};
+
+// 누적 벌점 수동 초기화 — 전체(seatKey 생략) 또는 학생 1명.
+// penalties 문서는 규칙상 delete 가 막혀 있어(allow delete: if false) 삭제 대신
+// periods 를 빈 맵으로 덮어쓴다. 문서 껍데기(name/seatKey/date)는 규칙이 요구하므로 남긴다.
+// ⚠️ canceled 토글과 달리 항목 자체가 사라져 복구 불가 — 그래서 문구 입력 확인을 받는다.
+window.resetPenalties = async function(filterSeatKey) {
+  const scope = filterSeatKey ? `${_nameForSeatKey(filterSeatKey) || filterSeatKey}(${filterSeatKey}번) 학생의` : '전체 학생의';
+  const typed = prompt(`⚠️ ${scope} 누적 벌점을 모두 초기화합니다.\n지워진 기록은 되돌릴 수 없습니다.\n\n계속하려면 아래에 "초기화" 를 입력하세요.`);
+  if (typed === null) return;
+  if (typed.trim() !== '초기화') { alert('입력이 일치하지 않아 취소했습니다.'); return; }
+
+  try {
+    const db = await window.waitDb();
+    if (!db) { alert('DB 준비 안 됨'); return; }
+    const { doc, setDoc, collection, getDocs, query, where } = window._fs;
+
+    const snap = filterSeatKey
+      ? await getDocs(query(collection(db, 'penalties'), where('seatKey', '==', String(filterSeatKey))))
+      : await getDocs(collection(db, 'penalties'));
+
+    // 이미 비어 있는 문서는 건너뛴다(불필요한 쓰기 방지)
+    const targets = [];
+    snap.forEach(d => {
+      const data = d.data();
+      if (Object.keys(data.periods || {}).length) targets.push({ id: d.id, data });
+    });
+    if (!targets.length) { alert('초기화할 벌점이 없습니다.'); return; }
+
+    let cleared = 0, failed = 0;
+    for (const t of targets) {
+      try {
+        await setDoc(doc(db, 'penalties', t.id), {
+          name: t.data.name || '',
+          seatKey: String(t.data.seatKey || ''),
+          date: t.data.date || '',
+          ...(t.data.seat ? { seat: t.data.seat } : {}),
+          ...(t.data.day ? { day: t.data.day } : {}),
+          periods: {},
+          resetAt: new Date().toISOString(),
+        });
+        cleared += Object.keys(t.data.periods).length;
+      } catch (e) { failed++; console.error('벌점 초기화 실패:', t.id, e); }
+    }
+
+    _penaltyDocsTs = 0; // 사용시간 탭 배지 캐시 무효화
+    try { applyPenaltyBadges(); } catch(e){}
+    if (document.getElementById('penalty-modal-overlay')) _renderPenaltyList(_penaltyModalFilter);
+    alert(failed
+      ? `⚠️ 벌점 ${cleared}건 초기화 · 문서 ${failed}건 실패(콘솔 확인)`
+      : `✅ 벌점 ${cleared}건을 초기화했습니다.`);
+  } catch(e) {
+    console.error('벌점 초기화 실패:', e);
+    alert('초기화 실패: ' + (e.message || e));
   }
 };
 
@@ -12897,7 +12957,11 @@ function _apcAiRenderPanel(v) {
   box.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:7px">
       <div><span style="border:1px solid ${qColor};color:${qColor};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">${_apcEsc(v.quality || '')}</span></div>
-      <div style="font-size:12px;color:#555;line-height:1.55"><b style="color:#1E1B4B">요약</b> · ${_apcEsc(v.summary || '')}</div>
+      <div id="apc-ai-summary" style="font-size:12px;color:#555;line-height:1.55">
+        <b style="color:#1E1B4B">요약</b> · ${_apcEsc(v.summary || '')}${v.summaryEditedAt ? ' <span style="color:#9CA3AF">(수정됨)</span>' : ''}
+        <button onclick="window.apcAiSummaryEdit()" title="요약 수정"
+          style="background:none;border:none;color:#9CA3AF;font-size:11px;cursor:pointer;padding:0 2px">✏️</button>
+      </div>
       <div style="background:#fff;border:1px solid #C7D2FE;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#333;line-height:1.6;white-space:pre-wrap">${_apcEsc(v.comment || '')}</div>
       <button onclick="window.apcAiCopy()"
         style="background:#EEF2FF;color:#4C3FB8;border:1px solid #C7D2FE;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-end">↓ 코멘트 입력란에 복사</button>
@@ -12930,6 +12994,46 @@ window.apcAiCopy = function() {
   input.value = _apcAiLastComment;
   input.focus();
   showAdminToast('✏️ 입력란에 복사했습니다 — 수정 후 저장을 눌러주세요');
+};
+
+// 요약 수정 — 다시 검사(=API 재호출, 비용 발생) 없이 문장만 손보기 위한 기능.
+// 요약은 다음 검사의 프롬프트(이전 기록 최근 4건)로도 들어가므로 틀린 채 두면 뒤 코멘트까지 오염된다.
+window.apcAiSummaryEdit = function() {
+  const wrap = document.getElementById('apc-ai-summary');
+  const v = _apcAi[_apcSeat];
+  if (!wrap || !v) return;
+  wrap.innerHTML = `
+    <textarea id="apc-ai-summary-input"
+      style="width:100%;box-sizing:border-box;border:1px solid #C7D2FE;border-radius:7px;padding:7px 9px;font-size:12px;line-height:1.55;font-family:inherit;resize:vertical"
+      rows="3">${_apcEsc(v.summary || '')}</textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:5px">
+      <button onclick="window.apcAiSummaryCancel()"
+        style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;border-radius:7px;padding:5px 10px;font-size:12px;cursor:pointer">취소</button>
+      <button onclick="window.apcAiSummarySave()"
+        style="background:#4C3FB8;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">요약 저장</button>
+    </div>`;
+  const ta = document.getElementById('apc-ai-summary-input');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+};
+
+// 인라인 onclick은 전역 스코프에서 실행되므로 모듈 스코프 함수는 반드시 window로 감싼다.
+window.apcAiSummaryCancel = function() { _apcAiRenderPanel(_apcAi[_apcSeat] || null); };
+
+window.apcAiSummarySave = async function() {
+  const ta = document.getElementById('apc-ai-summary-input');
+  if (!ta || !_apcSeat || !_apcCurrentDate) return;
+  const text = ta.value.trim();
+  if (!text) { showAdminToast('⚠️ 요약이 비어 있습니다'); return; }
+  try {
+    await updateDoc(doc(db, 'planner_ai_reviews', `${_apcSeat}_${_apcCurrentDate}`),
+      { summary: text, summaryEditedAt: serverTimestamp() });
+    showAdminToast('✅ 요약을 수정했습니다');
+    // 화면은 onSnapshot이 갱신하지만, 규칙 오류 등으로 못 받는 경우를 대비해 로컬도 맞춰 둔다.
+    if (_apcAi[_apcSeat]) { _apcAi[_apcSeat].summary = text; _apcAi[_apcSeat].summaryEditedAt = Date.now(); }
+    _apcAiRenderPanel(_apcAi[_apcSeat]);
+  } catch(e) {
+    showAdminToast('❌ 저장 실패: ' + e.message);
+  }
 };
 
 // 상단 [📋 전체 검사] — 제출했지만 아직 검사 안 된 학생만 일괄 요청

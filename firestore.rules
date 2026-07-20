@@ -138,7 +138,15 @@ service cloud.firestore {
 
     // 플래너 AI 검사 — 관리앱이 요청 생성(create만), 결과는 서버(Cloud Function)만 쓴다
     match /planner_ai_requests/{id} { allow read, create: if true; }
-    match /planner_ai_reviews/{id}  { allow read: if true; }
+    // 결과는 서버가 쓰되, 요약 문장이 틀렸을 때 관리앱에서 고칠 수 있게 summary만 예외로 연다
+    // (다시 검사는 API 재호출이라 비용이 든다). quality·stats·comment는 여전히 서버 전용.
+    match /planner_ai_reviews/{id}  {
+      allow read: if true;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['summary', 'summaryEditedAt'])
+                    && request.resource.data.summary is string
+                    && request.resource.data.summary.size() <= 1000;
+    }
 
     // 자동문 원격 명령: current 문서만, action=open, 30초 이내
     match /door_commands/{id} {
