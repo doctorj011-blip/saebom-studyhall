@@ -1182,20 +1182,20 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 
 <!-- 플래너 상세 모달 (사진 확대 + 코멘트) -->
 <div id="apc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9998;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:16px;width:min(94vw,900px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.25);overflow:hidden">
+  <div style="background:#fff;border-radius:16px;width:min(97vw,1320px);height:94vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.25);overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:0.5px solid #eee;background:#F8FAFF">
       <div id="apc-detail-title" style="font-size:14px;font-weight:700;color:#1E1B4B"></div>
       <button onclick="window.apcCloseModal()"
         style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
     </div>
-    <div style="overflow-y:auto;padding:16px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+    <div style="flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
       <!-- 사진 -->
-      <div style="flex:1.2;min-width:260px;text-align:center">
-        <img id="apc-photo" src="" alt="" style="display:none;max-width:100%;border-radius:12px">
+      <div style="flex:1.6;min-width:min(420px,100%);text-align:center">
+        <img id="apc-photo" src="" alt="" style="display:none;max-width:100%;border-radius:12px;cursor:zoom-in" onclick="window.open(this.src,'_blank')" title="클릭하면 원본 크기로 열립니다">
         <div id="apc-nophoto" style="color:#aaa;font-size:13px;padding:40px 0">이 날짜에 등록된 플래너 사진이 없습니다</div>
       </div>
       <!-- 코멘트 -->
-      <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:10px">
+      <div style="flex:1;min-width:min(320px,100%);display:flex;flex-direction:column;gap:10px">
         <!-- 플래너 검사 -->
         <div style="border:1.5px solid #C7D2FE;background:#F5F7FF;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
@@ -1209,7 +1209,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <div id="apc-comments-list" style="display:flex;flex-direction:column;gap:8px;min-height:40px"></div>
         <div style="display:flex;flex-direction:column;gap:6px">
           <textarea id="apc-comment-input" placeholder="코멘트를 입력하세요..."
-            style="width:100%;padding:8px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;background:#F8FAFF;color:#333;outline:none;resize:vertical;min-height:72px;box-sizing:border-box;font-family:inherit"></textarea>
+            style="width:100%;padding:8px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;background:#F8FAFF;color:#333;outline:none;resize:vertical;min-height:180px;line-height:1.6;box-sizing:border-box;font-family:inherit"></textarea>
           <div style="display:flex;gap:6px;align-self:flex-end">
             <button id="apc-comment-cancel" onclick="window.apcCancelEdit()"
               style="display:none;background:#F3F4F6;color:#555;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">취소</button>
