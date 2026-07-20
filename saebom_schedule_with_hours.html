@@ -9132,14 +9132,46 @@ let _penaltyBoardDocs = [];
 let _penaltyBoardUnsub = null;
 let _penaltyBoardKey = '';
 
-// 대시보드 벌점 현황 접기/펼치기 (기본값=접힘)
-window.togglePenaltyBoard = function() {
-  const body  = document.getElementById('penalty-board-body');
-  const caret = document.getElementById('penalty-board-caret');
+// ── 대시보드 현황판 접힘 상태 기억 (localStorage) ──
+// { 'penalty-board': 1, 'schedvar-board': 0 } 꼴. 1=접힘, 0=펼침. 저장값 없으면 기본 접힘.
+// HTML의 초기 상태(body display:none + 캐럿 무회전)가 기본값이라 저장값이 없으면 그대로 둔다.
+const BOARD_COLLAPSE_KEY = 'saebom_boardCollapsed';
+
+function _boardCollapseState() {
+  try { return JSON.parse(localStorage.getItem(BOARD_COLLAPSE_KEY) || '{}') || {}; } catch(e) { return {}; }
+}
+// 화면에만 반영 (저장 안 함)
+function _boardApplyCollapse(id, collapsed) {
+  const body  = document.getElementById(id + '-body');
+  const caret = document.getElementById(id + '-caret');
   if (!body) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  if (caret) caret.style.transform = open ? 'rotate(90deg)' : '';
+  body.style.display = collapsed ? 'none' : '';
+  if (caret) caret.style.transform = collapsed ? '' : 'rotate(90deg)';
+}
+// 반영 + 저장
+function _boardSetCollapsed(id, collapsed) {
+  _boardApplyCollapse(id, collapsed);
+  try {
+    const st = _boardCollapseState();
+    st[id] = collapsed ? 1 : 0;
+    localStorage.setItem(BOARD_COLLAPSE_KEY, JSON.stringify(st));
+  } catch(e) {}
+}
+// 저장된 상태 복원 — 저장값이 있는 카드만 건드린다(없으면 HTML 기본 접힘 유지)
+function restoreBoardCollapse() {
+  const st = _boardCollapseState();
+  ['penalty-board', 'schedvar-board'].forEach(id => {
+    if (st[id] != null) _boardApplyCollapse(id, !!st[id]);
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreBoardCollapse);
+else restoreBoardCollapse();
+
+// 대시보드 벌점 현황 접기/펼치기 (기본값=접힘, 마지막 상태 기억)
+window.togglePenaltyBoard = function() {
+  const body = document.getElementById('penalty-board-body');
+  if (!body) return;
+  _boardSetCollapsed('penalty-board', body.style.display !== 'none');
 };
 
 function _penIsoDate(ts) {
@@ -9266,14 +9298,11 @@ function _svMs(u) {
   return 0;
 }
 
-// 대시보드 스케줄 변동 접기/펼치기 (기본값=접힘 — 제목줄의 'N명 변동' 요약만 보이게)
+// 대시보드 스케줄 변동 접기/펼치기 (기본값=접힘 — 제목줄의 'N명 변동' 요약만 보이게, 마지막 상태 기억)
 window.toggleSchedVarBoard = function() {
-  const body  = document.getElementById('schedvar-board-body');
-  const caret = document.getElementById('schedvar-board-caret');
+  const body = document.getElementById('schedvar-board-body');
   if (!body) return;
-  const open = body.style.display === 'none';
-  body.style.display = open ? '' : 'none';
-  if (caret) caret.style.transform = open ? 'rotate(90deg)' : '';
+  _boardSetCollapsed('schedvar-board', body.style.display !== 'none');
 };
 
 // 고정 대비 오늘 변경 델타 계산 → [{pn, kind, label}] (kind: absent/partial/return/add/remove)
