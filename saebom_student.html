@@ -1683,43 +1683,24 @@ function renderPenaltyCard() {
     </div>`;
 }
 
-// ── 주간 목표순공 설정 카드 (학생이 직접 목표 시간 설정) ──
-// 목표 이상 순공하면 상점 3점 자동 부여(미달 벌점 없음). students/{좌석}.weeklyGoalH 에 merge 저장.
+// ── 주간 목표순공 카드 (관리자가 설정, 학생은 조회만) ──
+// 목표 이상 순공하면 상점 2점 자동 부여(미달 벌점 없음). 목표는 관리자앱에서 students/{좌석}.weeklyGoalH 로 설정.
 function renderWeeklyGoalCard() {
   const el = document.getElementById('weekly-goal-card');
   if (!el || !currentStudent) return;
   const g = Number(currentStudent.weeklyGoalH) || 0;
-  const req = currentStudent.weeklyGoalReq;
-  const hasReq = (typeof req === 'number' && req !== g);
-  const sub = hasReq
-    ? `<span style="color:#B45309">⏳ 신청 ${req}시간 · 관리자 승인 대기중</span>${g ? ` (현재 적용: 주 ${g}시간)` : ''}`
-    : (g ? `주 ${g}시간 · 달성하면 상점 2점` : '목표를 신청하면 관리자 승인 후 적용됩니다');
+  const sub = g
+    ? `주 ${g}시간 · 달성하면 상점 2점 (미달 벌점 없음)`
+    : '관리자가 설정한 목표가 여기에 표시됩니다';
   el.innerHTML = `
     <div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
       <div style="min-width:0">
         <div style="font-size:13px;font-weight:700;color:#4338A8">🎯 주간 목표순공</div>
         <div style="font-size:11px;color:#6366F1;margin-top:2px">${sub}</div>
       </div>
-      <button onclick="setStudentWeeklyGoal()" style="flex:0 0 auto;padding:7px 14px;background:#6366F1;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${(g||hasReq) ? '목표 변경 신청' : '목표 신청'}</button>
+      ${g ? `<div style="flex:0 0 auto;font-size:16px;font-weight:800;color:#4338A8">주 ${g}h</div>` : ''}
     </div>`;
 }
-
-// 학생은 목표를 '신청'만 한다 — weeklyGoalReq(승인 대기)에 저장, 실제 적용(weeklyGoalH)은 관리자 승인 후.
-window.setStudentWeeklyGoal = async function() {
-  if (!currentStudent) return;
-  const cur = (typeof currentStudent.weeklyGoalReq === 'number' ? currentStudent.weeklyGoalReq : (Number(currentStudent.weeklyGoalH) || 0));
-  const raw = prompt('주간 목표순공(시간)을 신청하세요.\n\n관리자 승인 후 적용됩니다. 한 주(월~토) 순공이\n목표 이상이면 상점 2점이 자동 부여됩니다. (미달 시 벌점 없음)', cur ? String(cur) : '');
-  if (raw === null) return; // 취소
-  const num = Math.max(0, Math.min(80, Math.round(Number(raw) || 0)));
-  currentStudent.weeklyGoalReq = num;
-  try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
-  renderWeeklyGoalCard();
-  try {
-    const seatKey = String(currentStudent.seat || '').replace('번', '');
-    await window._fsSetDoc(window._fsDoc(window._db, 'students', seatKey), { weeklyGoalReq: num }, { merge: true });
-    if (window.showToast) showToast(`✅ 주 ${num}시간 신청 — 관리자 승인 대기중`);
-  } catch(e) { console.error('주간 목표 신청 실패:', e); alert('신청 실패: ' + (e.message || e)); }
-};
 
 // ── 내 상점 조회/표시 (오늘 일정 탭 상단, 벌점 카드 위) ──
 // merits/{autoId} 문서 — 관리자가 수동 부여. { name, seatKey, date, day, points, reason, canceled }
@@ -1837,8 +1818,7 @@ async function tryLogin() {
             loginPin: v.loginPin || '',
             schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
             hours: v.hours || {},
-            weeklyGoalH: Number(v.weeklyGoalH) || 0,
-            weeklyGoalReq: (typeof v.weeklyGoalReq === 'number' ? v.weeklyGoalReq : null)
+            weeklyGoalH: Number(v.weeklyGoalH) || 0
           });
         }
       });
