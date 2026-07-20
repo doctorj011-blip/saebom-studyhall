@@ -1616,20 +1616,18 @@ async function clearReturnedPenalties(periodsList) {
       if (p && p.type !== 'noshow') { delete periods[k]; changed = true; }
     });
     if (!changed) return;
-    if (Object.keys(periods).length === 0) {
-      // 남은 벌점 교시가 없으면 문서 자체를 삭제
-      await window._fsDeleteDoc(ref);
-    } else {
-      await window._fsSetDoc(ref, {
-        name: currentStudent.name,
-        seat: currentStudent.seat,
-        seatKey: seatKey,
-        date: dateStr,
-        day: todayDay,
-        periods: periods,
-        updatedAt: window._fsServerTimestamp()
-      });
-    }
+    // 남은 교시가 없어도 문서를 지우지 않고 periods를 빈 맵으로 저장한다.
+    // (firestore.rules는 penalties delete를 막아 둠 — 삭제하면 PERMISSION_DENIED로
+    //  조용히 실패해 벌점이 그대로 남았다. 빈 periods는 모든 앱에서 0점으로 집계됨.)
+    await window._fsSetDoc(ref, {
+      name: currentStudent.name,
+      seat: currentStudent.seat,
+      seatKey: seatKey,
+      date: dateStr,
+      day: todayDay,
+      periods: periods,
+      updatedAt: window._fsServerTimestamp()
+    });
     loadMyPenalties(); // 벌점 카드 갱신
   } catch(e) { console.warn('벌점 취소 실패:', e); }
 }
