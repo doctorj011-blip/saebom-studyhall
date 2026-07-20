@@ -123,9 +123,10 @@ service cloud.firestore {
 
     // 설정: 앱이 실제로 쓰는 문서만 허용
     // admin_auth = 관리자 기기 등록 마스터 비밀번호(salt+PBKDF2 해시). read는 검증에 필요.
+    // vacation_mode = 방학 시간표(평일도 1~11교시). 3개 앱이 read, 관리자앱 설정 탭이 write.
     match /settings/{id} {
       allow read: if true;
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'admin_auth', 'seatSelection'];
+      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'admin_auth', 'seatSelection', 'vacation_mode'];
     }
 
     // 문자 발송 로그

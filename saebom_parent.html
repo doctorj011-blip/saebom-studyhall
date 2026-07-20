@@ -542,6 +542,12 @@ const PERIODS_SAT = [
   {n:9,label:'9교시',t:'20:30~22:00'},{n:10,label:'10교시',t:'22:30~23:50'},
   {n:11,label:'11교시',t:'00:00~01:00'},
 ];
+// ── 방학 시간표(settings/vacation_mode) ──
+// 학기 중 평일은 7~11교시(저녁)만, 방학에는 평일도 토요일과 같은 1~11교시를 운영한다.
+// 관리자앱 설정 탭의 '🌞 방학 시간표' 토글이 이 값을 바꾸고 3개 앱이 같은 문서를 읽는다.
+let VACATION_MODE = false;
+function isSatLike(dayName) { return dayName === '토' || VACATION_MODE; }
+
 // ── 누적시간 key 헬퍼 (YYYY-MM) — 정의는 saebom-common.js 한 곳에만 둔다 ──
 // 아래 폴백은 common.js 로드 실패(배포 누락) 시 앱이 통째로 죽는 것만 막는 비상용.
 // ⚠️ 내용 수정은 반드시 saebom-common.js 에서 (세 앱 동작 불일치 방지).
@@ -695,9 +701,23 @@ async function refreshParentData() {
   } catch(e) { console.error('학부모 데이터 갱신 실패:', e); }
 }
 
+// 방학 시간표 구독 — 켜지면 시간표 표에 평일 1~6교시 행이 함께 표시된다.
+function startVacationModeRealtime() {
+  if (!window._onSnapshot || !window._db) return;
+  try {
+    window._onSnapshot(window._doc(window._db, 'settings', 'vacation_mode'), snap => {
+      const next = snap.exists() ? !!snap.data().enabled : false;
+      if (next === VACATION_MODE) return;
+      VACATION_MODE = next;
+      try { loadSchedule(); } catch(e) { console.error('방학 시간표 반영 실패:', e); }
+    });
+  } catch(e) { /* 실패해도 학기 시간표로 표시 */ }
+}
+
 async function loadAllData() {
   await startStatusRealtime();  // 실시간 먼저
   startScheduleRealtime();      // 스케줄도 실시간 구독
+  startVacationModeRealtime();  // 방학/학기 교시 구성
   loadNotices();
   refreshParentData();          // 최신 hours 재조회 (캐시 갱신)
   loadParentPenalties();        // 스케줄 변경 벌점 내역
@@ -1206,8 +1226,8 @@ function loadSchedule() {
   PERIODS_SAT.forEach(p => {
     html += `<tr><td style="font-size:10px;color:#888;white-space:nowrap">${p.n}교시</td>`;
     DAYS.forEach(day => {
-      // 평일은 1~6교시 없음
-      if (day !== '토' && p.n <= 6) { html += '<td></td>'; return; }
+      // 학기 중 평일은 1~6교시 없음 (방학이면 평일도 1~11교시 운영)
+      if (!isSatLike(day) && p.n <= 6) { html += '<td></td>'; return; }
 
       const base = parseScheduleStr(getBaseDayStr(day));
       const changedStr = _changedSchedule ? _changedSchedule[day] : null;

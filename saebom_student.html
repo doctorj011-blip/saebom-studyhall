@@ -1467,6 +1467,15 @@ const PERIODS_SAT = [
   {n:11,label:'11교시',t:'00:00~01:00'},
 ];
 
+// ── 방학 시간표(settings/vacation_mode) ──
+// 학기 중 평일은 7~11교시(저녁)만 운영하지만, 방학에는 평일도 토요일과 같은 1~11교시를 운영한다.
+// 관리자앱 설정 탭의 '🌞 방학 시간표' 토글이 이 값을 바꾸고 3개 앱이 같은 문서를 읽는다.
+// ★교시 목록이 필요한 곳은 반드시 periodsFor(요일)를 쓸 것 — day==='토' 직접 비교가 남으면
+//   방학에 그 화면만 오전 교시가 사라진다(2026-07-21 사고: 학생이 입력한 오전 일정이 저장 시 버려짐).
+let VACATION_MODE = false;
+function isSatLike(dayName) { return dayName === '토' || VACATION_MODE; }
+function periodsFor(dayName) { return isSatLike(dayName) ? PERIODS_SAT : PERIODS_WEEK; }
+
 // ── 상태 ──
 let currentStudent = null;
 let currentDayTab = '월';
@@ -1490,7 +1499,7 @@ const PENALTY_LEAD_HOURS = 5;
 
 // 오늘 기준 교시 시작 시각(epoch ms). 11교시(00:00~01:00)는 익일 자정 시작.
 function periodStartMs(pNum, dayName) {
-  const periods = dayName === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const periods = periodsFor(dayName);
   const p = periods.find(q => q.n === pNum);
   if (!p) return null;
   const parts = p.t.split('~')[0].split(':').map(Number);
@@ -1510,7 +1519,7 @@ function computeLatePenalties() {
   const oldSched = currentStudent.schedule[todayDay] || '-';
   const dd = draftSchedule[todayDay];
   if (!dd) return [];
-  const periods = todayDay === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const periods = periodsFor(todayDay);
   const now = Date.now();
   const out = [];
   periods.forEach(p => {
@@ -1581,7 +1590,7 @@ function computePenaltyReversals() {
   const oldSched = currentStudent.schedule[todayDay] || '-';
   const dd = draftSchedule[todayDay];
   if (!dd) return [];
-  const periods = todayDay === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const periods = periodsFor(todayDay);
   const out = [];
   periods.forEach(p => {
     const oldSt = parsePeriodStatus(oldSched, p.n);
@@ -2246,6 +2255,7 @@ function enterApp() {
     checkSeatSelectionActive();
     loadNoticesFromFirebase();
     subscribeScheduleEdit();
+    subscribeVacationMode();
     refreshStudentData();
     loadActualStudyData();
     loadEventsList();
@@ -2257,6 +2267,7 @@ function enterApp() {
       checkSeatSelectionActive();
       loadNoticesFromFirebase();
       subscribeScheduleEdit();
+      subscribeVacationMode();
       refreshStudentData();
       loadActualStudyData();
       loadEventsList();
@@ -2290,6 +2301,25 @@ function subscribeScheduleEdit() {
       scheduleEditEnabled = snap.exists() ? !!snap.data().enabled : false;
       updateScheduleEditBanner();
       buildWeeklyTable();
+    });
+  } catch(e) {}
+}
+
+// 방학 시간표 구독 — 관리자앱 설정 토글이 바뀌면 교시 구성이 즉시 바뀐다.
+// 표(주간·오늘 일정)와 저장 직렬화가 같은 값을 봐야 하므로 반드시 재렌더한다.
+function subscribeVacationMode() {
+  if (!window._firebaseReady) return;
+  try {
+    const db = window._db;
+    const ref = window._fsDoc(db, 'settings', 'vacation_mode');
+    window._fsOnSnapshot(ref, snap => {
+      const next = snap.exists() ? !!snap.data().enabled : false;
+      if (next === VACATION_MODE) return;
+      VACATION_MODE = next;
+      try {
+        buildWeeklyTable();
+        buildDailyPeriods();
+      } catch(e) { console.error('방학 시간표 반영 실패:', e); }
     });
   } catch(e) {}
 }
@@ -2538,7 +2568,7 @@ function selectDayTab(day, btn) {
 
 // ── 요일별 교시 목록 ──
 function buildDailyPeriods() {
-  const periods = currentDayTab === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const periods = periodsFor(currentDayTab);
   const dayDraft = draftSchedule[currentDayTab];
   const el = document.getElementById('daily-periods');
   const isToday = currentDayTab === todayDay;
@@ -2744,7 +2774,7 @@ async function saveSchedule() {
   // 예: 7교시 출석, 8교시 결석(사유), 9교시 출석 → "7,x(사유),9"
   DAYS.forEach(day => {
     const dd = draftSchedule[day];
-    const periods = day === '토' ? PERIODS_SAT : PERIODS_WEEK;
+    const periods = periodsFor(day);
     const tokens = [];
     let hasAny = false;
 
@@ -2854,7 +2884,7 @@ async function saveDailyReportToFirebase(db, seatKey) {
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
     const todayDay = DAY_NAMES[today.getDay()];
     const todayDraft = draftSchedule[todayDay] || {};
-    const periods = todayDay === '토' ? PERIODS_SAT : PERIODS_WEEK;
+    const periods = periodsFor(todayDay);
     const periodsPayload = {};
     periods.forEach(p => {
       periodsPayload[p.n] = todayDraft.periods?.[p.n] || 'none';
@@ -3022,7 +3052,7 @@ let statsView = 'daily';
 
 function _dayMinutes(dayName) {
   if (dayName === '일' || !draftSchedule[dayName]) return 0;
-  const periods = dayName === '토' ? PERIODS_SAT : PERIODS_WEEK;
+  const periods = periodsFor(dayName);
   return periods.reduce((sum, p) => {
     const st = draftSchedule[dayName].periods[p.n];
     // 중간입실(partial)도 출석으로 집계
@@ -3938,7 +3968,7 @@ let studyroomUnsubscribe = null;
 function studyroomPeriodsToday() {
   const today = DAY_NAMES[new Date().getDay()];
   if (today === '일') return null;
-  return today === '토'
+  return isSatLike(today)
     ? [{n:1,t:'09:00~10:00'},{n:2,t:'10:10~11:10'},{n:3,t:'11:20~12:30'},
        {n:4,t:'13:30~14:30'},{n:5,t:'14:40~15:40'},{n:6,t:'15:50~17:00'},
        {n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},

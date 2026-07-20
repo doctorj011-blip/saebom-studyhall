@@ -1511,6 +1511,19 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         </div>
       </div>
 
+      <!-- 방학 시간표 -->
+      <div style="background:#FFF7ED;border:1.5px solid #F5A524;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#7C2D12;margin-bottom:6px">🌞 방학 시간표</div>
+        <div style="font-size:11px;color:#9A3412;margin-bottom:10px">켜면 평일도 토요일과 같이 <b>1~11교시</b>로 운영합니다(오전 1교시 9:00~). 끄면 평일은 7~11교시(저녁)만 표시됩니다. 관리자앱·학생앱·학부모앱에 함께 적용됩니다.</div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button id="vacation-mode-toggle-btn" onclick="toggleVacationMode()"
+            style="padding:8px 18px;background:#bdc1c6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
+            📚 학기 시간표
+          </button>
+          <span id="vacation-mode-status" style="font-size:11px;color:#888"></span>
+        </div>
+      </div>
+
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html" target="_blank"
           style="padding:6px 12px;background:#6C5DD3;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">
@@ -1610,6 +1623,18 @@ const PERIODS_SAT=[
 let PERIODS = PERIODS_WEEKDAY;
 let PERIOD_OFFSET = 6;
 
+// ── 방학 시간표(settings/vacation_mode) ──
+// 학기 중 평일은 7~11교시(저녁)만 운영하지만, 방학에는 평일도 토요일과 같은 1~11교시를 운영한다.
+// 이 값이 true면 '평일'을 토요일과 동일하게 취급한다 — 교시 목록·시간대·표 열·저장 형식 전부.
+// ★단일 진입점: 요일별 교시 구성을 판단하는 곳은 반드시 isSatLike()/periodsForDay()를 쓸 것.
+//   (day==='토' 직접 비교가 남아 있으면 방학에 그 화면만 오전 교시가 사라진다 — 2026-07-21 사고 원인)
+let VACATION_MODE = false;
+function isSatLike(day) { return day === '토' || VACATION_MODE; }
+function periodsForDay(day) { return isSatLike(day) ? PERIODS_SAT : PERIODS_WEEKDAY; }
+function allPeriodsForDay(day) { return isSatLike(day) ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK; }
+window.isSatLike = isSatLike;
+window.periodsForDay = periodsForDay;
+
 // ── 현재 교시 표시 ──
 // PERIODS_* 의 시각 문자열('6:00~6:50' 등)은 12시간제라 오전/오후가 모호하다.
 // 하루가 아침→밤→자정 넘김 순으로 '단조 증가'한다는 성질을 이용해 24시간(분) 값으로 해석한다.
@@ -1641,8 +1666,9 @@ function _currentPeriodInfo(now){
   const effDay = h < 3 ? (now.getDay() + 6) % 7 : now.getDay();
   let nowMin = h*60 + now.getMinutes();
   if (h < 3) nowMin += 1440; // 자정 넘긴 시각을 확장 스케일(24:00~)로
+  // 방학에는 평일도 토요일과 같은 1~11교시 시간대를 쓴다
   const list = (effDay === 6) ? _PERIOD_MIN_SAT
-             : (effDay >= 1 && effDay <= 5) ? _PERIOD_MIN_WEEKDAY
+             : (effDay >= 1 && effDay <= 5) ? (VACATION_MODE ? _PERIOD_MIN_SAT : _PERIOD_MIN_WEEKDAY)
              : null; // 일요일(0) → 휴관
   if (!list) return { phase: 'closed' };
   for (const p of list) if (nowMin >= p.startMin && nowMin < p.endMin) return { phase: 'in', current: p };
@@ -2765,6 +2791,7 @@ function loadSettingsTab() {
   //     module 의 loadSolapiConfigFromCloud() 가 최신값으로 덮어쓰게 한다.
   loadSeatSelectionStatus();
   loadScheduleEditStatus();
+  loadVacationModeStatus();
   try {
     const k = document.getElementById('cfg-key');
     const s = document.getElementById('cfg-secret');
@@ -2840,6 +2867,83 @@ window.toggleScheduleEdit = async function() {
     showAdminToast(next ? '✅ 주간 시간표 수정 허용됨' : '🔒 주간 시간표 수정 잠금됨');
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
+// ── 방학 시간표 토글 (settings/vacation_mode) ──
+// 3개 앱이 같은 문서를 읽는다. 값이 바뀌면 표·모달의 교시 구성이 즉시 1~11교시로 바뀐다.
+function applyVacationMode(enabled) {
+  const changed = VACATION_MODE !== !!enabled;
+  VACATION_MODE = !!enabled;
+  updateVacationModeBtn(VACATION_MODE);
+  if (changed) {
+    // 교시 구성이 달라졌으므로 열려 있는 표를 다시 그린다
+    try {
+      if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || '월');
+      if (window.buildDashboard) window.buildDashboard();
+      if (window.updateNowPeriodChip) window.updateNowPeriodChip();
+    } catch(e) { console.error('방학 시간표 반영 실패:', e); }
+  }
+}
+window.applyVacationMode = applyVacationMode;
+
+function updateVacationModeBtn(enabled) {
+  const btn = document.getElementById('vacation-mode-toggle-btn');
+  const status = document.getElementById('vacation-mode-status');
+  if (!btn) return;
+  if (enabled === null) {
+    btn.textContent = '⚠️ 상태 확인 실패';
+    btn.style.background = '#E0A800';
+    if (status) { status.textContent = '새로고침 후 다시 확인하세요'; status.style.color = '#B45309'; }
+    btn.dataset.enabled = '';
+    return;
+  }
+  if (enabled) {
+    btn.textContent = '🌞 방학 시간표 (1~11교시)';
+    btn.style.background = '#F5A524';
+    if (status) { status.textContent = '평일도 오전 1교시부터 운영합니다'; status.style.color = '#9A3412'; }
+  } else {
+    btn.textContent = '📚 학기 시간표 (7~11교시)';
+    btn.style.background = '#bdc1c6';
+    if (status) { status.textContent = '평일은 저녁 7교시부터 운영합니다'; status.style.color = '#888'; }
+  }
+  btn.dataset.enabled = enabled ? '1' : '0';
+}
+
+async function loadVacationModeStatus() {
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('DB 연결 대기 시간 초과');
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'vacation_mode'));
+    applyVacationMode(snap.exists() ? !!snap.data().enabled : false);
+  } catch(e) {
+    console.error('방학 시간표 상태 조회 실패:', e);
+    updateVacationModeBtn(null);
+  }
+}
+window.loadVacationModeStatus = loadVacationModeStatus;
+
+window.toggleVacationMode = async function() {
+  try {
+    const db = await window.waitDb();
+    if (!db) { showAdminToast('❌ DB 연결 실패 — 잠시 후 다시 시도하세요'); return; }
+    const btn = document.getElementById('vacation-mode-toggle-btn');
+    // 상태 조회에 실패했으면(dataset 비어 있음) 화면값을 믿지 않고 실제 값을 다시 읽는다
+    if (btn.dataset.enabled !== '0' && btn.dataset.enabled !== '1') {
+      const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'vacation_mode'));
+      applyVacationMode(snap.exists() ? !!snap.data().enabled : false);
+      showAdminToast('🔄 현재 상태를 불러왔습니다 — 다시 눌러 변경하세요');
+      return;
+    }
+    const next = btn.dataset.enabled !== '1';
+    if (next && !confirm('방학 시간표로 전환할까요?\n\n평일도 1~11교시로 운영됩니다.\n(기존에 입력된 저녁 7~11교시 일정은 그대로 유지되고, 오전 1~6교시 칸이 새로 열립니다)')) return;
+    if (!next && !confirm('학기 시간표로 되돌릴까요?\n\n평일 오전 1~6교시 칸이 화면에서 사라집니다.\n(저장된 값 자체는 지워지지 않지만, 이후 학생·관리자가 그 요일을 저장하면 오전 일정은 사라집니다)')) return;
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'vacation_mode'), {
+      enabled: next,
+      updatedAt: window._fsServerTimestamp()
+    });
+    applyVacationMode(next);
+    showAdminToast(next ? '🌞 방학 시간표로 전환됨 (평일 1~11교시)' : '📚 학기 시간표로 전환됨 (평일 7~11교시)');
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
+
 window.saveSettingsFromTab = function() {
   const apiKey    = document.getElementById('cfg-key').value.trim();
   const apiSecret = document.getElementById('cfg-secret').value.trim();
@@ -3873,8 +3977,8 @@ function getCellContent(sched, pidx) {
 }
 
 function buildScheduleTable(day){
-  // 토요일은 1~11교시 전체, 평일은 7~11교시만
-  if(day==='토'){
+  // 토요일(및 방학 중 평일)은 1~11교시 전체, 학기 중 평일은 7~11교시만
+  if(isSatLike(day)){
     PERIODS=PERIODS_SAT; PERIOD_OFFSET=0;
   } else {
     PERIODS=PERIODS_WEEKDAY; PERIOD_OFFSET=6;
@@ -4324,8 +4428,8 @@ function buildDashboard(){
     </div>`;
   }).join('')+'</div>';
 
-  // 오늘 요일 기준 교시별 실제 입실 학생 기준 출석현황
-  const todayPeriods = PERIODS_WEEKDAY;
+  // 오늘 요일 기준 교시별 실제 입실 학생 기준 출석현황 (방학이면 평일도 1~11교시)
+  const todayPeriods = periodsForDay(getTodayDayName());
   // 현재 입실 중인 학생 이름 목록
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
 
@@ -4909,9 +5013,10 @@ window.checkinConfirm = function() {
     const is7thOrLater = curMin >= 18 * 60; // 18:00 이후
     // 운영일 기준(새벽 3시 경계) 요일 — getCurrentPeriod의 effDay와 동일. 토요일이면 종일 예약제
     const effDay = now.getHours() < 3 ? (now.getDay() + 6) % 7 : now.getDay();
-    const isSat = effDay === 6;
+    // 방학에는 평일도 오전 1교시부터 운영하므로 토요일과 같이 종일 배정 대상
+    const isAllDay = effDay === 6 || VACATION_MODE;
 
-    if (curPeriod && (isSat || is7thOrLater)) {
+    if (curPeriod && (isAllDay || is7thOrLater)) {
       // 교시 중 입실 — 스터디룸 배정 (단독 사용 룸 제외, 본인 단독 룸 우선)
       // 평일은 18:00 이후만, 토요일은 오전 1교시부터 배정
       isDuringPeriod = true;
@@ -6459,8 +6564,8 @@ function draftToStr(draft, isSat) {
   if (!draft.partialTimes) draft.partialTimes = {};
   if (draft.periods.size === 0 && draft.absentPeriods.size === 0) return '-';
 
-  // 토요일은 1~11, 평일은 7~11만 출력
-  const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+  // 토요일(및 방학 중 평일)은 1~11, 학기 중 평일은 7~11만 출력
+  const validPeriods = isSat ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK;
   const parts = [];
   for (const p of validPeriods) {
     if (draft.absentPeriods.has(p)) {
@@ -6489,12 +6594,12 @@ function renderScheduleModal() {
   </div>`;
 
   DAYS.forEach(day => {
-    const isSat = day === '토';
-    const availPeriods = isSat ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK;
+    const isSat = isSatLike(day);
+    const availPeriods = allPeriodsForDay(day);
     const draft = _schedDraft[day];
 
     html += `<div class="sched-day-row">
-      <div class="sched-day-label${isSat?' sat':''}">${day}요일</div>
+      <div class="sched-day-label${day==='토'?' sat':''}">${day}요일</div>
       <div>
         <div class="sched-periods">`;
 
@@ -6738,7 +6843,7 @@ function saveSchedule(commitBase) {
     });
   } else {
     DAYS.forEach(day => {
-      s.schedule[day] = draftToStr(_schedDraft[day], day === '토');
+      s.schedule[day] = draftToStr(_schedDraft[day], isSatLike(day));
     });
   }
 
@@ -6781,8 +6886,11 @@ function showPeriodStudents(periodIdx) {
   const old = document.getElementById('period-popup-overlay');
   if (old) old.remove();
 
-  const p = PERIODS_WEEKDAY[periodIdx];
-  const pNum = periodIdx + 7; // 평일 교시는 7교시부터
+  // 대시보드 교시 카드와 같은 목록을 써야 인덱스가 어긋나지 않는다(방학이면 1~11교시)
+  const _periods = periodsForDay(getTodayDayName());
+  const p = _periods[periodIdx];
+  if (!p) return;
+  const pNum = parseInt(p.n); // '7교시' → 7
 
   // 해당 교시 출석 예정 학생 전체 + 그중 실제 입실 중인 학생 구분
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
@@ -8815,6 +8923,16 @@ window._syncScheduleClasses = async function(classesArr) {
   } catch(e) { console.error('반(수업 블록) 로드 실패:', e); }
 })();
 
+// ── 방학 시간표(settings/vacation_mode) 실시간 구독 ──
+// 앱 시작 시점부터 필요하다(스케줄 표의 교시 열 구성이 이 값에 달려 있음).
+// 설정 탭을 열지 않아도 반영되어야 하고, 키오스크 2대가 같은 값을 보게 실시간 구독한다.
+onSnapshot(doc(db, 'settings', 'vacation_mode'), (snap) => {
+  const enabled = snap.exists() ? !!snap.data().enabled : false;
+  if (window.applyVacationMode) window.applyVacationMode(enabled);
+}, (error) => {
+  console.error('❌ 방학 시간표 구독 에러:', error);
+});
+
 function _syncStudyRoomStudents() {
   // studyRoomStudents(현재 사용자)·studyRoomWaiting(다음 교시 대기자) 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
@@ -9957,6 +10075,9 @@ const NOSHOW_POINTS = 2;
 const NOSHOW_LOOKBACK_DAYS = 3;
 // 교시 시작·종료(그날 자정 기준 분). getCurrentPeriod()의 PERIOD_TIMES와 동일 값.
 // 11교시는 익일 00:00~01:00 = 1440~1500분.
+// 방학 평일 오전(1~6교시) 무단결석 판정 시작일 — 이 날짜(포함)부터 오전 교시도 2점 대상.
+// 토요일 오전은 이 값과 무관하게 원래부터 판정된다.
+const NOSHOW_WEEKDAY_MORNING_FROM = '2026-07-22';
 const NOSHOW_PERIOD_TIMES = {
   1:[540,600], 2:[610,670], 3:[680,750], 4:[810,870], 5:[880,940], 6:[950,1020],
   7:[1080,1130], 8:[1140,1220], 9:[1230,1320], 10:[1350,1430], 11:[1440,1500]
@@ -10051,6 +10172,10 @@ async function _assessNoShowForDate(dIso, d0, dayName) {
       const sessions = sessByName[name] || [];
       const missed = [];
       parsed.periods.forEach(pn => { // periods = o + △(중간입실) 모두 '출석 예정'
+        // 방학 평일 오전(1~6교시) 무단결석 판정은 2026-07-22부터 적용(사용자 확정).
+        // 그 전 날짜는 오전 교시가 운영되지 않았거나 전환 과도기라 소급 판정하지 않는다.
+        // ※토요일 오전은 원래부터 판정 대상이므로 제외하지 않는다.
+        if (pn <= 6 && dayName !== '토' && dIso < NOSHOW_WEEKDAY_MORNING_FROM) return;
         const w = NOSHOW_PERIOD_TIMES[pn];
         if (!w) return;
         const ps = d0 + w[0] * 60000, pe = d0 + w[1] * 60000;
@@ -10444,10 +10569,34 @@ async function _claimAutoSms(alertId) {
 
 function _autoHandleScheduleChange(alertObj) {
   const student = (window.STUDENTS || []).find(s => s.seat === alertObj.seat);
-  if (!student) return;
+  if (!student) {
+    // students 문서보다 schedules 문서가 먼저 도착한 경우(신규 등록 직후 등). 한 번만 재시도한다 —
+    // 여기서 그냥 버리면 그 변경은 students 컬렉션에 영영 반영되지 않는다.
+    if (!alertObj._retried) {
+      alertObj._retried = true;
+      setTimeout(() => _autoHandleScheduleChange(alertObj), 3000);
+    } else {
+      console.warn('[스케줄 자동적용] STUDENTS에 없는 좌석 — 건너뜀:', alertObj.seat, alertObj.studentName);
+    }
+    return;
+  }
   // 1) 즉시 적용 — 켜져 있는 모든 기기가 각자 실행(같은 값 저장이라 멱등), 관리자 표 즉시 갱신.
   //    '변동'으로 저장되므로(base 유지) 다음날 새벽 2시에 고정 시간표로 자동 복구된다.
-  alertObj.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
+  //
+  // ★변경분(changes)만 덮어쓰면 안 된다 — 이어지는 saveScheduleToFirebase는 로컬 student.schedule의
+  //   6개 요일을 통째로 setDoc 하기 때문이다. 학생앱은 schedules만 쓰고 students는 쓰지 않으므로,
+  //   이 기기가 꺼져 있던 동안의 변경은 로컬 STUDENTS(=students 컬렉션 사본)에 없다. 그 상태로
+  //   6일치를 되쓰면 손대지 않은 요일이 옛 값으로 되돌아간다(학생의 이전 변경이 조용히 사라짐).
+  //   → schedules 문서(alertObj.full)가 항상 students보다 최신이므로 그것을 기준값으로 삼는다.
+  //     (관리자 저장·새벽 리셋은 students와 schedules를 함께 쓰므로 두 컬렉션이 어긋나지 않는다)
+  const _full = alertObj.full;
+  if (_full) {
+    ['월','화','수','목','금','토'].forEach(d => {
+      if (typeof _full[d] === 'string') student.schedule[d] = _full[d];
+    });
+  } else {
+    alertObj.changes.forEach(c => { student.schedule[c.day] = c.newVal; });
+  }
   // origin='student' — 학생이 신청한 값을 그대로 적용하는 것이므로 daily_reports에 학생발로 남긴다
   // (이걸 'admin'으로 남기면 변동판이 학생 신청을 '관리자 변경'으로 잘못 표시한다)
   if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student, false, 'student').catch(console.error);
@@ -10534,7 +10683,9 @@ onSnapshot(collection(db, 'schedules'), (snapshot) => {
     // 2026-07-10: 알림 카드를 만들지 않고 곧바로 자동 적용 + 알림톡 자동 발송
     // (구 카드 파이프라인 — scheduleAlerts/_meta_schedule_alerts 공유/적용·문자 버튼 — 은
     //  배포 전 남은 알림 표시·처리를 위해 코드만 유지한다. 새 알림은 더 이상 생성되지 않는다.)
-    _autoHandleScheduleChange({ seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt });
+    // full = schedules 문서 전체(6개 요일). 자동적용이 로컬 캐시가 아니라 이 값을 기준으로
+    // 되쓰게 해서, 이 기기가 놓쳤던 요일이 옛 값으로 되돌아가는 것을 막는다.
+    _autoHandleScheduleChange({ seat, studentName: data.name || seat, changes: dayChanges, updatedAt: data.updatedAt, full: data });
   });
 
   _schedulesInitDone = true;  // 첫 콜백 이후 초기 로딩 완료 — 이후 added는 신규 저장으로 감지
@@ -11408,8 +11559,7 @@ async function _sendScheduleAlimtalk(student, changes) {
   // 변경분(diff)이 아니라 "그날 현재 전체 일정"을 표시한다.
   let changeLines = [];
   Object.keys(byDay).forEach(day => {
-    const isSat = day === '토';
-    const validPeriods = isSat ? [1,2,3,4,5,6,7,8,9,10,11] : [7,8,9,10,11];
+    const validPeriods = allPeriodsForDay(day);
     const dayChanges = byDay[day];
     // 같은 날 변경이 여러 건이면 가장 마지막(최신) 값이 현재 일정
     const latest = dayChanges[dayChanges.length - 1];
@@ -11795,8 +11945,9 @@ window.adminForceCheckin = function(name) {
   let curMin = now.getHours() * 60 + now.getMinutes();
   if (now.getHours() < 3) curMin += 1440; // 자정 넘김(11교시)도 전날 밤으로 취급
   const effDay = now.getHours() < 3 ? (now.getDay() + 6) % 7 : now.getDay();
-  const isSat = effDay === 6;
-  if (curPeriod && (isSat || curMin >= 18 * 60) && !window.isAdminSeat(student.seat)) {
+  // 방학에는 평일도 오전 1교시부터 운영하므로 토요일과 같이 종일 배정 대상
+  const isAllDay = effDay === 6 || window.isSatLike('월');
+  if (curPeriod && (isAllDay || curMin >= 18 * 60) && !window.isAdminSeat(student.seat)) {
     // 단독 사용(lock) 룸 제외·본인 단독 룸 우선 — 키오스크 입실과 동일 로직
     assignedRoom = autoAssignStudyroom(student, curPeriod);
   }
