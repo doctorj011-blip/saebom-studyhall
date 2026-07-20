@@ -2798,14 +2798,22 @@ async function loadSeatSelectionStatus() {
 }
 
 function loadSettingsTab() {
-  const k = document.getElementById('cfg-key');
-  const s = document.getElementById('cfg-secret');
-  const sn = document.getElementById('cfg-sender');
-  if (k) k.value = SOLAPI_API_KEY;
+  // ★ SOLAPI_API_KEY/SECRET/SENDER 는 module 스크립트 최상위 let 이라 '그 모듈 안에서만' 보인다.
+  //   classic 인 이 함수에서 식별자로 읽으면 항상 ReferenceError → 함수가 그 줄에서 중단되어
+  //   아래 상태 조회 두 개가 영영 실행되지 않았다(좌석 선택·주간 시간표 수정 허용 표시가 계속 초기값).
+  //   탭 복원 경로의 catch(e){} 가 에러를 삼켜 콘솔에도 안 보였다.
+  //   → 상태 조회를 먼저 하고, 입력칸은 localStorage 캐시로 채운 뒤
+  //     module 의 loadSolapiConfigFromCloud() 가 최신값으로 덮어쓰게 한다.
   loadSeatSelectionStatus();
   loadScheduleEditStatus();
-  if (s) s.value = SOLAPI_API_SECRET;
-  if (sn) sn.value = SOLAPI_SENDER;
+  try {
+    const k = document.getElementById('cfg-key');
+    const s = document.getElementById('cfg-secret');
+    const sn = document.getElementById('cfg-sender');
+    if (k) k.value = localStorage.getItem('solapi_api_key') || '';
+    if (s) s.value = localStorage.getItem('solapi_api_secret') || '';
+    if (sn) sn.value = localStorage.getItem('solapi_sender') || '';
+  } catch(e) { console.error('솔라피 설정 표시 실패:', e); }
   // 클라우드에서 최신 설정을 다시 불러와 입력칸을 채움 (localStorage가 비었어도 복원됨)
   if (window.loadSolapiConfigFromCloud) window.loadSolapiConfigFromCloud();
 }
