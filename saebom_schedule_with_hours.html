@@ -2768,8 +2768,8 @@ async function doRandomAssignment() {
 
 async function loadSeatSelectionStatus() {
   try {
-    const db = window._adminDb;
-    if (!db) return;
+    const db = await window.waitDb();   // 위 loadScheduleEditStatus 와 같은 이유 (모듈 로드 경합)
+    if (!db) throw new Error('DB 연결 대기 시간 초과');
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
     if (!snap.exists()) return;
     const d = snap.data();
@@ -2790,7 +2790,7 @@ async function loadSeatSelectionStatus() {
       statusEl.textContent = '비활성화됨';
       statusEl.style.color = '#888';
     }
-  } catch(e) {}
+  } catch(e) { console.error('좌석 선택 상태 조회 실패:', e); }
 }
 
 function loadSettingsTab() {
@@ -2807,19 +2807,33 @@ function loadSettingsTab() {
 }
 
 async function loadScheduleEditStatus() {
+  // ★ window._adminDb 를 그냥 읽으면 모듈 스크립트가 아직 세팅 전일 때 조용히 빠져나가고,
+  //   버튼이 HTML 초기값('🔒 수정 잠금 중')에 멈춰 실제 허용 상태를 잠금으로 오표시했다.
+  //   waitDb()로 준비를 기다리고, 실패는 삼키지 말고 '확인 실패'로 드러낸다.
   try {
-    const db = window._adminDb;
-    if (!db) return;
+    const db = await window.waitDb();
+    if (!db) throw new Error('DB 연결 대기 시간 초과');
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'schedule_edit'));
     const enabled = snap.exists() ? !!snap.data().enabled : false;
     updateScheduleEditBtn(enabled);
-  } catch(e) {}
+  } catch(e) {
+    console.error('주간 시간표 수정 허용 상태 조회 실패:', e);
+    updateScheduleEditBtn(null);
+  }
 }
 
 function updateScheduleEditBtn(enabled) {
   const btn = document.getElementById('schedule-edit-toggle-btn');
   const status = document.getElementById('schedule-edit-status');
   if (!btn) return;
+  if (enabled === null) {
+    // 상태를 모르는 것과 '잠금'은 다르다 — 모를 때 잠금으로 보이면 안 된다.
+    btn.textContent = '⚠️ 상태 확인 실패';
+    btn.style.background = '#E0A800';
+    if (status) { status.textContent = '새로고침 후 다시 확인하세요'; status.style.color = '#B45309'; }
+    btn.dataset.enabled = '';
+    return;
+  }
   if (enabled) {
     btn.textContent = '✏️ 수정 허용 중';
     btn.style.background = '#6C5DD3';
@@ -2834,9 +2848,17 @@ function updateScheduleEditBtn(enabled) {
 
 window.toggleScheduleEdit = async function() {
   try {
-    const db = window._adminDb;
-    if (!db) return;
+    const db = await window.waitDb();
+    if (!db) { showAdminToast('❌ DB 연결 실패 — 잠시 후 다시 시도하세요'); return; }
     const btn = document.getElementById('schedule-edit-toggle-btn');
+    // dataset 이 비어 있으면(초기 조회 실패) 화면값을 믿지 말고 실제 값을 다시 읽는다.
+    // 안 그러면 '허용 중'인데 잠금으로 보이던 상태에서 눌러도 다시 허용을 쓸 뿐 잠기지 않는다.
+    if (btn.dataset.enabled !== '0' && btn.dataset.enabled !== '1') {
+      const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'schedule_edit'));
+      updateScheduleEditBtn(snap.exists() ? !!snap.data().enabled : false);
+      showAdminToast('🔄 현재 상태를 불러왔습니다 — 다시 눌러 변경하세요');
+      return;
+    }
     const nowEnabled = btn.dataset.enabled === '1';
     const next = !nowEnabled;
     await window._fsSetDoc(window._fsDoc(db, 'settings', 'schedule_edit'), {
