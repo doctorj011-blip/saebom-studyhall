@@ -2882,14 +2882,18 @@ window.toggleScheduleEdit = async function() {
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 window.saveSettingsFromTab = function() {
-  SOLAPI_API_KEY    = document.getElementById('cfg-key').value.trim();
-  SOLAPI_API_SECRET = document.getElementById('cfg-secret').value.trim();
-  SOLAPI_SENDER     = document.getElementById('cfg-sender').value.trim().replace(/-/g,'');
-  localStorage.setItem('solapi_api_key', SOLAPI_API_KEY);
-  localStorage.setItem('solapi_api_secret', SOLAPI_API_SECRET);
-  localStorage.setItem('solapi_sender', SOLAPI_SENDER);
-  if (window.saveSolapiConfigToCloud) window.saveSolapiConfigToCloud();
+  const apiKey    = document.getElementById('cfg-key').value.trim();
+  const apiSecret = document.getElementById('cfg-secret').value.trim();
+  const sender    = document.getElementById('cfg-sender').value.trim().replace(/-/g,'');
   const st = document.getElementById('cfg-status');
+  // ★ 여기서 SOLAPI_* 에 직접 대입하면 안 된다 — 그건 module 스코프 변수라 안 바뀌고,
+  //   window 전역만 생긴 채 saveSolapiConfigToCloud() 가 옛 값을 클라우드에 덮어써
+  //   새로 넣은 키가 다음 로드 때 되돌아간다. 반드시 module 이 노출한 통로를 쓴다.
+  if (!window.applySolapiConfig) {
+    if (st) { st.textContent = '❌ 아직 준비 중입니다 — 잠시 후 다시 저장하세요'; setTimeout(()=>st.textContent='', 3000); }
+    return;
+  }
+  window.applySolapiConfig({ apiKey, apiSecret, sender });
   if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
 };
 
@@ -11213,6 +11217,19 @@ window.saveSolapiConfigToCloud = async function() {
       updatedAt: window._fsServerTimestamp()
     });
   } catch(e) {}
+};
+
+// classic 스크립트에서 솔라피 설정을 바꾸는 유일한 통로.
+// classic 은 이 모듈의 SOLAPI_* 를 볼 수 없다(module 최상위 let = 모듈 스코프).
+// 거기서 `SOLAPI_API_KEY = ...` 로 대입하면 sloppy 모드라 에러 없이 window 전역만 새로 생기고,
+// 실제 발송이 쓰는 이 변수들은 그대로다. 그 상태로 saveSolapiConfigToCloud() 를 부르면
+// '옛 값'이 클라우드에 덮여, 다음 로드 때 새로 넣은 키가 되돌아간다.
+window.applySolapiConfig = function(cfg) {
+  cfg = cfg || {};
+  if (cfg.apiKey    != null) { SOLAPI_API_KEY    = cfg.apiKey;    localStorage.setItem('solapi_api_key', cfg.apiKey); }
+  if (cfg.apiSecret != null) { SOLAPI_API_SECRET = cfg.apiSecret; localStorage.setItem('solapi_api_secret', cfg.apiSecret); }
+  if (cfg.sender    != null) { SOLAPI_SENDER     = cfg.sender;    localStorage.setItem('solapi_sender', cfg.sender); }
+  return window.saveSolapiConfigToCloud();   // 갱신된 값으로 클라우드 저장
 };
 
 // 앱 시작 시 클라우드에서 설정 복원
