@@ -164,6 +164,8 @@ body.admin-device .topbar-tabs{display:flex}
 .month-tabs{display:flex;gap:4px}
 .month-tab{padding:5px 11px;border:0.5px solid var(--color-border-secondary);border-radius:20px;cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary);transition:all 0.15s}
 .month-tab.active{background:#5546C4;color:#fff;border-color:#5546C4}
+/* SUMMER 탭 — 월 탭과 구분되는 특강 전용 강조 */
+.month-tab.summer-tab{margin-left:8px;font-weight:600;color:#B45309;border-color:#FDE68A;background:#FFFBEB}
 .view-toggle{display:flex;gap:4px}
 .view-btn{padding:5px 10px;border:0.5px solid var(--color-border-secondary);border-radius:var(--border-radius-md);cursor:pointer;font-size:12px;background:var(--color-background-primary);color:var(--color-text-secondary)}
 .view-btn.active{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
@@ -525,6 +527,8 @@ body{letter-spacing:-0.012em;
 .day-tab:hover,.month-tab:hover{border-color:var(--sb-gold-light);color:var(--sb-gold-dark)}
 .day-tab.active{background:linear-gradient(135deg,var(--sb-gold-light),var(--sb-gold));border-color:transparent;color:#fff;box-shadow:0 3px 10px rgba(108,93,211,.30)}
 .month-tab.active{background:linear-gradient(135deg,#5546C4,#5546C4);border-color:transparent;box-shadow:0 3px 10px rgba(85,70,196,.28)}
+.month-tab.summer-tab:hover{border-color:#F59E0B;color:#92400E}
+.month-tab.summer-tab.active{background:linear-gradient(135deg,#FBBF24,#F59E0B);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(245,158,11,.32)}
 
 /* ── 버튼 : 그라데이션 + 그림자 + 눌림 피드백 ── */
 .add-btn,.sched-save-btn,.range-btn-primary,.cbtn-ok,.confirm-ok,.sc-apply-btn,.class-pop-foot .cbtn-ok{
@@ -978,7 +982,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <input type="date" id="hours-range-start" class="range-input">
     <span style="color:var(--color-text-tertiary)">~</span>
     <input type="date" id="hours-range-end" class="range-input">
-    <button class="range-btn range-btn-primary" onclick="queryHoursRange()">조회</button>
+    <button class="range-btn range-btn-primary" onclick="window._hoursSummerMode=false;queryHoursRange()">조회</button>
     <button class="range-btn" id="hours-range-reset" onclick="resetHoursRange()" style="display:none">✕ 월별 보기로</button>
     <span style="display:flex;gap:4px;flex-wrap:wrap">
       <button class="range-preset" onclick="setHoursRangePreset(7)">최근 7일</button>
@@ -2881,7 +2885,24 @@ window.saveSettingsFromTab = function() {
   if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
 };
 
+// ── SUMMER(여름특강) 기간 ──
+// 시간 탭의 ☀️SUMMER 탭이 조회하는 고정 기간. 특강 일정이 바뀌면 여기만 고치면 된다.
+// (기간조회와 같은 경로를 타므로 92일 상한을 넘지 않게 유지할 것)
+const SUMMER_RANGE = { startISO: '2026-07-20', endISO: '2026-08-31', label: '2026 여름특강' };
+window._hoursSummerMode = false;
+
+// SUMMER 탭 — 특강 기간 전체를 기간조회로 돌려 누적 사용시간을 보여준다
+window.selectSummer = function(el){
+  document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
+  if (el) el.classList.add('active');
+  document.getElementById('hours-range-start').value = SUMMER_RANGE.startISO;
+  document.getElementById('hours-range-end').value   = SUMMER_RANGE.endISO;
+  window._hoursSummerMode = true;
+  window.queryHoursRange();
+};
+
 window.selectMonth = function(m,el){
+  window._hoursSummerMode = false;
   if (window._hoursRangeMode) window.resetHoursRange(true); // 월 탭 클릭 시 기간 모드 해제
   currentMonth=m;
   document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));
@@ -3153,6 +3174,7 @@ function _rangeDateStringsISO(startISO, endISO){
 }
 
 window.setHoursRangePreset = function(preset){
+  window._hoursSummerMode = false;
   const startEl = document.getElementById('hours-range-start');
   const endEl = document.getElementById('hours-range-end');
   const now = new Date();
@@ -3220,6 +3242,11 @@ window.queryHoursRange = async function(){
     window._hoursRangeMode = true;
     document.getElementById('hours-range-reset').style.display = '';
     document.querySelectorAll('.month-tab').forEach(t => t.classList.remove('active'));
+    // SUMMER 탭에서 들어온 조회면 탭 강조를 유지한다 (직접 기간조회는 어떤 탭도 강조하지 않음)
+    if (window._hoursSummerMode) {
+      const st = document.querySelector('.month-tab.summer-tab');
+      if (st) st.classList.add('active');
+    }
     statusEl.textContent = '';
     renderHoursRangeTable({ totalMin, daysSet, seatOf }, startISO, endISO, dates.length);
   } catch(e) {
@@ -3245,11 +3272,23 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
   const active = rows.filter(r => r.min > 0);
   const avgMin = active.length ? Math.round(active.reduce((a, r) => a + r.min, 0) / active.length) : 0;
   const label = `${startISO.replace(/-/g,'.')} ~ ${endISO.replace(/-/g,'.')}`;
+  // SUMMER 탭은 기간이 미래까지 걸쳐 있어 '몇 일 중 몇 일 경과'를 같이 보여준다
+  const summer = window._hoursSummerMode;
+  let headChip;
+  if (summer) {
+    const todayISO = (dt => `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`)(new Date());
+    const elapsed = todayISO < startISO ? 0
+      : todayISO > endISO ? dayCount
+      : _rangeDateStrings(startISO, todayISO).length;
+    headChip = `<div class="summary-chip">☀️ <span>${SUMMER_RANGE.label}</span> ${label} (${dayCount}일 중 ${elapsed}일 경과)</div>`;
+  } else {
+    headChip = `<div class="summary-chip">📅 <span>${label}</span> (${dayCount}일)</div>`;
+  }
 
   document.getElementById('hours-summary').innerHTML = `
-    <div class="summary-chip">📅 <span>${label}</span> (${dayCount}일)</div>
+    ${headChip}
     <div class="summary-chip">이용 학생 <span>${active.length}명</span></div>
-    <div class="summary-chip">평균 <span>${_fmtRangeMin(avgMin)}</span></div>
+    <div class="summary-chip">${summer ? '1인 평균 누적' : '평균'} <span>${_fmtRangeMin(avgMin)}</span></div>
     <div class="summary-chip">최고 <span>${_fmtRangeMin(top ? top.min : 0)}</span> (${top && top.min > 0 ? top.name : '-'})</div>
   `;
 
@@ -3257,7 +3296,7 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
     <th>좌석</th><th>이름</th>
     <th>상점현황</th>
     <th>벌점현황</th>
-    <th>총 사용시간</th>
+    <th>${summer ? 'SUMMER 누적시간' : '총 사용시간'}</th>
     <th>출석일수</th>
     <th>일평균</th>
   </tr></thead><tbody>`;
@@ -3282,6 +3321,7 @@ function renderHoursRangeTable(result, startISO, endISO, dayCount){
 
 window.resetHoursRange = function(skipRebuild){
   window._hoursRangeMode = false;
+  window._hoursSummerMode = false;
   document.getElementById('hours-range-reset').style.display = 'none';
   document.getElementById('hours-range-status').textContent = '';
   if (!skipRebuild) {
@@ -4103,7 +4143,9 @@ window.selectDay = function(day,el){
 function buildMonthTabs(){
   document.getElementById('month-tabs').innerHTML=MONTHS.map(m=>
     `<div class="month-tab${m.k===currentMonth?' active':''}" onclick="selectMonth('${m.k}',this)">${m.label}</div>`
-  ).join('');
+  ).join('')
+  // SUMMER 탭 — 여름특강 전체 기간(SUMMER_RANGE)의 누적 사용시간. 기간조회와 같은 표를 쓴다.
+  + `<div class="month-tab summer-tab" onclick="selectSummer(this)" title="${SUMMER_RANGE.label} 누적">☀️ SUMMER</div>`;
 }
 
 // 현재 시간 기준 교시 번호 계산
