@@ -7887,7 +7887,7 @@ window.clearAllScheduleAlerts = function() {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction, orderBy, limit, startAfter, getCountFromServer }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -7912,7 +7912,7 @@ try {
 }
 // Firestore 함수 일괄 노출 — classic 스크립트에서 매번 동적 import 하지 않도록.
 // (_adminDb 보다 먼저 세팅: _adminDb 가 보이면 _fs 도 반드시 존재)
-window._fs = { doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, runTransaction };
+window._fs = { doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, runTransaction, orderBy, limit, startAfter, getCountFromServer };
 window._adminDb = db;
 window._adminApp = app;
 // ── [테스트 전용] 로컬 Firestore 에뮬레이터 연결 (URL에 ?emu=1 일 때만) ──
@@ -10964,39 +10964,117 @@ function _smsTs(log) {
   return isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+// ── 발신내역 페이지네이션 ──
+// 예전엔 sms_logs 컬렉션 전체를 getDocs로 받아 300건만 잘라 썼다. 문자는 학생당 하루 2건씩
+// 쌓이므로 컬렉션이 수천 건이 되면 탭을 열 때마다 그만큼 read 과금이 나갔고, 통계 카드도
+// 잘린 300건 기준이라 '총 발송'이 300에서 멈춰 보였다.
+// → 목록은 orderBy(createdAt)+limit로 100건씩만 받고, 통계는 getCountFromServer로 센다.
+//   (집계는 매칭 1000건당 1 read라 컬렉션이 커져도 비용이 거의 늘지 않는다)
+const SMS_PAGE_SIZE = 100;
+let _smsCursor = null;    // 다음 페이지 시작점(마지막 문서 스냅샷)
+let _smsHasMore = false;
+let _smsStats = null;     // 서버 집계 { total, success, fail, today }
+let _smsLoadingMore = false;
+
+// createdAt이 없는 문서는 orderBy에서 아예 빠진다. saveSmsLogToFirebase가 항상 넣어주므로
+// 정상 경로에선 문제없고, 혹시 누락된 옛 문서가 있으면 localStorage 병합분으로 보인다.
+function _smsPageQuery(after) {
+  const { collection, query, orderBy, limit, startAfter } = window._fs;
+  const col = collection(window._adminDb, 'sms_logs');
+  return after
+    ? query(col, orderBy('createdAt', 'desc'), startAfter(after), limit(SMS_PAGE_SIZE))
+    : query(col, orderBy('createdAt', 'desc'), limit(SMS_PAGE_SIZE));
+}
+
+function _smsDocsFrom(snap) {
+  const out = [];
+  snap.forEach(d => {
+    if (!_deletedSmsIds.has(String(d.id)) && !_deletedSmsIds.has(String(d.data().id))) {
+      out.push({ _fbId: d.id, ...d.data(), id: d.id });
+    }
+  });
+  return out;
+}
+
+// 서버 집계로 통계 카드 채우기. 실패는 where(success,==,false) 대신 total-success로 구한다
+// (success 필드가 없는 옛 문서를 놓치지 않도록).
+async function _loadSmsStats() {
+  try {
+    const { collection, query, where, getCountFromServer } = window._fs;
+    const col = collection(window._adminDb, 'sms_logs');
+    const today = new Date().toLocaleDateString('ko-KR');
+    const [t, s, d] = await Promise.all([
+      getCountFromServer(col),
+      getCountFromServer(query(col, where('success', '==', true))),
+      getCountFromServer(query(col, where('date', '==', today))),
+    ]);
+    const total = t.data().count, success = s.data().count;
+    _smsStats = { total, success, fail: Math.max(0, total - success), today: d.data().count };
+  } catch(e) {
+    console.error('SMS 통계 집계 실패 — 불러온 목록 기준으로 표시:', e);
+    _smsStats = null;
+  }
+}
+
 window.loadSmsLog = async function() {
   const list = document.getElementById('smslog-list');
   list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
+  _smsCursor = null; _smsHasMore = false; _smsStats = null;
 
   // localStorage 먼저 즉시 표시 (삭제된 항목 제외 — id는 문자열로 통일해 비교)
-  let logs = _smsLogs.filter(l => !_deletedSmsIds.has(String(l.id)));
+  let logs = _smsLogs.filter(l => !_deletedSmsIds.has(String(l.id))).slice(0, SMS_PAGE_SIZE);
   _smsLogData = logs;
   renderSmsLog(logs);
 
-  // Firebase에서 추가 로드 후 병합
-  if (window._adminDb) {
-    try {
-      const { collection, getDocs } = window._fs;
-      const snap = await getDocs(collection(window._adminDb, 'sms_logs'));
-      const fbLogs = [];
-      snap.forEach(d => {
-        if (!_deletedSmsIds.has(String(d.id)) && !_deletedSmsIds.has(String(d.data().id))) {
-          fbLogs.push({ _fbId: d.id, ...d.data(), id: d.id });
-        }
-      });
+  if (!window._adminDb) return;
+  try {
+    const { getDocs } = window._fs;
+    const snap = await getDocs(_smsPageQuery(null));
+    const fbLogs = _smsDocsFrom(snap);
+    _smsCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : null;
+    _smsHasMore = snap.size === SMS_PAGE_SIZE;
 
-      if (fbLogs.length > 0) {
-        const merged = [...fbLogs];
-        const fbIds = new Set(fbLogs.map(l => l.id));
-        _smsLogs.forEach(l => { if (!fbIds.has(l.id) && !fbIds.has(String(l.id)) && !_deletedSmsIds.has(String(l.id))) merged.push(l); });
-        merged.sort((a, b) => _smsTs(b) - _smsTs(a));
-        logs = merged.slice(0, 300);
-        _smsLogData = logs;
-        renderSmsLog(logs);
-      }
-    } catch(e) {
-      console.error('SMS 로그 Firebase 로드 실패:', e);
-    }
+    // 아직 서버에 못 올라간 로컬 로그는 첫 페이지 구간(가장 오래된 항목 이후)에 한해 끼워 넣는다.
+    // 그보다 오래된 로컬 로그까지 섞으면 커서 기준과 어긋나 '더 보기'에서 중복/누락이 생긴다.
+    const fbIds = new Set(fbLogs.map(l => String(l.id)));
+    const oldest = fbLogs.length ? Math.min(...fbLogs.map(_smsTs)) : 0;
+    const merged = [...fbLogs];
+    _smsLogs.forEach(l => {
+      if (fbIds.has(String(l.id)) || _deletedSmsIds.has(String(l.id))) return;
+      if (_smsTs(l) >= oldest) merged.push(l);
+    });
+    merged.sort((a, b) => _smsTs(b) - _smsTs(a));
+
+    _smsLogData = merged;
+    await _loadSmsStats();
+    renderSmsLog(_smsLogData);
+  } catch(e) {
+    console.error('SMS 로그 Firebase 로드 실패:', e);
+  }
+}
+
+window.loadMoreSmsLog = async function() {
+  if (_smsLoadingMore || !_smsHasMore || !_smsCursor || !window._adminDb) return;
+  _smsLoadingMore = true;
+  const btn = document.getElementById('smslog-more-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '불러오는 중...'; }
+  try {
+    const { getDocs } = window._fs;
+    const snap = await getDocs(_smsPageQuery(_smsCursor));
+    const more = _smsDocsFrom(snap);
+    _smsCursor = snap.docs.length ? snap.docs[snap.docs.length - 1] : _smsCursor;
+    _smsHasMore = snap.size === SMS_PAGE_SIZE;
+
+    const seen = new Set(_smsLogData.map(l => String(l.id)));
+    more.forEach(l => { if (!seen.has(String(l.id))) _smsLogData.push(l); });
+    _smsLogData.sort((a, b) => _smsTs(b) - _smsTs(a));
+    filterSmsLog();   // 켜져 있는 필터를 유지한 채 다시 그림
+  } catch(e) {
+    console.error('SMS 로그 추가 로드 실패:', e);
+    showAdminToast('⚠️ 더 불러오기 실패: ' + e.message);
+    if (btn) { btn.disabled = false; btn.textContent = '더 보기'; }
+  } finally {
+    _smsLoadingMore = false;
   }
 }
 
@@ -11005,17 +11083,22 @@ window.renderSmsLog = function(logs) {
   const sorted = [...logs].sort((a, b) => _smsTs(b) - _smsTs(a));
 
   const today = new Date().toLocaleDateString('ko-KR');
-  const todayLogs = sorted.filter(l => l.date === today);
-  const successLogs = sorted.filter(l => l.success);
-  const failLogs = sorted.filter(l => !l.success);
-
-  document.getElementById('smslog-total').textContent = sorted.length;
-  document.getElementById('smslog-success').textContent = successLogs.length;
-  document.getElementById('smslog-fail').textContent = failLogs.length;
-  document.getElementById('smslog-today').textContent = todayLogs.length;
+  // 통계는 서버 집계값(컬렉션 전체 기준)을 쓴다. 집계 전/실패 시에만 현재 목록으로 폴백.
+  const stats = _smsStats || {
+    total:   sorted.length,
+    success: sorted.filter(l => l.success).length,
+    fail:    sorted.filter(l => !l.success).length,
+    today:   sorted.filter(l => l.date === today).length,
+  };
+  document.getElementById('smslog-total').textContent = stats.total;
+  document.getElementById('smslog-success').textContent = stats.success;
+  document.getElementById('smslog-fail').textContent = stats.fail;
+  document.getElementById('smslog-today').textContent = stats.today;
 
   if (sorted.length === 0) {
-    document.getElementById('smslog-list').innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">📭 발신내역이 없습니다</div>';
+    // 필터로 다 걸러졌는데 서버에 다음 페이지가 남아 있을 수 있으므로 '더 보기'는 같이 둔다.
+    document.getElementById('smslog-list').innerHTML =
+      '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">📭 발신내역이 없습니다</div>' + _smsMoreHtml(0);
     return;
   }
 
@@ -11063,7 +11146,19 @@ window.renderSmsLog = function(logs) {
         ${errorHtml}
       </div>
     </div>`;
-  }).join('');
+  }).join('') + _smsMoreHtml(sorted.length);
+}
+
+// 목록 하단 '더 보기' — 서버에 다음 페이지가 남아 있을 때만 표시.
+function _smsMoreHtml(shown) {
+  if (!_smsHasMore) {
+    return `<div style="text-align:center;padding:12px;font-size:11px;color:var(--color-text-tertiary)">${shown}건 모두 표시됨</div>`;
+  }
+  return `<div style="text-align:center;padding:12px">
+    <button id="smslog-more-btn" onclick="loadMoreSmsLog()"
+      style="padding:8px 20px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:10px;font-size:12px;color:#4A3FA8;cursor:pointer;font-weight:700">더 보기</button>
+    <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:6px">${shown}건 표시 중 · ${SMS_PAGE_SIZE}건씩 추가</div>
+  </div>`;
 }
 
 window.toggleSmsDetail = function(id) {
@@ -11091,8 +11186,15 @@ window.deleteSmsLog = async function(logId, idx) {
   _smsLogs = _smsLogs.filter(l => String(l.id) !== String(logId));
   localStorage.setItem('saebom_sms_logs', JSON.stringify(_smsLogs));
 
-  // _smsLogData에서 즉시 제거
+  // _smsLogData에서 즉시 제거 (+ 서버 집계 캐시도 같이 깎아야 카드 숫자가 어긋나지 않음)
+  const removed = _smsLogData.find(l => String(l.id) === String(logId));
   _smsLogData = _smsLogData.filter(l => String(l.id) !== String(logId));
+  if (_smsStats && removed) {
+    _smsStats.total = Math.max(0, _smsStats.total - 1);
+    if (removed.success) _smsStats.success = Math.max(0, _smsStats.success - 1);
+    else _smsStats.fail = Math.max(0, _smsStats.fail - 1);
+    if (removed.date === new Date().toLocaleDateString('ko-KR')) _smsStats.today = Math.max(0, _smsStats.today - 1);
+  }
 
   // Firebase에서도 삭제 (id 또는 _fbId 사용)
   const fbId = logId;
