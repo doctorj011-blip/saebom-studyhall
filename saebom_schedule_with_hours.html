@@ -802,13 +802,13 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="penalty-board-body" style="display:none"></div>
     </div>
-    <!-- 오늘 스케줄 변동 현황판 (고정 시간표 대비 오늘 요일 변경) — 기본 펼침 -->
+    <!-- 오늘 스케줄 변동 현황판 (고정 시간표 대비 오늘 요일 변경) — 기본 접힘(벌점 현황판과 동일) -->
     <div class="card" id="schedvar-board-section">
       <div class="card-title" style="justify-content:space-between">
-        <span onclick="toggleSchedVarBoard()" style="cursor:pointer;user-select:none" title="스케줄 변동 접기/펼치기"><i id="schedvar-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-calendar-event" style="font-size:14px;color:#5546C4" aria-hidden="true"></i> 오늘 스케줄 변동</span>
+        <span onclick="toggleSchedVarBoard()" style="cursor:pointer;user-select:none" title="스케줄 변동 접기/펼치기"><i id="schedvar-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s" aria-hidden="true"></i> <i class="ti ti-calendar-event" style="font-size:14px;color:#5546C4" aria-hidden="true"></i> 오늘 스케줄 변동</span>
         <span id="schedvar-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
       </div>
-      <div id="schedvar-board-body"></div>
+      <div id="schedvar-board-body" style="display:none"></div>
     </div>
     </div>
     <!-- 스터디룸 초과 경고 -->
@@ -9266,7 +9266,7 @@ function _svMs(u) {
   return 0;
 }
 
-// 대시보드 스케줄 변동 접기/펼치기 (기본값=펼침 — 한눈에 보이도록)
+// 대시보드 스케줄 변동 접기/펼치기 (기본값=접힘 — 제목줄의 'N명 변동' 요약만 보이게)
 window.toggleSchedVarBoard = function() {
   const body  = document.getElementById('schedvar-board-body');
   const caret = document.getElementById('schedvar-board-caret');
