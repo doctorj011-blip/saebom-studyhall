@@ -11,7 +11,7 @@
  *   · 끌 때: 재실 0이 offGraceMin 분 동안 "계속" 유지될 때만 OFF (잠깐 출입은 안 끔)
  *   · 한 번 켜지면 minOnMin 분은 유지(최소 운전시간)
  *   · 운영시간(opStart~opEnd) 밖에는 항상 OFF (평일=저녁 opStart, 주말=weekendOpStart 오전 시작)
- *   · 주말은 정식 시작 전 조기 가동 창(weekendPreOpenStart~weekendOpStart)에 입실 구역만 먼저 냉방
+ *   · 정식 시작 전 조기 가동 창(평일 weekdayPreOpenStart~opStart / 주말 weekendPreOpenStart~weekendOpStart)에 입실 구역만 먼저 냉방(열람실은 비어도 정식 운영과 같은 offGrace 2단 유예)
  *   · 정식 종료(opEnd) 후 lateHardOff 까지: 남은 학생 있으면 열람실 '1대만'(재실 최다·동수면 에어컨2) → lateHardOff에 전체 OFF
  *   · 끄기 직전 dryOffMin 분 송풍 건조 후 전원 차단(코일 곰팡이·냄새 방지) — 자동/수동 OFF 공통
  * 제어 단위(zone): 열람실(hall)=전체 재실 기준 / 스터디룸(studyroom)=해당 방 배정+재실 기준
@@ -104,6 +104,8 @@ async function acConfig() {
     // 주말(토·일) 전용: 오전부터 운영. weekendOpStart=정식 시작, weekendPreOpenStart=조기 가동(입실 구역만) 시작.
     weekendOpStart: c.weekendOpStart || '08:30',
     weekendPreOpenStart: c.weekendPreOpenStart || '08:00',
+    // 평일 조기 가동 시작(~opStart). 이 창에는 입실 좌석이 있는 구역만 켠다(빈 구역은 대기). ''이면 평일 조기 가동 없음.
+    weekdayPreOpenStart: c.weekdayPreOpenStart != null ? c.weekdayPreOpenStart : '08:00',
     offGraceMin: c.offGraceMin != null ? c.offGraceMin : 20,   // 무인 지속 → 절전(setback) 전환 유예
     hardOffMin: c.hardOffMin != null ? c.hardOffMin : 60,      // 무인 지속 → 완전 OFF (2단 공실 2단계)
     minOnMin: c.minOnMin != null ? c.minOnMin : 20,            // 최소 운전시간(완전 OFF 억제)
@@ -134,11 +136,13 @@ function _hhmm(s) { const p = String(s).split(':').map(Number); return (p[0] || 
 //   date는 KST 시프트된 값이라 getDay()도 KST 요일(0=일 … 6=토).
 function _isWeekend(date) { const d = date.getDay(); return d === 0 || d === 6; }
 function _effStart(cfg, date) { return _isWeekend(date) ? cfg.weekendOpStart : cfg.opStart; }
-// 주말 조기 가동 창: 정식 시작 전(weekendPreOpenStart~weekendOpStart) — 입실 구역만 켠다. 평일은 없음.
+// 조기 가동 창: 정식 시작 전(평일 weekdayPreOpenStart~opStart / 주말 weekendPreOpenStart~weekendOpStart) — 입실 구역만 켠다.
+//   시작값이 비어 있으면 그 요일은 조기 가동 없음.
 function _preOpenWindow(cfg, date) {
-  if (!_isWeekend(date)) return false;
+  const preStart = _isWeekend(date) ? cfg.weekendPreOpenStart : cfg.weekdayPreOpenStart;
+  if (!preStart) return false;
   const now = date.getHours() * 60 + date.getMinutes();
-  return now >= _hhmm(cfg.weekendPreOpenStart) && now < _hhmm(cfg.weekendOpStart);
+  return now >= _hhmm(preStart) && now < _hhmm(_effStart(cfg, date));
 }
 function _withinOp(cfg, date) {
   const now = date.getHours() * 60 + date.getMinutes();
@@ -302,6 +306,17 @@ async function acSetPower(cfg, deviceId, on) {
 }
 
 // ---------- 자동화 핵심 ----------
+// 무인 지속 시 열람실 2단 절전 프로파일 — 유예 중 냉방 유지 → offGraceMin 후 setback → hardOffMin 후 OFF(최소 운전시간 충족 시).
+//   ※ zs.emptySince를 없으면 채워 넣는다(무인 시작 시각 기록). forceSetback=true면 유예 중이라도 바로 setback(마감 여열 coast).
+function _emptyProfile(cfg, zs, nowMs, forceSetback) {
+  if (!zs.emptySince) zs.emptySince = nowMs;
+  const emptyMin = (nowMs - zs.emptySince) / 60000;
+  const onMin = zs.lastOnTs ? (nowMs - zs.lastOnTs) / 60000 : 1e9;
+  if (emptyMin >= cfg.hardOffMin && onMin >= cfg.minOnMin) return { power: false };
+  if (emptyMin >= cfg.offGraceMin || forceSetback) return { power: true, mode: cfg.onMode, temp: cfg.setbackTemp };
+  return { power: true, mode: cfg.onMode, temp: cfg.onTemp };
+}
+
 async function acEvaluate(reason) {
   const cfg = await acConfig();
   const zoneIds = Object.keys(cfg.zones || {});
@@ -313,7 +328,7 @@ async function acEvaluate(reason) {
   const srSched = await acStudyroomSchedule(now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const op = _withinOp(cfg, now);
-  const preOpen = _preOpenWindow(cfg, now);   // 주말 정식 시작 전 조기 가동 창(입실 구역만)
+  const preOpen = _preOpenWindow(cfg, now);   // 정식 시작 전 조기 가동 창(입실 구역만)
   const lateTail = _inLateTail(cfg, now);     // 정식 종료(opEnd)~lateHardOff: 열람실 1대만 유지
   const minsToHardOff = _minsToHardOff(cfg, now);
   const preClose = minsToHardOff != null && minsToHardOff <= cfg.preCloseMin;   // 완전 종료(lateHardOff) 직전 여열 coast
@@ -370,8 +385,13 @@ async function acEvaluate(reason) {
     if (!op) {
       // 운영시간 밖.
       if (preOpen && occupied) {
-        // 주말 조기 가동: 입실 구역만 먼저 냉방.
+        // 정식 시작 전 조기 가동: 입실 구역만 먼저 냉방(빈 구역은 대기).
         zs.emptySince = null; profile = { power: true, mode: cfg.onMode, temp: cfg.onTemp };
+      } else if (preOpen && !isSr && zs.on === true) {
+        // 조기 가동 중 열람실이 비었을 때: 정식 운영과 같은 2단 유예(유예 냉방 → setback → hardOff).
+        //   잠깐 나갔다 오는 낮 시간 단속운전 방지. 아직 안 켜진 구역은 아래 else로 떨어져 그대로 대기.
+        //   스터디룸은 예약 교시 기반이라 유예 없이 종료(예약 끝 = 진짜 종료).
+        profile = _emptyProfile(cfg, zs, nowMs, false);
       } else if (lateTail && !isSr && deviceId === lateWinnerId) {
         // 정식 종료(opEnd)~lateHardOff: 재실 최다 열람실 1대만 유지(끝 preCloseMin은 여열 coast).
         zs.emptySince = null;
@@ -384,12 +404,7 @@ async function acEvaluate(reason) {
       profile = preClose ? { power: true, mode: cfg.onMode, temp: cfg.setbackTemp }
                          : { power: true, mode: cfg.onMode, temp: cfg.onTemp };
     } else {
-      if (!zs.emptySince) zs.emptySince = nowMs;
-      const emptyMin = (nowMs - zs.emptySince) / 60000;
-      const onMin = zs.lastOnTs ? (nowMs - zs.lastOnTs) / 60000 : 1e9;
-      if (emptyMin >= cfg.hardOffMin && onMin >= cfg.minOnMin) profile = { power: false };
-      else if (emptyMin >= cfg.offGraceMin || preClose) profile = { power: true, mode: cfg.onMode, temp: cfg.setbackTemp };
-      else profile = { power: true, mode: cfg.onMode, temp: cfg.onTemp };   // 유예 중: 냉방 유지
+      profile = _emptyProfile(cfg, zs, nowMs, preClose);
     }
 
     // 필요한 변경(전원/모드/온도/풍량)만 LG로 전송 — API 스팸·불필요 전환 방지.
@@ -429,7 +444,7 @@ async function acEvaluate(reason) {
     }
     out[deviceId] = zs;
   }
-  await ref.set({ zones: out, present: present.size, op, auto: cfg.auto, updatedAt: now.toISOString() }, { merge: true });
+  await ref.set({ zones: out, present: present.size, op, preOpen, auto: cfg.auto, updatedAt: now.toISOString() }, { merge: true });
 }
 
 // 대시보드 표시용 — 설정된 에어컨들의 현재 상태·기능표를 LG에서 읽어 ac_state에 저장.

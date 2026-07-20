@@ -13706,12 +13706,13 @@ document.addEventListener('DOMContentLoaded', function() {
     const auto = CONF.auto !== false;
     const present = STATE.present!=null ? STATE.present : '—';
     const op = STATE.op;
+    const preOpen = STATE.preOpen === true;   // 정식 시작 전 조기 가동 창 — 입실 구역만 켜지는 상태
     const m = CONF.onMode || 'COOL';
     const modeOpt = (v,lb)=>`<option value="${v}"${m===v?' selected':''}>${lb}</option>`;
 
     const head = `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px">
       <div style="font-size:16px;font-weight:800;color:${C.text}">❄️🔥 냉난방 · 입퇴실 자동</div>
-      <span style="font-size:12px;color:${C.muted}">현재 재실 <b style="color:${C.text}">${esc(present)}</b>명 ${op===false?`· <span style="color:${C.warn}">운영시간 외</span>`:''}</span>
+      <span style="font-size:12px;color:${C.muted}">현재 재실 <b style="color:${C.text}">${esc(present)}</b>명 ${op===false?(preOpen?`· <span style="color:${C.accent}">조기 가동 중 (입실 구역만)</span>`:`· <span style="color:${C.warn}">운영시간 외</span>`):''}</span>
       <label style="margin-left:auto;display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:700;color:${C.text};cursor:pointer">자동
         <button onclick="__ac.toggleAuto()" style="border:0;border-radius:999px;width:50px;height:27px;position:relative;cursor:pointer;background:${auto?'#22C55E':'#D1D5DB'}">
           <span style="position:absolute;top:3px;left:${auto?'26px':'3px'};width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)"></span>
@@ -13724,6 +13725,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const inp = `background:${C.inputBg};border:1px solid ${C.line};color:${C.text};border-radius:6px;padding:4px 6px`;
     const settings = `<div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;font-size:12px;color:${C.muted};background:#FAFAFB;border:1px solid ${C.line};border-radius:9px;padding:9px 12px;margin-bottom:14px">
       운영 <input id="ac_opStart" value="${esc(CONF.opStart||'06:00')}" style="width:62px;${inp}">~<input id="ac_opEnd" value="${esc(CONF.opEnd||'24:00')}" style="width:62px;${inp}">
+      · <span title="평일 운영 시작 전이라도 이 시각부터는 감지합니다. 단, 입실한 구역만 켜고 빈 구역은 대기합니다(운영시간과 달리 무인 구역은 아예 안 켜짐). 비우면 조기 가동을 쓰지 않습니다. 주말은 별도 설정(08:00)입니다.">조기 가동</span> <input id="ac_preopen" placeholder="비우면 끔" value="${esc(CONF.weekdayPreOpenStart!=null?CONF.weekdayPreOpenStart:'08:00')}" style="width:62px;${inp}">부터
       · 자동 운전 <select id="ac_mode" style="${inp}">${modeOpt('COOL','냉방')}${modeOpt('HEAT','난방')}${modeOpt('AUTO','자동')}</select>
       · OFF 유예 <input id="ac_grace" type="number" value="${esc(CONF.offGraceMin!=null?CONF.offGraceMin:20)}" style="width:52px;${inp}">분
       · 기본온도 <input id="ac_temp" type="number" step="0.5" value="${esc(CONF.onTemp!=null?CONF.onTemp:24)}" style="width:58px;${inp}">°
@@ -13770,7 +13772,11 @@ document.addEventListener('DOMContentLoaded', function() {
       const dry=el.querySelector('#ac_dry'), pc=el.querySelector('#ac_precool'), br=el.querySelector('#ac_bridge');
       // 0도 유효값(=기능 끔)이라 ||로 기본값을 못 준다. 빈 칸일 때만 기본값.
       const num=(n,dflt)=>{ const s=String((n&&n.value)||'').trim(); if(!s) return dflt; const v=Number(s); return Number.isFinite(v)&&v>=0 ? v : dflt; };
+      // 조기 가동 시작 — 빈 칸은 '끔'이라 기본값을 채우면 안 된다. 형식이 틀리면 서버가 조용히 무시하므로 여기서 막는다.
+      const po=String((el.querySelector('#ac_preopen')||{}).value||'').trim();
+      if (po && !/^([01]?\d|2[0-3]):[0-5]\d$/.test(po)) { alert('조기 가동 시작 시각은 08:00 형식으로 입력하세요. (비우면 조기 가동 끔)'); return; }
       saveConf({
+        weekdayPreOpenStart:po,
         opStart:(el.querySelector('#ac_opStart')||{}).value||'06:00',
         opEnd:(el.querySelector('#ac_opEnd')||{}).value||'24:00',
         offGraceMin:Number(g&&g.value)||20,
