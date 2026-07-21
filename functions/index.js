@@ -545,6 +545,7 @@ exports.acOnCommand = onDocumentCreated(
 // 모델·프롬프트는 ai_config/planner 문서로 덮어쓸 수 있다(없으면 기본값).
 // ══════════════════════════════════════════════════════════════
 const Anthropic = require('@anthropic-ai/sdk');
+const sharp = require('sharp');            // 플래너 사진 축소용(API 10MB 상한 대응)
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const PLANNER_AI_MODEL = 'claude-opus-4-8';
@@ -722,9 +723,29 @@ exports.plannerAiReview = onDocumentCreated(
 
       const res = await fetch(url);
       if (!res.ok) throw new Error(`사진 다운로드 실패 (HTTP ${res.status})`);
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length > 20 * 1024 * 1024) throw new Error('사진이 너무 큽니다(20MB 초과)');
-      const mediaType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+      let buf = Buffer.from(await res.arrayBuffer());
+      let mediaType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+
+      // 요즘 폰 사진은 10MB를 예사로 넘는데 Claude API 이미지 상한이 10MB다(2026-07-21 23번 실패).
+      // 어차피 긴 변 1568px를 넘으면 API가 내부적으로 축소하므로 미리 줄여도 판독 품질 손해가
+      // 없고, 용량·메모리·비용·지연이 모두 줄어든다.
+      // ⚠️ .rotate()는 생략 금지 — sharp는 출력 시 EXIF를 버리므로, 방향 태그를 미리 픽셀에
+      //    반영해 두지 않으면 오히려 눕거나 뒤집힌 사진이 모델에 전달된다.
+      try {
+        const meta = await sharp(buf).metadata();
+        if (Math.max(meta.width || 0, meta.height || 0) > 1568 || buf.length > 4 * 1024 * 1024) {
+          buf = await sharp(buf).rotate()
+            .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 85 }).toBuffer();
+          mediaType = 'image/jpeg';
+        }
+      } catch (e) {
+        logger.warn('사진 축소 실패 — 원본으로 진행', { seat, date: dateStr, message: e.message });
+      }
+      // 상한 10MB는 base64 문자열 길이 기준이다(원본 7.9MB가 base64로 10.5MB가 되어 거부됐음).
+      // 원본 바이트로 재면 통과할 것처럼 보이니 주의.
+      const b64 = buf.toString('base64');
+      if (b64.length > 10 * 1024 * 1024) throw new Error('사진이 너무 큽니다 — 축소 후에도 10MB를 넘습니다');
 
       // 모델/프롬프트 덮어쓰기(선택) — ai_config/planner { model, prompt }
       const cfgSnap = await db.collection('ai_config').doc('planner').get();
@@ -743,7 +764,7 @@ exports.plannerAiReview = onDocumentCreated(
         messages: [{
           role: 'user',
           content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: buf.toString('base64') } },
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
             { type: 'text', text: `학생: ${req.name || seat + '번'} / 학습일: ${dateStr}\n이 플래너를 검사하고 결과를 작성해 주세요.${history}` }
           ]
         }]
