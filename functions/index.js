@@ -701,7 +701,10 @@ async function plannerAiHistory(seat, beforeDate) {
 }
 
 exports.plannerAiReview = onDocumentCreated(
-  { document: 'planner_ai_requests/{id}', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, memory: '512MiB' },
+  // concurrency:1 필수 — 기본값 80이면 "전체 검사" 20여건이 한 인스턴스에 몰려
+  // 사진 Buffer+base64가 겹쳐 OOM으로 컨테이너가 통째로 죽는다(catch/finally도 못 돌아
+  // 요청 문서가 남고 리뷰가 running에서 멈춤). 2026-07-21 실제 사고.
+  { document: 'planner_ai_requests/{id}', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, memory: '1GiB', concurrency: 1 },
   async (event) => {
     const snap = event.data; if (!snap) return;
     const req = snap.data() || {};
