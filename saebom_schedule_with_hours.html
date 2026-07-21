@@ -1250,7 +1250,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <select id="sa-grade-sel" onchange="window.saSetGrade(this.value)" title="학년 — 또래 교재 추천에 사용됩니다"
         style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none">
         <option value="">학년 미지정</option>
-        <option value="중1">중1</option><option value="중2">중2</option><option value="중3">중3</option>
         <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
         <option value="N수">N수</option>
       </select>
@@ -11902,7 +11901,6 @@ window.openAddStudentModal = function(seatNum) {
           <select id="new-st-grade"
             style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box;background:#fff;color:#1E1B4B">
             <option value="">학년 미지정</option>
-            <option value="중1">중1</option><option value="중2">중2</option><option value="중3">중3</option>
             <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
             <option value="N수">N수</option>
           </select>
@@ -12782,8 +12780,9 @@ function _apcDefaultDate() {
 const _APC_EXCLUDE = new Set(['관리자', '정원혁', '이새봄', '손형준', '김근우', '이수연']);
 const _apcBase = n => String(n || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
 const _apcIsStaff = n => /\(\s*관리/.test(String(n || '')) || _apcBase(n) === '관리자';
-// 예외 허용 — 관리 계정이지만 플래너 검사에서만 학생과 동일하게 취급(제외 규칙보다 우선)
-const _APC_INCLUDE = new Set(['정원혁']);
+// 예외 허용 — 관리 계정이지만 플래너 검사에서만 학생과 동일하게 취급(제외 규칙보다 우선).
+// 검사 기능 개발 중 정원혁을 넣어 뒀으나 검증이 끝나 제외함(2026-07-22). 비워 두면 아무도 예외가 아니다.
+const _APC_INCLUDE = new Set();
 function _apcStudents() {
   return (window.STUDENTS || [])
     .filter(s => _APC_INCLUDE.has(_apcBase(s.name))
