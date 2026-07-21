@@ -736,6 +736,62 @@ body.kiosk-mode #kiosk-clock .kc-time{color:#fff;text-shadow:0 4px 30px rgba(10,
 body.kiosk-mode #kiosk-clock .kc-sec{color:rgba(255,255,255,.7)}
 body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:22px}
 @media (prefers-reduced-motion:reduce){.wx-sun,.wx-flare,.wx-star,.wx-cloud,.wx-rain-drop,.wx-snow-flake,.wx-fog,.wx-drop,.wx-run,.sky-storm::after{animation:none!important}}
+
+/* ══════════════════════════════════════════════════════════════
+   모바일 (≤600px)
+   PC 레이아웃은 그대로 두고, 좁은 화면에서만 덮어쓴다.
+   ─ 상단바 : 제목 줄 / 탭 줄 2단으로 나누고 탭은 가로 스크롤
+   ─ 대시보드 : 3열 → 1열
+   ─ 배치도 : 사이드패널을 아래로 내리고 좌석표는 터치 스크롤
+   ══════════════════════════════════════════════════════════════ */
+@media (max-width:600px){
+
+  /* ── 상단바 : 높이 고정 해제 + 2단 ── */
+  .topbar{height:auto;flex-wrap:wrap;align-items:flex-start;padding:8px 10px 0;gap:6px}
+  .topbar-title{width:100%;flex-wrap:wrap;gap:6px;font-size:13.5px;line-height:1.5}
+  .topbar-title .today-chip,.topbar-title .now-period-chip{font-size:10.5px}
+  .checkin-shortcut-btn{margin-left:auto!important}
+
+  /* 탭은 줄바꿈 대신 가로 스크롤 — 13개가 세로로 쌓이면 본문이 안 보인다 */
+  body.admin-device .topbar-tabs{
+    width:100%;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+    padding:0 0 8px;margin:0 -10px;padding-left:10px;padding-right:10px;
+  }
+  body.admin-device .topbar-tabs::-webkit-scrollbar{display:none}
+  .tab-btn{flex:0 0 auto;padding:6px 11px;font-size:11.5px}
+
+  /* ── 본문 여백 ── */
+  .content{padding:12px 10px}
+
+  /* ── 대시보드 : auto 1fr 1fr → 1열 ── */
+  .dashboard-grid{grid-template-columns:1fr;gap:10px}
+  .stats-row{gap:7px}
+  .stat-card{padding:11px 8px}
+  .stat-val{font-size:20px}
+  .stat-label{font-size:10px;letter-spacing:0}
+
+  /* ── 배치도 : 사이드패널을 좌석표 아래로 ── */
+  #fp-drag-wrap{
+    margin-right:0!important;min-height:0!important;
+    overflow:auto!important;-webkit-overflow-scrolling:touch;
+    justify-content:flex-start;padding:8px;
+  }
+  #fp-side-panel{position:static!important;width:auto!important;margin-top:12px;max-height:60vh}
+  .fp-side-drag-hint{display:none}      /* 터치에선 드래그&드롭이 안 되므로 숨김 */
+  .fp-toolbar{flex-wrap:wrap;gap:6px}
+
+  /* ── 넓은 표·차트는 가로 스크롤로 흘려보낸다 ── */
+  .card{padding:11px}
+  table{font-size:11.5px}
+
+  /* ── 폼 : iOS가 확대하지 않도록 16px 유지 ── */
+  input,select,textarea{font-size:16px;max-width:100%;min-width:0}
+
+  /* 설정 탭의 2열 인라인 그리드(시작/종료 시각 등)는 1열로 —
+     16px 입력칸이 1fr 트랙보다 넓어져 카드를 밀어낸다 */
+  #sec-settings [style*="1fr 1fr"]{grid-template-columns:1fr!important}
+}
 </style>
 
 
