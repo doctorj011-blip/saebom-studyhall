@@ -752,7 +752,21 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   .topbar-title .today-chip,.topbar-title .now-period-chip{font-size:10.5px}
   .checkin-shortcut-btn{margin-left:auto!important}
 
-  /* 탭은 줄바꿈 대신 가로 스크롤 — 13개가 세로로 쌓이면 본문이 안 보인다 */
+  /* ── 폰에서 감출 탭 ──
+     폰은 '확인용'(대시보드·배치도·공지·이벤트·관리·시간·설정)으로만 쓴다.
+     입퇴실은 키오스크 태블릿 몫이고, 스케줄·문자·수납·플래너·학습분석·인수인계는
+     입력이 많아 PC에서 하는 작업이라 좁은 화면에 띄울 이유가 없다.
+     ※ 미등록 기기는 입퇴실 화면밖에 못 보므로, 입퇴실 버튼은 관리자 기기에서만 감춘다.
+        (JS 쪽 MOBILE_HIDDEN_TABS와 목록을 맞출 것) */
+  body.admin-device .checkin-shortcut-btn,
+  .tab-btn[onclick*="'handover'"],
+  .tab-btn[onclick*="'planner'"],
+  .tab-btn[onclick*="'analytics'"],
+  .tab-btn[onclick*="'schedule'"],
+  .tab-btn[onclick*="'smslog'"],
+  .tab-btn[onclick*="'billing'"]{display:none}
+
+  /* 탭은 줄바꿈 대신 가로 스크롤 — 세로로 쌓이면 본문이 안 보인다 */
   body.admin-device .topbar-tabs{
     width:100%;flex-wrap:nowrap;overflow-x:auto;overscroll-behavior-x:contain;
     -webkit-overflow-scrolling:touch;scrollbar-width:none;
@@ -1984,16 +1998,42 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+// ── 폰에서 감추는 탭 ──
+// CSS(@media max-width:600px)에서 버튼을 숨기지만, 탭 복원·기본 활성 섹션은
+// JS가 정하므로 목록을 여기에도 둔다. 한쪽만 고치면 '버튼은 없는데 화면은 떠 있는'
+// 상태가 되니 CSS 쪽 목록과 항상 같이 고칠 것.
+const MOBILE_HIDDEN_TABS = ['checkin','handover','planner','analytics','schedule','smslog','billing'];
+function isMobileView() { return window.matchMedia('(max-width:600px)').matches; }
+// 미등록 기기는 입퇴실 말고는 열 수 있는 화면이 없으므로 감추지 않는다.
+function isTabHiddenOnMobile(id) {
+  return isMobileView() && isAdminDevice() && MOBILE_HIDDEN_TABS.includes(id);
+}
+window.isTabHiddenOnMobile = isTabHiddenOnMobile;
+
+// 폰에서 감춰진 탭이 열려 있으면 대시보드로 돌린다.
+// (sec-checkin이 HTML상 기본 active라, 관리자 폰으로 열면 탭 없이 입퇴실만 떠 있게 된다)
+function redirectIfHiddenOnMobile() {
+  if (window._kioskAuto) return;
+  const cur = document.querySelector('.section.active');
+  const id = cur ? cur.id.replace('sec-', '') : null;
+  if (!id || !isTabHiddenOnMobile(id)) return;
+  const btn = document.querySelector('.tab-btn[onclick*="\'dashboard\'"]');
+  if (btn) showSection('dashboard', btn);
+}
+// 가로↔세로 회전으로 600px 경계를 넘나들 때도 맞춰준다
+window.addEventListener('resize', redirectIfHiddenOnMobile);
+
 // 페이지 로드 시 마지막 탭 복원
 window.addEventListener('load', function() {
   if (window._kioskAuto) return; // 키오스크 모드에서는 항상 입실·퇴실 화면 고정
   try {
     const saved = sessionStorage.getItem('saebom_active_tab');
-    if (saved && saved !== 'dashboard') {
+    if (saved && saved !== 'dashboard' && !isTabHiddenOnMobile(saved)) {
       const btn = document.querySelector('.tab-btn[onclick*="\'' + saved + '\'"]');
       if (btn) setTimeout(() => showSection(saved, btn), 800);
     }
   } catch(e) {}
+  redirectIfHiddenOnMobile();
 });
 
 // ══════════════════════════════════════════════════════════════════════
@@ -8060,10 +8100,11 @@ window.initApp = function(){
   try {
     if (window._kioskAuto) return;
     const saved = sessionStorage.getItem('saebom_active_tab');
-    if (saved && saved !== 'dashboard') {
+    if (saved && saved !== 'dashboard' && !isTabHiddenOnMobile(saved)) {
       const btn = document.querySelector('.tab-btn[onclick*="' + saved + '"]');
       if (btn) showSection(saved, btn);
     }
+    redirectIfHiddenOnMobile();
   } catch(e) {}
 };
 window.initApp();
