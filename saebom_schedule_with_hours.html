@@ -268,6 +268,24 @@ body.admin-device .topbar-tabs{display:flex}
 .done-msg{font-size:14px;color:var(--color-text-secondary);margin-bottom:6px}
 .done-time{font-size:12px;color:var(--color-text-tertiary)}
 
+/* 교시 중 입실 시 스터디룸 배정 전체화면 안내 —
+   완료 패널의 한 줄 안내는 학생들이 그냥 지나쳐서, 화면 전체를 덮어 강제로 보게 한다. */
+#sr-fullscreen{position:fixed;inset:0;z-index:99999;display:none;flex-direction:column;
+  align-items:center;justify-content:center;text-align:center;padding:4vh 4vw;
+  background:linear-gradient(160deg,#4338A8 0%,#6C5DD3 55%,#8F82E4 100%);color:#fff;
+  font-family:inherit;cursor:pointer;-webkit-user-select:none;user-select:none}
+#sr-fullscreen.show{display:flex;animation:srPop .28s ease-out}
+@keyframes srPop{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+.sr-fs-name{font-size:clamp(28px,6vw,64px);font-weight:800;opacity:.95;margin-bottom:1vh}
+.sr-fs-label{font-size:clamp(22px,4.5vw,48px);font-weight:700;letter-spacing:.08em;opacity:.85}
+/* 가로/세로 어느 쪽이든 화면을 벗어나지 않도록 vw·vh 중 작은 쪽을 따른다 */
+.sr-fs-room{font-size:clamp(120px,min(32vw,40vh),400px);font-weight:900;line-height:.95;margin:1vh 0;
+  text-shadow:0 6px 30px rgba(0,0,0,.28)}
+.sr-fs-room small{font-size:.4em;font-weight:800;margin-left:.08em}
+.sr-fs-sub{font-size:clamp(20px,3.6vw,40px);font-weight:700;line-height:1.45;margin-top:2vh;
+  margin-bottom:6vh;background:rgba(255,255,255,.16);border-radius:20px;padding:2vh 4vw}
+.sr-fs-hint{position:absolute;bottom:2.5vh;font-size:clamp(14px,2vw,20px);opacity:.7}
+
 /* 오늘 현황 */
 .checkin-today-wrap{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:14px}
 .checkin-today-title{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin-bottom:10px;display:flex;align-items:center;gap:6px}
@@ -1034,6 +1052,15 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <div class="done-msg" id="done-msg"></div>
       <div class="done-time" id="done-time"></div>
     </div>
+  </div>
+
+  <!-- 교시 중 입실 스터디룸 배정 전체화면 안내 (화면 아무데나 누르면 닫힘) -->
+  <div id="sr-fullscreen" onclick="hideStudyroomFullscreen()">
+    <div class="sr-fs-name" id="sr-fs-name"></div>
+    <div class="sr-fs-label">스터디룸</div>
+    <div class="sr-fs-room" id="sr-fs-room"></div>
+    <div class="sr-fs-sub">여기서 공부하다가<br><b>쉬는 시간에 내 좌석으로</b> 이동하세요</div>
+    <div class="sr-fs-hint">화면을 누르면 닫힙니다</div>
   </div>
 
   <!-- 오늘 입실 현황 -->
@@ -5211,6 +5238,9 @@ window.checkinConfirm = function() {
   document.getElementById('done-msg').textContent = doneMsg;
   document.getElementById('done-time').textContent = timeStr;
 
+  // 교시 중 입실이라 스터디룸으로 가야 하면 화면 전체를 덮어 안내 (그냥 좌석으로 들어가는 것 방지)
+  if (assignedRoom && isDuringPeriod) showStudyroomFullscreen(assignedRoom, maskName(student.name));
+
   // PRESENT 업데이트
   if (isCheckout) {
     const idx = PRESENT.indexOf(student.name);
@@ -5235,7 +5265,7 @@ window.checkinConfirm = function() {
 
   setTimeout(() => {
     checkinReset();
-  }, isDuringPeriod && assignedRoom ? 6000 : 2200);
+  }, isDuringPeriod && assignedRoom ? 9000 : 2200);
   } catch(e) {
     // 처리 중 예외가 나도 잠금(_checkinProcessing)이 풀리고 첫 화면으로 복귀하도록 보장
     // (기존엔 예외 시 잠금이 걸린 채 확인 화면에 멈춰 키오스크가 먹통이 됐음)
@@ -5560,7 +5590,22 @@ async function saveAutoStudyroomAssignment(student, room, period) {
   } catch(e) { console.error('스터디룸 자동배정 저장 실패:', e); }
 }
 
+// ── 스터디룸 배정 전체화면 안내 ──
+// 키오스크 앞에서 안내를 안 보고 좌석으로 들어가는 학생이 많아, 완료 패널의 한 줄 대신
+// 화면 전체를 덮는다. 화면 터치 또는 checkinReset(자동 복귀)으로 닫힌다.
+window.showStudyroomFullscreen = function(room, name) {
+  const el = document.getElementById('sr-fullscreen');
+  if (!el) return;
+  document.getElementById('sr-fs-name').textContent = name ? `${name} 학생` : '';
+  document.getElementById('sr-fs-room').innerHTML = `${room}<small>번</small>`;
+  el.classList.add('show');
+};
+window.hideStudyroomFullscreen = function() {
+  document.getElementById('sr-fullscreen')?.classList.remove('show');
+};
+
 window.checkinReset = function() {
+  hideStudyroomFullscreen();
   window._checkinProcessing = false; // 처리 잠금 해제
   _checkinPanelShownAt = 0;
   numpadBuffer = '';
