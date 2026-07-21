@@ -10,6 +10,23 @@
 <meta name="apple-mobile-web-app-title" content="새봄 학생">
 <meta name="theme-color" content="#6C5DD3">
 <title>새봄 면학관 — 학생</title>
+<!-- ── Google Analytics (GA4) ──────────────────────────────────────────
+     방문·사용 통계. 학생 개인정보(이름·좌석번호·연락처)는 어떤 파라미터로도 보내지 않는다.
+     보내는 값은 앱 구분과 탭 이름 같은 익명 값뿐. saTrack()으로만 이벤트를 쏜다. -->
+<script>
+(function(){
+  // ?emu=1(로컬 에뮬레이터 테스트)은 집계 제외 — 실사용 통계가 개발용 접속으로 오염되지 않도록
+  if (new URLSearchParams(location.search).get('emu') === '1') { window.saTrack = function(){}; return; }
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function(){ dataLayer.push(arguments); };
+  gtag('js', new Date());
+  gtag('config', 'G-D2GE36RSZH', { app_name: '학생앱' });
+  var s = document.createElement('script');
+  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=G-D2GE36RSZH';
+  document.head.appendChild(s);
+  window.saTrack = function(name, params){ try { gtag('event', name, params || {}); } catch(e) {} };
+})();
+</script>
 <!-- 카톡 등 메신저에 링크 붙여넣을 때 미리보기 카드(이미지+제목)가 자동으로 뜨게 하는 태그 -->
 <meta property="og:title" content="새봄 면학관 학생 앱">
 <meta property="og:description" content="터치 한 번으로 접속 · 휴대폰 번호 뒷 4자리 로그인">
@@ -1855,6 +1872,9 @@ async function tryLogin() {
 
 function loginAsStudent(s) {
   currentStudent = s;
+  // 통계 — 새로고침 복원(restoreSession)은 이 경로를 타지 않으므로 '진짜 로그인'만 잡힌다.
+  // 학생을 특정할 수 있는 값은 넣지 않는다.
+  if (window.saTrack) saTrack('login_success', { app_name: '학생앱' });
   // 새로고침 후 자동 로그인을 위해 저장
   try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
   initDraft();
@@ -2478,6 +2498,7 @@ function updateBottomNav(id) {
 
 // ── 탭 전환 ──
 function showTab(id, btn) {
+  if (window.saTrack) saTrack('tab_view', { app_name: '학생앱', tab_name: id });
   // 자리선택 탭 이탈 시 구독 해제
   if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
   // 현재 탭 저장
@@ -4661,6 +4682,8 @@ async function savePlannerMeta(seat, dateStr, url) {
       status,               // 'ontime' | 'late' — 최초 제출 기준
       updatedAt: nowIso     // 마지막 교체 시각
     });
+    // 통계 — 저장이 실제로 성공한 뒤에만. status는 'ontime'/'late'라 학생을 특정하지 않는다.
+    if (window.saTrack) saTrack('planner_submit', { app_name: '학생앱', status: status || 'unknown' });
   } catch(e) { console.warn('플래너 메타 저장 실패:', e); }
 }
 

@@ -5,6 +5,22 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>새봄 면학관 관리자</title>
+<!-- ── Google Analytics (GA4) ──────────────────────────────────────────
+     방문 통계만. 학생 개인정보(이름·좌석번호·연락처)는 어떤 파라미터로도 보내지 않는다. -->
+<script>
+(function(){
+  // ?emu=1(로컬 에뮬레이터 테스트)은 집계 제외 — 실사용 통계가 개발용 접속으로 오염되지 않도록
+  if (new URLSearchParams(location.search).get('emu') === '1') { window.saTrack = function(){}; return; }
+  window.dataLayer = window.dataLayer || [];
+  window.gtag = function(){ dataLayer.push(arguments); };
+  gtag('js', new Date());
+  gtag('config', 'G-D2GE36RSZH', { app_name: '관리앱' });
+  var s = document.createElement('script');
+  s.async = true; s.src = 'https://www.googletagmanager.com/gtag/js?id=G-D2GE36RSZH';
+  document.head.appendChild(s);
+  window.saTrack = function(name, params){ try { gtag('event', name, params || {}); } catch(e) {} };
+})();
+</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
 </head>
 <style>
