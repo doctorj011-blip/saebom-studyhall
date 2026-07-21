@@ -49,6 +49,58 @@
 
   @media (max-width: 900px) { .spec { grid-template-columns: 1fr 1fr; } }
   @media (max-width: 560px) { .spec { grid-template-columns: 1fr; } }
+
+  /* 검사·분석 — 3단계, 등급 띠, 분석 항목 */
+  .stages { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 26px; }
+  .stage {
+    background: #fff; border: 1px solid var(--parchment-2);
+    border-top: 3px solid var(--gold-warm); border-radius: 4px; padding: 20px;
+  }
+  .stage b { display: block; font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .stage span { font-size: 13.5px; color: var(--on-light-mute); }
+  /* .stage span 뒤에 둬야 글꼴·색이 덮이지 않는다 */
+  .stage .stage-no {
+    display: block; font-size: 11.5px; font-weight: 700; letter-spacing: .14em;
+    color: var(--umber); margin-bottom: 8px;
+  }
+  @media (max-width: 700px) { .stages { grid-template-columns: 1fr; } }
+
+  .grades { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 6px; }
+  .grade {
+    display: inline-flex; align-items: center; gap: 7px;
+    background: #fff; border: 1px solid var(--parchment-2); border-radius: 999px;
+    padding: 7px 15px 7px 11px; font-size: 14px; font-weight: 600;
+  }
+  .grade i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .grade small { font-weight: 500; font-size: 13px; color: var(--on-light-mute); }
+
+  .checkcard {
+    background: #fff; border: 1px solid var(--parchment-2);
+    border-left: 3px solid var(--gold-warm); border-radius: 4px;
+    padding: 22px 24px; margin: 22px 0;
+  }
+  .checkcard .cc-top {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .checkcard .cc-tag {
+    font-size: 12px; font-weight: 700; letter-spacing: .1em;
+    background: rgba(46,125,83,.12); color: var(--good);
+    border-radius: 3px; padding: 4px 9px;
+  }
+  .checkcard .cc-who { font-size: 12.5px; color: var(--on-light-mute); }
+  .checkcard .cc-sum { font-size: 14.5px; font-weight: 600; margin-bottom: 10px; }
+  .checkcard .cc-body { font-size: 14.5px; color: var(--on-light-mute); line-height: 1.85; }
+  .checkcard .cc-foot {
+    font-size: 12.5px; color: var(--on-light-mute);
+    margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--parchment-2);
+  }
+
+  .seen { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--parchment-2); margin: 22px 0 6px; }
+  .seen div { background: #fff; padding: 18px 20px; }
+  .seen b { display: block; font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .seen span { font-size: 13.5px; color: var(--on-light-mute); }
+
+  @media (max-width: 700px) { .seen { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -440,6 +492,130 @@
         <span>70일 뒤에 남는 게 "화이팅" 70개예요. 대신 발견을 쓰면 나만의 공부법 70개가 남습니다.</span>
       </div>
     </div>
+  </div>
+</section>
+
+<!-- ── 내고 나면 ─────────────────────────── -->
+<section class="band band--day-alt" id="review">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:20px">
+      <span class="eyebrow">내고 나면</span>
+      <h2 class="sec-title">낸 플래너는 하나도 빠짐없이 읽힙니다</h2>
+      <p class="sec-lead">
+        사진을 올리면 그날로 검사가 들어갑니다. 밀렸다가 한꺼번에 훑는 일이 없도록,
+        먼저 자동으로 한 번 읽고 그다음에 선생님이 확인하는 순서로 돌아갑니다.
+      </p>
+    </div>
+
+    <div class="stages">
+      <div class="stage">
+        <span class="stage-no">1단계</span>
+        <b>자동 검사</b>
+        <span>사진을 읽어 계획·시간·완료 체크를 확인하고 등급과 요약을 냅니다.</span>
+      </div>
+      <div class="stage">
+        <span class="stage-no">2단계</span>
+        <b>선생님 확인</b>
+        <span>사람이 원본과 대조해 보고, 코멘트를 그대로 쓰거나 고쳐서 확정합니다.</span>
+      </div>
+      <div class="stage">
+        <span class="stage-no">3단계</span>
+        <b>앱에 게시</b>
+        <span>학생앱과 학부모앱에 사진·등급·코멘트가 함께 올라갑니다.</span>
+      </div>
+    </div>
+
+    <p style="font-size:15.5px;margin:0 0 4px">등급은 다섯 가지예요.</p>
+    <div class="grades">
+      <span class="grade"><i style="background:#2E7D53"></i>우수</span>
+      <span class="grade"><i style="background:#5B9BD5"></i>양호</span>
+      <span class="grade"><i style="background:#E8B520"></i>보통</span>
+      <span class="grade"><i style="background:#E07B2C"></i>부실</span>
+      <span class="grade"><i style="background:#B0AAA0"></i>판독불가 <small>사진이 흐리거나 잘렸을 때</small></span>
+    </div>
+    <p style="font-size:14.5px;color:var(--on-light-mute);margin-top:12px">
+      등급은 얼마나 오래 공부했는지로 매기지 않습니다. 규칙 다섯 개를 지켰는지 —
+      교재와 숫자를 썼는지, 확인 칸을 채웠는지, 순공만 색칠했는지 — 로 봅니다.
+      그래서 공부량이 적은 날도 정직하게 쓰면 <b>우수</b>가 나옵니다.
+    </p>
+
+    <h3 class="sec-title" style="font-size:20px;margin:40px 0 10px">실제로 이렇게 돌아옵니다</h3>
+    <div class="checkcard">
+      <div class="cc-top">
+        <span class="cc-tag">우수</span>
+        <span class="cc-who">7월 19일 · 총 10시간 40분</span>
+      </div>
+      <p class="cc-sum">
+        요약 — 수학·영어·국어 세 과목을 교재와 페이지까지 구체적으로 계획했고,
+        계획 항목 전부에 완료 체크가 되어 있고 색깔별 타임테이블로 과목별 시간 배분도 표시함.
+      </p>
+      <p class="cc-body">
+        "수학 일일블록부터 영어 화이트라벨·어휘끝, 국어 100인지혜 문법과 문학까지 교재와 페이지를
+        정확히 적고 하나도 빠짐없이 완료 체크한 점이 정말 알찹니다. 색깔로 나눈 타임테이블 덕분에
+        어느 시간대에 무엇을 했는지 한눈에 보이는 것도 좋았어요. 메모에 적은 것처럼 영어 단어를
+        한꺼번에 외우려 하기보다 34~38번을 오전·오후로 쪼개 두세 번 훑으면 훨씬 덜 힘들 거예요.
+        D-1까지 이렇게 성실히 채워온 만큼 내일도 지금처럼만 하면 됩니다."
+      </p>
+      <p class="cc-foot">
+        실제로 나간 코멘트입니다. 이 문장은 선생님이 원본과 대조한 뒤 확정한 것이고,
+        학생앱·학부모앱에 이대로 올라갑니다.
+      </p>
+    </div>
+
+    <div class="note">
+      <h4>판정은 사람이 합니다</h4>
+      <p>
+        자동 검사는 초안까지입니다. 등급과 코멘트는 선생님이 사진을 직접 보고 확정하며,
+        상·벌점이 자동 검사 결과만으로 매겨지는 일은 없습니다.
+      </p>
+    </div>
+
+    <h3 class="sec-title" style="font-size:20px;margin:44px 0 6px">그리고 한 장씩이 아니라 모아서 봅니다</h3>
+    <p class="sec-lead" style="margin-bottom:4px">
+      면학관에는 입퇴실 기록이 남아 있습니다. 여기에 매일 낸 플래너를 겹치면,
+      한 장만 볼 때는 안 보이던 것이 보입니다. 선생님이 보는 화면에는 이런 게 뜹니다.
+    </p>
+
+    <div class="seen">
+      <div>
+        <b>앉아 있던 시간 vs 실제로 공부한 시간</b>
+        <span>면학관에 머문 시간과 플래너에 색칠한 순공을 나란히 놓습니다. 열 시간을 앉아 있고 네 시간을 칠했다면 그 여섯 시간이 어디로 갔는지 물어볼 수 있습니다.</span>
+      </div>
+      <div>
+        <b>계획 완료율</b>
+        <span>세운 계획 중 몇 개에 O가 붙었는지. 완료율이 늘 100%면 계획을 작게 잡고 있다는 신호이기도 합니다.</span>
+      </div>
+      <div>
+        <b>줄었는지 늘었는지</b>
+        <span>"하루 평균 순공이 49% 줄었습니다", "등원 시각이 평균 99분 빨라졌습니다" 처럼 변화가 먼저 눈에 띄게 표시됩니다.</span>
+      </div>
+      <div>
+        <b>주차별 목표 달성</b>
+        <span>그 주에 정한 목표 순공을 실제로 채웠는지 주 단위로 쌓입니다.</span>
+      </div>
+      <div>
+        <b>과목별 시간 배분</b>
+        <span>어느 과목에 시간을 몰아쓰고 어느 과목이 밀리고 있는지. 시험이 다가올수록 이 균형이 깨집니다.</span>
+      </div>
+      <div>
+        <b>시간대별 패턴</b>
+        <span>몇 시에 어떤 과목을 하는지. 수학은 오후에만 하는 학생, 오전을 통째로 흘려보내는 학생이 여기서 드러납니다.</span>
+      </div>
+      <div>
+        <b>요일별 리듬</b>
+        <span>요일마다 평균 순공이 다릅니다. 학원이 몰린 요일이 늘 무너지고 있다면 시간표부터 손봐야 합니다.</span>
+      </div>
+      <div>
+        <b>학습 스타일</b>
+        <span>한 과목을 길게 붙잡는지 자주 갈아타는지, 오전형인지 오후형인지. 쌓인 기록에서 나온 성향이라 상담할 때 근거가 됩니다.</span>
+      </div>
+    </div>
+
+    <p style="font-size:14.5px;color:var(--on-light-mute);margin-top:18px">
+      이 분석 화면은 상담과 지도를 위해 선생님이 보는 화면입니다.
+      학부모님께는 플래너 사진과 검사 결과, 선생님 코멘트가
+      <a href="apps.html#parent" style="color:var(--gold-warm);font-weight:600">학부모앱</a>에 그대로 올라갑니다.
+    </p>
   </div>
 </section>
 

@@ -92,7 +92,7 @@
     {
       "@type": "Question",
       "name": "플래너는 꼭 써야 하나요?",
-      "acceptedAnswer": { "@type": "Answer", "text": "매일 씁니다. 그날 페이지를 쓰고 사진을 앱으로 올리며, 다음날 낮 12시가 마감입니다. 선생님이 확인해 피드백을 남기고 학부모도 앱에서 볼 수 있습니다." }
+      "acceptedAnswer": { "@type": "Answer", "text": "매일 씁니다. 그날 페이지를 쓰고 사진을 앱으로 올리며, 다음날 낮 12시가 마감입니다. 올라온 사진은 그날 자동으로 한 번 검사되어 등급과 요약이 나오고, 선생님이 원본과 대조해 코멘트를 확정합니다. 결과는 학생앱과 학부모앱에서 그대로 볼 수 있습니다." }
     },
     {
       "@type": "Question",
@@ -299,8 +299,8 @@
           <path d="M8.5 8h6M8.5 11h4"/>
         </svg>
       </div>
-      <h3>학습 플래너 관리</h3>
-      <p>학생이 그날의 계획과 실행을 플래너에 적고, 선생님이 확인해 피드백을 남깁니다. 학부모님도 앱에서 그대로 보실 수 있습니다.</p>
+      <h3>학습 플래너 검사</h3>
+      <p>학생이 그날의 계획과 실행을 플래너에 적어 올리면 그날로 검사가 들어갑니다. 등급과 코멘트가 붙어 학생앱·학부모앱에 그대로 올라갑니다.</p>
     </div>
 
     <div class="card">
@@ -379,8 +379,8 @@
       <div class="fl-item">
         <div class="fl-when">다음날<br>낮 12시</div>
         <div class="fl-what">
-          <b>플래너 사진 제출 마감</b>
-          <span>그날의 계획과 실행을 직접 적어 올립니다. 선생님이 확인하고 피드백을 남깁니다.</span>
+          <b>플래너 사진 제출 마감<span class="fl-tag">자동</span></b>
+          <span>그날의 계획과 실행을 직접 적어 올립니다. 올라온 사진은 자동으로 한 번 검사되고, 선생님이 확인해 등급과 코멘트를 확정합니다.</span>
         </div>
       </div>
       <div class="fl-item">
@@ -394,6 +394,56 @@
 
     <div class="cta-row" style="margin-top:34px">
       <a class="btn btn--ghost" href="apps.html">앱에서 무엇을 보는지 →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── 플래너 검사와 분석 ─────────────────── -->
+<section class="band band--night" id="review">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:28px">
+      <span class="eyebrow">검사와 분석</span>
+      <h2 class="sec-title">낸 플래너를 쌓아두지 않습니다</h2>
+      <p class="sec-lead">
+        플래너를 걷기만 하고 학기 말에 몰아서 훑는 곳이 많습니다. 저희는 사진이 올라온 그날
+        자동으로 한 번 읽고, 선생님이 원본과 대조해 등급과 코멘트를 확정합니다.
+        학생은 다음 날 아침에 어제 플래너에 대한 답을 받습니다.
+      </p>
+    </div>
+
+    <div class="flowline">
+      <div class="fl-item">
+        <div class="fl-when">그날</div>
+        <div class="fl-what">
+          <b>자동 검사<span class="fl-tag">자동</span></b>
+          <span>교재와 숫자를 썼는지, 확인 칸을 채웠는지, 순공만 색칠했는지를 확인해 등급과 요약을 냅니다. 공부량이 아니라 작성 규칙으로 봅니다.</span>
+        </div>
+      </div>
+      <div class="fl-item">
+        <div class="fl-when">확정</div>
+        <div class="fl-what">
+          <b>선생님이 읽고 코멘트를 답니다</b>
+          <span>사람이 사진을 직접 보고 코멘트를 고쳐 확정합니다. 자동 검사 결과만으로 상·벌점이 매겨지는 일은 없습니다.</span>
+        </div>
+      </div>
+      <div class="fl-item">
+        <div class="fl-when">쌓이면</div>
+        <div class="fl-what">
+          <b>입퇴실 기록과 겹쳐 봅니다</b>
+          <span>면학관에 머문 시간과 플래너에 색칠한 순공을 나란히 놓습니다. 열 시간을 앉아 있고 네 시간을 칠했다면, 그 차이가 상담의 출발점이 됩니다.</span>
+        </div>
+      </div>
+      <div class="fl-item">
+        <div class="fl-when">그래서</div>
+        <div class="fl-what">
+          <b>말이 아니라 숫자로 이야기합니다</b>
+          <span>계획 완료율, 과목별 시간 배분, 요일별 리듬, 등원 시각의 변화까지 남습니다. "요즘 열심히 안 한다"가 아니라 무엇이 언제부터 어떻게 달라졌는지를 짚습니다.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="cta-row" style="margin-top:34px">
+      <a class="btn btn--ghost" href="planner.html#review">검사 결과 예시 보기 →</a>
     </div>
   </div>
 </section>
@@ -829,7 +879,8 @@
         <summary>플래너는 꼭 써야 하나요?</summary>
         <div class="faq-a">
           <p>네, 매일 씁니다. 그날 페이지를 다 쓰고 사진 한 장을 앱으로 올리면 되며, 다음날 낮 12시가 마감입니다. 결석한 날도 제출합니다.</p>
-          <p>선생님이 확인하고 피드백을 남기며, 학부모님도 앱에서 그대로 보십니다. 무엇을 어떻게 쓰게 하는지는 <a href="planner.html">플래너 작성법</a>에 전부 공개해 두었습니다.</p>
+          <p>올라온 사진은 그날 자동으로 한 번 검사되어 등급(우수·양호·보통·부실)과 요약이 나오고, 선생님이 원본과 대조해 코멘트를 확정합니다. 학부모님도 앱에서 그대로 보십니다.</p>
+          <p>무엇을 어떻게 쓰게 하는지, 검사 결과가 실제로 어떻게 돌아오는지는 <a href="planner.html#review">플래너 작성법</a>에 예시까지 공개해 두었습니다.</p>
         </div>
       </details>
 

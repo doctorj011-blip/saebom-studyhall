@@ -561,7 +561,8 @@ a.telno { cursor: pointer; }
 }
 .fl-what b { display: block; font-size: 16.5px; font-weight: 700; margin-bottom: 4px; }
 .fl-what span { font-size: 14.5px; color: var(--on-dark-mute); }
-.fl-tag {
+/* .fl-what span 보다 뒤에, 같은 무게로 — 안 그러면 글꼴·색이 덮여 회색으로 나온다 */
+.fl-what .fl-tag {
   display: inline-block; margin-left: 8px; padding: 2px 9px;
   border: 1px solid rgba(232,181,32,.45); border-radius: 999px;
   font-size: 11.5px; font-weight: 600; color: var(--gold);
