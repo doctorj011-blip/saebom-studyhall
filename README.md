@@ -28,7 +28,7 @@
 ├── saebom_parent.html               ← 학부모 앱
 ├── saebom_schedule_with_hours.html  ← 관리자·키오스크 앱
 ├── manifest.json                    ← PWA 설정(앱 이름/아이콘)
-├── service-worker.js                ← 오프라인 캐시
+├── service-worker.js                ← 폐기됨(자기 등록해제 전용). 캐시 기능 없음
 └── icons/
     ├── icon-192.png                 ← 앱 아이콘 (소)
     └── icon-512.png                 ← 앱 아이콘 (대)
