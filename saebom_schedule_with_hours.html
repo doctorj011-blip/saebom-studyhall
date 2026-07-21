@@ -13030,6 +13030,16 @@ function _apcAiRequest(seatKey, ds, name) {
   });
 }
 
+// 서버 함수가 통째로 죽으면(2026-07-21 OOM 사고) catch도 못 돌아 status가 'running'에
+// 영원히 멈춘다. 그러면 아래 전체 검사 필터와 모달 버튼이 "검사 중"으로 보고 영구히
+// 잠겨 재검사가 불가능해진다 → 오래된 running은 실패로 간주해 다시 열어 준다.
+const _APC_AI_STALE_MS = 10 * 60 * 1000;
+function _apcAiStuck(v) {
+  if (!v || (v.status !== 'running' && v.status !== 'requested')) return false;
+  const t = Date.parse(v.startedAt || '');     // 'requested'는 로컬 상태라 startedAt이 없다(=잠금 유지)
+  return !isNaN(t) && (Date.now() - t) > _APC_AI_STALE_MS;
+}
+
 function _apcAiWatch(seatKey, ds) {
   if (_apcAiUnsub) { _apcAiUnsub(); _apcAiUnsub = null; }
   _apcAiLastComment = '';
@@ -13053,6 +13063,11 @@ function _apcAiRenderPanel(v) {
     return;
   }
   box.style.display = 'block';
+  if (_apcAiStuck(v)) {
+    btn.textContent = '다시 검사'; btn.disabled = false;
+    box.innerHTML = `<div style="font-size:12px;color:#C62828">⚠️ 검사가 중단됐습니다 — 다시 검사해 주세요</div>`;
+    return;
+  }
   if (v.status === 'running' || v.status === 'requested') {
     btn.textContent = '검사 중...'; btn.disabled = true;
     box.innerHTML = `<div style="font-size:12px;color:#6B7280">플래너를 검사하고 있습니다... (보통 30초~1분)</div>`;
@@ -13156,7 +13171,8 @@ window.apcAiRunAll = async function() {
     const key = _apcSeatKey(s.seat);
     const sub = _apcSubs[key];
     const ai = _apcAi[key];
-    return sub && sub.url && !(ai && (ai.status === 'done' || ai.status === 'running' || ai.status === 'requested'));
+    const busy = ai && (ai.status === 'running' || ai.status === 'requested') && !_apcAiStuck(ai);
+    return sub && sub.url && !(ai && (ai.status === 'done' || busy));
   });
   if (!targets.length) { showAdminToast('검사할 플래너가 없습니다 (미제출이거나 이미 검사됨)'); return; }
   const [y, m, d] = _apcDate.split('-').map(Number);
