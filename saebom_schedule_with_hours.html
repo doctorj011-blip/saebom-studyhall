@@ -11897,6 +11897,16 @@ window.openAddStudentModal = function(seatNum) {
             </div>
           </div>
         </div>
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:4px">학년</div>
+          <select id="new-st-grade"
+            style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box;background:#fff;color:#1E1B4B">
+            <option value="">학년 미지정</option>
+            <option value="중1">중1</option><option value="중2">중2</option><option value="중3">중3</option>
+            <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
+            <option value="N수">N수</option>
+          </select>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
             <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:4px">이용 시작일</div>
@@ -11979,13 +11989,14 @@ window.confirmAddStudent = function(seatNum) {
 
   // 근무요일(관리자) → schedule에 '근무'로 저장, 학생은 시작일/만료일/부모님번호 사용
   const schedule = { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' };
-  let parent = '', expiry = '', startDate = '';
+  let parent = '', expiry = '', startDate = '', grade = '';
   if (isAdmin) {
     (window._newAdminDays || new Set()).forEach(d => { schedule[d] = '근무'; });
   } else {
     parent    = '010-' + document.getElementById('new-st-parent').value.trim();
     expiry    = document.getElementById('new-st-expiry').value;
     startDate = document.getElementById('new-st-start-date').value;
+    grade     = document.getElementById('new-st-grade').value;   // 학습분석 또래 비교의 기준
   }
 
   // STUDENTS 배열에 추가
@@ -11995,6 +12006,7 @@ window.confirmAddStudent = function(seatNum) {
     phone,
     parent,
     gender,
+    grade,
     expiry,
     startDate,
     schedule,
