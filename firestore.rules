@@ -16,6 +16,8 @@ rules_version = '2';
 //   - 2026-07-17  handover_notes 추가 — 조교 서면 인수인계 메모(관리자앱 📝 인수인계 탭)
 //   - 2026-07-23  usage_logs 추가 — 학생앱 사용기록(관리앱 📊 사용기록 탭). create/read/delete만
 //                 허용하고 update는 차단(기록 위조 방지)
+//   - 2026-07-23  net_daily 추가 — 와이파이 일별 추이. 서버(netDailySnapshot)만 쓰므로
+//                 클라이언트는 read 전용
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -113,6 +115,13 @@ service cloud.firestore {
         && request.resource.data.event.size() <= 40
         && request.resource.data.date is string;
       allow update: if false;
+    }
+
+    // 와이파이 일별 추이: netDailySnapshot 함수가 매일 밤 저장한다.
+    // 서버(Admin SDK)는 규칙을 우회하므로 클라이언트에는 읽기만 열어 둔다.
+    match /net_daily/{date} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // 공지사항: list 문서 하나만 쓰기 허용

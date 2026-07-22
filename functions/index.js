@@ -826,6 +826,77 @@ function unreverseDomain(s) {
   return String(s || '').replace(/^\.+|\.+$/g, '').split('.').reverse().join('.');
 }
 
+// Cloudflare Gateway DNS 집계를 가져온다. HTTP 조회와 야간 스냅샷이 함께 쓴다.
+async function fetchGatewayDns(hours) {
+  const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+  // 도메인별 집계와 시간대별 집계를 한 요청에 담는다(별칭 2개).
+  const query = `
+    query GatewayDns($accountTag: string!, $start: Time) {
+      viewer {
+        accounts(filter: { accountTag: $accountTag }) {
+          byDomain: gatewayResolverQueriesAdaptiveGroups(
+            filter: { datetime_gt: $start }
+            limit: 200
+            orderBy: [count_DESC]
+          ) {
+            count
+            dimensions { queryNameReversed resolverDecision }
+          }
+          byHour: gatewayResolverQueriesAdaptiveGroups(
+            filter: { datetime_gt: $start }
+            limit: 800
+            orderBy: [datetimeHour_ASC]
+          ) {
+            count
+            dimensions { datetimeHour }
+          }
+        }
+      }
+    }`;
+
+  const r = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${CF_API_TOKEN.value()}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ query, variables: { accountTag: CF_ACCOUNT_ID.value(), start } })
+  });
+  const j = await r.json();
+  if (j.errors && j.errors.length) {
+    const msg = j.errors.map(e => e.message).join(' / ');
+    logger.error('[Gateway] GraphQL 오류', j.errors);
+    const err = new Error(msg); err.graphql = true; throw err;
+  }
+  const acct = ((j.data && j.data.viewer && j.data.viewer.accounts) || [])[0] || {};
+
+  // 같은 도메인이 여러 판정으로 쪼개져 오므로 도메인 기준으로 합친다.
+  const map = new Map();
+  (acct.byDomain || []).forEach(row => {
+    const d = unreverseDomain(row.dimensions && row.dimensions.queryNameReversed);
+    if (!d) return;
+    const decision = (row.dimensions && row.dimensions.resolverDecision) || '';
+    const blocked = /^blocked/i.test(decision);
+    const cur = map.get(d) || { domain: d, total: 0, blocked: 0, allowed: 0 };
+    cur.total += row.count;
+    if (blocked) cur.blocked += row.count; else cur.allowed += row.count;
+    map.set(d, cur);
+  });
+  const domains = Array.from(map.values()).sort((a, b) => b.total - a.total);
+  const hourly = (acct.byHour || []).map(row => ({
+    hour: row.dimensions && row.dimensions.datetimeHour,
+    count: row.count
+  }));
+
+  return {
+    hours,
+    domains,
+    hourly,
+    total: domains.reduce((s, d) => s + d.total, 0),
+    blocked: domains.reduce((s, d) => s + d.blocked, 0)
+  };
+}
+
 exports.gatewayLogs = onRequest(
   {
     region: 'us-central1',
@@ -843,79 +914,45 @@ exports.gatewayLogs = onRequest(
       if (!want || token !== want) { res.status(403).json({ error: '관리자 기기가 아닙니다' }); return; }
 
       const hours = Math.min(Math.max(parseInt((req.body && req.body.hours) || 24, 10) || 24, 1), 720);
-      const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
-
-      // 도메인별 집계와 시간대별 집계를 한 요청에 담는다(별칭 2개).
-      const query = `
-        query GatewayDns($accountTag: string!, $start: Time) {
-          viewer {
-            accounts(filter: { accountTag: $accountTag }) {
-              byDomain: gatewayResolverQueriesAdaptiveGroups(
-                filter: { datetime_gt: $start }
-                limit: 200
-                orderBy: [count_DESC]
-              ) {
-                count
-                dimensions { queryNameReversed resolverDecision }
-              }
-              byHour: gatewayResolverQueriesAdaptiveGroups(
-                filter: { datetime_gt: $start }
-                limit: 800
-                orderBy: [datetimeHour_ASC]
-              ) {
-                count
-                dimensions { datetimeHour }
-              }
-            }
-          }
-        }`;
-
-      const r = await fetch('https://api.cloudflare.com/client/v4/graphql', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${CF_API_TOKEN.value()}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ query, variables: { accountTag: CF_ACCOUNT_ID.value(), start } })
-      });
-      const j = await r.json();
-      if (j.errors && j.errors.length) {
-        logger.error('[Gateway] GraphQL 오류', j.errors);
-        res.status(502).json({ error: j.errors.map(e => e.message).join(' / ') });
-        return;
-      }
-      const acct = ((j.data && j.data.viewer && j.data.viewer.accounts) || [])[0] || {};
-
-      // 같은 도메인이 여러 판정으로 쪼개져 오므로 도메인 기준으로 합친다.
-      const map = new Map();
-      (acct.byDomain || []).forEach(row => {
-        const d = unreverseDomain(row.dimensions && row.dimensions.queryNameReversed);
-        if (!d) return;
-        const decision = (row.dimensions && row.dimensions.resolverDecision) || '';
-        const blocked = /^blocked/i.test(decision);
-        const cur = map.get(d) || { domain: d, total: 0, blocked: 0, allowed: 0 };
-        cur.total += row.count;
-        if (blocked) cur.blocked += row.count; else cur.allowed += row.count;
-        map.set(d, cur);
-      });
-      const domains = Array.from(map.values()).sort((a, b) => b.total - a.total);
-
-      const hourly = (acct.byHour || []).map(row => ({
-        hour: row.dimensions && row.dimensions.datetimeHour,
-        count: row.count
-      }));
-
-      res.json({
-        ok: true,
-        hours,
-        total: domains.reduce((s, d) => s + d.total, 0),
-        blocked: domains.reduce((s, d) => s + d.blocked, 0),
-        domains,
-        hourly
-      });
+      const out = await fetchGatewayDns(hours);
+      res.json({ ok: true, ...out });
     } catch (e) {
       logger.error('[Gateway] 조회 실패', e);
-      res.status(500).json({ error: String((e && e.message) || e) });
+      res.status(e.graphql ? 502 : 500).json({ error: String((e && e.message) || e) });
+    }
+  }
+);
+
+// ── 하루치 스냅샷 ────────────────────────────────────────────────────────
+// Cloudflare 무료 플랜은 로그를 24시간만 보관한다. 매일 밤 그날 집계를 우리
+// Firestore(net_daily/{YYYY-MM-DD})에 남겨 장기 추이를 볼 수 있게 한다.
+// 23:55에 도는 이유: 그 시점 '최근 24시간'이 사실상 그날 하루와 겹치기 때문.
+// 저장 용량을 아끼려고 도메인은 상위 50개만 남긴다(꼬리는 거의 잡음).
+exports.netDailySnapshot = onSchedule(
+  {
+    schedule: '55 23 * * *',
+    timeZone: 'Asia/Seoul',
+    region: 'us-central1',
+    secrets: [CF_API_TOKEN, CF_ACCOUNT_ID],
+    maxInstances: 1
+  },
+  async () => {
+    const now = new Date(Date.now() + 9 * 3600 * 1000);   // KST 기준 날짜 키
+    const date = now.toISOString().slice(0, 10);
+    try {
+      const out = await fetchGatewayDns(24);
+      await db.doc(`net_daily/${date}`).set({
+        date,
+        total: out.total,
+        blocked: out.blocked,
+        domainCount: out.domains.length,
+        domains: out.domains.slice(0, 50),
+        updatedAt: new Date().toISOString()
+      });
+      logger.info(`[Gateway] ${date} 스냅샷 저장 — 조회 ${out.total}건, 차단 ${out.blocked}건`);
+    } catch (e) {
+      logger.error(`[Gateway] ${date} 스냅샷 실패`, e);
+      throw e;   // 실패를 삼키면 조용히 비는 날이 생기므로 재시도되게 던진다
     }
   }
 );
