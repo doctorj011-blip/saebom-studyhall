@@ -1503,6 +1503,9 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-20'&&t<='2026-08-31')return{start:'2026-07-20',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
   window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
   window._computeOffset=(M,P)=>{M=Math.max(0,Math.round(M||0));P=Math.max(0,Math.round(P||0));const r=Math.min(Math.floor(M/3),Math.floor(P/2));return{rounds:r,spent:r*3,cleared:r*2,netMerit:M-r*3,netDemerit:P-r*2,rawMerit:M,rawDemerit:P};};
+  window._noticeDateLabel=(d)=>{const s=String(d||'').replace(/\D/g,'');return s.length<8?String(d||''):s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.';};
+  window._noticeSortKey=(n)=>{const s=String((n&&n.date)||'').replace(/\D/g,'');return s.length>=8?Number(s.slice(0,8)):((n&&n.id)?Number(String(n.id).slice(0,8)):0);};
+  window._sortNoticesDesc=(items)=>[...(items||[])].sort((a,b)=>(window._noticeSortKey(b)-window._noticeSortKey(a))||((b.id||0)-(a.id||0)));
 }
 
 // ── 교시 데이터 ──
@@ -2587,7 +2590,7 @@ function buildNotices() {
         <div style="flex:1">
           <span class="notice-badge badge-${n.badge}">${n.badgeLabel}</span>
           <div class="notice-title">${n.title}</div>
-          <div class="notice-date">${n.date}</div>
+          <div class="notice-date">${window._noticeDateLabel(n.date)}</div>
         </div>
         <span class="notice-expand" id="nexp-${i}">⌄</span>
       </div>
@@ -3070,8 +3073,9 @@ function loadNoticesFromFirebase() {
         // audience가 없는 옛 공지는 양쪽 대상으로 취급(기존 동작 유지).
         const items = snap.data().items.filter(n => (n.audience || 'both') !== 'parent');
         NOTICES.length = 0;
-        // 최신순 정렬
-        [...items].reverse().forEach(n => NOTICES.push(n));
+        // 최신순 정렬 — 배열 순서 뒤집기(reverse)가 아니라 date 내림차순.
+        // 옛 공지를 수정해도 배열 위치는 그대로라 reverse로는 날짜순이 어긋났다.
+        window._sortNoticesDesc(items).forEach(n => NOTICES.push(n));
         buildNotices();
         // 새 공지 알림 뱃지
         updateNoticeBadge(items.length);

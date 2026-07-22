@@ -1842,6 +1842,10 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._meritCycle=(refISO)=>{const t=refISO||(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();if(t>='2026-07-20'&&t<='2026-08-31')return{start:'2026-07-20',end:'2026-08-31',label:'이번 주기'};const ym=t.slice(0,7),y=+ym.slice(0,4),m=+ym.slice(5,7),ld=new Date(y,m,0).getDate();return{start:ym+'-01',end:ym+'-'+String(ld).padStart(2,'0'),label:'이번 달'};};
   window._inMeritCycle=(dISO,cyc)=>!!dISO&&dISO>=cyc.start&&dISO<=cyc.end;
   window._computeOffset=(M,P)=>{M=Math.max(0,Math.round(M||0));P=Math.max(0,Math.round(P||0));const r=Math.min(Math.floor(M/3),Math.floor(P/2));return{rounds:r,spent:r*3,cleared:r*2,netMerit:M-r*3,netDemerit:P-r*2,rawMerit:M,rawDemerit:P};};
+  window._noticeDateLabel=(d)=>{const s=String(d||'').replace(/\D/g,'');return s.length<8?String(d||''):s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.';};
+  window._noticeToday=()=>{const t=new Date();return t.getFullYear()+'.'+String(t.getMonth()+1).padStart(2,'0')+'.'+String(t.getDate()).padStart(2,'0')+'.';};
+  window._noticeSortKey=(n)=>{const s=String((n&&n.date)||'').replace(/\D/g,'');return s.length>=8?Number(s.slice(0,8)):((n&&n.id)?Number(String(n.id).slice(0,8)):0);};
+  window._sortNoticesDesc=(items)=>[...(items||[])].sort((a,b)=>(window._noticeSortKey(b)-window._noticeSortKey(a))||((b.id||0)-(a.id||0)));
 }
 
 // ── Firebase DB 준비 대기 (전 화면 공용) ──
@@ -7594,7 +7598,12 @@ async function loadNoticesAdmin() {
       el.innerHTML = '<div style="font-size:12px;color:#aaa;text-align:center;padding:16px">등록된 공지 없음</div>';
       return;
     }
-    el.innerHTML = items.map((n, i) => `
+    // 최신 공지가 위로 오도록 날짜 내림차순 정렬(원본 인덱스는 유지 — 수정/삭제가 인덱스 기반이므로)
+    const ordered = items
+      .map((n, i) => ({ n, i }))
+      .sort((a, b) => (window._noticeSortKey(b.n) - window._noticeSortKey(a.n)) || ((b.n.id || 0) - (a.n.id || 0)));
+
+    el.innerHTML = ordered.map(({ n, i }) => `
       <div style="background:#F8FAFF;border:1px solid #8F82E4;border-radius:10px;padding:10px 12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
           <div style="min-width:0;flex:1;cursor:pointer" onclick="noticeToggleBody(${i})">
@@ -7606,7 +7615,7 @@ async function loadNoticesAdmin() {
             })()}
             <span style="font-size:12px;font-weight:600">${n.title}</span>
             <span style="font-size:11px;color:#8F82E4;margin-left:6px">👁 보기</span>
-            <div style="font-size:11px;color:#aaa;margin-top:2px">${n.date||''}${(n.images||[]).length ? ` · 📎 ${n.images.length}장` : ''}</div>
+            <div style="font-size:11px;color:#aaa;margin-top:2px">${window._noticeDateLabel(n.date)}${(n.images||[]).length ? ` · 📎 ${n.images.length}장` : ''}</div>
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0">
             <button onclick="editNotice(${i})" style="background:#EEF2FF;color:#4A3FA8;border:1px solid #8F82E4;border-radius:8px;padding:4px 10px;font-size:11px;font-weight:600;cursor:pointer">수정</button>
@@ -7662,7 +7671,9 @@ window.publishNotice = async function() {
     const { doc, setDoc } = window._fs;
     const isEdit = window._noticeEditIdx !== null;
     const noticeId = isEdit ? (window._adminNotices[window._noticeEditIdx].id || Date.now()) : Date.now();
-    const today = new Date().toLocaleDateString('ko-KR',{year:'numeric',month:'2-digit',day:'2-digit'}).replace(/\. /g,'.').replace('.','');
+    // "2026.07.10." — 예전엔 toLocaleDateString + replace('.','') 로 만들다가
+    // 첫 점까지 지워져 "202607.10." 로 저장되던 버그가 있었다. (표시는 _noticeDateLabel이 보정)
+    const today = window._noticeToday();
 
     // 이미지 처리: 신규(dataURL)는 Storage 업로드, 기존(url)은 그대로
     const imageUrls = [];

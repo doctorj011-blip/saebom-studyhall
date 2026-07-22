@@ -56,6 +56,33 @@ window._normalizeHours = function(hours) {
   return out;
 };
 
+// ── 공지 날짜 표기·정렬 (3앱 공통) ──
+// 저장된 date는 "2026.07.10." 형식이 정상이지만, 옛 공지는 관리자앱 저장 버그로
+// "202607.10." (첫 점이 지워짐)로 들어가 있다. 표시할 때 숫자만 뽑아 다시 조립하므로
+// 옛 데이터를 건드리지 않아도 화면에는 항상 올바르게 나온다.
+window._noticeDateLabel = function(date) {
+  const d = String(date || '').replace(/\D/g, '');
+  if (d.length < 8) return String(date || '');   // 형식을 못 읽으면 원문 그대로
+  return d.slice(0, 4) + '.' + d.slice(4, 6) + '.' + d.slice(6, 8) + '.';
+};
+// 오늘 날짜를 저장용 형식("2026.07.10.")으로
+window._noticeToday = function() {
+  const t = new Date();
+  return t.getFullYear() + '.' + String(t.getMonth() + 1).padStart(2, '0') + '.' + String(t.getDate()).padStart(2, '0') + '.';
+};
+// 정렬키: 날짜 앞 8자리 숫자(YYYYMMDD). 날짜가 없으면 id(생성 타임스탬프)로 대체해 맨 뒤로.
+window._noticeSortKey = function(n) {
+  const d = String((n && n.date) || '').replace(/\D/g, '');
+  if (d.length >= 8) return Number(d.slice(0, 8));
+  return (n && n.id) ? Number(String(n.id).slice(0, 8)) : 0;
+};
+// 최신 공지가 앞으로 오도록 날짜 내림차순 정렬(원본 배열은 건드리지 않음).
+// 같은 날짜끼리는 id(생성 시각) 최신순.
+window._sortNoticesDesc = function(items) {
+  return [...(items || [])].sort((a, b) =>
+    (window._noticeSortKey(b) - window._noticeSortKey(a)) || ((b.id || 0) - (a.id || 0)));
+};
+
 // ── 전화번호 뒷 4자리 (입실 키오스크·학생앱 로그인 검색 색인) ──
 // students 문서에 phoneLast4 필드로 저장해 where('phoneLast4','==',...) 한 번으로 검색.
 window._phoneLast4 = function(phone) { return String(phone || '').replace(/\D/g, '').slice(-4); };
