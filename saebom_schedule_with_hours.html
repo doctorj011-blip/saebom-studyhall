@@ -12710,19 +12710,30 @@ const BREAKS_EVENING = [ // 평일·토요일 공통 (7~11교시 사이)
   [22*60,    22*60+30, '9~10교시'],
   [23*60+50, 24*60,    '10~11교시'],
 ];
-const BREAKS_SAT_DAY = [ // 토요일 낮 (1~6교시 사이, 점심 12:30~1:30·저녁 5:00~6:00 제외)
+const BREAKS_DAY = [ // 낮 (1~6교시 사이, 점심 12:30~1:30·저녁 5:00~6:00 제외)
   [10*60,    10*60+10, '1~2교시'],
   [11*60+10, 11*60+20, '2~3교시'],
   [14*60+30, 14*60+40, '4~5교시'],
   [15*60+40, 15*60+50, '5~6교시'],
 ];
 
+// 낮 교시는 평소엔 토요일만 돌지만, 여름특강 기간엔 평일에도 돈다.
+// 이 기간이 아닌 평일 낮에 낮 목록을 켜면 아무도 없는 면학관 문이 자동으로 열리므로
+// 반드시 기간을 좁혀 둘 것. 특강 일정이 바뀌면 여기만 고치면 된다.
+const SUMMER_DAY_BREAKS = { startISO: '2026-07-22', endISO: '2026-08-11' };
+
+function isSummerDaySession(d) {
+  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return iso >= SUMMER_DAY_BREAKS.startISO && iso <= SUMMER_DAY_BREAKS.endISO;
+}
+
 function getCurrentBreak() {
   const now = new Date();
   const day = now.getDay();
   if (day === 0) return null; // 일요일은 교시 없음
   const t = now.getHours()*60 + now.getMinutes();
-  const list = day === 6 ? [...BREAKS_SAT_DAY, ...BREAKS_EVENING] : BREAKS_EVENING;
+  const useDay = day === 6 || isSummerDaySession(now); // 토요일 + 여름특강 평일
+  const list = useDay ? [...BREAKS_DAY, ...BREAKS_EVENING] : BREAKS_EVENING;
   for (const [start, end, label] of list) {
     if (t >= start && t < end) return { start, end, label };
   }
