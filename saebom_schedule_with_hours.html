@@ -1747,8 +1747,18 @@ let PERIOD_OFFSET = 6;
 //   (day==='토' 직접 비교가 남아 있으면 방학에 그 화면만 오전 교시가 사라진다 — 2026-07-21 사고 원인)
 let VACATION_MODE = false;
 function isSatLike(day) { return day === '토' || VACATION_MODE; }
-function periodsForDay(day) { return isSatLike(day) ? PERIODS_SAT : PERIODS_WEEKDAY; }
-function allPeriodsForDay(day) { return isSatLike(day) ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK; }
+// 방학 중에는 11교시(00:00~01:00)를 운영하지 않는다 — 교시 목록에서 아예 뺀다(3앱 공통 규칙).
+// 학기 중(방학모드 OFF)에는 예전처럼 11교시가 다시 나타난다.
+const VACATION_HIDDEN_PERIODS = new Set([11]);
+function periodsForDay(day) {
+  const list = isSatLike(day) ? PERIODS_SAT : PERIODS_WEEKDAY;
+  return VACATION_MODE ? list.filter(p => !VACATION_HIDDEN_PERIODS.has(parseInt(p.n))) : list;
+}
+function allPeriodsBySat(isSat) {
+  const list = isSat ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK;
+  return VACATION_MODE ? list.filter(p => !VACATION_HIDDEN_PERIODS.has(p)) : list;
+}
+function allPeriodsForDay(day) { return allPeriodsBySat(isSatLike(day)); }
 window.isSatLike = isSatLike;
 window.periodsForDay = periodsForDay;
 
@@ -4197,11 +4207,9 @@ function getCellContent(sched, pidx) {
 
 function buildScheduleTable(day){
   // 토요일(및 방학 중 평일)은 1~11교시 전체, 학기 중 평일은 7~11교시만
-  if(isSatLike(day)){
-    PERIODS=PERIODS_SAT; PERIOD_OFFSET=0;
-  } else {
-    PERIODS=PERIODS_WEEKDAY; PERIOD_OFFSET=6;
-  }
+  // ★교시 목록은 반드시 periodsForDay()로 — 방학 중 11교시 제외가 여기에도 걸려 있다.
+  PERIODS = periodsForDay(day);
+  PERIOD_OFFSET = isSatLike(day) ? 0 : 6;
   const tbl=document.getElementById('schedule-table');
   const display=[...STUDENTS].filter(s=>parseInt(s.seat)<54).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)); // 관리자(54번~) 제외
   _scheduleDisplay=display; // 반 편집(드래그 선택)에서 행 인덱스→좌석 매핑에 사용
@@ -6803,8 +6811,8 @@ function draftToStr(draft, isSat) {
   if (!draft.partialTimes) draft.partialTimes = {};
   if (draft.periods.size === 0 && draft.absentPeriods.size === 0) return '-';
 
-  // 토요일(및 방학 중 평일)은 1~11, 학기 중 평일은 7~11만 출력
-  const validPeriods = isSat ? ALL_PERIODS_SAT : ALL_PERIODS_WEEK;
+  // 토요일(및 방학 중 평일)은 1~11, 학기 중 평일은 7~11만 출력 (방학 중이면 11교시 제외)
+  const validPeriods = allPeriodsBySat(isSat);
   const parts = [];
   for (const p of validPeriods) {
     if (draft.absentPeriods.has(p)) {

@@ -1533,7 +1533,13 @@ const PERIODS_SAT = [
 //   방학에 그 화면만 오전 교시가 사라진다(2026-07-21 사고: 학생이 입력한 오전 일정이 저장 시 버려짐).
 let VACATION_MODE = false;
 function isSatLike(dayName) { return dayName === '토' || VACATION_MODE; }
-function periodsFor(dayName) { return isSatLike(dayName) ? PERIODS_SAT : PERIODS_WEEK; }
+// 방학 중에는 11교시(00:00~01:00)를 운영하지 않는다 — 교시 목록에서 아예 뺀다(3앱 공통 규칙).
+// 학기 중(방학모드 OFF)에는 예전처럼 11교시가 다시 나타난다.
+const VACATION_HIDDEN_PERIODS = new Set([11]);
+function periodsFor(dayName) {
+  const list = isSatLike(dayName) ? PERIODS_SAT : PERIODS_WEEK;
+  return VACATION_MODE ? list.filter(p => !VACATION_HIDDEN_PERIODS.has(p.n)) : list;
+}
 
 // ── 상태 ──
 let currentStudent = null;
@@ -2699,8 +2705,8 @@ function setReason(day, pNum, val) {
 // ── 주간 시간표 ──
 function buildWeeklyTable() {
   const el = document.getElementById('weekly-table');
-  // 모든 교시 (1~11)
-  const allPeriods = [1,2,3,4,5,6,7,8,9,10,11];
+  // 모든 교시 (1~11) — 방학 중에는 11교시를 운영하지 않으므로 행 자체를 뺀다
+  const allPeriods = [1,2,3,4,5,6,7,8,9,10,11].filter(n => !(VACATION_MODE && VACATION_HIDDEN_PERIODS.has(n)));
 
   // '오늘만' 임시변경 배지: 오늘 요일 셀이 고정 시간표(base)와 다르면 표시.
   // 주간 수정모드에서 오늘 요일을 직접 고친 경우는 base에 반영될 값이므로 제외.
