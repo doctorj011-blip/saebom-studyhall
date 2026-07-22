@@ -11,6 +11,7 @@
  *   · 끌 때: 재실 0이 offGraceMin 분 동안 "계속" 유지될 때만 OFF (잠깐 출입은 안 끔)
  *   · 한 번 켜지면 minOnMin 분은 유지(최소 운전시간)
  *   · 운영시간(opStart~opEnd) 밖에는 항상 OFF (평일=저녁 opStart, 주말=weekendOpStart 오전 시작)
+ *   · hallAlwaysOn=true(방학 시간표)면 운영시간 동안 열람실은 무인이어도 냉방 유지 — 위 '끌 때' 유예를 건너뜀
  *   · 정식 시작 전 조기 가동 창(평일 weekdayPreOpenStart~opStart / 주말 weekendPreOpenStart~weekendOpStart)에 입실 구역만 먼저 냉방(열람실은 비어도 정식 운영과 같은 offGrace 2단 유예)
  *   · 정식 종료(opEnd) 후 lateHardOff 까지: 남은 학생 있으면 열람실 '1대만'(재실 최다·동수면 에어컨2) → lateHardOff에 전체 OFF
  *   · 끄기 직전 dryOffMin 분 송풍 건조 후 전원 차단(코일 곰팡이·냄새 방지) — 자동/수동 OFF 공통
@@ -26,6 +27,7 @@
  */
 const { onSchedule } = require('firebase-functions/v2/scheduler');
 const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
 const admin = require('firebase-admin');
@@ -111,6 +113,9 @@ async function acConfig() {
     minOnMin: c.minOnMin != null ? c.minOnMin : 20,            // 최소 운전시간(완전 OFF 억제)
     manualHoldMin: c.manualHoldMin != null ? c.manualHoldMin : 60, // 수동조작 후 자동보류(분)
     onTemp: c.onTemp != null ? c.onTemp : 24,
+    // 방학 상시 가동 — 운영시간(opStart~opEnd) 동안 열람실은 무인이어도 끄지 않고 onTemp 냉방 유지.
+    //   학기 중(저녁만 운영)으로 돌아가면 false로 되돌릴 것. 스터디룸·마감 tail·조기 가동 창은 영향 없음.
+    hallAlwaysOn: c.hallAlwaysOn === true,
     setbackTemp: c.setbackTemp != null ? c.setbackTemp : 28,   // 절전(무인/마감여열) 시 목표온도 — 압축기 idle
     preCloseMin: c.preCloseMin != null ? c.preCloseMin : 20,   // 마감 전 여열 coast 시작(냉방 중단)
     // 정식 종료(opEnd) 후 ~ lateHardOff 까지: 남은 학생이 있으면 열람실 에어컨 '1대만' 유지(재실 최다·동수면 에어컨2).
@@ -403,6 +408,10 @@ async function acEvaluate(reason) {
       zs.emptySince = null;
       profile = preClose ? { power: true, mode: cfg.onMode, temp: cfg.setbackTemp }
                          : { power: true, mode: cfg.onMode, temp: cfg.onTemp };
+    } else if (cfg.hallAlwaysOn) {
+      // 방학 상시 가동: 열람실은 무인이어도 운영시간 내내 냉방 유지(2단 유예·OFF 건너뜀).
+      zs.emptySince = null;
+      profile = { power: true, mode: cfg.onMode, temp: preClose ? cfg.setbackTemp : cfg.onTemp };
     } else {
       profile = _emptyProfile(cfg, zs, nowMs, preClose);
     }
@@ -789,6 +798,124 @@ exports.plannerAiReview = onDocumentCreated(
       await reviewRef.set({ seat: seat || null, date: dateStr || null, status: 'error', error: e.message, doneAt: new Date().toISOString() }, { merge: true });
     } finally {
       await snap.ref.delete().catch(() => {});   // 요청 문서는 1회용 — 처리 후 정리
+    }
+  }
+);
+
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Cloudflare Zero Trust — Gateway DNS 로그 조회 프록시
+//
+//  왜 서버를 거치나: 이 저장소는 public 이라 관리앱 HTML에 Cloudflare 토큰을
+//  넣을 수 없다. 토큰은 Secret 으로만 두고, 브라우저는 이 함수를 호출한다.
+//
+//  설정(둘 다 필요):
+//     firebase functions:secrets:set CF_API_TOKEN     ← Account > Zero Trust > Read 권한 토큰
+//     firebase functions:secrets:set CF_ACCOUNT_ID    ← Cloudflare 대시보드 우측의 Account ID
+//
+//  인증: 관리앱이 보낸 기기 토큰이 settings/admin_auth.hash 와 같을 때만 응답한다
+//        (관리앱의 기존 '관리자 기기 등록제'와 같은 신뢰 수준).
+//
+//  주의: Gateway 로그는 '기기(=면학관 공유기)' 단위다. 학생 개인은 특정되지 않는다.
+// ══════════════════════════════════════════════════════════════════════════
+const CF_API_TOKEN = defineSecret('CF_API_TOKEN');
+const CF_ACCOUNT_ID = defineSecret('CF_ACCOUNT_ID');
+
+// Cloudflare는 도메인을 뒤집어서 준다("com.youtube.www") → 사람이 읽는 순서로 되돌린다.
+function unreverseDomain(s) {
+  return String(s || '').replace(/^\.+|\.+$/g, '').split('.').reverse().join('.');
+}
+
+exports.gatewayLogs = onRequest(
+  {
+    region: 'us-central1',
+    secrets: [CF_API_TOKEN, CF_ACCOUNT_ID],
+    cors: ['https://saebom-studyhall.web.app', 'https://doctorj011-blip.github.io', 'http://localhost:8961', 'http://127.0.0.1:8961'],
+    maxInstances: 3
+  },
+  async (req, res) => {
+    if (req.method !== 'POST') { res.status(405).json({ error: 'POST만 허용' }); return; }
+    try {
+      // ── 관리자 기기 확인 ──
+      const token = (req.body && req.body.token) || '';
+      const authSnap = await db.doc('settings/admin_auth').get();
+      const want = authSnap.exists ? (authSnap.data() || {}).hash : null;
+      if (!want || token !== want) { res.status(403).json({ error: '관리자 기기가 아닙니다' }); return; }
+
+      const hours = Math.min(Math.max(parseInt((req.body && req.body.hours) || 24, 10) || 24, 1), 720);
+      const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+
+      // 도메인별 집계와 시간대별 집계를 한 요청에 담는다(별칭 2개).
+      const query = `
+        query GatewayDns($accountTag: string!, $start: Time) {
+          viewer {
+            accounts(filter: { accountTag: $accountTag }) {
+              byDomain: gatewayResolverQueriesAdaptiveGroups(
+                filter: { datetime_gt: $start }
+                limit: 200
+                orderBy: [count_DESC]
+              ) {
+                count
+                dimensions { queryNameReversed resolverDecision }
+              }
+              byHour: gatewayResolverQueriesAdaptiveGroups(
+                filter: { datetime_gt: $start }
+                limit: 800
+                orderBy: [datetimeHour_ASC]
+              ) {
+                count
+                dimensions { datetimeHour }
+              }
+            }
+          }
+        }`;
+
+      const r = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${CF_API_TOKEN.value()}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ query, variables: { accountTag: CF_ACCOUNT_ID.value(), start } })
+      });
+      const j = await r.json();
+      if (j.errors && j.errors.length) {
+        logger.error('[Gateway] GraphQL 오류', j.errors);
+        res.status(502).json({ error: j.errors.map(e => e.message).join(' / ') });
+        return;
+      }
+      const acct = ((j.data && j.data.viewer && j.data.viewer.accounts) || [])[0] || {};
+
+      // 같은 도메인이 여러 판정으로 쪼개져 오므로 도메인 기준으로 합친다.
+      const map = new Map();
+      (acct.byDomain || []).forEach(row => {
+        const d = unreverseDomain(row.dimensions && row.dimensions.queryNameReversed);
+        if (!d) return;
+        const decision = (row.dimensions && row.dimensions.resolverDecision) || '';
+        const blocked = /^blocked/i.test(decision);
+        const cur = map.get(d) || { domain: d, total: 0, blocked: 0, allowed: 0 };
+        cur.total += row.count;
+        if (blocked) cur.blocked += row.count; else cur.allowed += row.count;
+        map.set(d, cur);
+      });
+      const domains = Array.from(map.values()).sort((a, b) => b.total - a.total);
+
+      const hourly = (acct.byHour || []).map(row => ({
+        hour: row.dimensions && row.dimensions.datetimeHour,
+        count: row.count
+      }));
+
+      res.json({
+        ok: true,
+        hours,
+        total: domains.reduce((s, d) => s + d.total, 0),
+        blocked: domains.reduce((s, d) => s + d.blocked, 0),
+        domains,
+        hourly
+      });
+    } catch (e) {
+      logger.error('[Gateway] 조회 실패', e);
+      res.status(500).json({ error: String((e && e.message) || e) });
     }
   }
 );

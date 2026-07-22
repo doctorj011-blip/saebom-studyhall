@@ -773,6 +773,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   .tab-btn[onclick*="'analytics'"],
   .tab-btn[onclick*="'schedule'"],
   .tab-btn[onclick*="'smslog'"],
+  .tab-btn[onclick*="'usagelog'"],
+  .tab-btn[onclick*="'netlog'"],
   .tab-btn[onclick*="'billing'"]{display:none}
 
   /* 탭은 줄바꿈 대신 가로 스크롤 — 세로로 쌓이면 본문이 안 보인다 */
@@ -842,6 +844,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
     <button class="tab-btn" onclick="showSection('hours',this)">시간</button>
     <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자</button>
+    <button class="tab-btn" onclick="showSection('usagelog',this)">📊 사용기록</button>
+    <button class="tab-btn" onclick="showSection('netlog',this)">🌐 와이파이</button>
     <button class="tab-btn" onclick="showSection('billing',this)">💳 수납</button>
     <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 설정</button>
   </div>
@@ -1163,6 +1167,104 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
     <div id="smslog-list" style="min-height:200px">
       <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>
+    </div>
+  </div>
+</div>
+
+<!-- 사용기록 (학생앱 usage_logs) -->
+<div id="sec-usagelog" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700;color:#1E1B4B">📊 학생앱 사용기록</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="usagelog-days" onchange="loadUsageLog()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
+        <option value="1">오늘</option>
+        <option value="7" selected>최근 7일</option>
+        <option value="30">최근 30일</option>
+      </select>
+      <input id="usagelog-search" oninput="renderUsageLog()" placeholder="학생 이름 검색" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B;width:120px">
+      <button onclick="loadUsageLog()" style="padding:6px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;color:#4A3FA8;cursor:pointer;font-weight:600">🔄 새로고침</button>
+    </div>
+  </div>
+
+  <!-- 통계 카드 -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
+    <div style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #8F82E4;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#4A3FA8;font-weight:700;margin-bottom:4px">총 기록</div>
+      <div style="font-size:22px;font-weight:700;color:#6C5DD3" id="usagelog-total">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">사용 학생</div>
+      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="usagelog-users">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#F3E5F5,#E1BEE7);border:1.5px solid #CE93D8;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#6A1B9A;font-weight:700;margin-bottom:4px">로그인 횟수</div>
+      <div style="font-size:22px;font-weight:700;color:#6A1B9A" id="usagelog-logins">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#FFF8E1,#FFECB3);border:1.5px solid #FFD54F;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#8D6E00;font-weight:700;margin-bottom:4px">가장 많이 본 탭</div>
+      <div style="font-size:15px;font-weight:700;color:#8D6E00;margin-top:5px" id="usagelog-toptab">—</div>
+    </div>
+  </div>
+
+  <!-- 학생별 요약 + 최근 기록 -->
+  <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:14px" id="usagelog-panes">
+    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+      <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#4A3FA8;background:#F8FAFF;border-bottom:1px solid #E6E2F9">학생별 사용량</div>
+      <div id="usagelog-bystudent" style="min-height:200px;max-height:460px;overflow-y:auto"></div>
+    </div>
+    <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+      <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#4A3FA8;background:#F8FAFF;border-bottom:1px solid #E6E2F9">최근 기록</div>
+      <div id="usagelog-list" style="min-height:200px;max-height:460px;overflow-y:auto">
+        <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 와이파이 접속기록 (Cloudflare Gateway DNS) -->
+<div id="sec-netlog" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700;color:#1E1B4B">🌐 와이파이 접속기록</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="netlog-hours" onchange="loadNetLog()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
+        <option value="6">최근 6시간</option>
+        <option value="24" selected>최근 24시간</option>
+        <option value="168">최근 7일</option>
+      </select>
+      <select id="netlog-filter" onchange="renderNetLog()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
+        <option value="all">전체</option>
+        <option value="blocked">차단된 것만</option>
+        <option value="allowed">허용된 것만</option>
+      </select>
+      <input id="netlog-search" oninput="renderNetLog()" placeholder="도메인 검색" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B;width:120px">
+      <button onclick="loadNetLog()" style="padding:6px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;color:#4A3FA8;cursor:pointer;font-weight:600">🔄 새로고침</button>
+    </div>
+  </div>
+
+  <div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:10px;padding:9px 13px;margin-bottom:13px;font-size:11.5px;color:#8D6E00;line-height:1.55">
+    면학관 와이파이의 DNS 조회 기록입니다. <b>공유기 단위라 학생 개인은 특정되지 않습니다</b> — 어떤 사이트에 얼마나 몰리는지 경향만 볼 수 있어요.
+    개인 데이터(LTE·5G)로 접속한 것은 잡히지 않습니다.
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+    <div style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #8F82E4;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#4A3FA8;font-weight:700;margin-bottom:4px">총 조회</div>
+      <div style="font-size:22px;font-weight:700;color:#6C5DD3" id="netlog-total">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">차단됨</div>
+      <div style="font-size:22px;font-weight:700;color:#C62828" id="netlog-blocked">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">도메인 수</div>
+      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="netlog-domains">0</div>
+    </div>
+  </div>
+
+  <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden">
+    <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#4A3FA8;background:#F8FAFF;border-bottom:1px solid #E6E2F9">도메인별 조회수</div>
+    <div id="netlog-list" style="min-height:200px;max-height:520px;overflow-y:auto">
+      <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">기간을 고르고 새로고침을 누르세요.</div>
     </div>
   </div>
 </div>
@@ -2044,7 +2146,7 @@ document.addEventListener('keydown', function(e) {
 // CSS(@media max-width:600px)에서 버튼을 숨기지만, 탭 복원·기본 활성 섹션은
 // JS가 정하므로 목록을 여기에도 둔다. 한쪽만 고치면 '버튼은 없는데 화면은 떠 있는'
 // 상태가 되니 CSS 쪽 목록과 항상 같이 고칠 것.
-const MOBILE_HIDDEN_TABS = ['checkin','handover','planner','analytics','schedule','smslog','billing'];
+const MOBILE_HIDDEN_TABS = ['checkin','handover','planner','analytics','schedule','smslog','usagelog','netlog','billing'];
 function isMobileView() { return window.matchMedia('(max-width:600px)').matches; }
 // 미등록 기기는 입퇴실 말고는 열 수 있는 화면이 없으므로 감추지 않는다.
 function isTabHiddenOnMobile(id) {
@@ -2265,6 +2367,8 @@ window.showSection = function(id,btn){
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
   if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
+  if (id === 'usagelog') { loadUsageLog(); }
+  if (id === 'netlog') { loadNetLog(); }
   if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
   if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
@@ -8560,7 +8664,7 @@ window.purgeStudentData = async function(seat, name, execute) {
   return { ok, fail };
 };
 
-// ── 오래된 로그 정리 도구 (checkin_logs · sms_logs) ──
+// ── 오래된 로그 정리 도구 (checkin_logs · sms_logs · usage_logs) ──
 // 누적시간은 퇴실 시점에 students.hours 로 합산되므로, 오래된 로그를 지워도 통계는 유지된다.
 // 설정 탭 버튼 또는 콘솔에서 purgeOldLogs(60, true) 로 실행.
 window.purgeOldLogs = async function(days = 60, execute = false) {
@@ -8572,7 +8676,7 @@ window.purgeOldLogs = async function(days = 60, execute = false) {
     return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
   };
   const targets = [];
-  for (const col of ['checkin_logs', 'sms_logs']) {
+  for (const col of ['checkin_logs', 'sms_logs', 'usage_logs']) {
     const snap = await getDocs(collection(db, col));
     snap.forEach(d => {
       const dt = parseDate(d.data().date);
@@ -11278,6 +11382,149 @@ window.loadSmsLog = async function() {
     console.error('SMS 로그 Firebase 로드 실패:', e);
   }
 }
+
+// ══ 학생앱 사용기록 (usage_logs) ══
+// 학생앱 saTrack()이 남기는 로그를 기간별로 읽어 학생별 요약 + 최근 기록으로 보여준다.
+// where(date) 하나만 걸고 정렬은 클라이언트에서 — 복합 색인 없이 동작하게.
+let _usageLogData = [];
+const USAGE_TAB_NAMES = {
+  notice:'공지', events:'이벤트', daily:'오늘', weekly:'주간', mystats:'내 기록',
+  quest:'퀘스트', seatmap:'자리선택', studyroom:'스터디룸', planner:'플래너', focus:'집중감지'
+};
+const USAGE_EVENT_NAMES = {
+  login_success:'로그인', tab_view:'탭 열람', planner_submit:'플래너 제출'
+};
+
+window.loadUsageLog = async function() {
+  const list = document.getElementById('usagelog-list');
+  if (!list) return;
+  list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">불러오는 중...</div>';
+  const db = window._adminDb;
+  if (!db) { list.innerHTML = '<div style="text-align:center;padding:48px;color:#C62828;font-size:13px">DB 연결 대기 중입니다. 잠시 후 새로고침해 주세요.</div>'; return; }
+  const daysEl = document.getElementById('usagelog-days');
+  const days = daysEl ? parseInt(daysEl.value, 10) : 7;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutoffStr = cutoff.getFullYear() + '-' + String(cutoff.getMonth()+1).padStart(2,'0') + '-' + String(cutoff.getDate()).padStart(2,'0');
+  try {
+    const { getDocs, query, where, collection } = window._fs;
+    const snap = await getDocs(query(collection(db, 'usage_logs'), where('date', '>=', cutoffStr)));
+    _usageLogData = [];
+    snap.forEach(d => _usageLogData.push(d.data()));
+    _usageLogData.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+    renderUsageLog();
+  } catch(e) {
+    console.error('[사용기록] 로드 실패:', e);
+    list.innerHTML = '<div style="text-align:center;padding:48px;color:#C62828;font-size:13px">불러오기 실패: ' + e.message + '</div>';
+  }
+};
+
+window.renderUsageLog = function() {
+  const list = document.getElementById('usagelog-list');
+  const byStu = document.getElementById('usagelog-bystudent');
+  if (!list || !byStu) return;
+  const searchEl = document.getElementById('usagelog-search');
+  const kw = searchEl ? searchEl.value.trim() : '';
+  const rows = kw ? _usageLogData.filter(r => String(r.name || '').includes(kw)) : _usageLogData;
+
+  // 통계
+  const users = new Set(), tabCount = {}, stuCount = {}, stuLast = {};
+  let logins = 0;
+  rows.forEach(r => {
+    const n = r.name || '(이름없음)';
+    users.add(n);
+    stuCount[n] = (stuCount[n] || 0) + 1;
+    if (!stuLast[n] || String(r.at || '') > stuLast[n]) stuLast[n] = r.at || '';
+    if (r.event === 'login_success') logins++;
+    if (r.event === 'tab_view' && r.tab) tabCount[r.tab] = (tabCount[r.tab] || 0) + 1;
+  });
+  const topTab = Object.keys(tabCount).sort((a, b) => tabCount[b] - tabCount[a])[0];
+  document.getElementById('usagelog-total').textContent = rows.length;
+  document.getElementById('usagelog-users').textContent = users.size;
+  document.getElementById('usagelog-logins').textContent = logins;
+  document.getElementById('usagelog-toptab').textContent = topTab ? (USAGE_TAB_NAMES[topTab] || topTab) : '—';
+
+  // 학생별 요약 (사용량 많은 순)
+  const names = Object.keys(stuCount).sort((a, b) => stuCount[b] - stuCount[a]);
+  byStu.innerHTML = names.length ? names.map(n => {
+    const last = stuLast[n] ? new Date(stuLast[n]).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '—';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-bottom:1px solid #F1EFFB">'
+      + '<div><div style="font-size:13px;font-weight:600;color:#1E1B4B">' + n + '</div>'
+      + '<div style="font-size:10.5px;color:var(--color-text-tertiary)">마지막 ' + last + '</div></div>'
+      + '<div style="font-size:13px;font-weight:700;color:#6C5DD3">' + stuCount[n] + '</div></div>';
+  }).join('') : '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">기록이 없습니다</div>';
+
+  // 최근 기록 (200건까지)
+  list.innerHTML = rows.length ? rows.slice(0, 200).map(r => {
+    const t = r.at ? new Date(r.at).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : (r.date || '');
+    const ev = USAGE_EVENT_NAMES[r.event] || r.event || '';
+    const tab = r.tab ? (USAGE_TAB_NAMES[r.tab] || r.tab) : '';
+    return '<div style="display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid #F1EFFB;font-size:12px">'
+      + '<div style="width:96px;color:var(--color-text-tertiary);font-size:11px;flex-shrink:0">' + t + '</div>'
+      + '<div style="width:66px;font-weight:600;color:#1E1B4B;flex-shrink:0">' + (r.name || '') + '</div>'
+      + '<div style="color:#4A3FA8">' + ev + (tab ? ' · <b>' + tab + '</b>' : '') + '</div></div>';
+  }).join('') : '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">기록이 없습니다</div>';
+};
+
+// ══ 와이파이 접속기록 (Cloudflare Gateway DNS) ══
+// 토큰이 public 저장소에 들어가면 안 되므로 조회는 Cloud Function(gatewayLogs)이 대신한다.
+// 관리자 기기 토큰을 그대로 실어 보내고, 함수가 settings/admin_auth.hash 와 대조한다.
+const NETLOG_ENDPOINT = 'https://us-central1-saebom-studyhall.cloudfunctions.net/gatewayLogs';
+let _netLogData = [];
+
+window.loadNetLog = async function() {
+  const list = document.getElementById('netlog-list');
+  if (!list) return;
+  const token = localStorage.getItem('saebom_admin_token');
+  if (!token) { list.innerHTML = '<div style="text-align:center;padding:48px;color:#C62828;font-size:13px">관리자 기기 등록이 필요합니다.</div>'; return; }
+  list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">Cloudflare에서 불러오는 중...</div>';
+  const hoursEl = document.getElementById('netlog-hours');
+  const hours = hoursEl ? parseInt(hoursEl.value, 10) : 24;
+  try {
+    const r = await fetch(NETLOG_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, hours })
+    });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+    _netLogData = j.domains || [];
+    document.getElementById('netlog-total').textContent = (j.total || 0).toLocaleString();
+    document.getElementById('netlog-blocked').textContent = (j.blocked || 0).toLocaleString();
+    document.getElementById('netlog-domains').textContent = _netLogData.length;
+    renderNetLog();
+  } catch(e) {
+    console.error('[와이파이] 로드 실패:', e);
+    list.innerHTML = '<div style="text-align:center;padding:48px;color:#C62828;font-size:13px">불러오기 실패: ' + e.message
+      + '<br><span style="font-size:11px;color:var(--color-text-tertiary)">CF_API_TOKEN·CF_ACCOUNT_ID 시크릿과 gatewayLogs 함수 배포를 확인하세요.</span></div>';
+  }
+};
+
+window.renderNetLog = function() {
+  const list = document.getElementById('netlog-list');
+  if (!list) return;
+  const filterEl = document.getElementById('netlog-filter');
+  const searchEl = document.getElementById('netlog-search');
+  const filter = filterEl ? filterEl.value : 'all';
+  const kw = searchEl ? searchEl.value.trim().toLowerCase() : '';
+  let rows = _netLogData;
+  if (filter === 'blocked') rows = rows.filter(d => d.blocked > 0);
+  if (filter === 'allowed') rows = rows.filter(d => d.allowed > 0);
+  if (kw) rows = rows.filter(d => d.domain.toLowerCase().includes(kw));
+  const max = rows.length ? rows[0].total : 1;
+  list.innerHTML = rows.length ? rows.map(d => {
+    const pct = Math.max(2, Math.round(d.total / max * 100));
+    const tag = d.blocked > 0
+      ? '<span style="display:inline-block;padding:1px 7px;border-radius:9px;background:#FCEBEB;color:#C62828;font-weight:700;font-size:10px;margin-left:6px">차단 ' + d.blocked.toLocaleString() + '</span>'
+      : '';
+    return '<div style="padding:8px 14px;border-bottom:1px solid #F1EFFB">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">'
+      + '<div style="font-size:12px;color:#1E1B4B;word-break:break-all">' + d.domain + tag + '</div>'
+      + '<div style="font-size:12px;font-weight:700;color:#6C5DD3;flex-shrink:0">' + d.total.toLocaleString() + '</div></div>'
+      + '<div style="height:4px;background:#F1EFFB;border-radius:3px;overflow:hidden">'
+      + '<div style="height:100%;width:' + pct + '%;background:' + (d.blocked > 0 ? '#F09595' : '#8F82E4') + '"></div></div></div>';
+  }).join('') : '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">기록이 없습니다</div>';
+};
 
 window.loadMoreSmsLog = async function() {
   if (_smsLoadingMore || !_smsHasMore || !_smsCursor || !window._adminDb) return;

@@ -14,6 +14,8 @@ rules_version = '2';
 //   - 2026-07-16  pendingSeats 추가 — 자리변경 예약(학생앱 미래 적용일)이 캐치올에 막혀
 //                 permission-denied로 조용히 죽어 있던 것을 수정
 //   - 2026-07-17  handover_notes 추가 — 조교 서면 인수인계 메모(관리자앱 📝 인수인계 탭)
+//   - 2026-07-23  usage_logs 추가 — 학생앱 사용기록(관리앱 📊 사용기록 탭). create/read/delete만
+//                 허용하고 update는 차단(기록 위조 방지)
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -100,6 +102,18 @@ service cloud.firestore {
 
     // SEE EYES 동의: 학생앱이 본인 동의 기록·철회, 대시보드/관리자가 조회
     match /see_eyes_consents/{seat} { allow read, write: if true; }
+
+    // 사용기록: 학생앱이 남기는 앱 사용 로그(로그인·탭 열람 등).
+    // 남기기(create)와 조회·정리(read/delete)만 허용하고, 한 번 쓴 기록의 수정(update)은 막는다.
+    match /usage_logs/{id} {
+      allow read, delete: if true;
+      allow create: if request.resource.data.name is string
+        && request.resource.data.name.size() <= 30
+        && request.resource.data.event is string
+        && request.resource.data.event.size() <= 40
+        && request.resource.data.date is string;
+      allow update: if false;
+    }
 
     // 공지사항: list 문서 하나만 쓰기 허용
     match /notices/{id} {
