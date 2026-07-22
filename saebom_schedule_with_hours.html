@@ -403,35 +403,40 @@ body.admin-device .topbar-tabs{display:flex}
 .round-walker .rw-armB{transform-box:view-box;transform-origin:30px 27px;animation:rwArmB .62s ease-in-out infinite}
 
 /* 스케줄 편집 모달 */
-.sched-modal{background:#ffffff;border-radius:16px;width:min(96vw,640px);max-height:88vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden}
+.sched-modal{background:#ffffff;border-radius:16px;width:min(96vw,860px);max-height:94vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.22);overflow:hidden}
 .sched-modal-header{display:flex;align-items:flex-start;justify-content:space-between;padding:18px 20px 14px;border-bottom:0.5px solid var(--color-border-tertiary)}
 .sched-modal-title{font-size:16px;font-weight:600}
 .sched-modal-sub{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
 .sched-modal-close{background:none;border:none;font-size:18px;cursor:pointer;color:var(--color-text-tertiary);padding:2px 6px;border-radius:6px;line-height:1}
 .sched-modal-close:hover{background:var(--color-background-secondary)}
-.sched-modal-body{overflow-y:auto;padding:16px 20px;flex:1}
+.sched-modal-body{overflow-y:auto;padding:10px 20px;flex:1}
 .sched-modal-footer{padding:14px 20px;border-top:0.5px solid var(--color-border-tertiary);display:flex;justify-content:flex-end;gap:10px}
 .sched-cancel-btn{padding:8px 18px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);border-radius:8px;font-size:13px;cursor:pointer;color:var(--color-text-secondary)}
 .sched-save-btn{padding:8px 22px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer}
 
 /* 요일별 스케줄 행 */
-.sched-day-row{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start;padding:10px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
+.sched-day-row{display:grid;grid-template-columns:44px 1fr;gap:10px;align-items:start;padding:5px 0;border-bottom:0.5px solid var(--color-border-tertiary)}
 .sched-day-row:last-child{border-bottom:none}
-.sched-day-label{font-size:13px;font-weight:600;color:var(--color-text-primary);padding-top:6px}
+.sched-day-label{font-size:13px;font-weight:600;color:var(--color-text-primary);padding-top:4px}
 .sched-day-label.sat{color:#222}
-.sched-periods{display:flex;flex-wrap:wrap;gap:5px}
+/* 1~11교시가 줄바꿈 없이 한 줄에 들어가도록 11칸 그리드 고정 */
+.sched-periods{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:4px}
 
 /* 교시 토글 버튼 */
-.sched-period-btn{padding:4px 9px;border-radius:6px;font-size:11px;font-weight:500;border:0.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:pointer;transition:all 0.12s;user-select:none}
-.sched-period-btn.on{background:#EEF2FF;color:#27500A;border-color:#8F82E4}
-.sched-period-btn.partial{background:#EEF2FF;color:#4338A8;border-color:#A5B4FC}
-.sched-period-btn.absent{background:#FCEBEB;color:#C62828;border-color:#F09595}
+.sched-period-btn{padding:4px 2px;border-radius:6px;font-size:11px;font-weight:500;border:1.5px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:pointer;transition:all 0.12s;user-select:none;white-space:nowrap;overflow:hidden;text-overflow:clip;min-width:0}
+/* 상태 3색은 채도·색상을 확실히 벌린다: 출석=초록 / 중간입실=주황 / 결석=빨강 (테두리도 굵게) */
+.sched-period-btn.on{background:#D6F0DC;color:#14602C;border:1.5px solid #3FA35F;font-weight:700}
+.sched-period-btn.partial{background:#FFE9C2;color:#8A4B00;border:1.5px solid #E08A1E;font-weight:700}
+/* 결석은 색 말고도 구분되도록 점선 테두리 + 취소선 (적록색약 대비) */
+.sched-period-btn.absent{background:#FBD5D5;color:#A81E1E;border:1.5px dashed #DB4E4E;font-weight:700;text-decoration:line-through}
+/* 좁은 화면에서도 11칸이 한 줄에 들어가도록 글자만 축소 */
+@media (max-width:860px){.sched-period-btn{font-size:10px;padding:4px 1px;letter-spacing:-0.3px}}
 
 /* 결석 사유 입력 */
 .sched-absent-row{display:flex;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap}
 .sched-absent-label{font-size:11px;color:var(--color-text-secondary);white-space:nowrap}
 .sched-absent-input{flex:1;min-width:120px;padding:4px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary)}
-.sched-legend{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap}
+.sched-legend{display:flex;gap:10px;margin-bottom:8px;flex-wrap:wrap}
 .sched-legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
 .sched-legend-dot{width:12px;height:12px;border-radius:3px}
 
@@ -6821,9 +6826,9 @@ function renderScheduleModal() {
   const body = document.getElementById('sched-modal-body');
 
   let html = `<div class="sched-legend">
-    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#EEF2FF;border:0.5px solid #A5D6A7"></div>출석</div>
-    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#EEF2FF;border:0.5px solid #A5B4FC"></div>중간입실</div>
-    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FCEBEB;border:0.5px solid #F09595"></div>결석</div>
+    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#D6F0DC;border:1.5px solid #3FA35F"></div>출석</div>
+    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FFE9C2;border:1.5px solid #E08A1E"></div>중간입실</div>
+    <div class="sched-legend-item"><div class="sched-legend-dot" style="background:#FBD5D5;border:1.5px dashed #DB4E4E"></div>결석</div>
     <div class="sched-legend-item" style="font-size:11px;color:var(--color-text-tertiary)">클릭: 공란→출석→중간입실 / 우클릭: 결석→공란</div>
   </div>`;
 
@@ -6835,7 +6840,7 @@ function renderScheduleModal() {
     html += `<div class="sched-day-row">
       <div class="sched-day-label${day==='토'?' sat':''}">${day}요일</div>
       <div>
-        <div class="sched-periods">`;
+        <div class="sched-periods" style="grid-template-columns:repeat(${availPeriods.length},minmax(0,1fr))">`;
 
     availPeriods.forEach(p => {
       let cls = 'sched-period-btn';
@@ -6860,7 +6865,7 @@ function renderScheduleModal() {
     if (draft.absentPeriods && draft.absentPeriods.size > 0) {
       const reasons = [...draft.absentPeriods].map(p => {
         const r = draft.absentReasons && draft.absentReasons[p];
-        return `<span style="font-size:10px;color:#C62828;background:#FCEBEB;padding:2px 6px;border-radius:4px">${p}교시${r?': '+r:''}</span>`;
+        return `<span style="font-size:10px;color:#A81E1E;background:#FBD5D5;padding:2px 6px;border-radius:4px">${p}교시${r?': '+r:''}</span>`;
       }).join(' ');
       html += `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${reasons}</div>`;
     }
@@ -6869,7 +6874,7 @@ function renderScheduleModal() {
     if (draft.partials && draft.partials.size > 0) {
       const mids = [...draft.partials].sort((a,b)=>a-b).map(p => {
         const t = draft.partialTimes && draft.partialTimes[p];
-        return `<span onclick="showPartialTimePopup('${day}',${p},event)" style="font-size:10px;color:#4338A8;background:#EEF2FF;padding:2px 6px;border-radius:4px;cursor:pointer" title="클릭해서 입실시간 수정">${p}교시 ${t ? t + '~ 입실' : '중간입실'}</span>`;
+        return `<span onclick="showPartialTimePopup('${day}',${p},event)" style="font-size:10px;color:#8A4B00;background:#FFE9C2;padding:2px 6px;border-radius:4px;cursor:pointer" title="클릭해서 입실시간 수정">${p}교시 ${t ? t + '~ 입실' : '중간입실'}</span>`;
       }).join(' ');
       html += `<div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:3px">${mids}</div>`;
     }
