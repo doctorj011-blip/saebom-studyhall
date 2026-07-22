@@ -625,6 +625,8 @@ input:focus,select:focus,textarea:focus{outline:none}
    ☀️ 날씨 연동 키오스크 배경 — Apple 날씨앱 감성 (2026)
    =================================================================== */
 #weather-sky{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;
+  /* 하늘의 리페인트가 키패드·카드까지 무효화하지 않도록 격리 (터치 반응성) */
+  contain:layout paint style;isolation:isolate;
   transition:background 1.4s ease;background:linear-gradient(180deg,#2E6FD6 0%,#5B9BE8 42%,#A9D3F5 80%,#DCEEFF 100%)}
 /* 콘텐츠는 하늘 위로 */
 #sec-checkin .checkin-wrap,#sec-checkin .checkin-today-wrap,#sec-checkin #checkin-door-controls,#kiosk-weather{position:relative;z-index:2}
@@ -698,8 +700,9 @@ input:focus,select:focus,textarea:focus{outline:none}
 @keyframes wxRain{from{transform:translateY(-12vh)}to{transform:translateY(114vh)}}
 
 /* ── 유리창에 맺힌 빗방울 (비/뇌우) — 성에 낀 유리 + 맺힘 + 흘러내림 ── */
+/* ※ backdrop-filter 금지: 뒤에서 빗줄기가 움직이므로 매 프레임 화면 전체를 다시 블러
+      합성해 태블릿 터치 반응이 크게 느려진다. 정적 그라데이션만으로 유리 질감을 낸다. */
 .wx-glass{position:absolute;inset:0;pointer-events:none;
-  backdrop-filter:blur(3px) saturate(112%);-webkit-backdrop-filter:blur(3px) saturate(112%);
   background:
     radial-gradient(circle at 22% 26%,rgba(255,255,255,.06),transparent 14%),
     radial-gradient(circle at 68% 58%,rgba(255,255,255,.05),transparent 16%),
@@ -708,9 +711,9 @@ input:focus,select:focus,textarea:focus{outline:none}
 /* 맺힌 물방울(렌즈처럼 굴절되는 비드) */
 .wx-drop{position:absolute;border-radius:50%;
   background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.92),rgba(228,238,255,.25) 40%,rgba(120,140,175,.30) 66%,rgba(38,54,84,.20) 100%);
-  box-shadow:inset 0 -2px 3px rgba(255,255,255,.55),inset 0 2px 4px rgba(25,40,75,.40),0 1px 2px rgba(10,20,45,.35);
-  animation:wxBead var(--bd,5s) ease-in-out infinite;will-change:transform}
-@keyframes wxBead{0%,100%{transform:scale(1);opacity:.92}50%{transform:scale(1.07);opacity:1}}
+  box-shadow:inset 0 -2px 3px rgba(255,255,255,.55),inset 0 2px 4px rgba(25,40,75,.40),0 1px 2px rgba(10,20,45,.35)}
+/* 맺힌 비드는 정적으로 둔다. scale 무한 애니메이션은 inset box-shadow 재계산 때문에
+   개당 매 프레임 리페인트를 일으켜 수십 개가 겹치면 입력 지연의 주원인이 된다. */
 /* 흘러내리는 물방울 + 짧은 물자국 꼬리 */
 .wx-run{position:absolute;width:var(--w,8px);height:calc(var(--w,8px)*1.18);border-radius:48% 48% 54% 54%;
   background:radial-gradient(circle at 36% 26%,rgba(255,255,255,.95),rgba(220,235,255,.30) 42%,rgba(110,135,175,.35) 70%,rgba(33,50,80,.25) 100%);
@@ -2655,6 +2658,18 @@ document.addEventListener('visibilitychange', () => {
   const rnd = (a,b)=>a+Math.random()*(b-a);
   const el = (cls)=>{ const d=document.createElement('div'); d.className=cls; return d; };
 
+  // ── 파티클 수 감쇄 계수 ──────────────────────────────────────────────
+  // 애니메이션 입자가 많을수록 합성 비용이 늘어 키패드 터치 반응이 느려진다.
+  // 저사양 태블릿(코어 적음/메모리 적음)에서는 절반만 그린다. 보기엔 거의 차이 없음.
+  const WX_Q = (function(){
+    const cores = navigator.hardwareConcurrency || 4;
+    const mem   = navigator.deviceMemory || 4;
+    if (cores <= 4 || mem <= 4) return 0.5;
+    if (cores <= 6) return 0.75;
+    return 1;
+  })();
+  const Q = (n)=>Math.max(3, Math.round(n*WX_Q));
+
   // WMO 코드 → 씬/이모지/설명
   function scene(code, isDay){
     const d = isDay!==0;
@@ -2712,7 +2727,7 @@ document.addEventListener('visibilitychange', () => {
 
     // 별 (맑은 밤)
     if (starry){
-      const stars = kind.indexOf('partly')>=0 ? 40 : 70;
+      const stars = Q(kind.indexOf('partly')>=0 ? 40 : 70);
       for (let i=0;i<stars;i++){ const s=el('wx-star');
         s.style.left=rnd(0,100)+'%'; s.style.top=rnd(2,62)+'%';
         s.style.setProperty('--tw',rnd(1.8,4.5).toFixed(2)+'s');
@@ -2739,7 +2754,7 @@ document.addEventListener('visibilitychange', () => {
     // 비 / 뇌우 — 유리창에 맺혀 흘러내리는 느낌
     if (kind==='rain'||kind==='drizzle'||kind==='storm'){
       // (1) 유리 뒤로 흐릿하게 내리는 배경 빗줄기 — 깊이감
-      const bg = kind==='drizzle'?16:(kind==='storm'?42:28);
+      const bg = Q(kind==='drizzle'?16:(kind==='storm'?42:28));
       for(let i=0;i<bg;i++){ const r=el('wx-rain-drop');
         r.style.left=rnd(0,100)+'%';
         r.style.animationDuration=rnd(.5,.95).toFixed(2)+'s';
@@ -2749,7 +2764,7 @@ document.addEventListener('visibilitychange', () => {
       // (2) 성에 낀 유리 레이어
       sky.appendChild(el('wx-glass'));
       // (3) 유리에 맺힌 물방울(정적 비드, 은은한 숨쉬기)
-      const beads = kind==='drizzle'?26:46;
+      const beads = Q(kind==='drizzle'?26:46);
       for(let i=0;i<beads;i++){ const d=el('wx-drop'); const s=rnd(4,16);
         d.style.width=s.toFixed(1)+'px'; d.style.height=s.toFixed(1)+'px';
         d.style.left=rnd(1,99)+'%'; d.style.top=rnd(2,96)+'%';
@@ -2757,7 +2772,7 @@ document.addEventListener('visibilitychange', () => {
         d.style.animationDelay=(-rnd(0,6)).toFixed(1)+'s';
         d.style.opacity=rnd(.6,1).toFixed(2); sky.appendChild(d); }
       // (4) 스르륵 흘러내리는 물방울(꼬리 물자국)
-      const runs = kind==='drizzle'?7:(kind==='storm'?18:13);
+      const runs = Q(kind==='drizzle'?7:(kind==='storm'?18:13));
       for(let i=0;i<runs;i++){ const r=el('wx-run');
         r.style.setProperty('--w',rnd(6,13).toFixed(1)+'px');
         r.style.left=rnd(2,98)+'%';
@@ -2766,7 +2781,7 @@ document.addEventListener('visibilitychange', () => {
         sky.appendChild(r); }
     }
     // 눈
-    if (kind==='snow'){ for(let i=0;i<70;i++){ const f=el('wx-snow-flake');
+    if (kind==='snow'){ const flakes=Q(70); for(let i=0;i<flakes;i++){ const f=el('wx-snow-flake');
       f.style.left=rnd(0,100)+'%';
       const sz=rnd(3,7).toFixed(1); f.style.width=sz+'px'; f.style.height=sz+'px';
       f.style.animationDuration=rnd(4,9).toFixed(1)+'s';
