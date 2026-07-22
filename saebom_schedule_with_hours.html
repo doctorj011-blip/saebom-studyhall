@@ -1875,6 +1875,18 @@ window.isTestStudent = function(name) {
   return TEST_STUDENTS.has(base);
 };
 
+// ── 관리자·조교 계정 (관리자석 54~63번) ──
+// 학생이 아니므로 '현재 입실' 인원수와 입실현황 목록에 넣지 않는다.
+// 좌석 배치도에는 그대로 보인다(관리자석 입실 색 표시는 유지).
+window.isAdminName = function(name) {
+  const s = (window.STUDENTS || []).find(x => x.name === name);
+  return !!(s && window.isAdminSeat && window.isAdminSeat(s.seat));
+};
+// 입실현황·인원수 집계에서 빼야 할 계정 (테스트 계정 + 관리자)
+window.isNonStudent = function(name) {
+  return window.isTestStudent(name) || window.isAdminName(name);
+};
+
 // ── 미입실 문자 발송완료 상태 (오늘 날짜·교시별, 기기 간 공유) ──
 // 키: "YYYY-M-D_이름_N교시" — 날짜가 포함되어 다음날 자동 초기화되고,
 // 같은 학생이 다음 교시에도 미입실이면 그 교시의 발송 버튼은 다시 활성화된다.
@@ -4458,7 +4470,7 @@ function getCurrentPeriod() {
 function showTodayAttendees() {
   const old = document.getElementById('today-popup-overlay');
   if (old) { old.remove(); return; }
-  const inStudents = PRESENT.filter(name => !window.isTestStudent(name)).map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
+  const inStudents = PRESENT.filter(name => !window.isNonStudent(name)).map(name => STUDENTS.find(s=>s.name===name)).filter(Boolean);
   const overlay = document.createElement('div');
   overlay.id = 'today-popup-overlay';
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:9998;display:flex;align-items:center;justify-content:center';
@@ -4521,8 +4533,8 @@ function calcAlerts() {
   const day = getTodayDayName(); // 화면에서 보고 있는 요일 탭(currentDay)이 아닌 '실제 오늘' 기준
 
   STUDENTS.forEach(s => {
-    // 테스트 계정은 미입실 알림 대상 아님
-    if (window.isTestStudent(s.name)) return;
+    // 테스트 계정·관리자는 미입실 알림 대상 아님
+    if (window.isNonStudent(s.name)) return;
     // 이미 입실 중이면 제외
     if (PRESENT.includes(s.name)) return;
 
@@ -4560,7 +4572,7 @@ function buildDashboard(){
   ALERTS = calcAlerts();
   // 오늘 등원수 동적 업데이트
   const todayEl = document.getElementById('stat-today');
-  if (todayEl) todayEl.textContent = PRESENT.filter(n => !window.isTestStudent(n)).length;
+  if (todayEl) todayEl.textContent = PRESENT.filter(n => !window.isNonStudent(n)).length;
   // 미입실 알림대상 수 동적 업데이트
   const alertsEl = document.getElementById('stat-alerts');
   if (alertsEl) alertsEl.textContent = ALERTS.length;
@@ -4615,7 +4627,7 @@ function buildDashboard(){
     if (typeof buildFloorplan === 'function') setTimeout(buildFloorplan, 0);
   }
 
-  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+PRESENT.filter(name=>!window.isTestStudent(name)).map(name=>{
+  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+PRESENT.filter(name=>!window.isNonStudent(name)).map(name=>{
     const s=STUDENTS.find(s=>s.name===name);
     return `<div class="attend-row">
       <div style="display:flex;align-items:center;gap:5px">
@@ -5626,17 +5638,19 @@ window.checkinReset = function() {
 
 function buildCheckinTodayList() {
   const listEl = document.getElementById('checkin-today-list');
-  const inCount = todayRecords.filter(r => !r.outTime).length;
-  const awayCount = todayRecords.filter(r => !r.outTime && window._awayStudents && window._awayStudents[r.studentName]).length;
+  // 관리자·테스트 계정은 학생이 아니므로 목록·인원수에서 제외
+  const records = todayRecords.filter(r => !window.isNonStudent(r.studentName));
+  const inCount = records.filter(r => !r.outTime).length;
+  const awayCount = records.filter(r => !r.outTime && window._awayStudents && window._awayStudents[r.studentName]).length;
   document.getElementById('checkin-today-count').textContent =
     `현재 ${inCount}명 입실 중` + (awayCount > 0 ? ` · 외출 ${awayCount}명` : '');
 
-  if (todayRecords.length === 0) {
+  if (records.length === 0) {
     listEl.innerHTML = '<div style="text-align:center;color:var(--color-text-tertiary);font-size:12px;padding:12px">아직 입실 기록이 없습니다</div>';
     return;
   }
 
-  listEl.innerHTML = [...todayRecords].reverse().map(r => {
+  listEl.innerHTML = [...records].reverse().map(r => {
     const isIn = !r.outTime;
     const isAway = isIn && window._awayStudents && window._awayStudents[r.studentName];
     return `<div class="checkin-today-item">
@@ -6109,9 +6123,9 @@ function buildFpSidePanel() {
   const countEl = document.getElementById('fp-side-count');
   if (!listEl) return;
 
-  // 전체 학생 (입실중 → 미입실 순)
+  // 전체 학생 (입실중 → 미입실 순) — 관리자석(54번~)은 학생이 아니라 제외
   const sorted = [...STUDENTS]
-    .filter(s => s.seat && parseInt(s.seat) > 0)
+    .filter(s => s.seat && parseInt(s.seat) > 0 && !window.isAdminSeat(s.seat))
     .sort((a, b) => {
       const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
       const bIn = todayRecords.some(r => r.studentName === b.name && !r.outTime);
@@ -12078,7 +12092,8 @@ window.showTodayAttendees = function() {
   modal.id = 'today-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9999;display:flex;align-items:center;justify-content:center';
   function renderList() {
-    const list = PRESENT.map(name => {
+    const present = PRESENT.filter(name => !window.isNonStudent(name));
+    const list = present.map(name => {
       const s = STUDENTS.find(s => s.name === name);
       const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
       return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:12px">
@@ -12095,7 +12110,7 @@ window.showTodayAttendees = function() {
     const inner = document.getElementById('today-modal-list');
     if (inner) inner.innerHTML = list || '<div style="text-align:center;padding:24px;color:#aaa;font-size:13px">현재 입실 중인 학생이 없습니다</div>';
     const cnt = document.getElementById('today-modal-count');
-    if (cnt) cnt.textContent = `총 ${PRESENT.length}명 입실 중`;
+    if (cnt) cnt.textContent = `총 ${present.length}명 입실 중`;
   }
   modal.innerHTML = `
     <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,420px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
