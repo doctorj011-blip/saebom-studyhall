@@ -277,6 +277,43 @@ body:has(.save-fab.show) .app-content{padding-bottom:170px}
 .chip-absent{background:var(--red-pale);color:var(--red)}
 .chip-none{color:var(--border);font-size:12px}
 
+/* ── 📈 학습 분석 (학부모앱과 동일 · 모바일 세로 1단) ── */
+/* 학부모앱에서 그대로 옮겨온 마크업이라, 이 앱에 없는 변수·카드 클래스는 #pa-root 안에서만 정의한다 */
+#pa-root{--text-soft:#6B7280;--brand-50:#F1EFFB;--brand-light:#B9AEEA;--brand-dark:#4C3FB8}
+#pa-root .card{background:var(--card);border-radius:var(--r-md);padding:16px;box-shadow:var(--shadow-sm);border:1px solid var(--border-light);margin-top:14px}
+#pa-root .card-title{font-size:14px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:6px;margin-bottom:12px}
+.pa-chips{display:flex;gap:6px;margin-bottom:10px}
+.pa-chip{flex:1;padding:7px 0;border:1px solid var(--border-light);background:#fff;border-radius:10px;
+  font-size:12px;font-weight:700;color:var(--text3);cursor:pointer;transition:.15s}
+.pa-chip.on{background:var(--brand-50);border-color:var(--brand-light);color:var(--brand-dark)}
+.pa-note{font-size:11px;color:var(--text3);line-height:1.5}
+.pa-sec{margin-top:18px}
+.pa-h{font-size:13px;font-weight:800;color:var(--text);margin-bottom:2px}
+.pa-hsub{font-size:10.5px;color:var(--text3);margin-bottom:8px;line-height:1.45}
+/* 요약 타일 — 좁은 화면에서 2열, 넓으면 4열 */
+.pa-tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:7px}
+@media (min-width:520px){.pa-tiles{grid-template-columns:repeat(4,1fr)}}
+.pa-tile{background:rgba(255,255,255,.72);border:1px solid var(--border-light);border-radius:14px;padding:10px 11px}
+.pa-tile-l{font-size:10.5px;color:var(--text3);margin-bottom:3px}
+.pa-tile-v{font-size:15px;font-weight:800;color:var(--text);letter-spacing:-.3px}
+.pa-tile-s{font-size:10px;color:var(--text3);margin-top:2px}
+.pa-alert{border-radius:11px;padding:8px 11px;font-size:12px;line-height:1.5;display:flex;gap:6px;align-items:flex-start}
+.pa-alert b{font-weight:800}
+/* 가로 스크롤 차트 — 기간이 길면 화면 밖으로 나가지 않고 좌우로 넘긴다 */
+.pa-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.pa-bars{display:flex;align-items:flex-end;gap:1px;border-bottom:1px solid var(--border-light)}
+.pa-bcol{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0;cursor:pointer}
+.pa-tip{margin-top:7px;font-size:11.5px;color:var(--text2);background:var(--surface);
+  border:1px solid var(--border-light);border-radius:9px;padding:7px 10px;line-height:1.5;min-height:18px}
+.pa-legend{display:flex;gap:9px;flex-wrap:wrap;margin-top:7px}
+.pa-lg{display:inline-flex;align-items:center;gap:4px;font-size:10.5px;color:var(--text-soft)}
+.pa-sw{width:9px;height:9px;border-radius:3px;flex:0 0 auto}
+.pa-row{display:flex;align-items:center;gap:8px}
+.pa-track{flex:1;background:var(--surface);border-radius:6px;height:15px;overflow:hidden}
+.pa-fill{height:100%;border-radius:6px}
+.pa-styles{display:flex;gap:6px;flex-wrap:wrap}
+.pa-style{border-radius:11px;padding:6px 10px;font-size:11.5px;line-height:1.4}
+
 /* ── 홈 메뉴 화면 ── */
 .home-screen{display:none;min-height:100vh;flex-direction:column;background:var(--bg)}
 .home-screen.visible{display:flex}
@@ -1191,6 +1228,8 @@ body{
     <!-- 학습현황 -->
     <div id="tab-mystats" style="display:none">
       <div id="mystats-content"></div>
+      <!-- 📈 학습 분석 — 공부시간 기록 아래에 이어서(별도 탭 없이 스크롤로 도달) -->
+      <div id="pa-root"></div>
     </div>
 
     <!-- 연속 출석 퀘스트 -->
@@ -2236,7 +2275,8 @@ window.signupSelectSeat = async function(seatNum) {
 
 function logout() {
   currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false; baseScheduleRaw = null;
-  ACTUAL_MIN = null; actualBestSession = 0;
+  ACTUAL_MIN = null; ACTUAL_IN = null; actualBestSession = 0;
+  try { paReset(); } catch(e) {}   // 다른 학생으로 로그인할 때 이전 학생의 검사 결과가 남지 않도록
   try { sessionStorage.removeItem('saebom_student'); sessionStorage.removeItem('saebom_active_tab_student'); } catch(e) {}
   updatePinDisplay();
   document.getElementById('login-screen').style.display='flex';
@@ -2512,12 +2552,15 @@ function showTab(id, btn) {
   if (id === 'focus') { if (window.fmOnOpen) window.fmOnOpen(); }
   else { if (window.fmOnLeave) window.fmOnLeave(); }
   if (id === 'planner') { initPlannerCalendar(); }
-  if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); if (statsView === 'rank') loadRankData(true); } // 탭 열 때마다 최신 기록으로 갱신
+  if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); if (statsView === 'rank') loadRankData(true); paInit(); } // 탭 열 때마다 최신 기록으로 갱신
   if (id === 'quest') { buildQuest(); loadActualStudyData(); }
   if (id === 'events') { buildEvents(); loadActualStudyData(); }
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   updateBottomNav(id);
+  // 헤더 타이틀 — 하단 탭으로 이동할 때도 갱신 (openSection 경유가 아니어도)
+  const titleEl = document.getElementById('section-title');
+  if (titleEl) titleEl.textContent = SECTION_NAMES[id] || id;
 
   // 저장 버튼: daily, weekly 탭에서만 표시
   const showSave = (id==='daily'||id==='weekly') && isDirty;
@@ -3087,10 +3130,14 @@ function _dayMinutes(dayName) {
 // 자정을 넘긴 세션도 durationMin 전체가 입실일(inDate)에 귀속되므로 날짜별 짝짓기가 필요 없다.
 // (구 checkin_logs 짝짓기 방식은 자정 넘긴 밤샘 세션이 어느 날에도 안 잡히는 버그로 폐기)
 let ACTUAL_MIN = null;       // { '2026-7-3': 공부시간(분) } — 관리자앱 date 형식(0패딩 없음)과 동일 키
+// 날짜별 그날 첫 입실 시각(자정 기준 분). { '2026-7-3': 1080 } — 학습분석 '등원 시각 변화' 전용
+let ACTUAL_IN = null;
 let actualBestSession = 0;   // 한 번에 가장 오래 공부한 세션(분)
 let _actualLoading = false;
 
 function _dkey(d) { return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
+// 어떤 날짜 표기든 '2026-7-9' 형태로 정규화 (학습분석이 ACTUAL_MIN/ACTUAL_IN 키를 맞출 때 쓴다)
+function _normDkey(s) { const m = String(s).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? `${+m[1]}-${+m[2]}-${+m[3]}` : String(s).trim(); }
 function _parseDkey(k) { const p = String(k).split('-').map(Number); return new Date(p[0], p[1]-1, p[2]); }
 function _isoToDkey(iso) { const p = String(iso).split('-').map(Number); return p[0]+'-'+p[1]+'-'+p[2]; } // '2026-07-09' → '2026-7-9'
 // 세션 인정 상한: 입실일 다음날 01:00 (미퇴실 과대집계 방지 — 관리자앱 sessCapTs와 동일)
@@ -3126,19 +3173,23 @@ async function loadActualStudyData(force) {
       snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
         where('studentName','==', currentStudent.name)));
     }
-    const map = {}; let bestSession = 0;
+    const map = {}, inMap = {}; let bestSession = 0;
     const nowTs = Date.now();
     snap.forEach(docu => {
       const s = docu.data();
       if (!s.inDate || typeof s.inTs !== 'number') return;
+      const k = _isoToDkey(s.inDate);
+      // 그날 첫 입실 시각(자정 기준 분) — 학습분석의 '등원 시각 변화'가 쓴다
+      const _iAt = new Date(s.inTs), _iMin = _iAt.getHours() * 60 + _iAt.getMinutes();
+      if (inMap[k] == null || _iMin < inMap[k]) inMap[k] = _iMin;
       const min = _sessionDocMin(s, nowTs);
       if (min <= 0) return;
-      const k = _isoToDkey(s.inDate);
       map[k] = (map[k] || 0) + min;
       if (min > bestSession) bestSession = min;
     });
-    ACTUAL_MIN = map; actualBestSession = bestSession;
+    ACTUAL_MIN = map; ACTUAL_IN = inMap; actualBestSession = bestSession;
     buildMyStats(); buildQuest(); buildEvents();
+    try { paOnData(); } catch(e) {}   // 학습분석이 이미 그려져 있으면 새 기록 반영
   } catch(e) { console.error('학습현황 세션 기록 로드 실패:', e); }
   _actualLoading = false;
 }
@@ -4741,6 +4792,447 @@ function showToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ══════════════════════════════════════════
+//  📈 학습 분석 (학부모앱과 같은 화면 · 학습현황 탭 하단)
+// ══════════════════════════════════════════
+// 플래너 검사 결과(planner_ai_reviews) + 세션 집계(ACTUAL_MIN/ACTUAL_IN)를 본인 기준으로 재구성.
+// - 순공/등원 시각은 이미 불러온 세션 집계를 잘라 쓴다(추가 조회 없음).
+//   ⚠️ 그 조회가 최근 3개월치라 기간 선택은 최대 60일까지만 둔다.
+// - 또래 교재·학원 추천은 다른 학생 데이터를 읽어야 하므로 제외(학부모앱과 동일).
+// - 모바일이라 hover 툴팁 대신 '막대를 누르면 아래 줄에 상세 표시' 방식을 쓴다.
+const _PA_FILL = { '국어':'#F2A9A2','수학':'#A3C4E8','영어':'#9ED2B0','과학':'#C4B3E0','사회':'#F0C89B','한국사':'#9CCFCC','제2외국어':'#EFAFCE','기타':'#CBD0D8' };
+const _PA_INK  = { '국어':'#C0554C','수학':'#4C7CB4','영어':'#4E9B6B','과학':'#7C63B0','사회':'#B77C3C','한국사':'#4A8F8C','제2외국어':'#B96694','기타':'#79808C' };
+const _PA_QFILL = { '우수':'#A9D6B6','양호':'#A8C6E8','보통':'#F2D2A0','부실':'#F2AFA8','판독불가':'#D5D8DE' };
+const _paFill = n => _PA_FILL[n] || '#CBD0D8';
+const _paInk  = n => _PA_INK[n]  || '#79808C';
+const _paEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const _paIso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const _paFmtMin = m => {
+  if (m == null || isNaN(m)) return '-';
+  const h = Math.floor(m / 60), mm = Math.round(m % 60);
+  return h ? `${h}시간${mm ? ' ' + mm + '분' : ''}` : `${mm}분`;
+};
+const _paClock = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.round(m%60)).padStart(2,'0')}`;
+
+let _paDays = 30;         // 선택된 기간
+let _paReviews = null;    // 내 플래너 검사 결과(전 기간) — 한 번만 조회해 캐시
+let _paLoaded = false;
+let _paTips = {};         // { day:[...], hour:[...] } — 막대 index → 상세 문구
+
+function paReset() { _paReviews = null; _paLoaded = false; }
+
+// 기간 칩
+window.paSetDays = function(d) { _paDays = d; paRender(); };
+// 막대 탭 → 아래 줄에 상세 표시
+window.paTip = function(kind, i) {
+  const el = document.getElementById('pa-tip-' + kind);
+  if (el && _paTips[kind]) el.textContent = _paTips[kind][i] || '';
+};
+
+// 검사 결과 1회 조회 후 렌더 (탭 진입 시 호출)
+async function paInit() {
+  const root = document.getElementById('pa-root');
+  if (!root || !currentStudent) return;
+  if (_paLoaded) { paRender(); return; }
+  root.innerHTML = `<div class="card"><div class="card-title"><i class="ti ti-chart-histogram"></i> 학습 분석</div>
+    <div class="pa-note">불러오는 중...</div></div>`;
+  const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || String(currentStudent.seat || '');
+  const list = [];
+  try {
+    if (window._fs && window._db) {
+      const { collection, query, where, getDocs } = window._fs;
+      const snap = await getDocs(query(collection(window._db, 'planner_ai_reviews'), where('seat', '==', seatKey)));
+      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) list.push(v); });
+    }
+  } catch(e) {
+    // 검사 결과를 못 읽어도 순공 기반 분석은 보여줄 수 있으므로 빈 배열로 계속 진행한다
+    console.warn('[학습분석] 플래너 검사 조회 실패:', e && e.code, e && e.message);
+  }
+  _paReviews = list.sort((a, b) => (a.date < b.date ? -1 : 1));
+  _paLoaded = true;
+  paRender();
+}
+
+// 세션 기록이 갱신됐을 때 — 이미 그려진 경우에만 다시 그린다
+function paOnData() {
+  const t = document.getElementById('tab-mystats');
+  if (_paLoaded && t && t.style.display !== 'none') paRender();
+}
+
+function paRender() {
+  const root = document.getElementById('pa-root');
+  if (!root || !currentStudent) return;
+  const days = _paDays;
+  const today = new Date();
+  const cutoff = new Date(today); cutoff.setDate(cutoff.getDate() - (days - 1));
+  const cutIso = _paIso(cutoff), todayIso = _paIso(today);
+
+  // ── 기간 내 순공·등원 시각 (이미 불러온 세션 집계에서 잘라 쓴다) ──
+  const attend = {}, attendIn = {};
+  for (let i = 0; i < days; i++) {
+    const d = new Date(cutoff); d.setDate(cutoff.getDate() + i);
+    const ds = _paIso(d), k = _normDkey(ds);
+    if (ACTUAL_MIN && ACTUAL_MIN[k]) attend[ds] = ACTUAL_MIN[k];
+    if (ACTUAL_IN && ACTUAL_IN[k] != null) attendIn[ds] = ACTUAL_IN[k];
+  }
+  const reviews = (_paReviews || []).filter(v => v.date >= cutIso && v.date <= todayIso);
+  const byDate = {}; reviews.forEach(v => { byDate[v.date] = v; });
+
+  const chips = `
+    <div class="pa-chips">
+      ${[[14,'최근 2주'],[30,'최근 30일'],[60,'최근 60일']].map(([d, l]) =>
+        `<button class="pa-chip${_paDays === d ? ' on' : ''}" onclick="paSetDays(${d})">${l}</button>`).join('')}
+    </div>`;
+  const shell = inner => { root.innerHTML = `<div class="card">
+      <div class="card-title"><i class="ti ti-chart-histogram"></i> 학습 분석</div>
+      ${chips}${inner}</div>`; };
+
+  if (!ACTUAL_MIN) { shell(`<div class="pa-note">공부시간 기록을 불러오는 중입니다...</div>`); return; }
+  if (!reviews.length && !Object.keys(attend).length) {
+    shell(`<div class="pa-note">이 기간에는 출석 기록도 검사된 플래너도 없습니다.</div>`);
+    return;
+  }
+
+  // ── 집계 ──
+  let totalMin = 0, minDays = 0, planned = 0, completed = 0;
+  const subjTotal = {};   // 과목 → {min, cnt}
+  reviews.forEach(v => {
+    const st = v.stats || {};
+    if (st.total_minutes != null) { totalMin += st.total_minutes; minDays++; }
+    planned += st.planned_count || 0;
+    completed += st.completed_count || 0;
+    (st.subjects || []).forEach(s => {
+      if (!s || !s.name) return;
+      const t = subjTotal[s.name] || (subjTotal[s.name] = { min: 0, cnt: 0 });
+      t.cnt++; if (s.minutes != null) t.min += s.minutes;
+    });
+  });
+  const doneRate = planned ? Math.round(completed / planned * 100) : null;
+  const attendTotal = Object.values(attend).reduce((a, b) => a + b, 0);
+  const attendDays = Object.keys(attend).length;
+  const attendAvg = attendDays ? Math.round(attendTotal / attendDays) : 0;
+  // 기록률 — 면학관에 머문 시간 중 플래너에 적힌 시간의 비율(검사한 날만 비교)
+  let cmpAttend = 0, cmpPlan = 0;
+  reviews.forEach(v => {
+    const pm = (v.stats || {}).total_minutes;
+    if (pm != null && attend[v.date]) { cmpAttend += attend[v.date]; cmpPlan += pm; }
+  });
+  const logRate = cmpAttend ? Math.round(cmpPlan / cmpAttend * 100) : null;
+
+  // ── ① 요약 타일 ──
+  const tile = (l, v, s) => `<div class="pa-tile"><div class="pa-tile-l">${l}</div>
+    <div class="pa-tile-v">${v}</div>${s ? `<div class="pa-tile-s">${s}</div>` : ''}</div>`;
+  const tiles = `<div class="pa-tiles">
+      ${tile('면학관 순공', attendDays ? _paFmtMin(attendTotal) : '기록 없음', attendDays ? `${attendDays}일 출석` : '')}
+      ${tile('하루 평균', attendDays ? _paFmtMin(attendAvg) : '-', '출석한 날 기준')}
+      ${tile('플래너 기록', minDays ? _paFmtMin(totalMin) : '검사 없음', minDays ? `${minDays}일치 합계` : '')}
+      ${tile('계획 완료율', doneRate != null ? doneRate + '%' : '-', doneRate != null ? '플래너에 적은 계획 중' : '')}
+    </div>`;
+
+  const noReviewNote = reviews.length ? '' : `
+    <div class="pa-alert" style="background:#FFFBEB;border:1px solid #FDE68A;color:#B45309;margin-top:12px">
+      <span>ℹ️</span><span>이 기간에 <b>검사된 플래너가 없어</b> 출석 기록만으로 분석했습니다.
+      과목별 학습시간·시간대 패턴은 플래너를 제출하면 채워집니다.</span></div>`;
+
+  // ── ② 진단 ──
+  const half = Math.floor(days / 2);
+  const midIso = _paIso(new Date(cutoff.getTime() + half * 86400000));
+  const halfAgg = which => {
+    const agg = {};
+    reviews.filter(v => which === 'early' ? v.date < midIso : v.date >= midIso).forEach(v => {
+      (((v.stats || {}).subjects) || []).forEach(s => {
+        if (!s || !s.name) return;
+        const t = agg[s.name] || (agg[s.name] = { min: 0, cnt: 0 });
+        t.cnt++; if (s.minutes != null) t.min += s.minutes;
+      });
+    });
+    return agg;
+  };
+  const early = halfAgg('early'), late = halfAgg('late');
+  const earlyDays = reviews.filter(v => v.date < midIso).length;
+  const lateDays = reviews.filter(v => v.date >= midIso).length;
+  const alerts = [];
+  if (earlyDays >= 2 && lateDays >= 2) {
+    // 검사일 수가 다를 수 있으니 '하루당' 값으로 비교한다
+    Object.keys(early).forEach(name => {
+      const e = early[name], l = late[name] || { min: 0, cnt: 0 };
+      const useMin = e.min > 0;
+      const eV = (useMin ? e.min : e.cnt) / earlyDays, lV = (useMin ? l.min : l.cnt) / lateDays;
+      if (eV <= 0) return;
+      const drop = Math.round((1 - lV / eV) * 100);
+      if (lV === 0) alerts.push({ lv:'high', text:`<b>${_paEsc(name)}</b> — 최근 플래너에는 전혀 나오지 않습니다 (이전에는 ${useMin ? _paFmtMin(e.min) : e.cnt + '회'})` });
+      else if (drop >= 30) alerts.push({ lv:'mid', text:`<b>${_paEsc(name)}</b> 학습시간이 기간 전반 대비 <b>${drop}% 줄었습니다</b>` });
+    });
+    Object.keys(late).forEach(name => {
+      if (early[name]) return;
+      alerts.push({ lv:'good', text:`<b>${_paEsc(name)}</b> — 최근에 새로 시작했습니다` });
+    });
+  }
+  if (logRate != null && logRate < 60) {
+    alerts.push({ lv:'mid', text:`면학관에 머문 시간의 <b>${logRate}%</b>만 플래너에 적혀 있습니다 — 기록이 빠졌을 수 있습니다` });
+  }
+  const attEarly = Object.entries(attend).filter(([d]) => d < midIso).map(([, m]) => m);
+  const attLate  = Object.entries(attend).filter(([d]) => d >= midIso).map(([, m]) => m);
+  if (attEarly.length >= 3 && attLate.length >= 3) {
+    const eA = attEarly.reduce((a,b)=>a+b,0) / attEarly.length;
+    const lA = attLate.reduce((a,b)=>a+b,0) / attLate.length;
+    const d = Math.round((1 - lA / eA) * 100);
+    if (d >= 25) alerts.push({ lv:'high', text:`하루 평균 순공이 <b>${d}% 줄었습니다</b> (${_paFmtMin(Math.round(eA))} → ${_paFmtMin(Math.round(lA))})` });
+    else if (d <= -25) alerts.push({ lv:'good', text:`하루 평균 순공이 <b>${Math.abs(d)}% 늘었습니다</b> (${_paFmtMin(Math.round(eA))} → ${_paFmtMin(Math.round(lA))})` });
+  }
+  // 등원 시각 변화 — 슬럼프는 성적보다 등원 시각에서 먼저 드러난다
+  const avgOf = l => l.length ? l.reduce((a,b)=>a+b,0) / l.length : null;
+  const inEarly = avgOf(Object.entries(attendIn).filter(([d]) => d < midIso).map(([, v]) => v));
+  const inLate  = avgOf(Object.entries(attendIn).filter(([d]) => d >= midIso).map(([, v]) => v));
+  const inShift = (inEarly != null && inLate != null) ? Math.round(inLate - inEarly) : null;
+  if (inShift != null && inShift >= 30) alerts.push({ lv:'mid', text:`등원 시각이 평균 <b>${inShift}분 늦어졌습니다</b> (${_paClock(inEarly)} → ${_paClock(inLate)})` });
+  else if (inShift != null && inShift <= -30) alerts.push({ lv:'good', text:`등원 시각이 평균 <b>${Math.abs(inShift)}분 빨라졌습니다</b> (${_paClock(inEarly)} → ${_paClock(inLate)})` });
+
+  const aC = { high:['#FEF2F2','#FCA5A5','#B91C1C','!'], mid:['#FFFBEB','#FDE68A','#B45309','▼'], good:['#F0FDF4','#BBF7D0','#15803D','↑'] };
+  const diagnostics = alerts.length ? `
+    <div class="pa-sec"><div class="pa-h">진단</div>
+      <div class="pa-hsub">기간을 절반으로 나눠 앞뒤를 비교한 결과입니다</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${alerts.map(a => { const [bg,bd,fg,ic] = aC[a.lv];
+          return `<div class="pa-alert" style="background:${bg};border:1px solid ${bd};color:${fg}"><span>${ic}</span><span>${a.text}</span></div>`;
+        }).join('')}
+      </div></div>` : '';
+
+  // ── ③ 일별 학습시간 (회색=순공, 안쪽 색=플래너 기록/검사 등급) ──
+  const dayMax = Math.max(60, ...reviews.map(v => (v.stats || {}).total_minutes || 0), ...Object.values(attend));
+  const labelEvery = days > 31 ? 5 : days > 20 ? 3 : 2;
+  const DOWL = ['일','월','화','수','목','금','토'];
+  _paTips.day = [];
+  let bars = '';
+  for (let i = 0; i < days; i++) {
+    const d = new Date(cutoff); d.setDate(cutoff.getDate() + i);
+    const ds = _paIso(d), v = byDate[ds], st = v ? (v.stats || {}) : null;
+    const min = st && st.total_minutes != null ? st.total_minutes : null;
+    const att = attend[ds] || 0;
+    const hAtt = att ? Math.max(3, Math.round(att / dayMax * 104)) : 0;
+    const hPlan = min != null ? Math.max(3, Math.round(min / dayMax * 104)) : 0;
+    const color = v ? (_PA_QFILL[v.quality] || '#D5D8DE') : '#DCDFE5';
+    const parts = [`${d.getMonth()+1}/${d.getDate()}(${DOWL[d.getDay()]})`];
+    parts.push(att ? '순공 ' + _paFmtMin(att) : '출석 없음');
+    if (v) parts.push('플래너 검사 ' + (v.quality || ''));
+    if (min != null) parts.push('플래너 기록 ' + _paFmtMin(min));
+    _paTips.day.push(parts.join(' · '));
+    bars += `<div class="pa-bcol" onclick="paTip('day',${i})">
+        <div style="width:100%;height:104px;display:flex;align-items:flex-end;justify-content:center;position:relative">
+          ${hAtt ? `<div style="position:absolute;bottom:0;width:80%;max-width:16px;height:${hAtt}px;background:#E7E9EE;border-radius:3px 3px 0 0"></div>` : ''}
+          ${hPlan ? `<div style="position:absolute;bottom:0;width:46%;max-width:9px;height:${hPlan}px;background:${color};border-radius:2px 2px 0 0"></div>` : ''}
+          ${!hPlan && v ? `<div style="position:absolute;bottom:0;width:46%;max-width:9px;height:6px;background:${color};opacity:.45;border-radius:2px 2px 0 0"></div>` : ''}
+        </div>
+        <div style="font-size:8px;color:#B0B4BC;height:10px">${i % labelEvery === 0 ? d.getDate() : ''}</div>
+      </div>`;
+  }
+  // 검사가 하나도 없으면 등급 범례는 뜻이 없다(회색 순공 막대만 그려지므로)
+  const legend = `<span class="pa-lg"><span class="pa-sw" style="background:#E7E9EE"></span>면학관 순공</span>`
+    + (reviews.length ? Object.entries(_PA_QFILL).map(([q,c]) => `<span class="pa-lg"><span class="pa-sw" style="background:${c}"></span>${q}</span>`).join('') : '');
+  const daily = `
+    <div class="pa-sec"><div class="pa-h">일별 학습시간</div>
+      <div class="pa-hsub">${reviews.length
+        ? '회색 = 면학관에 머문 시간 · 안쪽 색막대 = 플래너에 적은 시간(색은 검사 등급) · '
+        : '회색 = 면학관에 머문 시간 · '}<b>막대를 누르면</b> 그날 기록이 보입니다</div>
+      <div class="pa-scroll"><div class="pa-bars" style="min-width:${Math.max(100, days * 9)}px">${bars}</div></div>
+      <div class="pa-tip" id="pa-tip-day">막대를 눌러보세요</div>
+      <div class="pa-legend">${legend}</div>
+    </div>`;
+
+  // ── ④ 주차별 순공·목표 달성 ──
+  const weekStartOf = iso => { const d = new Date(iso + 'T00:00:00'); d.setDate(d.getDate() - ((d.getDay()+6)%7)); return _paIso(d); };
+  const wk = {};
+  const wkOf = k => wk[k] || (wk[k] = { att: 0, planned: 0, completed: 0 });
+  Object.entries(attend).forEach(([ds, m]) => { wkOf(weekStartOf(ds)).att += m; });
+  reviews.forEach(v => { const w = wkOf(weekStartOf(v.date)), st = v.stats || {};
+    w.planned += st.planned_count || 0; w.completed += st.completed_count || 0; });
+  const goalMin = Math.round((Number(currentStudent.weeklyGoalH) || 0) * 60);
+  const wkKeys = Object.keys(wk).sort();
+  const wkMax = Math.max(1, ...wkKeys.map(k => wk[k].att));
+  const weekly = wkKeys.length ? `
+    <div class="pa-sec"><div class="pa-h">주차별 순공${goalMin ? ' · 목표 달성' : ''}</div>
+      <div class="pa-hsub">${goalMin ? `주간 목표 순공 ${_paFmtMin(goalMin)} 기준` : '주간 목표 순공이 설정되지 않아 달성률은 생략합니다'}</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        ${wkKeys.map(k => {
+          const w = wk[k], s = new Date(k + 'T00:00:00'), e = new Date(s.getTime() + 6*86400000);
+          const partial = k < cutIso || _paIso(e) > todayIso;
+          const rate = goalMin ? Math.round(w.att / goalMin * 100) : null;
+          const barW = goalMin ? Math.min(100, rate) : Math.min(100, Math.round(w.att / wkMax * 100));
+          const col = rate == null ? '#C9BEF0' : rate >= 100 ? '#A9D6B6' : rate >= 70 ? '#F2D2A0' : '#F2AFA8';
+          const ink = rate == null ? '#6C5DD3' : rate >= 100 ? '#4E9B6B' : rate >= 70 ? '#B77C3C' : '#C0554C';
+          const done = w.planned ? Math.round(w.completed / w.planned * 100) : null;
+          return `<div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-soft);margin-bottom:3px">
+              <span>${s.getMonth()+1}/${s.getDate()}~${e.getMonth()+1}/${e.getDate()}${partial ? ' <span style="color:#C9CDD4">일부</span>' : ''}</span>
+              <span>${_paFmtMin(w.att)}${rate != null ? ` <b style="color:${ink}">${rate}%</b>` : ''}${done != null ? ` <span style="color:#D5D8DE">|</span> 완료 ${done}%` : ''}</span>
+            </div>
+            <div class="pa-track"><div class="pa-fill" style="width:${Math.max(2, barW)}%;background:${col}"></div></div>
+          </div>`;
+        }).join('')}
+      </div></div>` : '';
+
+  // ── ⑤ 출석 리듬 (요일별 하루 평균 + 등원 시각) ──
+  const DOW = ['월','화','수','목','금','토','일'];
+  const dowAgg = DOW.map(() => ({ min: 0, days: 0 }));
+  Object.entries(attend).forEach(([ds, m]) => {
+    const idx = (new Date(ds + 'T00:00:00').getDay() + 6) % 7;
+    dowAgg[idx].min += m; dowAgg[idx].days++;
+  });
+  const dowMax = Math.max(1, ...dowAgg.map(d => d.days ? d.min / d.days : 0));
+  const rhythm = attendDays ? `
+    <div class="pa-sec"><div class="pa-h">출석 리듬</div>
+      <div class="pa-hsub">요일별 하루 평균 순공</div>
+      <div style="display:flex;align-items:flex-end;gap:5px;height:92px;border-bottom:1px solid var(--border-light);margin-bottom:7px">
+        ${dowAgg.map((d, i) => {
+          const avg = d.days ? d.min / d.days : 0;
+          const h = d.days ? Math.max(4, Math.round(avg / dowMax * 62)) : 0;
+          const we = i >= 5;
+          return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:3px">
+            <div style="font-size:8.5px;color:var(--text3)">${d.days ? _paFmtMin(Math.round(avg)) : ''}</div>
+            <div style="width:72%;max-width:30px;height:${h}px;background:${we ? '#DCD6F5' : '#B9AEEA'};border-radius:4px 4px 0 0"></div>
+            <div style="font-size:11px;font-weight:700;color:${we ? 'var(--text3)' : 'var(--text-soft)'}">${DOW[i]}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:11.5px;color:var(--text2);line-height:1.6">
+        ${inShift != null
+          ? `평균 등원 시각 <b>${_paClock(inEarly)}</b> → <b>${_paClock(inLate)}</b>
+             <span style="color:${inShift >= 30 ? '#C62828' : inShift <= -30 ? '#15803D' : 'var(--text3)'};font-weight:800">${inShift > 0 ? '+' : ''}${inShift}분</span><br>`
+          : ''}
+        기간 중 <b>${attendDays}일</b> 출석 · 플래너 검사 <b>${reviews.length}일</b>
+      </div></div>` : '';
+
+  // ── ⑥ 과목별 총 학습시간 ──
+  const subjRows = Object.entries(subjTotal).sort((a, b) => b[1].min - a[1].min || b[1].cnt - a[1].cnt);
+  const maxSubj = Math.max(1, ...subjRows.map(([, t]) => t.min));
+  const subjects = subjRows.length ? `
+    <div class="pa-sec"><div class="pa-h">과목별 학습시간</div>
+      <div class="pa-hsub">플래너에 적힌 내용 기준</div>
+      <div style="display:flex;flex-direction:column;gap:7px">
+        ${subjRows.map(([name, t]) => `
+          <div class="pa-row">
+            <div style="width:52px;font-size:11.5px;font-weight:700;color:${_paInk(name)};text-align:right;flex:0 0 auto">${_paEsc(name)}</div>
+            <div class="pa-track"><div class="pa-fill" style="width:${t.min ? Math.max(3, Math.round(t.min/maxSubj*100)) : 3}%;background:${_paFill(name)}"></div></div>
+            <div style="width:72px;font-size:10.5px;color:var(--text-soft);text-align:right;flex:0 0 auto">${t.min ? _paFmtMin(t.min) : t.cnt + '회'}</div>
+          </div>`).join('')}
+      </div></div>` : '';
+
+  // ── ⑦ 시간대별 학습 패턴 ──
+  // hourly는 타임테이블 색칠을 시간 단위로 분해한 값이라 총량이 과목 합계와 조금 다를 수 있다.
+  // 그래서 '총량'이 아니라 '언제 무엇을 하는가(분포)'를 보는 용도로만 쓴다.
+  const HOUR_ORDER = Array.from({ length: 24 }, (_, i) => (i + 5) % 24);   // 05시 시작 ~ 익일 04시
+  const hourAgg = {}; let hourlyTotal = 0;
+  reviews.forEach(v => {
+    (((v.stats || {}).hourly) || []).forEach(h => {
+      if (!h || typeof h.hour !== 'number' || h.hour < 0 || h.hour > 23) return;
+      const slot = hourAgg[h.hour] || (hourAgg[h.hour] = {});
+      slot[h.subject] = (slot[h.subject] || 0) + (h.minutes || 0);
+      hourlyTotal += (h.minutes || 0);
+    });
+  });
+  let hourPattern = '';
+  if (hourlyTotal > 0) {
+    const hourTotalOf = h => Object.values(hourAgg[h] || {}).reduce((a, b) => a + b, 0);
+    const idxs = HOUR_ORDER.map((h, i) => hourAgg[h] ? i : -1).filter(i => i >= 0);
+    const shown = HOUR_ORDER.slice(Math.max(0, Math.min(...idxs) - 1), Math.min(23, Math.max(...idxs) + 1) + 1);
+    const hMax = Math.max(30, ...shown.map(hourTotalOf));
+    _paTips.hour = [];
+    const cols = shown.map((h, i) => {
+      const slot = hourAgg[h] || {}, tot = hourTotalOf(h);
+      const stack = Object.entries(slot).sort((a,b) => b[1]-a[1]).map(([sub, m]) =>
+        `<div style="width:100%;height:${Math.round(m / hMax * 96)}px;background:${_paFill(sub)}"></div>`).join('');
+      // 기간 전체를 시간대별로 합친 값이라 '기간 합계'임을 문구로 못박는다(하루치로 오해 방지)
+      _paTips.hour.push(tot ? `${h}시대 기간 합계 · ` + Object.entries(slot).sort((a,b)=>b[1]-a[1]).map(([s, m]) => `${s} ${_paFmtMin(m)}`).join(', ') : `${h}시 · 기록 없음`);
+      return `<div class="pa-bcol" onclick="paTip('hour',${i})">
+          <div style="width:74%;max-width:18px;display:flex;flex-direction:column-reverse;height:96px">${stack}</div>
+          <div style="font-size:8.5px;color:${tot ? 'var(--text-soft)' : '#D8DBE0'};height:11px">${h}</div>
+        </div>`;
+    }).join('');
+    const peakH = Object.keys(hourAgg).map(Number).sort((a,b) => hourTotalOf(b) - hourTotalOf(a))[0];
+    hourPattern = `
+      <div class="pa-sec"><div class="pa-h">시간대별 학습 패턴</div>
+        <div class="pa-hsub">플래너 타임테이블 기준 · 언제 무슨 과목을 하는지 (막대를 누르면 상세)</div>
+        <div class="pa-scroll"><div class="pa-bars" style="min-width:${Math.max(100, shown.length * 15)}px">${cols}</div></div>
+        <div class="pa-tip" id="pa-tip-hour">가장 많이 공부한 시간대는 <b>${peakH}시</b>입니다</div>
+        <div class="pa-legend">${Object.keys(subjTotal).map(n => `<span class="pa-lg"><span class="pa-sw" style="background:${_paFill(n)}"></span>${_paEsc(n)}</span>`).join('')}</div>
+      </div>`;
+  }
+
+  // ── ⑧ 학습 스타일 ──
+  // 라벨만 던지면 신뢰할 수 없으므로 근거 수치를 함께 붙인다.
+  let myBookCnt = 0, myLectureCnt = 0;
+  reviews.forEach(v => {
+    (((v.stats || {}).materials) || []).forEach(m => {
+      if (!m) return;
+      if (m.kind === '인강' || m.kind === '학원') myLectureCnt++;   // 학원 교재도 '수업 기반'으로 본다
+      else if (m.kind === '문제집') myBookCnt++;
+    });
+  });
+  const styleDen = myBookCnt + myLectureCnt;
+  const guidedRatio = styleDen ? myLectureCnt / styleDen : null;
+  // 같은 과목이 몇 시간 연속으로 이어지는가 — 몰입형/분산형
+  let runSum = 0, runCnt = 0;
+  reviews.forEach(v => {
+    const hs = (((v.stats || {}).hourly) || []).slice().sort((a, b) => a.hour - b.hour);
+    let curSub = null, curLen = 0, prevHour = null;
+    hs.forEach(h => {
+      if (h.subject === curSub && prevHour != null && h.hour === prevHour + 1) curLen++;
+      else { if (curLen) { runSum += curLen; runCnt++; } curSub = h.subject; curLen = 1; }
+      prevHour = h.hour;
+    });
+    if (curLen) { runSum += curLen; runCnt++; }
+  });
+  const avgRun = runCnt ? runSum / runCnt : null;
+  // 활동 시간대 무게중심 (심야는 24시 이후로 펴서 평균이 왜곡되지 않게)
+  let hwSum = 0, hwCnt = 0;
+  Object.entries(hourAgg).forEach(([h, slot]) => {
+    const m = Object.values(slot).reduce((a, b) => a + b, 0);
+    hwSum += (Number(h) < 5 ? Number(h) + 24 : Number(h)) * m; hwCnt += m;
+  });
+  const meanHour = hwCnt ? hwSum / hwCnt : null;
+
+  const stChips = [];
+  const stChip = (label, detail, tone) => {
+    const c = { blue:['#EEF2FF','#C7D2FE','#4C3FB8'], green:['#F0FDF4','#BBF7D0','#15803D'],
+                amber:['#FFFBEB','#FDE68A','#B77C3C'], gray:['#F5F6F8','#E7E9EE','#6B7280'] }[tone];
+    return `<div class="pa-style" style="background:${c[0]};border:1px solid ${c[1]}">
+      <b style="color:${c[2]}">${label}</b> <span style="color:var(--text-soft)">${detail}</span></div>`;
+  };
+  if (guidedRatio != null) {
+    const pct = Math.round(guidedRatio * 100);
+    if (guidedRatio >= 0.6) stChips.push(stChip('강의 중심형', `수업·인강 비중 ${pct}%`, 'amber'));
+    else if (guidedRatio <= 0.25) stChips.push(stChip('자기주도형', `문제집 위주 (수업·인강 ${pct}%)`, 'green'));
+    else stChips.push(stChip('병행형', `문제집과 수업·인강 함께 (수업 ${pct}%)`, 'blue'));
+  }
+  if (avgRun != null) stChips.push(stChip(avgRun >= 2 ? '몰입형' : '분산형', `한 과목 평균 ${avgRun.toFixed(1)}시간씩`, 'blue'));
+  if (meanHour != null) {
+    const mh = meanHour >= 24 ? meanHour - 24 : meanHour;
+    stChips.push(stChip(meanHour < 12 ? '오전형' : meanHour < 18 ? '오후형' : meanHour < 22 ? '저녁형' : '야간형',
+      `학습 무게중심 ${Math.floor(mh)}시경`, 'gray'));
+  }
+  if (doneRate != null) {
+    if (doneRate >= 85) stChips.push(stChip('계획 실행형', `완료율 ${doneRate}%`, 'green'));
+    else if (doneRate < 60) stChips.push(stChip('계획 미달형', `완료율 ${doneRate}%`, 'amber'));
+  }
+  let advice = '';
+  if (guidedRatio != null) {
+    if (guidedRatio >= 0.6) advice = '수업으로 배운 내용을 스스로 확인할 <b>문제집</b>을 함께 두면 좋습니다.';
+    else if (guidedRatio <= 0.25) advice = '혼자 막히는 과목이 있다면 <b>인강으로 해당 단원만</b> 보완하는 편이 효율적입니다.';
+    else advice = '지금 균형은 무난합니다. 취약 과목만 골라 보강하면 됩니다.';
+  }
+  if (doneRate != null && doneRate < 60) advice += ' 계획 완료율이 낮아 <b>분량이 많은 교재보다 얇은 교재</b>가 맞습니다.';
+  if (avgRun != null && avgRun < 1.5) advice += ' 짧게 끊어 공부하므로 <b>한 편이 짧은 인강</b>이 잘 맞습니다.';
+  const style = stChips.length ? `
+    <div class="pa-sec"><div class="pa-h">학습 스타일</div>
+      <div class="pa-hsub">플래너에 적힌 교재·시간표에서 읽어낸 경향입니다</div>
+      <div class="pa-styles">${stChips.join('')}</div>
+      ${advice ? `<div class="pa-alert" style="background:var(--surface);border:1px solid var(--border-light);color:var(--text2);margin-top:8px"><span>💡</span><span>${advice}</span></div>` : ''}
+    </div>` : '';
+
+  shell(tiles + noReviewNote + diagnostics + daily + weekly + rhythm + subjects + hourPattern + style
+    + `<div class="pa-note" style="margin-top:16px">순공 시간은 입·퇴실 기록, 나머지는 제출된 플래너를 검사한 결과입니다.</div>`);
 }
 
 </script>
