@@ -3300,6 +3300,29 @@ async function applyMeritBadges(){
   });
 }
 
+// 학생 관리 카드(#student-list)의 상·벌점 배지를 이번 주기 기준으로 채운다 (fire-and-forget).
+// 순위·상쇄가 주기 단위라 카드도 주기 합계를 보여준다(월탭·기간조회와 무관).
+async function applyStudentCardScores(){
+  const cells = document.querySelectorAll('#student-list .sc-merit, #student-list .sc-pen');
+  if (!cells.length) return;
+  // 이번 주기 범위 — saebom-common.js의 _meritCycle 우선, 없으면 1주기(7/20~8/31) 폴백.
+  //   (CYCLE1 상수는 다른 script 블록에 갇혀 여기서 접근 불가라 리터럴로 둔다)
+  let start = '2026-07-20', end = '2026-08-31';
+  try {
+    const cyc = window._meritCycle && window._meritCycle(SH.sessIsoDate(Date.now()));
+    if (cyc && cyc.start && cyc.end) { start = cyc.start; end = cyc.end; }
+  } catch(e){}
+  const [mDocs, pDocs] = await Promise.all([loadMeritDocs(), loadPenaltyDocs()]);
+  const mBy = _aggregateMerits(mDocs, start, end);
+  const pBy = _aggregatePenalties(pDocs, start, end);
+  document.querySelectorAll('#student-list .sc-merit').forEach(el => {
+    el.innerHTML = _meritBadge(mBy[el.getAttribute('data-sc-name')] || 0, el.getAttribute('data-sc-seat') || '', el.getAttribute('data-sc-name') || '');
+  });
+  document.querySelectorAll('#student-list .sc-pen').forEach(el => {
+    el.innerHTML = _penaltyBadge(pBy[el.getAttribute('data-sc-name')] || 0, el.getAttribute('data-sc-seat') || '');
+  });
+}
+
 function buildHoursTable(){
   // 기간 조회 모드에서는 월별 표로 덮어쓰지 않는다 (입퇴실 갱신 등 외부 호출 무시)
   if (window._hoursRangeMode) return;
@@ -5093,11 +5116,14 @@ function buildStudentList(filter=''){
           <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
             <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
             <span onclick="openWeeklyGoalAdmin(${idx},event)" title="주간 목표순공 설정 — 자동 상점 기준" style="font-size:11px;font-weight:600;background:${_wBg};color:${_wFg};border:1px ${_wBd};border-radius:20px;padding:2px 8px;display:inline-block;cursor:pointer">${_wTxt}</span>
+            <span class="sc-merit" data-sc-name="${s.name}" data-sc-seat="${String(s.seat).replace(/[^0-9]/g,'')}" onclick="event.stopPropagation()" title="이번 주기 상점"></span>
+            <span class="sc-pen" data-sc-name="${s.name}" data-sc-seat="${String(s.seat).replace(/[^0-9]/g,'')}" onclick="event.stopPropagation()" title="이번 주기 벌점"></span>
           </div>
         </div>
       </div>`;
     }).join('')
     : `<div class="student-list-empty">${filter?`🔍 "${filter.replace(/</g,'&lt;')}" 검색 결과가 없습니다`:'등록된 학생이 없습니다'}</div>`;
+  applyStudentCardScores();
 }
 
 window.toggleGender = function(idx, e) {
