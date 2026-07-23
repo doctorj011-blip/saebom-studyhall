@@ -219,6 +219,19 @@ body.admin-device .topbar-tabs{display:flex}
 .sess-out{color:#4338A8;font-weight:600}
 .sess-open{color:#C62828;font-weight:600}
 .sess-dur{margin-left:auto;color:var(--color-text-secondary);font-weight:600}
+.sess-away{color:#B45309;font-weight:600}
+/* 세션 수동 보정(입·퇴실 기록 수정/추가) — 외출 복귀를 안 눌러 시간이 안 잡힌 경우 등 */
+.sess-edit-btn{background:#EEF2FF;border:1px solid #C7D2FE;color:#4A3FA8;border-radius:6px;font-size:10px;font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
+.sess-edit-btn:hover{background:#DDD6FE}
+.sess-add-btn{background:#6C5DD3;border:none;color:#fff;border-radius:8px;font-size:12px;font-weight:700;padding:6px 12px;cursor:pointer}
+.sess-form{border:1.5px solid #6C5DD3;border-radius:12px;padding:12px;margin-bottom:12px;background:#F8F7FF}
+.sess-form-title{font-size:13px;font-weight:700;color:#1E1B4B;margin-bottom:10px}
+.sess-form-grid{display:grid;grid-template-columns:60px 1fr;gap:8px 10px;align-items:center;font-size:12px}
+.sess-form-grid label{color:var(--color-text-secondary);font-weight:600}
+.sess-form-grid input{width:100%;padding:6px 8px;border:1px solid #C7D2FE;border-radius:8px;font-size:13px;box-sizing:border-box}
+.sess-form-note{font-size:11px;color:var(--color-text-tertiary);margin-top:8px;line-height:1.5}
+.sess-form-btns{display:flex;gap:6px;margin-top:10px}
+.sess-form-btns button{flex:1;padding:8px;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer}
 .hours-bar-wrap{width:100%;background:var(--color-background-secondary);border-radius:3px;height:6px;overflow:hidden;display:inline-block;vertical-align:middle;width:80px}
 .hours-bar{height:100%;border-radius:3px;background:#5546C4}
 .rank-badge{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;font-size:10px;font-weight:500}
@@ -317,6 +330,7 @@ body.admin-device .topbar-tabs{display:flex}
 .fp-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--color-text-secondary)}
 .fp-leg-dot{width:10px;height:10px;border-radius:3px}
 .fp-leg-in{background:#6C5DD3}
+.fp-leg-away{background:#F59E0B}
 .fp-leg-out{background:#bdc1c6}
 .fp-leg-empty{background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary)}
 
@@ -955,6 +969,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   <div class="fp-toolbar">
     <div class="fp-legend">
       <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-in"></span>입실 중</span>
+      <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-away"></span>외출 중</span>
       <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-out"></span>퇴실</span>
       <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-empty"></span>공석</span>
     </div>
@@ -2130,6 +2145,22 @@ function sessDurationMin(inTs, outTs, awayMs){
 }
 function sessFmtKoTime(ts){ return new Date(ts).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}); }
 window._sessHelpers = { sessIsoDate, sessMonthKey, sessLegacyDate, sessCapTs, sessDurationMin, sessFmtKoTime };
+// ── 외출 상태 공용 헬퍼 ──
+// _awayStudents[이름] = 외출 시작 시각 문자열("오후 5:47"), _awayStartTs[이름] = 외출 시작 epoch.
+// 시작 epoch는 세션 문서(awayStartTs)에서만 오므로, 다른 기기가 처리한 외출도 그대로 잡힌다.
+// (students.awayAt 보조 경로로 들어온 외출은 시각 문자열만 있어 경과 시간이 null)
+window._awayStartTs = window._awayStartTs || {};
+// 외출이 이 시간을 넘으면 '복귀 누르는 걸 잊었을 가능성'으로 보고 빨갛게 강조한다.
+// (실제로 외출→복귀 미입력으로 4시간이 통째로 학습시간에서 빠진 사례가 있었다)
+const AWAY_LONG_MIN = 90;
+function awayInfo(name){
+  const at = window._awayStudents && window._awayStudents[name];
+  if (!at) return null;
+  const ts = window._awayStartTs && window._awayStartTs[name];
+  const min = ts ? Math.max(0, Math.round((Date.now() - ts) / 60000)) : null;
+  return { at, ts: ts || null, min, long: min != null && min >= AWAY_LONG_MIN };
+}
+window.awayInfo = awayInfo;
 // 모듈 스크립트가 window._sessionApi 를 노출할 때까지 대기 (waitDb와 동일 패턴)
 function waitSessionApi(){
   return new Promise(res => {
@@ -3547,16 +3578,22 @@ window.showStudentSessionsModal = async function(name){
     <div style="background:#fff;border-radius:16px;width:min(94vw,460px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#EEF2FF">
         <div style="font-size:15px;font-weight:700;color:#1E1B4B">${name} <span style="font-size:12px;font-weight:500;color:#4A3FA8">${seat ? seat + ' · ' : ''}${rangeLabel} 입·퇴실 기록</span></div>
-        <button onclick="document.getElementById('sess-modal-overlay').remove()"
-          style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <button class="sess-add-btn" onclick="sessEditOpen(null)">➕ 기록 추가</button>
+          <button onclick="document.getElementById('sess-modal-overlay').remove()"
+            style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+        </div>
       </div>
       <div id="sess-modal-body" style="overflow-y:auto;padding:14px 16px">
+        <div id="sess-edit-slot"></div>
         <div style="text-align:center;padding:32px;color:#aaa;font-size:13px">불러오는 중...</div>
       </div>
     </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
   document.body.appendChild(overlay);
   const bodyEl = overlay.querySelector('#sess-modal-body');
+  // 수정 폼 자리(#sess-edit-slot)는 본문을 다시 그려도 남아 있어야 한다
+  const setBody = html => { bodyEl.innerHTML = '<div id="sess-edit-slot"></div>' + html; };
 
   try {
     const db = await window.waitDb();
@@ -3572,11 +3609,20 @@ window.showStudentSessionsModal = async function(name){
 
     // 이 학생의 세션만 입실일별로 모은다
     const byDate = {};
+    const allSess = [];
     snaps.forEach(snap => snap.forEach(docSnap => {
-      const s = docSnap.data();
+      const s = Object.assign({ _id: docSnap.id }, docSnap.data());
       if (s.studentName !== name || typeof s.inTs !== 'number' || !s.inDate) return;
       (byDate[s.inDate] = byDate[s.inDate] || []).push(s);
+      allSess.push(s);
     }));
+    // 수동 보정(수정/추가/삭제)이 참조할 문맥 — 좌석은 현재 학생, 없으면 기록상 좌석(퇴원생)
+    window._sessModal = {
+      name,
+      seat: String(seat || (allSess[0] && allSess[0].seat) || '').replace('번','').trim(),
+      list: allSess,
+      byId: allSess.reduce((m, s) => (m[s._id] = s, m), {})
+    };
 
     const fmtClock = ts => {
       const d = new Date(ts);
@@ -3603,7 +3649,10 @@ window.showStudentSessionsModal = async function(name){
           dayMin += d;
           durTxt = _fmtRangeMin(d);
         } else if (date === todayIso) {
-          outTxt = `<span class="sess-open">재실 중</span>`;
+          // 외출 중이면 시계가 멈춰 있다는 것을 여기서도 드러낸다(복귀 미입력 조기 발견)
+          outTxt = s.awayStartTs
+            ? `<span class="sess-away">🚶 외출 중 ${fmtClock(s.awayStartTs)}~</span>`
+            : `<span class="sess-open">재실 중</span>`;
           let away = s.awayMs || 0;
           if (s.awayStartTs) away += Math.max(0, nowTs - s.awayStartTs);
           const d = sessDurationMin(s.inTs, nowTs, away); dayMin += d;
@@ -3620,6 +3669,7 @@ window.showStudentSessionsModal = async function(name){
           <span class="sess-arrow">→</span>
           <span>${outTxt}</span>
           <span class="sess-dur">${durTxt}${awayMin > 0 ? ` <span style="font-size:10px;color:#999">(외출 ${awayMin}분 제외)</span>` : ''}</span>
+          <button class="sess-edit-btn" onclick="sessEditOpen('${String(s._id).replace(/'/g,"\\'")}')" title="이 기록 수정">✏️</button>
         </div>`;
       }).join('');
 
@@ -3637,18 +3687,196 @@ window.showStudentSessionsModal = async function(name){
 
     const filled = blocks.filter(Boolean);
     if (!filled.length) {
-      bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#aaa;font-size:13px">${rangeLabel} 기간에 입·퇴실 기록이 없습니다</div>`;
+      setBody(`<div style="text-align:center;padding:32px;color:#aaa;font-size:13px">${rangeLabel} 기간에 입·퇴실 기록이 없습니다<br><span style="font-size:11px">기록이 빠졌다면 위 <b>➕ 기록 추가</b>로 직접 넣을 수 있습니다</span></div>`);
       return;
     }
-    bodyEl.innerHTML = `
+    setBody(`
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <div class="summary-chip">출석 <span>${dayCount}일</span></div>
         <div class="summary-chip">총 <span style="color:#5546C4">${_fmtRangeMin(grandMin)}</span></div>
       </div>
-      ${filled.join('')}`;
+      ${filled.join('')}`);
   } catch(e) {
     console.error('입·퇴실 상세 조회 실패:', e);
-    bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`;
+    setBody(`<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`);
+  }
+};
+
+// ══════════════════════════════════════════════════════════════
+// 입·퇴실 기록 수동 보정 (수정 / 추가 / 삭제)
+// ══════════════════════════════════════════════════════════════
+// 왜 필요한가: 외출을 누르고 복귀를 안 누른 채 퇴실하면 그 구간이 통째로 외출로 정산돼
+// 학습시간에서 빠진다(실제 사례: 4시간 19분 중 5분만 인정). 퇴실을 아예 안 눌러 자동마감된
+// 경우도 마찬가지다. 원본은 attendance_sessions 문서 하나뿐이므로 여기만 고치면
+// 누적시간·순위·학생앱·학부모앱이 전부 따라온다(hours는 세션 합산으로 재계산).
+// ※ 재실 중(열린 세션)은 포인터(current_sessions)와 짝을 이루므로 수정 대상에서 제외한다.
+window._sessModal = null;   // 열려 있는 상세 모달의 문맥 { name, seat, list, byId }
+window._sessEditId = null;  // 수정 중인 세션 문서 ID (없으면 신규 추가)
+
+function _sessEdDateStr(ts){
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function _sessEdTimeStr(ts){
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+function _sessEdVal(id){ const el = document.getElementById(id); return el ? el.value : ''; }
+
+// 폼 입력 → 저장할 값. 퇴실이 입실보다 이르면 자정을 넘긴 것으로 본다.
+function _sessEditCompute(){
+  const date = _sessEdVal('sess-ed-date'), inT = _sessEdVal('sess-ed-in'), outT = _sessEdVal('sess-ed-out');
+  if (!date || !inT || !outT) return { err: '날짜 · 입실 · 퇴실 시각을 모두 입력해 주세요' };
+  const awayMin = Math.max(0, parseInt(_sessEdVal('sess-ed-away') || '0', 10) || 0);
+  const [y, m, d] = date.split('-').map(Number);
+  const [ih, im] = inT.split(':').map(Number);
+  const [oh, om] = outT.split(':').map(Number);
+  if ([y,m,d,ih,im,oh,om].some(v => !Number.isFinite(v))) return { err: '입력값을 다시 확인해 주세요' };
+  const inTs = new Date(y, m-1, d, ih, im, 0, 0).getTime();
+  let outTs = new Date(y, m-1, d, oh, om, 0, 0).getTime();
+  const nextDay = outTs <= inTs;
+  if (nextDay) outTs += 86400000;
+  const awayMs = awayMin * 60000;
+  const rawMin = Math.max(0, Math.round((outTs - inTs - awayMs) / 60000));
+  const durationMin = sessDurationMin(inTs, outTs, awayMs); // 익일 01:00 상한 동일 적용
+  return { inTs, outTs, awayMs, awayMin, durationMin, rawMin, capped: durationMin < rawMin, nextDay };
+}
+
+window.sessEditPreview = function(){
+  const el = document.getElementById('sess-ed-preview');
+  if (!el) return;
+  const c = _sessEditCompute();
+  if (c.err) { el.innerHTML = `<span style="color:#C62828">${c.err}</span>`; return; }
+  el.innerHTML = `계산된 학습시간 <b style="color:#5546C4">${_fmtRangeMin(c.durationMin)}</b>`
+    + (c.nextDay ? ' <span style="color:#B45309">· 익일 퇴실</span>' : '')
+    + (c.awayMin ? ` <span style="color:#999">(외출 ${c.awayMin}분 제외)</span>` : '')
+    + (c.capped ? `<br><span style="color:#C62828">⚠ 익일 01:00 상한이 적용돼 ${_fmtRangeMin(c.rawMin)} 중 ${_fmtRangeMin(c.durationMin)}만 인정됩니다</span>` : '');
+};
+
+window.sessEditOpen = function(sid){
+  const ctx = window._sessModal;
+  const slot = document.getElementById('sess-edit-slot');
+  if (!ctx || !slot) return;
+  const s = sid ? ctx.byId[sid] : null;
+  if (sid && !s) { alert('기록을 찾을 수 없습니다. 목록을 다시 열어 주세요.'); return; }
+  if (s && s.status === 'open') {
+    alert('재실 중(퇴실 전) 기록은 수정할 수 없습니다.\n먼저 퇴실 처리한 뒤 수정해 주세요.');
+    return;
+  }
+  window._sessEditId = sid || null;
+  const now = Date.now();
+  const dateV = s ? s.inDate : _sessEdDateStr(now);
+  const inV   = s ? _sessEdTimeStr(s.inTs) : '18:00';
+  const outV  = s && s.outTs ? _sessEdTimeStr(s.outTs) : '22:00';
+  const awayV = s ? Math.round((s.awayMs || 0) / 60000) : 0;
+  slot.innerHTML = `
+    <div class="sess-form">
+      <div class="sess-form-title">${sid ? '✏️ 기록 수정' : '➕ 기록 추가'} — ${ctx.name}${ctx.seat ? ` (${ctx.seat}번)` : ''}</div>
+      <div class="sess-form-grid">
+        <label>날짜</label><input type="date" id="sess-ed-date" value="${dateV}" oninput="sessEditPreview()">
+        <label>입실</label><input type="time" id="sess-ed-in" value="${inV}" oninput="sessEditPreview()">
+        <label>퇴실</label><input type="time" id="sess-ed-out" value="${outV}" oninput="sessEditPreview()">
+        <label>외출(분)</label><input type="number" id="sess-ed-away" min="0" step="1" value="${awayV}" oninput="sessEditPreview()">
+      </div>
+      <div id="sess-ed-preview" class="sess-form-note" style="color:var(--color-text-secondary);font-size:12px"></div>
+      <div class="sess-form-note">
+        · 퇴실이 입실보다 이르면 <b>자정을 넘긴 퇴실</b>로 계산합니다.<br>
+        · <b>외출(분)</b>은 학습시간에서 빼는 시간입니다. 복귀를 누르지 않아 시간이 통째로 빠졌다면 <b>0</b>으로 고치세요.<br>
+        · 저장하면 해당 월 누적시간이 자동으로 다시 계산됩니다.<br>
+        · 지금 조회 기간 밖의 날짜로 저장하면 이 목록에는 보이지 않습니다(월·기간을 바꿔 확인).
+      </div>
+      <div class="sess-form-btns">
+        <button onclick="sessEditCancel()" style="background:#F3F4F6;color:#374151">취소</button>
+        ${sid ? `<button onclick="sessEditDelete()" style="background:#fff;color:#C62828;box-shadow:inset 0 0 0 1.5px #C62828">삭제</button>` : ''}
+        <button onclick="sessEditSave()" style="background:#6C5DD3;color:#fff">저장</button>
+      </div>
+    </div>`;
+  window.sessEditPreview();
+  slot.scrollIntoView({ block: 'nearest' });
+};
+
+window.sessEditCancel = function(){
+  window._sessEditId = null;
+  const slot = document.getElementById('sess-edit-slot');
+  if (slot) slot.innerHTML = '';
+};
+
+// 저장 후 목록을 다시 불러온다(모달을 같은 학생으로 재오픈 — 조회 기간 설정은 그대로 유지된다)
+async function _sessEditFinish(student, monthKeys, msg){
+  try {
+    const api = await waitSessionApi();
+    for (const mk of monthKeys) { if (mk) await api.recomputeMonthHours(student, mk); }
+  } catch(e) { console.error('누적시간 재계산 실패:', e); }
+  showAdminToast(msg);
+  const name = student.name;
+  window._sessEditId = null;
+  // 사용시간 표는 hours(월 누적) 기반이라 재계산 후 다시 그리면 반영된다.
+  // 기간조회 모드의 표는 세션을 직접 읽으므로 사용자가 '조회'를 다시 눌러야 갱신된다.
+  if (!window._hoursRangeMode) { try { buildHoursTable(); } catch(e){} }
+  window.showStudentSessionsModal(name);
+}
+
+window.sessEditSave = async function(){
+  const ctx = window._sessModal;
+  if (!ctx) return;
+  const sid = window._sessEditId;
+  const c = _sessEditCompute();
+  if (c.err) { alert(c.err); return; }
+  if (!ctx.seat) { alert('좌석 정보를 알 수 없어 저장할 수 없습니다.'); return; }
+  if (c.durationMin <= 0 && !confirm('계산된 학습시간이 0분입니다. 그대로 저장할까요?')) return;
+  // 같은 학생의 다른 기록과 시간이 겹치면 이중 집계가 되므로 미리 알린다
+  const ov = ctx.list.find(o => o._id !== sid && typeof o.inTs === 'number' && o.outTs && o.inTs < c.outTs && c.inTs < o.outTs);
+  if (ov) {
+    const f = ts => new Date(ts).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' });
+    if (!confirm(`다른 기록(${f(ov.inTs)} → ${f(ov.outTs)})과 시간이 겹칩니다.\n그래도 저장할까요?`)) return;
+  }
+  const btns = document.querySelectorAll('#sess-edit-slot button');
+  btns.forEach(b => b.disabled = true);
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('DB 연결 실패');
+    const { doc, setDoc, updateDoc, serverTimestamp } = window._fs;
+    const payload = {
+      studentName: ctx.name, seat: ctx.seat,
+      inTs: c.inTs, outTs: c.outTs, awayMs: c.awayMs, awayStartTs: null,
+      durationMin: c.durationMin,
+      inDate: sessIsoDate(c.inTs), monthKey: sessMonthKey(c.inTs),
+      status: 'closed', closedBy: 'manual', updatedAt: Date.now()
+    };
+    const oldMk = sid ? (ctx.byId[sid] || {}).monthKey : null;
+    if (sid) {
+      await updateDoc(doc(db, 'attendance_sessions', sid), payload);
+    } else {
+      const newId = ctx.seat + '_' + c.inTs;
+      await setDoc(doc(db, 'attendance_sessions', newId),
+        Object.assign({ sid: newId, createdAt: serverTimestamp() }, payload));
+    }
+    const student = (window.STUDENTS || []).find(s => s.name === ctx.name) || { name: ctx.name, seat: ctx.seat };
+    await _sessEditFinish(student, [payload.monthKey, oldMk],
+      `✅ ${ctx.name} 기록 ${sid ? '수정' : '추가'} 완료 · ${_fmtRangeMin(c.durationMin)}`);
+  } catch(e) {
+    console.error('기록 저장 실패:', e);
+    alert('저장 실패: ' + (e.message || e));
+    btns.forEach(b => b.disabled = false);
+  }
+};
+
+window.sessEditDelete = async function(){
+  const ctx = window._sessModal, sid = window._sessEditId;
+  if (!ctx || !sid) return;
+  const s = ctx.byId[sid];
+  if (!s) return;
+  const f = ts => ts ? new Date(ts).toLocaleString('ko-KR', { month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit' }) : '?';
+  if (!confirm(`이 기록을 삭제할까요?\n\n${ctx.name} · ${f(s.inTs)} → ${f(s.outTs)}\n\n삭제하면 되돌릴 수 없습니다.`)) return;
+  try {
+    const db = await window.waitDb();
+    const { doc, deleteDoc } = window._fs;
+    await deleteDoc(doc(db, 'attendance_sessions', sid));
+    const student = (window.STUDENTS || []).find(x => x.name === ctx.name) || { name: ctx.name, seat: ctx.seat };
+    await _sessEditFinish(student, [s.monthKey], `🗑️ ${ctx.name} 기록 삭제 완료`);
+  } catch(e) {
+    console.error('기록 삭제 실패:', e);
+    alert('삭제 실패: ' + (e.message || e));
   }
 };
 
@@ -4449,18 +4677,29 @@ function showTodayAttendees() {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;width:min(94vw,480px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#EEF2FF">
-        <div style="font-size:15px;font-weight:700;color:#1E1B4B">현재 입실 중 · <span style="color:#6C5DD3">${inStudents.length}명</span></div>
+        <div style="font-size:15px;font-weight:700;color:#1E1B4B">현재 입실 중 · <span style="color:#6C5DD3">${inStudents.length}명</span>${(() => {
+          const n = inStudents.filter(s => awayInfo(s.name)).length;
+          return n ? ` <span style="font-size:12px;font-weight:600;color:#D97706">🚶 외출 ${n}명</span>` : '';
+        })()}</div>
         <button onclick="document.getElementById('today-popup-overlay').remove()"
           style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
       </div>
       <div style="overflow-y:auto;padding:14px 16px;display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
         ${inStudents.length === 0
           ? '<div style="grid-column:1/-1;text-align:center;padding:32px;color:#aaa;font-size:14px">현재 입실 중인 학생이 없습니다</div>'
-          : inStudents.map(s=>`
-            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:12px">
-              <div style="width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#6C5DD3,#6C5DD3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${s.name[0]}</div>
-              <div><div style="font-size:13px;font-weight:600">${s.name}</div><div style="font-size:11px;color:#4A3FA8">${s.seat}</div></div>
-            </div>`).join('')}
+          : inStudents.map(s=>{
+            // 외출 중이면 배경·배지로 구분 (자리에 없는데 입실 중으로 세어지는 인원)
+            const aw = awayInfo(s.name);
+            const bg = aw ? (aw.long ? '#FEE2E2' : '#FEF3C7') : '#EEF2FF';
+            const bd = aw ? (aw.long ? '#EF4444' : '#F59E0B') : '#8F82E4';
+            const av = aw ? (aw.long ? '#DC2626' : '#D97706') : '#6C5DD3';
+            return `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:${bg};border:1.5px solid ${bd};border-radius:12px">
+              <div style="width:34px;height:34px;border-radius:10px;background:${av};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;flex-shrink:0">${aw ? '🚶' : s.name[0]}</div>
+              <div><div style="font-size:13px;font-weight:600">${s.name}</div>
+                <div style="font-size:11px;color:${aw ? av : '#4A3FA8'}">${s.seat}${aw ? ` · 외출 ${aw.at}${aw.min != null ? ` (${aw.min}분)` : ''}` : ''}</div></div>
+            </div>`;
+          }).join('')}
       </div>
     </div>`;
   overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
@@ -5143,8 +5382,11 @@ window.checkinConfirm = function() {
     if (window._awayStudents && window._awayStudents[student.name]) {
       _awayAtCheckout = window._awayStudents[student.name];
       delete window._awayStudents[student.name];
-      saveAwayToFirebase(student, true, timeStr);
     }
+    // 퇴실하면 외출 미러(students.awayAt)는 무조건 비운다. 예전엔 이 기기가 외출을
+    // 알고 있을 때만 지워서, 다른 기기에서 외출한 학생이 퇴실해도 값이 남아
+    // 며칠씩 '외출 중'으로 보이는 유령 상태가 생겼다.
+    if (_awayAtCheckout != null || student.awayAt) saveAwayToFirebase(student, true, timeStr);
     // 이월(어제 미퇴실) 기록을 퇴실하는 경우: 원래 날짜에도 퇴실 로그를 남겨
     // 다음 새로고침/탭 복귀 시 다시 입실로 이월되지 않도록 마감한다.
     if (existing.carriedOver && existing.carryFromDate) {
@@ -5365,6 +5607,7 @@ window.checkinBreakReentry = function() {
 //   students 문서 변경은 기존 실시간 리스너가 모든 기기에 전파하므로 동기화도 함께 해결된다.
 async function saveAwayToFirebase(student, isBack, timeStr) {
   try {
+    student.awayAt = isBack ? '' : timeStr; // 로컬 학생 객체도 맞춰 둔다(다음 저장에 옛 값이 실리지 않게)
     const db = await window.waitDb();
     if (!db) return;
     const { doc, updateDoc } = window._fs;
@@ -5637,20 +5880,31 @@ function buildCheckinTodayList() {
 
   listEl.innerHTML = [...records].reverse().map(r => {
     const isIn = !r.outTime;
-    const isAway = isIn && window._awayStudents && window._awayStudents[r.studentName];
+    const aw = isIn ? awayInfo(r.studentName) : null;
+    // 외출이 오래되면(복귀 미입력 의심) 빨갛게 — 그 시간이 통째로 학습시간에서 빠진다
+    const awayBg = aw && aw.long ? '#FEE2E2' : '#FEF3C7';
+    const awayFg = aw && aw.long ? '#B91C1C' : '#B45309';
     return `<div class="checkin-today-item">
       <div class="ci-dot ${isIn ? 'ci-in' : 'ci-out'}"></div>
       <span style="font-weight:500">${maskName(r.studentName)}</span>
       <span style="color:var(--color-text-secondary)">${r.seat}</span>
-      ${isAway
-        ? `<span style="font-size:11px;background:#EEF2FF;color:#4338A8;border-radius:10px;padding:1px 7px">외출 중</span>`
+      ${aw
+        ? `<span style="font-size:11px;background:${awayBg};color:${awayFg};border-radius:10px;padding:1px 7px;font-weight:600">🚶 외출 중${aw.min != null ? ' ' + aw.min + '분' : ''}</span>`
         : isIn
         ? `<span style="font-size:11px;background:#EEF2FF;color:#27500A;border-radius:10px;padding:1px 7px">입실 중</span>`
         : `<span style="font-size:11px;color:var(--color-text-tertiary)">퇴실</span>`}
-      <span class="ci-time">${isAway ? r.inTime + ' · 외출 ' + window._awayStudents[r.studentName] : r.inTime + (r.outTime ? ' → ' + r.outTime : '')}</span>
+      <span class="ci-time">${aw ? r.inTime + ' · 외출 ' + aw.at : r.inTime + (r.outTime ? ' → ' + r.outTime : '')}</span>
     </div>`;
   }).join('');
 }
+
+// 외출 경과 시간은 그리는 시점에 계산되므로, 외출 중인 학생이 있는 동안만 1분마다 다시 그린다.
+// (세션 스냅샷은 외출 시작/복귀 때만 오기 때문에 그것만으론 '몇 분째'가 멈춰 있다)
+setInterval(() => {
+  if (!window._awayStudents || Object.keys(window._awayStudents).length === 0) return;
+  try { buildCheckinTodayList(); } catch(e){}
+  try { if (!fpEditMode && document.getElementById('fp-room')) buildFloorplan(); } catch(e){}
+}, 60000);
 
 // ===== 배치도 =====
 let _fpDragDist = 0;
@@ -5673,6 +5927,8 @@ function getFpStudentBySeat(seatNum) {
 function getFpStatus(student) {
   if (!student) return 'vacant';
   const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
+  // 외출 중도 '입실 중'의 한 상태 — 좌석은 비었지만 기록은 열려 있으므로 따로 구분해 보여준다
+  if (rec && awayInfo(student.name)) return 'away';
   if (rec) return 'in';
   const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
   if (recOut) return 'out';
@@ -5890,6 +6146,9 @@ function buildFloorplan() {
     .fp-cell-admin-in { background:#E6F7EC; border:2px solid #22A45D; }
     .fp-cell-studio { background:#F5F0FF; border:1px dashed #C4A4E0; align-items:center; justify-content:center; }
     .fp-cell-in { background:#DCFCE7; border:1.5px solid #4ADE80; }
+    /* 외출 중 — 자리는 비어 있지만 입실 기록은 열려 있는 상태 */
+    .fp-cell-away { background:#FEF3C7; border:1.5px solid #F59E0B; }
+    .fp-cell-away-long { background:#FEE2E2; border:1.5px solid #EF4444; }
     .fp-cell-out { background:#F9FAFB; border:1px solid #D1D5DB; }
     .fp-cell-absent { background:#F9FAFB; border:1px solid #D1D5DB; }
     .fp-cell-vacant { background:transparent; border:none; }
@@ -5901,6 +6160,8 @@ function buildFloorplan() {
     .fp-name { font-size:12px; font-weight:700; color:#1F2937; line-height:1.3; margin-top:1px; }
     .fp-badge { font-size:8.5px; font-weight:600; padding:1px 3px; border-radius:3px; margin-top:1px; display:inline-block; white-space:nowrap; line-height:1.25; }
     .fp-badge-in { background:#16A34A; color:#fff; }
+    .fp-badge-away { background:#D97706; color:#fff; }
+    .fp-badge-away-long { background:#DC2626; color:#fff; }
     .fp-badge-out { background:#9CA3AF; color:#fff; }
     .fp-badge-absent { background:#F3F4F6; color:#9CA3AF; }
     .fp-dday { font-size:9px; color:#5B5FEF; font-weight:600; }
@@ -5986,6 +6247,13 @@ function buildFloorplan() {
             cellCls = 'fp-cell-vacant-seat'; badgeCls = ''; badgeText = '';
           } else if (status === 'in') {
             cellCls = 'fp-cell-in'; badgeCls = 'fp-badge-in'; badgeText = `●입실 ${rec?.inTime||''}`;
+          } else if (status === 'away') {
+            // 외출 중 — 복귀를 안 누르면 그 시간이 통째로 학습시간에서 빠지므로 오래되면 빨갛게
+            const aw = awayInfo(student.name);
+            const longAway = aw && aw.long;
+            cellCls = longAway ? 'fp-cell-away-long' : 'fp-cell-away';
+            badgeCls = longAway ? 'fp-badge-away-long' : 'fp-badge-away';
+            badgeText = `🚶외출 ${aw && aw.min != null ? aw.min + '분' : (aw ? aw.at : '')}`;
           } else if (status === 'out') {
             cellCls = 'fp-cell-out'; badgeCls = 'fp-badge-out'; badgeText = '퇴실';
           } else {
@@ -6420,8 +6688,11 @@ function fpSeatClick(seatNum) {
   const rec = todayRecords.find(r => r.studentName === student.name);
   const isIn = rec && !rec.outTime;
   const isOut = rec && rec.outTime;
-  const statusText = isIn ? `입실 중 (${rec.inTime}~)` : isOut ? `퇴실 (${rec.inTime} → ${rec.outTime})` : '오늘 미입실';
-  const statusColor = isIn ? '#6C5DD3' : isOut ? '#4338A8' : '#9CA3AF';
+  const aw = isIn ? awayInfo(student.name) : null;
+  const statusText = aw
+    ? `🚶 외출 중 (${aw.at}~${aw.min != null ? ' · ' + aw.min + '분 경과' : ''}) · 입실 ${rec.inTime}`
+    : isIn ? `입실 중 (${rec.inTime}~)` : isOut ? `퇴실 (${rec.inTime} → ${rec.outTime})` : '오늘 미입실';
+  const statusColor = aw ? (aw.long ? '#DC2626' : '#D97706') : isIn ? '#6C5DD3' : isOut ? '#4338A8' : '#9CA3AF';
   showFpPopup(student.name, student.seat, student.phone||'번호 미등록', student.parent||'번호 미등록', statusText, statusColor, isIn);
 }
 
@@ -6438,6 +6709,8 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     : '';
   // 정보 수정 버튼 — 관리석·학생 모두 팝업에서 바로 상세 수정 모달을 열 수 있게
   const editBtn = `<button onclick="fpEditFromPopup('${name}')" style="width:100%;padding:10px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">✏️ 정보 수정</button>`;
+  // 입·퇴실 기록 — 외출 복귀·퇴실을 안 눌러 시간이 빠진 경우 여기서 바로 수동 보정
+  const sessBtn = `<button onclick="document.getElementById('fp-popup-overlay').remove();showStudentSessionsModal('${String(name).replace(/'/g,"\\'")}')" style="width:100%;padding:10px;background:#fff;color:#4A3FA8;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🕐 입·퇴실 기록 / 시간 보정</button>`;
   // 스케줄 변경 벌점 조회 (학생별 필터로 벌점 모달 열기)
   const penSeatKey = String(seat || '').replace(/[^0-9]/g, '');
   const penaltyBtn = penSeatKey
@@ -6457,6 +6730,7 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     </div>
     <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#EEF2FF':'#F3F4F6'};border-radius:8px">${status}</div>
     ${editBtn}
+    ${sessBtn}
     ${penaltyBtn}
     ${checkoutBtn}
     <button onclick="document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer">닫기</button>
@@ -9005,13 +9279,21 @@ async function loadStudentsFromFirebase() {
         nextStudent: v.nextStudent || null,
         grade: v.grade || ''   // 학년 — 학습분석의 또래 교재 추천 기준
       };
-      // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영
+      // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영.
+      // ★ 원본은 세션 문서의 awayStartTs 다(= _awayStartTs 에 이름이 있으면 세션 기준 외출).
+      //   students.awayAt 은 보조 미러일 뿐이고 퇴실/자동마감 경로에 따라 지워지지 않은 채
+      //   며칠씩 남기도 하므로(유령 '외출 중'), 세션이 말해주는 상태를 덮어쓰지 않는다.
       if (!window._awayStudents) window._awayStudents = {};
-      if (v.awayAt) {
-        if (window._awayStudents[v.name] !== v.awayAt) { window._awayStudents[v.name] = v.awayAt; changed = true; }
-      } else if (window._awayStudents[v.name]) {
-        delete window._awayStudents[v.name];
-        changed = true;
+      // 이 학생의 열린 세션 문서를 이미 봤다면 외출 여부는 세션이 확정한 것이므로 손대지 않는다.
+      // (세션을 아직 못 본 초기 로드에서만 awayAt 을 보조로 쓴다)
+      const _sessSays = !!(window._sessKnownOpen && window._sessKnownOpen.has(v.name));
+      if (!_sessSays) {
+        if (v.awayAt) {
+          if (window._awayStudents[v.name] !== v.awayAt) { window._awayStudents[v.name] = v.awayAt; changed = true; }
+        } else if (window._awayStudents[v.name]) {
+          delete window._awayStudents[v.name];
+          changed = true;
+        }
       }
       const idx = STUDENTS.findIndex(s => s.seat === vSeat);
       if (idx !== -1) { STUDENTS[idx] = updated; }
@@ -9052,7 +9334,9 @@ function _rebuildTodayFromSessions(){
   todayRecords.length = 0;
   PRESENT.length = 0;
   const awayMap = {};
+  const awayTsMap = {};
   const seen = new Set();
+  const sessKnown = new Set(); // 세션 문서로 열린 기록을 확인한 학생 — 이 학생의 외출 여부는 세션이 확정한다
   [..._sessTodayDocs].sort((a,b) => (a.inTs||0) - (b.inTs||0)).forEach(o => {
     if (!o || !o.studentName || o.inDate !== todayIso) return; // 날짜 전환 직후 남은 전날 스냅샷 무시
     seen.add(o.sid);
@@ -9067,7 +9351,11 @@ function _rebuildTodayFromSessions(){
     });
     if (!closed) {
       if (!PRESENT.includes(o.studentName)) PRESENT.push(o.studentName);
-      if (o.awayStartTs) awayMap[o.studentName] = SH.sessFmtKoTime(o.awayStartTs);
+      sessKnown.add(o.studentName);
+      if (o.awayStartTs) {
+        awayMap[o.studentName] = SH.sessFmtKoTime(o.awayStartTs);
+        awayTsMap[o.studentName] = o.awayStartTs; // 외출 경과 시간 표시용
+      }
     }
   });
   // 열린 포인터 중 오늘 스냅샷에 없는 것 — 이월(전날 입실 후 아직 열린 세션, 새벽 02시 전)
@@ -9085,10 +9373,16 @@ function _rebuildTodayFromSessions(){
     todayRecords.push(rec);
     if (!PRESENT.includes(p.studentName)) PRESENT.push(p.studentName);
   });
-  // 외출 상태: 세션 awayStartTs 기준 + students.awayAt 보조(다기기 동기화 경로 유지)
+  // 외출 상태의 원본은 세션 문서의 awayStartTs.
+  // students.awayAt 은 세션 문서를 아직 못 본 경우(포인터만 있는 이월 기록 등)에만 쓰는 보조값이다.
+  // ※ 세션이 "열려 있는데 awayStartTs 없음"이라고 말하면 그 학생은 외출이 아니다 —
+  //   awayAt 은 퇴실 경로에 따라 지워지지 않고 며칠씩 남을 수 있어(유령 '외출 중') 믿지 않는다.
   window._awayStudents = awayMap;
+  window._awayStartTs = awayTsMap;
+  window._sessKnownOpen = sessKnown; // students 스냅샷 쪽에서도 같은 판단을 쓰도록 공유
   (window.STUDENTS || []).forEach(s => {
-    if (s.awayAt && s.name && !awayMap[s.name] && todayRecords.some(r => r.studentName === s.name && !r.outTime)) {
+    if (s.awayAt && s.name && !awayMap[s.name] && !sessKnown.has(s.name)
+        && todayRecords.some(r => r.studentName === s.name && !r.outTime)) {
       awayMap[s.name] = s.awayAt;
     }
   });
@@ -12601,12 +12895,17 @@ window.showTodayAttendees = function() {
     const list = present.map(name => {
       const s = STUDENTS.find(s => s.name === name);
       const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
-      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:12px">
+      // 외출 중이면 색과 배지로 구분 — 인원수엔 잡히지만 자리에는 없는 학생
+      const aw = window.awayInfo ? window.awayInfo(name) : null;
+      const bg = aw ? (aw.long ? '#FEE2E2' : '#FEF3C7') : '#EEF2FF';
+      const bd = aw ? (aw.long ? '#EF4444' : '#F59E0B') : '#8F82E4';
+      const fg = aw ? (aw.long ? '#B91C1C' : '#B45309') : '#4A3FA8';
+      return `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:${bg};border:1.5px solid ${bd};border-radius:12px">
         <div style="display:flex;align-items:center;gap:8px">
-          <div style="width:32px;height:32px;border-radius:10px;background:linear-gradient(135deg,#6C5DD3,#6C5DD3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${name[0]}</div>
+          <div style="width:32px;height:32px;border-radius:10px;background:${aw ? (aw.long ? '#DC2626' : '#D97706') : '#6C5DD3'};display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff">${aw ? '🚶' : name[0]}</div>
           <div>
-            <div style="font-size:13px;font-weight:700;color:#1E1B4B">${name}</div>
-            <div style="font-size:11px;color:#4A3FA8">${s?.seat||''} · 입실 ${rec?.inTime||''}</div>
+            <div style="font-size:13px;font-weight:700;color:#1E1B4B">${name}${aw ? ` <span style="font-size:10px;font-weight:700;color:#fff;background:${aw.long ? '#DC2626' : '#D97706'};border-radius:6px;padding:1px 5px">외출 중</span>` : ''}</div>
+            <div style="font-size:11px;color:${fg}">${s?.seat||''} · 입실 ${rec?.inTime||''}${aw ? ` · 외출 ${aw.at}${aw.min != null ? ` (${aw.min}분)` : ''}` : ''}</div>
           </div>
         </div>
         <button onclick="adminForceCheckout('${name}')" style="background:#C62828;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">퇴실 처리</button>
@@ -12615,7 +12914,8 @@ window.showTodayAttendees = function() {
     const inner = document.getElementById('today-modal-list');
     if (inner) inner.innerHTML = list || '<div style="text-align:center;padding:24px;color:#aaa;font-size:13px">현재 입실 중인 학생이 없습니다</div>';
     const cnt = document.getElementById('today-modal-count');
-    if (cnt) cnt.textContent = `총 ${present.length}명 입실 중`;
+    const awayN = present.filter(n => window.awayInfo && window.awayInfo(n)).length;
+    if (cnt) cnt.textContent = `총 ${present.length}명 입실 중` + (awayN ? ` · 🚶 외출 ${awayN}명` : '');
   }
   modal.innerHTML = `
     <div style="background:#fff;border-radius:20px;padding:24px;width:min(90vw,420px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
@@ -12656,6 +12956,11 @@ window.adminForceCheckout = function(name) {
     saveCheckinToFirebase(studentObj, true, closeTime, rec.carryFromDate).catch(console.error);
   }
   saveCheckinToFirebase(studentObj, true, timeStr);
+  // 외출 상태로 남아 있었으면 함께 해제 (안 지우면 퇴실 후에도 '외출 중'으로 보인다)
+  if ((window._awayStudents && window._awayStudents[name]) || studentObj.awayAt) {
+    delete window._awayStudents[name];
+    saveAwayToFirebase(studentObj, true, timeStr);
+  }
   // 세션 마감 + 월 누적 재계산 — 강제 퇴실도 이제 공부시간이 정확히 반영된다
   waitSessionApi().then(api => api.checkout(studentObj, 'admin')).catch(console.error);
   buildDashboard();
