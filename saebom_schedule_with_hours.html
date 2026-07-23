@@ -2480,6 +2480,7 @@ window.showSection = function(id,btn){
   if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
   if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
+  if (id === 'students') { if (window.refreshSummerMinutes) window.refreshSummerMinutes(); }  // ⏱ SUMMER 누적 갱신
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
 
@@ -3137,6 +3138,63 @@ window.saveSettingsFromTab = function() {
 // (기간조회와 같은 경로를 타므로 92일 상한을 넘지 않게 유지할 것)
 const SUMMER_RANGE = { startISO: '2026-07-20', endISO: '2026-08-31', label: '2026 여름특강' };
 window._hoursSummerMode = false;
+
+// ── 학생 관리카드 ⏱ 배지용 SUMMER 누적시간 ──
+// 카드에 '이번 달' 대신 '여름특강 시작(SUMMER_RANGE.startISO)부터 오늘까지'의 누적 학습시간을
+// 표시한다. 월별 hours[YYYY-MM]는 7월 1~19일치를 포함해 부정확하므로, ☀️SUMMER 탭과 동일하게
+// attendance_sessions를 기간조회해 정확히 합산한다(세션 durationMin을 입실일에 귀속).
+// 결과는 window._summerMinByName(이름→분)에 캐시하고, 준비되면 목록을 다시 그린다.
+window._summerMinByName = null;
+let _summerFetchLock = false;
+
+// SUMMER 시작~오늘(특강 종료일 상한) 경과 일수 — 카드 색(진도) 판정에 쓴다.
+function _summerElapsedDays(){
+  const today = sessIsoDate(Date.now());
+  const end = (SUMMER_RANGE.endISO < today) ? SUMMER_RANGE.endISO : today;
+  if (end < SUMMER_RANGE.startISO) return 0;
+  return _rangeDateStringsISO(SUMMER_RANGE.startISO, end).length;
+}
+
+async function refreshSummerMinutes(){
+  if (_summerFetchLock) return;
+  _summerFetchLock = true;
+  try {
+    const db = await window.waitDb();
+    if (!db) return;
+    const { collection, getDocs, query, where } = window._fs;
+    const today = sessIsoDate(Date.now());
+    if (today < SUMMER_RANGE.startISO) { window._summerMinByName = {}; return; }  // 특강 전
+    const endISO = (SUMMER_RANGE.endISO < today) ? SUMMER_RANGE.endISO : today;
+    const isoDates = _rangeDateStringsISO(SUMMER_RANGE.startISO, endISO);
+    const chunks = [];  // 'in' 쿼리 최대 30개 → 30일씩
+    for (let i=0;i<isoDates.length;i+=30) chunks.push(isoDates.slice(i,i+30));
+    const snaps = await Promise.all(chunks.map(c =>
+      getDocs(query(collection(db,'attendance_sessions'), where('inDate','in',c)))));
+    const totalMin = {};
+    const nowTs = Date.now();
+    snaps.forEach(snap => snap.forEach(docSnap => {
+      const s = docSnap.data();
+      if (!s.studentName || !s.inDate || typeof s.inTs !== 'number') return;
+      let min = 0;
+      if (s.status === 'closed' && typeof s.durationMin === 'number') {
+        min = s.durationMin;
+      } else if (s.status === 'open') {   // 진행 중: 현재 시각까지 잠정(외출·상한 동일)
+        let away = s.awayMs || 0;
+        if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, sessCapTs(s.inTs)) - s.awayStartTs);
+        min = sessDurationMin(s.inTs, nowTs, away);
+      }
+      if (min > 0) totalMin[s.studentName] = (totalMin[s.studentName]||0) + min;
+    }));
+    window._summerMinByName = totalMin;
+    // 관리 탭이 열려 있으면 새 값으로 다시 그린다
+    if (document.getElementById('student-list')) {
+      const se = document.getElementById('student-search');
+      buildStudentList(se ? se.value : '');
+    }
+  } catch(e) { console.error('SUMMER 누적 조회 실패:', e); }
+  finally { _summerFetchLock = false; }
+}
+window.refreshSummerMinutes = refreshSummerMinutes;
 
 // SUMMER 탭 — 특강 기간 전체를 기간조회로 돌려 누적 사용시간을 보여준다
 window.selectSummer = function(el){
@@ -5070,11 +5128,28 @@ function buildStudentList(filter=''){
   if(countEl) countEl.textContent=filter?`${matched.length}명 검색됨`:'';
   document.getElementById('student-list').innerHTML=matched.length
     ? matched.map(s=>{
-      const h=_readHour(s.hours,currentMonth);
+      // ⏱ 배지: 여름특강 시작(SUMMER_RANGE)부터의 누적 학습시간. 세션 조회가 준비되기 전에는
+      //   이번 달 값으로 잠깐 대체하고, refreshSummerMinutes()가 끝나면 다시 그린다.
+      const _summerReady = window._summerMinByName != null;
+      const h = _summerReady
+        ? Math.round((window._summerMinByName[s.name]||0)/60)
+        : _readHour(s.hours,currentMonth);
       const idx=STUDENTS.indexOf(s);
       const isAdmin = parseInt(s.seat) >= 54;
-      const hColor = h>=180?'#27500A':h>=120?'#4338A8':'#A32D2D';
-      const hBg = h>=180?'#E8F5E9':h>=120?'#EEF2FF':'#FCEBEB';
+      let hColor, hBg;
+      if (_summerReady) {
+        // 색은 주간목표 대비 '지금까지 나왔어야 할 시간'과 비교(경과일 비례). 목표 없으면 중립.
+        const _goal = Number(s.weeklyGoalH)||0;
+        const _expect = _goal>0 ? _goal*(_summerElapsedDays()/7) : 0;
+        const _ratio = _expect>0 ? h/_expect : null;
+        if (_ratio==null)      { hColor='#4338A8'; hBg='#EEF2FF'; }
+        else if (_ratio>=1)    { hColor='#27500A'; hBg='#E8F5E9'; }
+        else if (_ratio>=0.7)  { hColor='#4338A8'; hBg='#EEF2FF'; }
+        else                   { hColor='#A32D2D'; hBg='#FCEBEB'; }
+      } else {
+        hColor = h>=180?'#27500A':h>=120?'#4338A8':'#A32D2D';
+        hBg = h>=180?'#E8F5E9':h>=120?'#EEF2FF':'#FCEBEB';
+      }
       // 주간 목표 칩: 관리자가 설정(학생앱은 조회만)
       const _wG = Number(s.weeklyGoalH)||0;
       const _wBg = _wG?'#EAF7EE':'#F3F4F6';
@@ -5115,7 +5190,7 @@ function buildStudentList(filter=''){
           <div class="student-meta" style="font-size:11px;color:#4A3FA8;margin-bottom:4px">${s.phone||'전화번호 미등록'}</div>
           ${s.expiry ? `<div style="font-size:10px;color:${new Date(s.expiry)<new Date()?'#C62828':'#888'};margin-bottom:3px">📅 ${s.startDate?s.startDate+' ~ ':''}${s.expiry}${new Date(s.expiry)<new Date()?' (만료)':''}</div>` : ''}
           <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center">
-            <span style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">⏱ ${h}시간</span>
+            <span title="여름특강 누적 학습시간 (${SUMMER_RANGE.startISO}~)" style="font-size:11px;font-weight:600;background:${hBg};color:${hColor};border-radius:20px;padding:2px 8px;display:inline-block">☀️ ${h}시간</span>
             <span onclick="openWeeklyGoalAdmin(${idx},event)" title="주간 목표순공 설정 — 자동 상점 기준" style="font-size:11px;font-weight:600;background:${_wBg};color:${_wFg};border:1px ${_wBd};border-radius:20px;padding:2px 8px;display:inline-block;cursor:pointer">${_wTxt}</span>
             <span class="sc-merit" data-sc-name="${s.name}" data-sc-seat="${String(s.seat).replace(/[^0-9]/g,'')}" onclick="event.stopPropagation()" title="이번 주기 상점"></span>
             <span class="sc-pen" data-sc-name="${s.name}" data-sc-seat="${String(s.seat).replace(/[^0-9]/g,'')}" onclick="event.stopPropagation()" title="이번 주기 벌점"></span>
@@ -5125,6 +5200,8 @@ function buildStudentList(filter=''){
     }).join('')
     : `<div class="student-list-empty">${filter?`🔍 "${filter.replace(/</g,'&lt;')}" 검색 결과가 없습니다`:'등록된 학생이 없습니다'}</div>`;
   applyStudentCardScores();
+  // 첫 렌더 시 SUMMER 누적을 한 번 불러온다(완료되면 이 함수를 다시 호출해 값이 채워짐)
+  if (window._summerMinByName == null && !_summerFetchLock) refreshSummerMinutes();
 }
 
 window.toggleGender = function(idx, e) {
