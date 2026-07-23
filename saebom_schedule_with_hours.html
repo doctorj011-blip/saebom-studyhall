@@ -866,15 +866,20 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div id="alert-list"></div>
   </div>
   <div class="dashboard-grid">
-    <div class="card">
-      <div class="card-title"><i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</div>
-      <div id="present-list"></div>
+    <div class="card" id="present-board-section">
+      <div class="card-title" style="justify-content:space-between">
+        <span onclick="togglePresentBoard()" style="cursor:pointer;user-select:none" title="입실 현황 접기/펼치기"><i id="present-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</span>
+        <span id="present-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+      </div>
+      <div id="present-board-body"><div id="present-list"></div></div>
     </div>
     <!-- 2열: 교시별 출석 현황 + 그 바로 아래 스터디룸 신청 현황을 세로로 묶는다(왼쪽 입실현황 높이와 무관하게 붙게) -->
     <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
-      <div class="card">
-        <div class="card-title"><i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</div>
-        <div id="period-chart"></div>
+      <div class="card" id="period-board-section">
+        <div class="card-title" style="justify-content:space-between">
+          <span onclick="togglePeriodBoard()" style="cursor:pointer;user-select:none" title="교시별 출석 접기/펼치기"><i id="period-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-chart-bar" style="font-size:14px" aria-hidden="true"></i> 교시별 출석 현황</span>
+        </div>
+        <div id="period-board-body"><div id="period-chart"></div></div>
       </div>
       <!-- 오늘 스터디룸 신청 현황 (교시별 출석 바로 아래) -->
       <div class="card" id="studyroom-board-section" style="display:none">
@@ -4564,7 +4569,11 @@ function buildDashboard(){
     if (typeof buildFloorplan === 'function') setTimeout(buildFloorplan, 0);
   }
 
-  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+PRESENT.filter(name=>!window.isNonStudent(name)).map(name=>{
+  const presentStudentNames = PRESENT.filter(name=>!window.isNonStudent(name));
+  // 접었을 때도 인원수는 보이게
+  const presentSummaryEl = document.getElementById('present-board-summary');
+  if (presentSummaryEl) presentSummaryEl.textContent = presentStudentNames.length + '명';
+  document.getElementById('present-list').innerHTML=`<div style="display:grid;grid-template-columns:repeat(2,minmax(0,200px));gap:5px">`+presentStudentNames.map(name=>{
     const s=STUDENTS.find(s=>s.name===name);
     return `<div class="attend-row">
       <div style="display:flex;align-items:center;gap:5px">
@@ -9450,10 +9459,11 @@ function _boardSetCollapsed(id, collapsed) {
     localStorage.setItem(BOARD_COLLAPSE_KEY, JSON.stringify(st));
   } catch(e) {}
 }
-// 저장된 상태 복원 — 저장값이 있는 카드만 건드린다(없으면 HTML 기본 접힘 유지)
+// 저장된 상태 복원 — 저장값이 있는 카드만 건드린다(없으면 HTML 기본값 유지:
+// 벌점·스케줄변동은 접힘, 입실현황·교시별출석은 펼침)
 function restoreBoardCollapse() {
   const st = _boardCollapseState();
-  ['penalty-board', 'schedvar-board'].forEach(id => {
+  ['penalty-board', 'schedvar-board', 'present-board', 'period-board'].forEach(id => {
     if (st[id] != null) _boardApplyCollapse(id, !!st[id]);
   });
 }
@@ -9465,6 +9475,18 @@ window.togglePenaltyBoard = function() {
   const body = document.getElementById('penalty-board-body');
   if (!body) return;
   _boardSetCollapsed('penalty-board', body.style.display !== 'none');
+};
+
+// 대시보드 현재 입실 현황 / 교시별 출석 현황 접기/펼치기 (기본값=펼침, 마지막 상태 기억)
+window.togglePresentBoard = function() {
+  const body = document.getElementById('present-board-body');
+  if (!body) return;
+  _boardSetCollapsed('present-board', body.style.display !== 'none');
+};
+window.togglePeriodBoard = function() {
+  const body = document.getElementById('period-board-body');
+  if (!body) return;
+  _boardSetCollapsed('period-board', body.style.display !== 'none');
 };
 
 function _penIsoDate(ts) {
