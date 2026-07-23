@@ -935,6 +935,17 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="schedvar-board-body" style="display:none"></div>
     </div>
+    <!-- 외출 미기록 의심 — 재실 8시간 이상인데 외출 30분 미만이면 식사 시간이 학습시간에 그대로 잡힌 것 -->
+    <div class="card" id="awaymiss-board-section">
+      <div class="card-title" style="justify-content:space-between">
+        <span onclick="toggleAwayMissBoard()" style="cursor:pointer;user-select:none" title="외출 미기록 접기/펼치기"><i id="awaymiss-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#D97706;transition:transform .15s" aria-hidden="true"></i> <i class="ti ti-walk" style="font-size:14px;color:#D97706" aria-hidden="true"></i> 외출 미기록 의심</span>
+        <span style="display:flex;align-items:center;gap:8px">
+          <span id="awaymiss-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+          <button id="awaymiss-day-btn" onclick="awayMissToggleDay()" style="padding:3px 9px;border:1px solid #E5E7EB;background:#fff;color:#6B7280;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">오늘</button>
+        </span>
+      </div>
+      <div id="awaymiss-board-body" style="display:none"></div>
+    </div>
     </div>
     <!-- 스터디룸 초과 경고 -->
     <div class="card" id="studyroom-overflow-section" style="display:none">
@@ -9960,7 +9971,7 @@ function _boardSetCollapsed(id, collapsed) {
 // 벌점·스케줄변동은 접힘, 입실현황·교시별출석은 펼침)
 function restoreBoardCollapse() {
   const st = _boardCollapseState();
-  ['penalty-board', 'schedvar-board', 'present-board', 'period-board'].forEach(id => {
+  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board'].forEach(id => {
     if (st[id] != null) _boardApplyCollapse(id, !!st[id]);
   });
 }
@@ -9972,6 +9983,12 @@ window.togglePenaltyBoard = function() {
   const body = document.getElementById('penalty-board-body');
   if (!body) return;
   _boardSetCollapsed('penalty-board', body.style.display !== 'none');
+};
+
+window.toggleAwayMissBoard = function() {
+  const body = document.getElementById('awaymiss-board-body');
+  if (!body) return;
+  _boardSetCollapsed('awaymiss-board', body.style.display !== 'none');
 };
 
 // 대시보드 현재 입실 현황 / 교시별 출석 현황 접기/펼치기 (기본값=펼침, 마지막 상태 기억)
@@ -10084,6 +10101,115 @@ window.penaltyBoardToggle = function(docId, pn) {
 
 subscribePenaltyBoard();
 setInterval(subscribePenaltyBoard, 60000); // 자정 넘어가면 오늘/어제 날짜로 재구독
+
+// ── 외출 미기록 의심 현황판 (대시보드) ──
+// 문제: 밥 먹으러 나가면서 외출을 안 누르면 그 시간이 그대로 학습시간으로 잡힌다.
+// 안 찍고 나간 것은 어디에도 흔적이 남지 않으므로(자동문은 버튼을 눌러야 열리고,
+// 와이파이 로그는 기기 식별이 안 됨) 사후에 자동으로 알아낼 방법이 없다.
+// → "오래 앉아 있었다는데 외출이 거의 없다"는 정황만 짚어 사람이 확인하게 한다.
+const AWAYMISS_MIN_STAY_MIN = 8 * 60; // 재실 8시간 이상
+const AWAYMISS_MAX_AWAY_MIN = 30;     // 외출 30분 미만
+let _awayMissDocs = [];
+let _awayMissKey = '';
+let _awayMissUnsub = null;
+let _awayMissDay = 'today'; // 'today' | 'yesterday'
+
+function subscribeAwayMissBoard() {
+  const now = Date.now();
+  const today = _penIsoDate(now);
+  const yesterday = _penIsoDate(now - 86400000);
+  const key = today + '|' + yesterday;
+  if (key === _awayMissKey && _awayMissUnsub) return; // 날짜가 바뀔 때만 재구독
+  if (_awayMissUnsub) { _awayMissUnsub(); _awayMissUnsub = null; }
+  _awayMissKey = key;
+  _awayMissUnsub = onSnapshot(
+    query(collection(db, SESS_COL), where('inDate', 'in', [today, yesterday])),
+    snap => { _awayMissDocs = snap.docs.map(d => d.data()); renderAwayMissBoard(); },
+    e => {
+      console.error('외출 미기록 현황판 구독 실패:', e);
+      const body = document.getElementById('awaymiss-board-body');
+      if (body) body.innerHTML = `<div style="text-align:center;padding:18px;color:#C62828;font-size:12px">조회 실패: ${e.message || e}</div>`;
+    }
+  );
+}
+
+window.awayMissToggleDay = function(){
+  _awayMissDay = (_awayMissDay === 'today') ? 'yesterday' : 'today';
+  const btn = document.getElementById('awaymiss-day-btn');
+  if (btn) btn.textContent = (_awayMissDay === 'today') ? '오늘' : '어제';
+  renderAwayMissBoard();
+};
+
+function renderAwayMissBoard() {
+  const body = document.getElementById('awaymiss-board-body');
+  const summary = document.getElementById('awaymiss-board-summary');
+  if (!body) return;
+  const [today, yesterday] = _awayMissKey.split('|');
+  const day = (_awayMissDay === 'today') ? today : yesterday;
+  const nowTs = Date.now();
+
+  // 학생별 집계: 인정 학습시간 합 + 외출 합 (진행 중 세션은 지금까지로 잠정 계산)
+  const by = {};
+  _awayMissDocs.forEach(s => {
+    if (!s || s.inDate !== day || !s.studentName) return;
+    if (window.isNonStudent && window.isNonStudent(s.studentName)) return;
+    let min = 0, away = s.awayMs || 0;
+    if (s.status === 'closed' && typeof s.durationMin === 'number') {
+      min = s.durationMin;
+    } else if (s.status === 'open') {
+      if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, SH.sessCapTs(s.inTs)) - s.awayStartTs);
+      min = SH.sessDurationMin(s.inTs, nowTs, away);
+    }
+    const b = (by[s.studentName] = by[s.studentName] || { name: s.studentName, seat: s.seat, min: 0, awayMs: 0, open: false });
+    b.min += min; b.awayMs += away;
+    if (s.status === 'open') b.open = true;
+    if (s.seat) b.seat = s.seat;
+  });
+
+  const all = Object.values(by).map(b => ({ ...b, awayMin: Math.round(b.awayMs / 60000) }));
+  const flagged = all
+    .filter(b => b.min >= AWAYMISS_MIN_STAY_MIN && b.awayMin < AWAYMISS_MAX_AWAY_MIN)
+    .sort((a, b) => (b.min - a.min) || (a.awayMin - b.awayMin));
+
+  // 참고값: 같은 날 외출을 제대로 찍은 학생들의 외출 시간 중앙값.
+  // ※ 실제로 얼마나 나가 있었는지는 알 수 없다 — 보정값을 정하는 근거가 아니라
+  //   "보통 이 정도는 나간다"는 비교 기준일 뿐이다. 확인은 사람이 해야 한다.
+  const okAway = all.filter(b => b.awayMin >= AWAYMISS_MAX_AWAY_MIN).map(b => b.awayMin).sort((x, y) => x - y);
+  const median = okAway.length ? okAway[Math.floor(okAway.length / 2)] : null;
+
+  if (summary) summary.textContent = flagged.length ? `${flagged.length}명` : '';
+
+  if (!flagged.length) {
+    body.innerHTML = `<div style="text-align:center;padding:20px;color:#9CA3AF;font-size:12.5px">${_awayMissDay === 'today' ? '오늘' : '어제'} 해당 학생 없음 👍</div>`;
+    return;
+  }
+
+  const rows = flagged.map(b => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #F3F4F6">
+      <div style="flex:0 0 88px;cursor:pointer" onclick="showStudentSessionsModal('${String(b.name).replace(/'/g,"\\'")}')" title="입·퇴실 기록 열기(시간 보정)">
+        <div style="font-size:12.5px;font-weight:700;color:#1F2937">${b.name}</div>
+        <div style="font-size:10.5px;font-weight:500;color:#9CA3AF">${b.seat || '?'}번</div>
+      </div>
+      <div style="flex:1;display:flex;flex-wrap:wrap;gap:5px;font-size:11px">
+        <span style="background:#EEF2FF;color:#4338A8;border-radius:8px;padding:3px 8px;font-weight:600">재실 ${_fmtRangeMin(b.min)}${b.open ? ' (진행 중)' : ''}</span>
+        <span style="background:${b.awayMin ? '#FFF4E5' : '#FDE7E7'};color:${b.awayMin ? '#9A5B00' : '#8B1A1A'};border-radius:8px;padding:3px 8px;font-weight:600">외출 ${b.awayMin}분</span>
+      </div>
+      <button onclick="showStudentSessionsModal('${String(b.name).replace(/'/g,"\\'")}')"
+        style="flex:0 0 auto;background:#fff;color:#4A3FA8;border:1px solid #8F82E4;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer">기록 열기</button>
+    </div>`).join('');
+
+  body.innerHTML = rows + `
+    <div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;color:#92400E;line-height:1.6">
+      재실 ${AWAYMISS_MIN_STAY_MIN / 60}시간 이상인데 외출이 ${AWAYMISS_MAX_AWAY_MIN}분 미만 = 식사 시간이 학습시간에 그대로 잡혀 있을 수 있습니다.
+      ${median != null ? `같은 날 외출을 찍은 학생들의 <b>중앙값은 ${median}분</b>입니다(참고용 비교값 — 실제 외출 시간이 아닙니다).` : ''}
+      <br>실제로 얼마나 나가 있었는지는 기록에 남지 않으므로 <b>CCTV 등으로 확인한 뒤</b> '기록 열기'에서 외출 시간을 직접 넣어 주세요.
+    </div>`;
+}
+window.renderAwayMissBoard = renderAwayMissBoard;
+
+subscribeAwayMissBoard();
+setInterval(subscribeAwayMissBoard, 60000); // 자정 넘어가면 오늘/어제 날짜로 재구독
+setInterval(renderAwayMissBoard, 5 * 60000); // 진행 중 세션의 재실시간이 늘어나므로 주기적으로 다시 판정
 
 // ── 오늘 스케줄 변동 현황판 (대시보드) ──
 // 고정 시간표(schedule_base)와 현재 적용 스케줄(schedules)을 '오늘 요일'에서 비교해,
