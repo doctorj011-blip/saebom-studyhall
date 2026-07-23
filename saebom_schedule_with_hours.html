@@ -6807,10 +6807,14 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
   const editBtn = `<button onclick="fpEditFromPopup('${name}')" style="width:100%;padding:10px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">✏️ 정보 수정</button>`;
   // 입·퇴실 기록 — 외출 복귀·퇴실을 안 눌러 시간이 빠진 경우 여기서 바로 수동 보정
   const sessBtn = `<button onclick="document.getElementById('fp-popup-overlay').remove();showStudentSessionsModal('${String(name).replace(/'/g,"\\'")}')" style="width:100%;padding:10px;background:#fff;color:#4A3FA8;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🕐 입·퇴실 기록 / 시간 보정</button>`;
-  // 스케줄 변경 벌점 조회 (학생별 필터로 벌점 모달 열기)
+  // 상·벌점 현황 조회 (학생별 필터로 각 모달 열기) — 상점·벌점을 나란히 둔다
   const penSeatKey = String(seat || '').replace(/[^0-9]/g, '');
-  const penaltyBtn = penSeatKey
-    ? `<button onclick="document.getElementById('fp-popup-overlay').remove();showPenaltyModal('${penSeatKey}')" style="width:100%;padding:10px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">⚠️ 벌점 확인</button>`
+  const nameEsc = String(name || '').replace(/'/g, "\\'");
+  const scoreBtns = penSeatKey
+    ? `<div style="display:flex;gap:6px;margin-bottom:8px">
+        <button onclick="document.getElementById('fp-popup-overlay').remove();showMeritModal('${penSeatKey}','${nameEsc}')" style="flex:1;padding:10px;background:#fff;color:#059669;border:1.5px solid #A7F3D0;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">🎁 상점</button>
+        <button onclick="document.getElementById('fp-popup-overlay').remove();showPenaltyModal('${penSeatKey}')" style="flex:1;padding:10px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">⚠️ 벌점</button>
+      </div>`
     : '';
   popup.innerHTML = `
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
@@ -6827,7 +6831,7 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#EEF2FF':'#F3F4F6'};border-radius:8px">${status}</div>
     ${editBtn}
     ${sessBtn}
-    ${penaltyBtn}
+    ${scoreBtns}
     ${checkoutBtn}
     <button onclick="document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:13px;cursor:pointer">닫기</button>
   `;
