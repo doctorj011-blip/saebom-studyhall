@@ -1917,7 +1917,8 @@ let PERIODS = PERIODS_WEEKDAY;
 let PERIOD_OFFSET = 6;
 
 // ── 방학 시간표(settings/vacation_mode) ──
-// 학기 중 평일은 7~11교시(저녁)만 운영하지만, 방학에는 평일도 토요일과 같은 1~11교시를 운영한다.
+// 학기 중 평일은 7~11교시(저녁)만 운영하지만, 방학에는 평일도 토요일처럼 오전 1교시부터 운영한다
+// (단 11교시 00:00~01:00은 방학엔 제외 → 실제 1~10교시. 아래 VACATION_HIDDEN_PERIODS 참고).
 // 이 값이 true면 '평일'을 토요일과 동일하게 취급한다 — 교시 목록·시간대·표 열·저장 형식 전부.
 // ★단일 진입점: 요일별 교시 구성을 판단하는 곳은 반드시 isSatLike()/periodsForDay()를 쓸 것.
 //   (day==='토' 직접 비교가 남아 있으면 방학에 그 화면만 오전 교시가 사라진다 — 2026-07-21 사고 원인)
@@ -1969,7 +1970,7 @@ function _currentPeriodInfo(now){
   const effDay = h < 3 ? (now.getDay() + 6) % 7 : now.getDay();
   let nowMin = h*60 + now.getMinutes();
   if (h < 3) nowMin += 1440; // 자정 넘긴 시각을 확장 스케일(24:00~)로
-  // 방학에는 평일도 토요일과 같은 1~11교시 시간대를 쓴다
+  // 방학에는 평일도 토요일과 같은 교시 시간대를 쓴다(경계 계산용 원본 목록)
   const list = (effDay === 6) ? _PERIOD_MIN_SAT
              : (effDay >= 1 && effDay <= 5) ? (VACATION_MODE ? _PERIOD_MIN_SAT : _PERIOD_MIN_WEEKDAY)
              : null; // 일요일(0) → 휴관
@@ -3039,7 +3040,7 @@ window.toggleScheduleEdit = async function() {
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 // ── 방학 시간표 토글 (settings/vacation_mode) ──
-// 3개 앱이 같은 문서를 읽는다. 값이 바뀌면 표·모달의 교시 구성이 즉시 1~11교시로 바뀐다.
+// 3개 앱이 같은 문서를 읽는다. 값이 바뀌면 표·모달의 교시 구성이 즉시 1~10교시(방학, 11교시 제외)로 바뀐다.
 function applyVacationMode(enabled) {
   const changed = VACATION_MODE !== !!enabled;
   VACATION_MODE = !!enabled;

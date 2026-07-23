@@ -596,7 +596,8 @@ const PERIODS_SAT = [
   {n:11,label:'11교시',t:'00:00~01:00'},
 ];
 // ── 방학 시간표(settings/vacation_mode) ──
-// 학기 중 평일은 7~11교시(저녁)만, 방학에는 평일도 토요일과 같은 1~11교시를 운영한다.
+// 학기 중 평일은 7~11교시(저녁)만, 방학에는 평일도 토요일처럼 오전 1교시부터 운영한다
+// (단 11교시 00:00~01:00은 방학엔 제외 → 실제 1~10교시. 아래 VACATION_HIDDEN_PERIODS 참고).
 // 관리자앱 설정 탭의 '🌞 방학 시간표' 토글이 이 값을 바꾸고 3개 앱이 같은 문서를 읽는다.
 let VACATION_MODE = false;
 function isSatLike(dayName) { return dayName === '토' || VACATION_MODE; }
@@ -1741,7 +1742,7 @@ function loadSchedule() {
   visiblePeriodRows().forEach(p => {
     html += `<tr><td style="font-size:10px;color:#888;white-space:nowrap">${p.n}교시</td>`;
     DAYS.forEach(day => {
-      // 학기 중 평일은 1~6교시 없음 (방학이면 평일도 1~11교시 운영)
+      // 학기 중 평일은 1~6교시 없음 (방학이면 평일도 오전 1교시부터 — 단 11교시는 제외)
       if (!isSatLike(day) && p.n <= 6) { html += '<td></td>'; return; }
 
       const base = parseScheduleStr(getBaseDayStr(day));
