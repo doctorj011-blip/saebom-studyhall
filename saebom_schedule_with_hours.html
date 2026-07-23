@@ -1227,7 +1227,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div style="font-size:15px;font-weight:700;color:#1E1B4B">🌐 와이파이 접속기록</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <select id="netlog-hours" onchange="netLogPeriodChanged()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
-        <option value="live10">🔴 실시간 (최근 10분)</option>
+        <option value="live10">🔴 실시간 (최근 10분 · 30초마다)</option>
         <option value="60">최근 1시간</option>
         <option value="180">최근 3시간</option>
         <option value="360">최근 6시간</option>
@@ -11571,7 +11571,7 @@ window.loadNetLog = async function(silent) {
 
 // ── 실시간(LIVE) 모드 ──
 // Cloudflare 집계는 몇 분 지연이 있어 '초 단위 실시간'은 불가능하다.
-// 최근 10분 창을 20초마다 다시 읽어 사실상 실시간처럼 보이게 한다.
+// 최근 10분 창을 30초마다 다시 읽어 사실상 실시간처럼 보이게 한다.
 let _netLiveTimer = null;
 window.netLogPeriodChanged = function() {
   const sel = document.getElementById('netlog-hours');
@@ -11580,7 +11580,7 @@ window.netLogPeriodChanged = function() {
   if (badge) badge.style.display = live ? 'inline' : 'none';
   netLogStopLive();
   loadNetLog();
-  if (live) _netLiveTimer = setInterval(() => loadNetLog(true), 20000);
+  if (live) _netLiveTimer = setInterval(() => loadNetLog(true), 30000);
 };
 window.netLogStopLive = function() {
   if (_netLiveTimer) { clearInterval(_netLiveTimer); _netLiveTimer = null; }
