@@ -1240,7 +1240,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </select>
       <span id="netlog-live" style="display:none;font-size:11px;color:#C62828;font-weight:700">● LIVE <span id="netlog-live-at" style="color:var(--color-text-tertiary);font-weight:500"></span></span>
       <select id="netlog-filter" onchange="renderNetLog()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
-        <option value="nonstudy" selected>비학습만 (SNS·영상·게임)</option>
+        <option value="realuse" selected>🔥 실제로 쓴 것만</option>
+        <option value="nonstudy">비학습 전부 (SNS·영상·게임)</option>
         <option value="all">전체 (시스템 제외)</option>
         <option value="sns">SNS·메신저</option>
         <option value="video">영상·음악</option>
@@ -1257,12 +1258,13 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   <div style="background:#FFF8E1;border:1px solid #FFD54F;border-radius:10px;padding:9px 13px;margin-bottom:13px;font-size:11.5px;color:#8D6E00;line-height:1.55">
     면학관 와이파이의 DNS 조회 기록입니다. <b>공유기 단위라 학생 개인은 특정되지 않습니다</b> — 어떤 사이트에 얼마나 몰리는지 경향만 볼 수 있어요.
     개인 데이터(LTE·5G)로 접속한 것은 잡히지 않습니다.<br>
-    Cloudflare 무료 플랜은 로그를 <b>24시간만</b> 보관합니다. 그보다 오래된 기록은 아래 '일별 추이'에서 보세요(매일 밤 자동 저장).
+    Cloudflare 무료 플랜은 로그를 <b>24시간만</b> 보관합니다. 그보다 오래된 기록은 아래 '일별 추이'에서 보세요(매일 밤 자동 저장).<br>
+    <b>실사용</b> = 사진·영상·음원을 실제로 받아온 횟수(사람이 화면을 봐야 발생). <b>실사용 없음</b>은 앱이 백그라운드로 두드리기만 했거나 차단당한 것 — 학생이 쓴 게 아닙니다.
   </div>
 
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
     <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
-      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">비학습 (SNS·영상·게임)</div>
+      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">비학습 <span style="font-weight:500">실사용</span></div>
       <div style="font-size:22px;font-weight:700;color:#C62828" id="netlog-nonstudy">0</div>
     </div>
     <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
@@ -11522,22 +11524,27 @@ let _netLogData = [];
 // 도메인 분류 — 순서가 곧 우선순위다(위에서 먼저 걸리면 그걸로 확정).
 // 시스템·배경(애플/구글 동기화, CDN, 광고·분석)이 전체의 60% 안팎을 차지해서
 // 이걸 걷어내지 않으면 목록에서 사람이 볼 만한 신호가 보이지 않는다.
+//
+// content: '실사용 신호' 도메인 — 사진·영상·음원 같은 콘텐츠를 실제로 실어 나르는 곳.
+//   앱은 꺼져 있어도 푸시(mqtt)·API(graph)·통계를 계속 두드리지만, 콘텐츠 CDN은
+//   사람이 화면을 보고 있을 때만 켜진다. 차단된 질의는 콘텐츠가 0바이트이므로 실사용에서 뺀다.
+//   실측 예: 페북 4,998건 중 실사용 0(전부 차단 재시도 소음) / 유튜브 1,492건 중 728건이 실제 시청.
 const NET_SERVICES = [
-  { name:'인스타그램',   cat:'sns',    re:/instagram|cdninstagram/i },
-  { name:'페이스북',     cat:'sns',    re:/facebook|fbcdn|(^|\.)fb\.com/i },
+  { name:'인스타그램',   cat:'sns',    re:/instagram|cdninstagram/i, content:/scontent|cdninstagram/i },
+  { name:'페이스북',     cat:'sns',    re:/facebook|fbcdn|(^|\.)fb\.com/i, content:/scontent|fbcdn/i },
   // pangle·byteoversea 는 틱톡이 아니라 바이트댄스 '광고 SDK'다(무료앱·게임에 널리 박혀 있음).
   // 틱톡으로 묶으면 틱톡이 차단을 뚫은 것처럼 보인다 — 실제로 그렇게 오독했다. 아래 광고·분석으로 보낸다.
-  { name:'틱톡',         cat:'video',  re:/tiktok|musical\.ly|douyin/i },
-  { name:'유튜브',       cat:'video',  re:/youtube|ytimg|googlevideo/i },
-  { name:'넷플릭스',     cat:'video',  re:/netflix|nflx/i },
-  { name:'스포티파이',   cat:'video',  re:/spotify/i },
-  { name:'국내 OTT',     cat:'video',  re:/tving|wavve|coupangplay|watcha/i },
-  { name:'음악 스트리밍', cat:'video',  re:/melon|genie\.co|bugs\.co|soundcloud|vibe\.naver/i },
-  { name:'트위치·치지직', cat:'video',  re:/twitch|chzzk|afreeca|sooplive/i },
-  { name:'디스코드',     cat:'sns',    re:/discord/i },
-  { name:'X(트위터)',    cat:'sns',    re:/twitter|twimg|(^|\.)x\.com/i },
-  { name:'스냅챗',       cat:'sns',    re:/snapchat|sc-cdn/i },
-  { name:'텔레그램',     cat:'sns',    re:/telegram|\bt\.me/i },
+  { name:'틱톡',         cat:'video',  re:/tiktok|musical\.ly|douyin/i, content:/tiktokcdn|tiktokv/i },
+  { name:'유튜브',       cat:'video',  re:/youtube|ytimg|googlevideo/i, content:/googlevideo|ytimg/i },
+  { name:'넷플릭스',     cat:'video',  re:/netflix|nflx/i, content:/nflxvideo|nflximg/i },
+  { name:'스포티파이',   cat:'video',  re:/spotify/i, content:/spotifycdn|scdn\.co|audio.*spotify/i },
+  { name:'국내 OTT',     cat:'video',  re:/tving|wavve|coupangplay|watcha/i, content:/cdn|video|vod/i },
+  { name:'음악 스트리밍', cat:'video',  re:/melon|genie\.co|bugs\.co|soundcloud|vibe\.naver/i, content:/cdnimg|cdn|image|music/i },
+  { name:'트위치·치지직', cat:'video',  re:/twitch|chzzk|afreeca|sooplive/i, content:/video|ttvnw|livecloud|vod/i },
+  { name:'디스코드',     cat:'sns',    re:/discord/i, content:/cdn\.discord|media\.discord/i },
+  { name:'X(트위터)',    cat:'sns',    re:/twitter|twimg|(^|\.)x\.com/i, content:/twimg/i },
+  { name:'스냅챗',       cat:'sns',    re:/snapchat|sc-cdn/i, content:/sc-cdn/i },
+  { name:'텔레그램',     cat:'sns',    re:/telegram|\bt\.me/i, content:/cdn.*telegram|telegram.*cdn/i },
   // 실제 게임 서비스만. applovin·unityads·ironsrc·vungle 은 '게임 광고 SDK'라
   // 게임을 안 해도 광고 붙은 앱만 있으면 잡힌다 → 아래 광고·분석으로 보냄.
   { name:'게임',         cat:'game',   re:/roblox|nexon|ncsoft|netmarble|krafton|pubg|supercell|epicgames|steampowered|steamserver|riotgames|garena|playfab/i },
@@ -11545,7 +11552,7 @@ const NET_SERVICES = [
   { name:'매쓰플랫',     cat:'study',  re:/mathflat/i },
   { name:'미맥스터디',   cat:'study',  re:/mimacstudy/i },
   { name:'인강·학습',    cat:'study',  re:/ebs\.|megastudy|etoos|daekyo|chunjae|visang|kollus|classroom\.google|khanacademy|wolframalpha|qanda|mathpresso|coursera|udemy|neis|saebom/i },
-  { name:'카카오톡',     cat:'sns',    re:/talk-pilsner|katalk|(^|\.)kakao|onkakao|kakaocdn|daumcdn|tiara\.daum/i },
+  { name:'카카오톡',     cat:'sns',    re:/talk-pilsner|katalk|(^|\.)kakao|onkakao|kakaocdn|daumcdn|tiara\.daum/i, content:/kakaocdn|daumcdn/i },
   // ↓ 여기부터는 배경 통신. 위에서 안 걸린 것만 내려온다.
   { name:'애플 기기',    cat:'system', re:/apple|aapl|icloud|itunes|akadns/i },
   { name:'구글 기기',    cat:'system', re:/google|gstatic|gvt1|gvt2|googleapis|doubleclick|firebase|crashlytics|gcp\./i },
@@ -11564,6 +11571,11 @@ const NET_CATS = {
 function netClassify(domain) {
   for (const s of NET_SERVICES) if (s.re.test(domain)) return s;
   return { name:'기타', cat:'other', re:null };
+}
+// 이 도메인이 '실사용 신호'인가 — 콘텐츠를 실제로 받아온 경우만 참.
+// 차단된 질의는 콘텐츠가 0바이트라 실사용이 아니다(앱이 헛되이 재시도한 것).
+function netIsRealUse(svc, d) {
+  return !!(svc.content && svc.content.test(d.domain) && d.allowed > 0);
 }
 
 window.loadNetLog = async function(silent) {
@@ -11622,19 +11634,21 @@ window.renderNetLog = function() {
 
   // 도메인을 서비스 단위로 묶는다 — i.instagram.com·graph.instagram.com → '인스타그램'
   const svc = new Map();
-  const catTotal = {};
+  const catTotal = {}, catReal = {};
   let grand = 0;
   _netLogData.forEach(d => {
     const c = netClassify(d.domain);
+    const real = netIsRealUse(c, d) ? d.allowed : 0;
     grand += d.total;
     catTotal[c.cat] = (catTotal[c.cat] || 0) + d.total;
-    const cur = svc.get(c.name) || { name:c.name, cat:c.cat, total:0, blocked:0, domains:[] };
-    cur.total += d.total; cur.blocked += d.blocked;
-    cur.domains.push(d);
+    catReal[c.cat] = (catReal[c.cat] || 0) + real;
+    const cur = svc.get(c.name) || { name:c.name, cat:c.cat, total:0, blocked:0, real:0, domains:[] };
+    cur.total += d.total; cur.blocked += d.blocked; cur.real += real;
+    cur.domains.push(Object.assign({ _real: real > 0 }, d));
     svc.set(c.name, cur);
   });
 
-  const nonstudy = (catTotal.sns||0) + (catTotal.video||0) + (catTotal.game||0);
+  const nonstudy = (catReal.sns||0) + (catReal.video||0) + (catReal.game||0);
   const el = id => document.getElementById(id);
   if (el('netlog-nonstudy')) el('netlog-nonstudy').textContent = nonstudy.toLocaleString();
   if (el('netlog-study')) el('netlog-study').textContent = (catTotal.study||0).toLocaleString();
@@ -11651,26 +11665,35 @@ window.renderNetLog = function() {
 
   let rows = Array.from(svc.values());
   if (filter === 'nonstudy') rows = rows.filter(r => r.cat==='sns'||r.cat==='video'||r.cat==='game');
+  else if (filter === 'realuse') rows = rows.filter(r => r.real > 0 && r.cat !== 'study' && r.cat !== 'system');
   else if (filter === 'all') rows = rows.filter(r => r.cat !== 'system');
   else if (filter !== 'raw') rows = rows.filter(r => r.cat === filter);
   if (kw) rows = rows.filter(r => r.name.toLowerCase().includes(kw) || r.domains.some(d => d.domain.toLowerCase().includes(kw)));
-  rows.sort((a,b) => b.total - a.total);
+  // 실사용이 있는 서비스를 위로 — 차단 재시도 소음이 상단을 차지하지 않게
+  rows.sort((a,b) => (b.real - a.real) || (b.total - a.total));
 
-  const max = rows.length ? rows[0].total : 1;
-  list.innerHTML = rows.length ? rows.map((r,i) => {
+  const max = rows.length ? Math.max.apply(null, rows.map(r => r.real || r.total)) : 1;
+  list.innerHTML = rows.length ? rows.map(r => {
     const m = NET_CATS[r.cat] || NET_CATS.other;
-    const pct = Math.max(2, Math.round(r.total / max * 100));
+    const basis = r.real || r.total;
+    const pct = Math.max(2, Math.round(basis / max * 100));
     const blk = r.blocked > 0
       ? '<span style="padding:1px 7px;border-radius:9px;background:#FCEBEB;color:#C62828;font-weight:700;font-size:10px;margin-left:5px">차단 ' + r.blocked.toLocaleString() + '</span>' : '';
+    // 실사용 0 = 앱이 두드리기만 하고 콘텐츠는 못 받은 상태(차단됐거나 배경 통신뿐)
+    const realTag = r.real > 0
+      ? '<span style="padding:1px 7px;border-radius:9px;background:#FFF3E0;color:#E65100;font-weight:700;font-size:10px;margin-left:5px">실사용 ' + r.real.toLocaleString() + '</span>'
+      : '<span style="padding:1px 7px;border-radius:9px;background:#ECEFF1;color:#78909C;font-weight:700;font-size:10px;margin-left:5px">실사용 없음</span>';
     const sub = r.domains.sort((a,b)=>b.total-a.total).slice(0,8)
-      .map(d => '<div style="font-size:10.5px;color:var(--color-text-tertiary);padding:1px 0">' + d.domain + ' — ' + d.total.toLocaleString() + '</div>').join('');
-    return '<div style="padding:8px 14px;border-bottom:1px solid #F1EFFB;cursor:pointer" onclick="var s=this.querySelector(\'.nl-sub\');s.style.display=s.style.display===\'none\'?\'block\':\'none\'">'
+      .map(d => '<div style="font-size:10.5px;color:' + (d._real ? '#E65100' : 'var(--color-text-tertiary)') + ';padding:1px 0">'
+        + (d._real ? '● ' : '○ ') + d.domain + ' — ' + d.total.toLocaleString() + (d.blocked ? ' (차단 ' + d.blocked.toLocaleString() + ')' : '') + '</div>').join('');
+    return '<div style="padding:8px 14px;border-bottom:1px solid #F1EFFB;cursor:pointer' + (r.real ? '' : ';opacity:.62') + '" onclick="var s=this.querySelector(\'.nl-sub\');s.style.display=s.style.display===\'none\'?\'block\':\'none\'">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">'
       + '<div style="font-size:12.5px;color:#1E1B4B;font-weight:600">' + r.name
       + ' <span style="padding:1px 6px;border-radius:8px;background:' + m.bg + ';color:' + m.color + ';font-size:9.5px;font-weight:700">' + m.label + '</span>'
-      + ' <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:500">' + r.domains.length + '개 도메인</span>' + blk + '</div>'
-      + '<div style="font-size:12.5px;font-weight:700;color:' + m.color + ';flex-shrink:0">' + r.total.toLocaleString() + '</div></div>'
-      + '<div style="height:4px;background:#F1EFFB;border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + m.color + '"></div></div>'
+      + realTag + blk + '</div>'
+      + '<div style="font-size:12.5px;font-weight:700;color:' + (r.real ? '#E65100' : m.color) + ';flex-shrink:0">' + basis.toLocaleString()
+      + (r.real ? '<span style="font-size:9.5px;color:var(--color-text-tertiary);font-weight:500"> / 총' + r.total.toLocaleString() + '</span>' : '') + '</div></div>'
+      + '<div style="height:4px;background:#F1EFFB;border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + (r.real ? '#E65100' : m.color) + '"></div></div>'
       + '<div class="nl-sub" style="display:none;margin-top:6px;padding-left:4px">' + sub + '</div></div>';
   }).join('') : '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">해당하는 기록이 없습니다</div>';
 };
