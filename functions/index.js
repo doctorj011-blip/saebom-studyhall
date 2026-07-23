@@ -181,15 +181,24 @@ function _srDayKey(date) {
   const d = new Date(date.getTime() - 3 * 3600 * 1000);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+// 현재 운영일이 시작된 시각(=오늘 KST 03:00)의 epoch ms. 앱 전반의 세션 경계와 동일 기준이라
+// 새벽 3시 이전은 전날 밤의 연장으로 본다(11교시·마감 tail이 그대로 이어짐).
+function _opDayStartMs(nowMs) {
+  const s = new Date((nowMs != null ? nowMs : Date.now()) + 6 * 3600 * 1000);   // KST(+9) - 경계(3h)
+  return Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()) - 6 * 3600 * 1000;
+}
 
 // ---------- 재실/사용 판정 ----------
 function _seatNum(v) { const n = parseInt(String(v == null ? '' : v).replace(/[^0-9]/g, ''), 10); return Number.isNaN(n) ? null : n; }
 
-// 현재 재실 — 최근 18시간 checkin_logs를 학생별 마지막 이벤트로 판정(마지막이 'in').
+// 현재 재실 — 이번 운영일(오늘 KST 03:00~)의 checkin_logs를 학생별 마지막 이벤트로 판정(마지막이 'in').
+//   ※ 예전엔 '최근 18시간'이라, 밤에 퇴실 체크를 잊은 학생이 다음날 아침까지 재실로 남아
+//     빈 열람실이 조기 가동 창(07:00~)에 켜졌다. 새벽 리셋(03:00) 이전 기록은 이제 무시한다.
+//     01:00 전체 OFF·01:30~06:00 입실 차단이라 경계를 넘어 실제로 앉아 있는 학생은 없다.
 //   names: 재실 학생 이름 집합(스터디룸 배정 대조용)
 //   seats: 재실 학생 좌석번호 집합(열람실 좌석범위 판정용)
 async function acPresence() {
-  const since = Date.now() - 18 * 3600 * 1000;
+  const since = _opDayStartMs();
   const snap = await db.collection('checkin_logs').where('ts', '>=', since).get();
   const last = new Map();
   snap.forEach(d => {
