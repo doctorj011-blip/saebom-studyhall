@@ -906,8 +906,31 @@ function unreverseDomain(s) {
   return String(s || '').replace(/^\.+|\.+$/g, '').split('.').reverse().join('.');
 }
 
+// resolverDecision 해석.
+//  Cloudflare는 이 값을 '문서화되지 않은 숫자'로 준다(문서엔 blockedByCategory 같은
+//  문자열로 적혀 있지만 실제 응답은 5·9·10 같은 정수). 그래서 /^blocked/ 같은 문자열
+//  검사는 절대 걸리지 않고 차단 집계가 조용히 0이 된다 — 실제로 그 버그를 겪었다.
+//
+//  2026-07-23 실측(면학관 24시간 6.3만건)으로 확인한 매핑:
+//    5  = 허용    (구글·애플·카카오톡·유튜브 등 50개 도메인)
+//    9  = 차단    (페이스북·인스타그램 9개 도메인에만 붙음 = 실제 차단정책과 일치)
+//    10 = 허용    (별도 규칙으로 통과된 것으로 보임)
+//  다시 확인하려면 debug:true 로 호출해 rawRows(도메인×판정)를 보면 된다.
+//  모르는 값은 blocked 로 세지 않고 unknownDecisions 에 담아 드러낸다 —
+//  조용히 허용으로 처리했다가 차단을 놓치는 것보다 눈에 보이게 두는 편이 낫다.
+const DECISION_BLOCKED = new Set([9]);
+const DECISION_ALLOWED = new Set([5, 10]);
+function isBlockedDecision(d) {
+  if (typeof d === 'number') return DECISION_BLOCKED.has(d);
+  return /^blocked/i.test(String(d || ''));   // 문자열로 바뀌어 올 경우 대비
+}
+function isKnownDecision(d) {
+  if (typeof d === 'number') return DECISION_BLOCKED.has(d) || DECISION_ALLOWED.has(d);
+  return /^(blocked|allowed|override)/i.test(String(d || ''));
+}
+
 // Cloudflare Gateway DNS 집계를 가져온다. HTTP 조회와 야간 스냅샷이 함께 쓴다.
-async function fetchGatewayDns(minutes) {
+async function fetchGatewayDns(minutes, debug) {
   const start = new Date(Date.now() - minutes * 60 * 1000).toISOString();
   // 도메인별 집계와 시간대별 집계를 한 요청에 담는다(별칭 2개).
   const query = `
@@ -955,22 +978,44 @@ async function fetchGatewayDns(minutes) {
   (acct.byDomain || []).forEach(row => {
     const d = unreverseDomain(row.dimensions && row.dimensions.queryNameReversed);
     if (!d) return;
-    const decision = (row.dimensions && row.dimensions.resolverDecision) || '';
-    const blocked = /^blocked/i.test(decision);
+    const decision = row.dimensions && row.dimensions.resolverDecision;
+    const blocked = isBlockedDecision(decision);
     const cur = map.get(d) || { domain: d, total: 0, blocked: 0, allowed: 0 };
     cur.total += row.count;
     if (blocked) cur.blocked += row.count; else cur.allowed += row.count;
     map.set(d, cur);
   });
   const domains = Array.from(map.values()).sort((a, b) => b.total - a.total);
+
+  // 판정(resolverDecision) 분포 — 차단이 왜 0인지 같은 진단에 쓴다.
+  //  allowedOnNoPolicyMatch = 정책에 안 걸림 / allowedOnNoLocation = 위치 미매칭이라
+  //  정책 자체가 적용 안 됨(필터링 무력화) → 둘의 구분이 중요하다.
+  const decisions = {};
+  const unknownDecisions = {};
+  (acct.byDomain || []).forEach(row => {
+    const d = row.dimensions && row.dimensions.resolverDecision;
+    const k = (d === undefined || d === null) ? '(none)' : String(d);
+    decisions[k] = (decisions[k] || 0) + row.count;
+    if (!isKnownDecision(d)) unknownDecisions[k] = (unknownDecisions[k] || 0) + row.count;
+  });
   const hourly = (acct.byHour || []).map(row => ({
     hour: row.dimensions && row.dimensions.datetimeHour,
+    count: row.count
+  }));
+
+  // 진단용: 도메인×판정 원본(상위 60행). resolverDecision 숫자의 의미를 실측할 때 쓴다.
+  const rawRows = !debug ? undefined : (acct.byDomain || []).slice(0, 60).map(row => ({
+    domain: unreverseDomain(row.dimensions && row.dimensions.queryNameReversed),
+    decision: row.dimensions && row.dimensions.resolverDecision,
     count: row.count
   }));
 
   return {
     minutes,
     domains,
+    decisions,
+    unknownDecisions,
+    rawRows,
     hourly,
     total: domains.reduce((s, d) => s + d.total, 0),
     blocked: domains.reduce((s, d) => s + d.blocked, 0)
@@ -998,7 +1043,7 @@ exports.gatewayLogs = onRequest(
       let minutes = parseInt(b.minutes, 10);
       if (!minutes || isNaN(minutes)) minutes = (parseInt(b.hours, 10) || 24) * 60;
       minutes = Math.min(Math.max(minutes, 1), 43200);   // 1분 ~ 30일
-      const out = await fetchGatewayDns(minutes);
+      const out = await fetchGatewayDns(minutes, !!b.debug);
       res.json({ ok: true, ...out });
     } catch (e) {
       logger.error('[Gateway] 조회 실패', e);
