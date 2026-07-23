@@ -1226,18 +1226,25 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div style="font-size:15px;font-weight:700;color:#1E1B4B">🌐 와이파이 접속기록</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <select id="netlog-hours" onchange="loadNetLog()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
-        <option value="3">최근 3시간</option>
-        <option value="6">최근 6시간</option>
-        <option value="12">최근 12시간</option>
-        <option value="24" selected>최근 24시간</option>
+      <select id="netlog-hours" onchange="netLogPeriodChanged()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
+        <option value="live10">🔴 실시간 (최근 10분)</option>
+        <option value="60">최근 1시간</option>
+        <option value="180">최근 3시간</option>
+        <option value="360">최근 6시간</option>
+        <option value="1440" selected>최근 24시간</option>
       </select>
+      <span id="netlog-live" style="display:none;font-size:11px;color:#C62828;font-weight:700">● LIVE <span id="netlog-live-at" style="color:var(--color-text-tertiary);font-weight:500"></span></span>
       <select id="netlog-filter" onchange="renderNetLog()" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B">
-        <option value="all">전체</option>
-        <option value="blocked">차단된 것만</option>
-        <option value="allowed">허용된 것만</option>
+        <option value="nonstudy" selected>비학습만 (SNS·영상·게임)</option>
+        <option value="all">전체 (시스템 제외)</option>
+        <option value="sns">SNS·메신저</option>
+        <option value="video">영상·음악</option>
+        <option value="game">게임</option>
+        <option value="study">학습</option>
+        <option value="system">시스템·배경</option>
+        <option value="raw">전부 (시스템 포함)</option>
       </select>
-      <input id="netlog-search" oninput="renderNetLog()" placeholder="도메인 검색" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B;width:120px">
+      <input id="netlog-search" oninput="renderNetLog()" placeholder="검색" style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;background:#F8FAFF;color:#1E1B4B;width:100px">
       <button onclick="loadNetLog()" style="padding:6px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;color:#4A3FA8;cursor:pointer;font-weight:600">🔄 새로고침</button>
     </div>
   </div>
@@ -1248,23 +1255,26 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     Cloudflare 무료 플랜은 로그를 <b>24시간만</b> 보관합니다. 그보다 오래된 기록은 아래 '일별 추이'에서 보세요(매일 밤 자동 저장).
   </div>
 
-  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
-    <div style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #8F82E4;border-radius:14px;padding:12px;text-align:center">
-      <div style="font-size:10px;color:#4A3FA8;font-weight:700;margin-bottom:4px">총 조회</div>
-      <div style="font-size:22px;font-weight:700;color:#6C5DD3" id="netlog-total">0</div>
-    </div>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
     <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
-      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">차단됨</div>
-      <div style="font-size:22px;font-weight:700;color:#C62828" id="netlog-blocked">0</div>
+      <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">비학습 (SNS·영상·게임)</div>
+      <div style="font-size:22px;font-weight:700;color:#C62828" id="netlog-nonstudy">0</div>
     </div>
     <div style="background:linear-gradient(135deg,#E8F5E9,#C8E6C9);border:1.5px solid #A5D6A7;border-radius:14px;padding:12px;text-align:center">
-      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">도메인 수</div>
-      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="netlog-domains">0</div>
+      <div style="font-size:10px;color:#2D7A4F;font-weight:700;margin-bottom:4px">학습</div>
+      <div style="font-size:22px;font-weight:700;color:#2D7A4F" id="netlog-study">0</div>
+    </div>
+    <div style="background:linear-gradient(135deg,#EEF2FF,#E0E7FF);border:1.5px solid #8F82E4;border-radius:14px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#4A3FA8;font-weight:700;margin-bottom:4px">총 조회 <span style="font-weight:500">(시스템 포함)</span></div>
+      <div style="font-size:22px;font-weight:700;color:#6C5DD3" id="netlog-total">0</div>
     </div>
   </div>
 
+  <!-- 분류별 요약 칩 -->
+  <div id="netlog-chips" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px"></div>
+
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:16px;overflow:hidden;margin-bottom:16px">
-    <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#4A3FA8;background:#F8FAFF;border-bottom:1px solid #E6E2F9">도메인별 조회수</div>
+    <div style="padding:10px 14px;font-size:12px;font-weight:700;color:#4A3FA8;background:#F8FAFF;border-bottom:1px solid #E6E2F9">서비스별 조회수 <span style="font-weight:500;color:var(--color-text-tertiary)">— 줄을 누르면 실제 도메인이 보입니다</span></div>
     <div id="netlog-list" style="min-height:200px;max-height:520px;overflow-y:auto">
       <div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">기간을 고르고 새로고침을 누르세요.</div>
     </div>
@@ -2381,6 +2391,8 @@ window.showSection = function(id,btn){
   if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
   if (id === 'usagelog') { loadUsageLog(); }
+  // 와이파이 탭을 벗어나면 실시간 폴링 중지 — 안 그러면 백그라운드에서 계속 돈다
+  if (id !== 'netlog' && window.netLogStopLive) window.netLogStopLive();
   if (id === 'netlog') { loadNetLog(); loadNetDaily(); }
   if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
@@ -11485,26 +11497,70 @@ window.renderUsageLog = function() {
 const NETLOG_ENDPOINT = 'https://us-central1-saebom-studyhall.cloudfunctions.net/gatewayLogs';
 let _netLogData = [];
 
-window.loadNetLog = async function() {
+// 도메인 분류 — 순서가 곧 우선순위다(위에서 먼저 걸리면 그걸로 확정).
+// 시스템·배경(애플/구글 동기화, CDN, 광고·분석)이 전체의 60% 안팎을 차지해서
+// 이걸 걷어내지 않으면 목록에서 사람이 볼 만한 신호가 보이지 않는다.
+const NET_SERVICES = [
+  { name:'인스타그램',   cat:'sns',    re:/instagram|cdninstagram/i },
+  { name:'페이스북',     cat:'sns',    re:/facebook|fbcdn|(^|\.)fb\.com/i },
+  { name:'틱톡',         cat:'video',  re:/tiktok|pangle|byteoversea|bytewlb|musical\.ly|douyin/i },
+  { name:'유튜브',       cat:'video',  re:/youtube|ytimg|googlevideo/i },
+  { name:'넷플릭스',     cat:'video',  re:/netflix|nflx/i },
+  { name:'스포티파이',   cat:'video',  re:/spotify/i },
+  { name:'국내 OTT',     cat:'video',  re:/tving|wavve|coupangplay|watcha/i },
+  { name:'음악 스트리밍', cat:'video',  re:/melon|genie\.co|bugs\.co|soundcloud|vibe\.naver/i },
+  { name:'트위치·치지직', cat:'video',  re:/twitch|chzzk|afreeca|sooplive/i },
+  { name:'디스코드',     cat:'sns',    re:/discord/i },
+  { name:'X(트위터)',    cat:'sns',    re:/twitter|twimg|(^|\.)x\.com/i },
+  { name:'스냅챗',       cat:'sns',    re:/snapchat|sc-cdn/i },
+  { name:'텔레그램',     cat:'sns',    re:/telegram|\bt\.me/i },
+  { name:'게임',         cat:'game',   re:/applovin|unity3d|unityads|roblox|nexon|ncsoft|netmarble|krafton|pubg|supercell|epicgames|steampowered|riotgames|garena|playfab|gameanalytics|ironsrc|vungle/i },
+  { name:'네이버',       cat:'other',  re:/naver(?!.*vibe)/i },
+  { name:'매쓰플랫',     cat:'study',  re:/mathflat/i },
+  { name:'미맥스터디',   cat:'study',  re:/mimacstudy/i },
+  { name:'인강·학습',    cat:'study',  re:/ebs\.|megastudy|etoos|daekyo|chunjae|visang|kollus|classroom\.google|khanacademy|wolframalpha|qanda|mathpresso|coursera|udemy|neis|saebom/i },
+  { name:'카카오톡',     cat:'sns',    re:/talk-pilsner|katalk|(^|\.)kakao|onkakao|kakaocdn|daumcdn|tiara\.daum/i },
+  // ↓ 여기부터는 배경 통신. 위에서 안 걸린 것만 내려온다.
+  { name:'애플 기기',    cat:'system', re:/apple|aapl|icloud|itunes|akadns/i },
+  { name:'구글 기기',    cat:'system', re:/google|gstatic|gvt1|gvt2|googleapis|doubleclick|firebase|crashlytics|gcp\./i },
+  { name:'광고·분석',    cat:'system', re:/analytics|adjust|appsflyer|segment\.io|moloco|datadoghq|sentry|branch\.io|app-measurement|tgclab|dsp-api/i },
+  { name:'네트워크·CDN', cat:'system', re:/akamai|cloudfront|cdnetworks|kgslb|cloudflare|amazonaws|azureedge|fastly|nel\.goog|wpad|in-addr\.arpa|\.lan$|connectivitycheck|stun\.|tplinkcloud|lgthinq|krsys|op1top/i },
+  { name:'윈도우·MS',    cat:'system', re:/microsoft|windowsupdate|msftconnecttest|office|live\.com|bing/i }
+];
+const NET_CATS = {
+  sns:    { label:'SNS·메신저', color:'#C62828', bg:'#FCEBEB' },
+  video:  { label:'영상·음악',  color:'#E65100', bg:'#FFF3E0' },
+  game:   { label:'게임',       color:'#6A1B9A', bg:'#F3E5F5' },
+  study:  { label:'학습',       color:'#2D7A4F', bg:'#E8F5E9' },
+  other:  { label:'기타',       color:'#4A3FA8', bg:'#EEF2FF' },
+  system: { label:'시스템·배경', color:'#78909C', bg:'#ECEFF1' }
+};
+function netClassify(domain) {
+  for (const s of NET_SERVICES) if (s.re.test(domain)) return s;
+  return { name:'기타', cat:'other', re:null };
+}
+
+window.loadNetLog = async function(silent) {
   const list = document.getElementById('netlog-list');
   if (!list) return;
   const token = localStorage.getItem('saebom_admin_token');
   if (!token) { list.innerHTML = '<div style="text-align:center;padding:48px;color:#C62828;font-size:13px">관리자 기기 등록이 필요합니다.</div>'; return; }
-  list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">Cloudflare에서 불러오는 중...</div>';
-  const hoursEl = document.getElementById('netlog-hours');
-  const hours = hoursEl ? parseInt(hoursEl.value, 10) : 24;
+  if (!silent) list.innerHTML = '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:14px">Cloudflare에서 불러오는 중...</div>';
+  const sel = document.getElementById('netlog-hours');
+  const v = sel ? sel.value : '1440';
+  const minutes = (v === 'live10') ? 10 : (parseInt(v, 10) || 1440);
   try {
     const r = await fetch(NETLOG_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, hours })
+      body: JSON.stringify({ token, minutes })
     });
     const j = await r.json();
     if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
     _netLogData = j.domains || [];
     document.getElementById('netlog-total').textContent = (j.total || 0).toLocaleString();
-    document.getElementById('netlog-blocked').textContent = (j.blocked || 0).toLocaleString();
-    document.getElementById('netlog-domains').textContent = _netLogData.length;
+    const atEl = document.getElementById('netlog-live-at');
+    if (atEl) atEl.textContent = new Date().toLocaleTimeString('ko-KR', { hour12:false });
     renderNetLog();
   } catch(e) {
     console.error('[와이파이] 로드 실패:', e);
@@ -11513,30 +11569,84 @@ window.loadNetLog = async function() {
   }
 };
 
+// ── 실시간(LIVE) 모드 ──
+// Cloudflare 집계는 몇 분 지연이 있어 '초 단위 실시간'은 불가능하다.
+// 최근 10분 창을 20초마다 다시 읽어 사실상 실시간처럼 보이게 한다.
+let _netLiveTimer = null;
+window.netLogPeriodChanged = function() {
+  const sel = document.getElementById('netlog-hours');
+  const badge = document.getElementById('netlog-live');
+  const live = sel && sel.value === 'live10';
+  if (badge) badge.style.display = live ? 'inline' : 'none';
+  netLogStopLive();
+  loadNetLog();
+  if (live) _netLiveTimer = setInterval(() => loadNetLog(true), 20000);
+};
+window.netLogStopLive = function() {
+  if (_netLiveTimer) { clearInterval(_netLiveTimer); _netLiveTimer = null; }
+};
+
 window.renderNetLog = function() {
   const list = document.getElementById('netlog-list');
   if (!list) return;
   const filterEl = document.getElementById('netlog-filter');
   const searchEl = document.getElementById('netlog-search');
-  const filter = filterEl ? filterEl.value : 'all';
+  const filter = filterEl ? filterEl.value : 'nonstudy';
   const kw = searchEl ? searchEl.value.trim().toLowerCase() : '';
-  let rows = _netLogData;
-  if (filter === 'blocked') rows = rows.filter(d => d.blocked > 0);
-  if (filter === 'allowed') rows = rows.filter(d => d.allowed > 0);
-  if (kw) rows = rows.filter(d => d.domain.toLowerCase().includes(kw));
+
+  // 도메인을 서비스 단위로 묶는다 — i.instagram.com·graph.instagram.com → '인스타그램'
+  const svc = new Map();
+  const catTotal = {};
+  let grand = 0;
+  _netLogData.forEach(d => {
+    const c = netClassify(d.domain);
+    grand += d.total;
+    catTotal[c.cat] = (catTotal[c.cat] || 0) + d.total;
+    const cur = svc.get(c.name) || { name:c.name, cat:c.cat, total:0, blocked:0, domains:[] };
+    cur.total += d.total; cur.blocked += d.blocked;
+    cur.domains.push(d);
+    svc.set(c.name, cur);
+  });
+
+  const nonstudy = (catTotal.sns||0) + (catTotal.video||0) + (catTotal.game||0);
+  const el = id => document.getElementById(id);
+  if (el('netlog-nonstudy')) el('netlog-nonstudy').textContent = nonstudy.toLocaleString();
+  if (el('netlog-study')) el('netlog-study').textContent = (catTotal.study||0).toLocaleString();
+
+  // 분류 칩
+  const chips = el('netlog-chips');
+  if (chips) {
+    chips.innerHTML = ['sns','video','game','study','other','system'].filter(c => catTotal[c]).map(c => {
+      const m = NET_CATS[c], pct = grand ? Math.round(catTotal[c]/grand*100) : 0;
+      return '<span style="padding:4px 10px;border-radius:12px;background:' + m.bg + ';color:' + m.color
+        + ';font-size:11px;font-weight:700">' + m.label + ' ' + catTotal[c].toLocaleString() + ' (' + pct + '%)</span>';
+    }).join('');
+  }
+
+  let rows = Array.from(svc.values());
+  if (filter === 'nonstudy') rows = rows.filter(r => r.cat==='sns'||r.cat==='video'||r.cat==='game');
+  else if (filter === 'all') rows = rows.filter(r => r.cat !== 'system');
+  else if (filter !== 'raw') rows = rows.filter(r => r.cat === filter);
+  if (kw) rows = rows.filter(r => r.name.toLowerCase().includes(kw) || r.domains.some(d => d.domain.toLowerCase().includes(kw)));
+  rows.sort((a,b) => b.total - a.total);
+
   const max = rows.length ? rows[0].total : 1;
-  list.innerHTML = rows.length ? rows.map(d => {
-    const pct = Math.max(2, Math.round(d.total / max * 100));
-    const tag = d.blocked > 0
-      ? '<span style="display:inline-block;padding:1px 7px;border-radius:9px;background:#FCEBEB;color:#C62828;font-weight:700;font-size:10px;margin-left:6px">차단 ' + d.blocked.toLocaleString() + '</span>'
-      : '';
-    return '<div style="padding:8px 14px;border-bottom:1px solid #F1EFFB">'
+  list.innerHTML = rows.length ? rows.map((r,i) => {
+    const m = NET_CATS[r.cat] || NET_CATS.other;
+    const pct = Math.max(2, Math.round(r.total / max * 100));
+    const blk = r.blocked > 0
+      ? '<span style="padding:1px 7px;border-radius:9px;background:#FCEBEB;color:#C62828;font-weight:700;font-size:10px;margin-left:5px">차단 ' + r.blocked.toLocaleString() + '</span>' : '';
+    const sub = r.domains.sort((a,b)=>b.total-a.total).slice(0,8)
+      .map(d => '<div style="font-size:10.5px;color:var(--color-text-tertiary);padding:1px 0">' + d.domain + ' — ' + d.total.toLocaleString() + '</div>').join('');
+    return '<div style="padding:8px 14px;border-bottom:1px solid #F1EFFB;cursor:pointer" onclick="var s=this.querySelector(\'.nl-sub\');s.style.display=s.style.display===\'none\'?\'block\':\'none\'">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">'
-      + '<div style="font-size:12px;color:#1E1B4B;word-break:break-all">' + d.domain + tag + '</div>'
-      + '<div style="font-size:12px;font-weight:700;color:#6C5DD3;flex-shrink:0">' + d.total.toLocaleString() + '</div></div>'
-      + '<div style="height:4px;background:#F1EFFB;border-radius:3px;overflow:hidden">'
-      + '<div style="height:100%;width:' + pct + '%;background:' + (d.blocked > 0 ? '#F09595' : '#8F82E4') + '"></div></div></div>';
-  }).join('') : '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">기록이 없습니다</div>';
+      + '<div style="font-size:12.5px;color:#1E1B4B;font-weight:600">' + r.name
+      + ' <span style="padding:1px 6px;border-radius:8px;background:' + m.bg + ';color:' + m.color + ';font-size:9.5px;font-weight:700">' + m.label + '</span>'
+      + ' <span style="font-size:10px;color:var(--color-text-tertiary);font-weight:500">' + r.domains.length + '개 도메인</span>' + blk + '</div>'
+      + '<div style="font-size:12.5px;font-weight:700;color:' + m.color + ';flex-shrink:0">' + r.total.toLocaleString() + '</div></div>'
+      + '<div style="height:4px;background:#F1EFFB;border-radius:3px;overflow:hidden"><div style="height:100%;width:' + pct + '%;background:' + m.color + '"></div></div>'
+      + '<div class="nl-sub" style="display:none;margin-top:6px;padding-left:4px">' + sub + '</div></div>';
+  }).join('') : '<div style="text-align:center;padding:48px;color:var(--color-text-tertiary);font-size:13px">해당하는 기록이 없습니다</div>';
 };
 
 // 일별 추이 — Cloudflare는 무료 플랜에서 24시간만 보관하므로, 스케줄 함수가 매일 밤

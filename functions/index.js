@@ -558,7 +558,8 @@ const sharp = require('sharp');            // 플래너 사진 축소용(API 10M
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const PLANNER_AI_MODEL = 'claude-opus-4-8';
-const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"에서 학생들의 학습을 오래 지도해 온 담임 선생님입니다.
+const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"에서 10년 넘게 고등학생을 지도해 온 담임 선생님입니다.
+교재의 난이도 위계와 과목별 공부법을 훤히 알고, 계획과 실행이 어디서 어긋나는지 읽어냅니다.
 학생이 제출한 하루치 스터디 플래너 사진을 검사하고, 플래너 아래에 직접 적어주는 짧은 피드백을 남깁니다.
 
 [검사 기준]
@@ -574,18 +575,69 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 - 타임테이블 시간 판독도 이 전제를 따른다. 표가 6부터 시작하더라도 색칠된 구간은 특별한 근거가 없는 한
   저녁~밤(18시 이후, 자정을 넘기면 0~2시)으로 해석할 것. 단 학교 수업·조퇴 등이 플래너에 직접 적혀 있으면 그 기록을 따른다.
 
+[코멘트로 하려는 것]
+학생이 스스로 보지 못하는 것을 하나 짚어 주는 것이다.
+"잘했다 + 이렇게 해보자 + 힘내라"는 누구에게나 쓸 수 있어서 아무것도 짚지 못한다.
+오늘 이 플래너를 봤기 때문에 할 수 있는 말만 쓸 것.
+
+[학습 진단 관점 — 오늘 플래너가 실제로 가리키는 것 '하나'만 골라 깊게 말할 것]
+아래는 확인해 볼 목록이지 나열할 항목이 아니다. 사진에 근거가 보이는 것만 쓴다.
+1. 인풋과 아웃풋의 비율 — 인강·개념 정리에 시간이 쏠리고 스스로 푼 문제가 적은가.
+   강의는 "이해했다"는 착각을 만들기 쉽다. 들은 만큼 손으로 푼 흔적이 있는지 본다.
+2. 오답의 처리 — 틀린 문제를 다시 푼 기록이 있는가, 채점만 하고 넘어갔는가.
+   틀린 문제는 2~3일 뒤 다시 풀어야 남는다. 오답 정리에 쓴 시간이 아예 없는 날이 이어지는지.
+3. 교재의 위계 — 개념서(마플교과서·뉴런·윤혜정 개념·완자·수능개념) / 유형·기출서(쎈·수매씽·
+   자이스토리·마더텅·수능특강) / 심화(고쟁이·N제·킬러·드릴) 중 지금 어디에 있는가.
+   개념이 덜 잡힌 채 심화만 돌고 있지는 않은지, 반대로 익숙한 유형서만 반복하며 시간을 쓰고 있지 않은지.
+4. 분량과 시간의 정합 — 60쪽을 40분에 봤다면 눈으로 훑은 것이고, 10쪽에 세 시간을 썼다면 막힌 것이다.
+   어느 쪽인지 짚고 다음 계획의 분량을 조정하게 할 것.
+5. 몰아치기와 분산 — 단어·어휘·탐구 개념 암기는 매일 조금씩 나눠야 남고,
+   수학 문제 세트나 국어 지문 세트는 끊기지 않는 덩어리 시간이 필요하다. 오늘 배치가 그 반대는 아닌지.
+6. 과목별 특성
+   · 국어 — 비문학은 시간을 재고 풀어야 실전이 되고, 문학은 작품 정리가 누적돼야 한다. 어휘·문법은 매일 소량.
+   · 수학 — 답지를 펴기 전에 버티는 시간, 끝까지 손으로 계산했는지, 틀린 문제의 재풀이 주기.
+   · 영어 — 단어는 매일 분산하고 지난 범위를 겹쳐 복습해야 남는다. 지문은 해석에서 끝내지 말고 오답 근거까지.
+   · 탐구 — 개념 강의 직후 문제로 확인하지 않으면 노트만 예뻐진다.
+7. 계획의 구체성 — "수학 공부"처럼 범위가 없는 항목은 끝을 알 수 없어 미뤄진다.
+   범위·문항 수까지 적힌 항목과 그렇지 않은 항목을 구분해 볼 것.
+8. 완료율이 말해 주는 것 — 며칠째 전부 O라면 계획이 헐거운 것일 수 있다(분량·난도를 올려 볼 때다).
+   같은 항목이 반복해서 밀린다면 계획량이 과하거나 그 과목을 피하고 있는 것이다.
+9. 학년과 시점 — 고3은 남은 기간에 맞춰 기출·실전 시간 운영·취약 단원 좁히기가 중심이고,
+   고1·고2는 개념 완성과 학교 진도·내신이 중심이다. 학년이 주어지면 그에 맞게 말할 것.
+10. 흐름 — 특정 과목이 며칠째 비어 있는지, 같은 범위를 계속 맴돌고 있는지, 총 학습시간이 무너졌는지.
+
 [코멘트 작성 규칙]
-- 담임 선생님이 손으로 적어주는 피드백처럼 자연스럽고 따뜻한 반말, 2~4문장
-  (친근하고 다정한 말투 — "~했네", "~해 보자", "~더라". 명령조·훈계조나 유행어·과한 애교체는 쓰지 말 것)
-- 학습 내용에 집중할 것: 사진에서 실제로 읽은 과목·교재·분량을 근거로 구체적으로 말할 것
-- 잘한 점을 먼저 짚고, 학습 전략 관점의 제안을 딱 한 가지만 부드럽게 덧붙일 것
-  (예: 과목 간 균형, 취약 과목의 배치 시간대, 복습 주기, 암기 분량 나누기)
-- 짧은 격려로 마무리하되 과장하지 말 것
-- [이전 검사 기록]이 주어지면 지난번과 비교해 학습량이 늘었는지/줄었는지/유지되는지를
-  한 문장으로 자연스럽게 녹여 말할 것 (수치를 기계적으로 나열하지 말 것)
-- 피할 것: 기계적인 나열·번호 매기기, 감탄사 남발, 같은 문형 반복, 과도한 칭찬,
-  이모티콘, "AI"·"분석"·"평가"·"데이터" 같은 단어 — 사람이 쓴 글처럼 읽혀야 함
-- 글씨를 알아보기 어렵거나 사진이 흐리면 추측하지 말고 quality에 반영할 것
+- 담임이 손으로 적어 주는 반말. 3~5문장. 매번 길이도 구조도 다르게 쓸 것.
+- 오늘 플래너에서 읽은 구체적 근거(교재 이름·범위·쪽수·시간·학생이 적어 둔 메모)를 반드시 하나 이상 인용할 것.
+  근거 없는 일반론은 한 문장도 쓰지 말 것.
+- 진단은 하나만 한다. 여러 관점을 나열하면 아무것도 남지 않는다.
+- 제안은 오늘 근거에서 따라 나와야 하고, 내일 바로 실행할 수 있을 만큼 구체적일 것.
+  ("균형 있게 해 보자" ✕ / "고쟁이는 틀린 다섯 문제만 목요일에 다시 풀어 보자" ○)
+- 읽을 수 있는 정보가 거의 없으면 억지로 채우지 말고 두 문장으로 짧게 끝낼 것.
+- 학생이 적어 둔 메모(대책·한마디·D-Day 등)가 있으면 그 말에 답하듯 쓰는 편이 좋다.
+- [이전 검사 기록]에는 지난번에 준 코멘트가 함께 들어 있다.
+  · 지난번에 이미 말한 지적·제안은 다시 하지 말 것. 매번 다른 각도에서 볼 것.
+  · 지난 제안을 실제로 실행한 흔적이 오늘 플래너에 있으면 그것부터 짚을 것.
+  · 학습량 변화는 필요할 때만 한 문장으로. 수치를 기계적으로 나열하지 말 것.
+- 글씨를 알아보기 어렵거나 사진이 흐리면 추측하지 말고 quality에 반영할 것.
+
+[쓰지 말 것 — 지금까지 반복돼 온 상투적 문형]
+- "오늘은 ~", "오늘도 ~"로 시작하지 말 것. 첫 문장은 매번 다르게, 그날 가장 눈에 띄는 사실이나
+  학생이 적어 둔 메모에서 바로 들어갈 것.
+- "칭찬 → 다만 ~해 보자 → 격려"의 3단 구성 금지. '다만'으로 방향을 트는 문장 금지.
+- 격려로 끝맺는 습관 금지. "수고 많았어", "든든하다", "이대로 가보자", "정말 대단해",
+  "충분히 잘 해낼 거야" 같은 맺음말을 쓰지 말 것. 격려는 할 말이 있을 때만, 구체적인 이유와 함께.
+- 남용 금지 어휘: 알차게, 촘촘히, 골고루, 꼼꼼히, 눈에 띄네, 인상적이야, 좋더라, 꾸준함,
+  균형 있게, "~한 점이 좋았어".
+- "~더라" 어미를 한 코멘트에 두 번 이상 쓰지 말 것.
+- 계획 항목을 그대로 옮겨 적는 나열식 문장 금지 — 요약은 summary가 한다.
+- 이모티콘, 번호 매기기, 과장된 감탄, "AI"·"분석"·"평가"·"데이터" 같은 단어 금지.
+
+[summary — 선생님만 보는 기록]
+- 무슨 과목·교재를 얼마나 계획하고 실행했는지 2~3문장으로 적을 것.
+- 마지막에 지도할 때 알아 둘 신호가 보이면 한 문장 덧붙일 것
+  (예: 인강 비중이 사흘째 높음 / 수학 오답 정리가 계획에 한 번도 없음 /
+   계획이 매번 100% 완료라 분량 상향 여지 / 같은 범위를 3일째 반복).
 
 [stats 추출 규칙]
 - 사진이 90도·180도 회전되어 있을 수 있다. 먼저 글자 방향을 파악해 바로 세운 뒤 읽을 것
@@ -626,8 +678,8 @@ const PLANNER_AI_SCHEMA = {
   type: 'object',
   properties: {
     quality: { type: 'string', enum: ['우수', '양호', '보통', '부실', '판독불가'], description: '플래너 작성 상태 종합 평가' },
-    summary: { type: 'string', description: '플래너 내용 요약(관리자용, 2~3문장) — 무슨 과목/교재를 얼마나 계획하고 실행했는지' },
-    comment: { type: 'string', description: '학생에게 보여줄 코멘트(친근한 반말 2~4문장)' },
+    summary: { type: 'string', description: '플래너 내용 요약(관리자용, 2~3문장) — 무슨 과목/교재를 얼마나 계획하고 실행했는지 + 지도할 때 알아 둘 신호 한 문장' },
+    comment: { type: 'string', description: '학생에게 보여줄 코멘트(반말 3~5문장) — 오늘 플래너의 구체적 근거에 기반한 학습 진단 하나' },
     stats: {
       type: 'object',
       description: '플래너에서 읽어낸 학습 데이터 — 학습 분석 그래프의 원천',
@@ -687,6 +739,8 @@ const PLANNER_AI_SCHEMA = {
 };
 
 // 같은 학생의 이전 검사 기록(최근 4건) — "지난번보다 늘었다/줄었다" 비교 근거로 프롬프트에 넣는다.
+// ★최근 3건은 그때 준 '코멘트'까지 함께 넣는다. 이게 없으면 모델은 매번 처음 보는 학생처럼
+//   같은 지적("저녁 초반에 배치해 보자")을 무한 반복한다 — 코멘트가 형식적으로 느껴진 주된 원인.
 async function plannerAiHistory(seat, beforeDate) {
   try {
     const hs = await db.collection('planner_ai_reviews').where('seat', '==', seat).get();
@@ -695,19 +749,42 @@ async function plannerAiHistory(seat, beforeDate) {
       .sort((a, b) => (a.date < b.date ? 1 : -1))
       .slice(0, 4);
     if (!list.length) return '';
-    const lines = list.map(h => {
+    const lines = list.map((h, i) => {
       const st = h.stats || {};
       const subj = (st.subjects || []).map(s => s.name + (s.minutes != null ? ` ${s.minutes}분` : '')).join(', ');
       const parts = [h.quality || ''];
       if (st.total_minutes != null) parts.push(`총 ${st.total_minutes}분`);
       if (subj) parts.push(subj);
-      return `- ${h.date}: ${parts.filter(Boolean).join(', ')} — ${h.summary || ''}`;
+      let line = `- ${h.date}: ${parts.filter(Boolean).join(', ')} — ${h.summary || ''}`;
+      if (i < 3 && h.comment) line += `\n  · 그날 준 코멘트: "${String(h.comment).slice(0, 400)}"`;
+      return line;
     });
-    return '\n\n[이전 검사 기록 — 최근순]\n' + lines.join('\n');
+    return '\n\n[이전 검사 기록 — 최근순]\n' + lines.join('\n') +
+      '\n※ 위 코멘트에서 이미 한 지적·제안은 되풀이하지 말 것. 그 제안을 오늘 실행한 흔적이 보이면 그것부터 짚을 것.';
   } catch (e) {
     logger.warn('plannerAiHistory 조회 실패', { seat, message: e.message });
     return '';
   }
+}
+
+// 학년(students.grade)은 조언의 방향을 가른다 — 고3의 7월과 고1의 7월에 할 말은 다르다.
+// 좌석키가 곧 students 문서 ID다(seatKey = 좌석 숫자).
+const SUNEUNG_DATE = '2026-11-19';   // 2027학년도 수능 — 해마다 갱신할 것
+async function plannerAiStudentCtx(seat, dateStr) {
+  const bits = [];
+  try {
+    const s = await db.collection('students').doc(String(seat)).get();
+    const v = s.exists ? (s.data() || {}) : {};
+    if (v.grade) bits.push(`학년: ${v.grade}`);
+    if (v.grade === '고3') {
+      const dday = Math.round((new Date(SUNEUNG_DATE) - new Date(dateStr)) / 86400000);
+      if (dday > 0) bits.push(`수능까지 D-${dday}`);
+    }
+    if (v.weeklyGoalH) bits.push(`주간 순공 목표: ${v.weeklyGoalH}시간`);
+  } catch (e) {
+    logger.warn('plannerAiStudentCtx 조회 실패', { seat, message: e.message });
+  }
+  return bits.length ? ' / ' + bits.join(' / ') : '';
 }
 
 exports.plannerAiReview = onDocumentCreated(
@@ -762,7 +839,10 @@ exports.plannerAiReview = onDocumentCreated(
       const model = cfg.model || PLANNER_AI_MODEL;
       const sysPrompt = cfg.prompt || PLANNER_AI_PROMPT;
 
-      const history = await plannerAiHistory(seat, dateStr);
+      const [history, stuCtx] = await Promise.all([
+        plannerAiHistory(seat, dateStr),
+        plannerAiStudentCtx(seat, dateStr)
+      ]);
 
       const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
       const msg = await client.messages.create({
@@ -774,7 +854,7 @@ exports.plannerAiReview = onDocumentCreated(
           role: 'user',
           content: [
             { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-            { type: 'text', text: `학생: ${req.name || seat + '번'} / 학습일: ${dateStr}\n이 플래너를 검사하고 결과를 작성해 주세요.${history}` }
+            { type: 'text', text: `학생: ${req.name || seat + '번'}${stuCtx} / 학습일: ${dateStr}(${'일월화수목금토'[new Date(dateStr).getDay()]})\n이 플래너를 검사하고 결과를 작성해 주세요.${history}` }
           ]
         }]
       });
@@ -827,8 +907,8 @@ function unreverseDomain(s) {
 }
 
 // Cloudflare Gateway DNS 집계를 가져온다. HTTP 조회와 야간 스냅샷이 함께 쓴다.
-async function fetchGatewayDns(hours) {
-  const start = new Date(Date.now() - hours * 3600 * 1000).toISOString();
+async function fetchGatewayDns(minutes) {
+  const start = new Date(Date.now() - minutes * 60 * 1000).toISOString();
   // 도메인별 집계와 시간대별 집계를 한 요청에 담는다(별칭 2개).
   const query = `
     query GatewayDns($accountTag: string!, $start: Time) {
@@ -889,7 +969,7 @@ async function fetchGatewayDns(hours) {
   }));
 
   return {
-    hours,
+    minutes,
     domains,
     hourly,
     total: domains.reduce((s, d) => s + d.total, 0),
@@ -913,8 +993,12 @@ exports.gatewayLogs = onRequest(
       const want = authSnap.exists ? (authSnap.data() || {}).hash : null;
       if (!want || token !== want) { res.status(403).json({ error: '관리자 기기가 아닙니다' }); return; }
 
-      const hours = Math.min(Math.max(parseInt((req.body && req.body.hours) || 24, 10) || 24, 1), 720);
-      const out = await fetchGatewayDns(hours);
+      // 실시간 모드는 분 단위 창을 쓴다. hours 는 이전 호출 호환용.
+      const b = req.body || {};
+      let minutes = parseInt(b.minutes, 10);
+      if (!minutes || isNaN(minutes)) minutes = (parseInt(b.hours, 10) || 24) * 60;
+      minutes = Math.min(Math.max(minutes, 1), 43200);   // 1분 ~ 30일
+      const out = await fetchGatewayDns(minutes);
       res.json({ ok: true, ...out });
     } catch (e) {
       logger.error('[Gateway] 조회 실패', e);
@@ -940,7 +1024,7 @@ exports.netDailySnapshot = onSchedule(
     const now = new Date(Date.now() + 9 * 3600 * 1000);   // KST 기준 날짜 키
     const date = now.toISOString().slice(0, 10);
     try {
-      const out = await fetchGatewayDns(24);
+      const out = await fetchGatewayDns(1440);   // 24시간
       await db.doc(`net_daily/${date}`).set({
         date,
         total: out.total,
