@@ -254,6 +254,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .toggle-btn{padding:6px 15px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:600;cursor:pointer;transition:all 0.12s;color:var(--text2)}
 .toggle-btn.attend{background:var(--amber-pale);color:var(--amber-dark);border-color:rgba(108,93,211,0.4)}
 .toggle-btn.absent{background:var(--red-pale);color:var(--red);border-color:var(--red-border)}
+.toggle-btn.early{background:#CCF3EC;color:#0B6B62;border-color:#14A395}
 .toggle-btn:active{transform:scale(0.95)}
 .toggle-btn:disabled{opacity:0.35;cursor:not-allowed;pointer-events:none}
 
@@ -263,6 +264,12 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .reason-label{font-size:12px;color:var(--red);white-space:nowrap;font-weight:600}
 .reason-input{flex:1;border:1.5px solid var(--red-border);border-radius:var(--r-sm);padding:6px 10px;font-size:13px;color:var(--text);background:var(--red-pale);outline:none;font-family:inherit}
 .reason-input:focus{border-color:var(--red);background:#fff}
+/* 중간퇴실(▽) 퇴실시간 입력 줄 — 불참 사유 줄과 같은 구조, 색만 청록 */
+.early-time{margin-top:8px;display:none}
+.early-time.show{display:flex;align-items:center;gap:8px}
+.early-label{font-size:12px;color:#0B6B62;white-space:nowrap;font-weight:600}
+.early-input{flex:1;border:1.5px solid #14A395;border-radius:var(--r-sm);padding:6px 10px;font-size:13px;color:var(--text);background:#E6FAF6;outline:none;font-family:inherit}
+.early-input:focus{border-color:#0B6B62;background:#fff}
 
 /* 주간 시간표 */
 .weekly-table-wrap{overflow-x:auto;border-radius:var(--r-md);box-shadow:var(--shadow-sm);border:1px solid var(--border-light)}
@@ -275,6 +282,7 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .wk-cell-attend{background:var(--amber-pale);color:var(--green);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-absent{background:var(--red-pale);color:var(--red);border-radius:6px;padding:3px 6px;font-size:11px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-partial{background:#FFF3E0;color:#E67E22;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
+.wk-cell-early{background:#E6FAF6;color:#0F766E;border-radius:6px;padding:3px 6px;font-size:12px;font-weight:700;display:inline-block;cursor:pointer;min-width:32px}
 .wk-cell-empty{color:var(--border);font-size:14px;cursor:pointer;display:inline-block;min-width:32px}
 .wk-cell-input{margin-top:3px;width:100%;max-width:60px;box-sizing:border-box;border:1px solid var(--border-light);border-radius:5px;padding:2px 4px;font-size:10px;text-align:center;outline:none;color:var(--text)}
 .wk-cell-input:focus{border-color:#E67E22}
@@ -801,10 +809,15 @@ button{touch-action:manipulation}
   color:#BE123C;
   border-color:#FDA4AF;
 }
-.reason-input{
+.reason-input,.early-input{
   background:#fff;
   border-radius:12px;
   min-height:34px;
+}
+.toggle-btn.early{
+  background:#F0FDFA;
+  color:#0F766E;
+  border-color:#5EEAD4;
 }
 
 .weekly-table-wrap{
@@ -821,6 +834,7 @@ button{touch-action:manipulation}
 .wk-cell-attend{background:#ECFDF5;color:#047857}
 .wk-cell-absent{background:#FFF1F2;color:#BE123C}
 .wk-cell-partial{background:#FFF7ED;color:#C2410C}
+.wk-cell-early{background:#F0FDFA;color:#0F766E}
 
 .stat-row{gap:12px}
 .stat-card{padding:17px}
@@ -1090,17 +1104,18 @@ body{
 .weekly-table td.wk-todaycol{background:#F0F7FF}
 .weekly-table tbody tr:nth-child(even) td.wk-todaycol{background:#E8F2FF}
 /* 상태 칩 — 칸 전체가 탭 영역 (최소 40px 높이) */
-.wk-cell-attend,.wk-cell-absent,.wk-cell-partial,.wk-cell-empty{
+.wk-cell-attend,.wk-cell-absent,.wk-cell-partial,.wk-cell-early,.wk-cell-empty{
   display:flex;align-items:center;justify-content:center;
   width:100%;min-height:40px;box-sizing:border-box;
   border-radius:10px;font-size:17px;font-weight:800;cursor:pointer;
   -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
   transition:transform .12s ease,filter .12s ease;
 }
-.wk-cell-attend:active,.wk-cell-absent:active,.wk-cell-partial:active,.wk-cell-empty:active{transform:scale(.93)}
+.wk-cell-attend:active,.wk-cell-absent:active,.wk-cell-partial:active,.wk-cell-early:active,.wk-cell-empty:active{transform:scale(.93)}
 .wk-cell-attend{background:#D6F0DC;color:#1B7A3E;border:1.5px solid #3FA35F}
 .wk-cell-absent{background:#FBD5D5;color:#A81E1E;border:1.5px dashed #DB4E4E}
 .wk-cell-partial{background:#FFE9C2;color:#B45309;border:1.5px solid #E08A1E}
+.wk-cell-early{background:#CCF3EC;color:#0B6B62;border:1.5px solid #14A395}
 .wk-cell-empty{background:#F1F5F9;color:#B6C2D2;border:1.5px dashed #D3DBE5;font-size:20px}
 /* 사유·시간 입력칸 */
 .wk-cell-input,.wk-cell-input.reason{
@@ -1350,8 +1365,9 @@ body{
         <div class="wl-item"><span class="wl-chip" style="background:#D6F0DC;color:#1B7A3E;border:1.5px solid #3FA35F">O</span>참여</div>
         <div class="wl-item"><span class="wl-chip" style="background:#FBD5D5;color:#A81E1E;border:1.5px dashed #DB4E4E">X</span>불참</div>
         <div class="wl-item"><span class="wl-chip" style="background:#FFE9C2;color:#B45309;border:1.5px solid #E08A1E">△</span>중간입실</div>
+        <div class="wl-item"><span class="wl-chip" style="background:#CCF3EC;color:#0B6B62;border:1.5px solid #14A395">▽</span>중간퇴실</div>
         <div class="wl-item"><span class="wl-chip" style="background:#F1F5F9;color:#B6C2D2;border:1.5px dashed #D3DBE5">·</span>공란</div>
-        <div class="wl-hint">👆 칸을 <b>탭할 때마다</b> 공란 → O(참여) → X(불참) → △(중간입실) 순서로 바뀝니다. X는 사유, △는 입실시간을 아래 칸에 적어 주세요. · 표가 잘리면 <b>좌우로 밀어서</b> 보세요(교시 칸은 고정).</div>
+        <div class="wl-hint">👆 칸을 <b>탭할 때마다</b> 공란 → O(참여) → X(불참) → △(중간입실) → ▽(중간퇴실) 순서로 바뀝니다. X는 사유, △는 입실시간, ▽는 <b>나가는 시간</b>을 아래 칸에 적어 주세요. · 표가 잘리면 <b>좌우로 밀어서</b> 보세요(교시 칸은 고정).</div>
       </div>
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
@@ -1773,10 +1789,14 @@ function computeLatePenalties() {
   periods.forEach(p => {
     const oldSt = parsePeriodStatus(oldSched, p.n);
     const newSt = dd.periods[p.n] || 'none';
-    // 출석(O)·중간입실(△) 모두 '출석 예정'으로 취급 — 이를 취소한 경우만 벌점 대상
-    const wasIn = oldSt === 'attend' || oldSt === 'partial';
-    const stillIn = newSt === 'attend' || newSt === 'partial';
-    if (!wasIn || stillIn) return;
+    // 출석(O)·중간입실(△)·중간퇴실(▽) 모두 '출석 예정'으로 취급
+    const wasIn = oldSt === 'attend' || oldSt === 'partial' || oldSt === 'early';
+    const stillIn = newSt === 'attend' || newSt === 'partial' || newSt === 'early';
+    // (a) 출석 예정 → 불참/해제  (b) 온전한 참여(O·△) → 중간퇴실(▽)로 축소
+    //     ※ △↔▽ 사이 전환과 ▽의 시간만 수정하는 것은 벌점 대상이 아니다(중간입실 시간 수정과 동일 취급).
+    const cutToEarly = (oldSt === 'attend' || oldSt === 'partial') && newSt === 'early';
+    if (!wasIn) return;
+    if (stillIn && !cutToEarly) return;
     const start = periodStartMs(p.n, todayDay);
     if (start == null) return;
     const deadline = start - PENALTY_LEAD_HOURS * 3600000;
@@ -1784,8 +1804,11 @@ function computeLatePenalties() {
     out.push({
       n: p.n,
       from: oldSt,
-      to: newSt === 'absent' ? 'absent' : 'none',
-      reason: (dd.reasons && dd.reasons[p.n]) || '',
+      to: newSt === 'absent' ? 'absent' : (newSt === 'early' ? 'early' : 'none'),
+      // 중간퇴실은 사유칸이 없으므로 신고한 퇴실시간을 사유 자리에 남긴다(관리자 확인용)
+      reason: newSt === 'early'
+        ? ((dd.earlies && dd.earlies[p.n]) ? `${dd.earlies[p.n]} 퇴실` : '')
+        : ((dd.reasons && dd.reasons[p.n]) || ''),
       deadline: deadline,
       changedAt: now
     });
@@ -1843,10 +1866,12 @@ function computePenaltyReversals() {
   periods.forEach(p => {
     const oldSt = parsePeriodStatus(oldSched, p.n);
     const newSt = dd.periods[p.n] || 'none';
-    const wasIn = oldSt === 'attend' || oldSt === 'partial';
-    const stillIn = newSt === 'attend' || newSt === 'partial';
-    // 출석이 아니었다가(불참/해제) → 다시 출석(참여/중간입실)으로 복귀한 교시
-    if (!wasIn && stillIn) out.push(p.n);
+    const wasIn = oldSt === 'attend' || oldSt === 'partial' || oldSt === 'early';
+    const stillIn = newSt === 'attend' || newSt === 'partial' || newSt === 'early';
+    // 출석이 아니었다가(불참/해제) → 다시 출석(참여/중간입실/중간퇴실)으로 복귀한 교시
+    if (!wasIn && stillIn) { out.push(p.n); return; }
+    // 중간퇴실(▽) → 온전한 참여(O)로 되돌린 교시도 복귀 (중간퇴실로 받은 1점을 취소)
+    if (oldSt === 'early' && newSt === 'attend') out.push(p.n);
   });
   return out;
 }
@@ -1924,7 +1949,7 @@ function renderPenaltyCard() {
   if (!rows.length) { el.innerHTML = ''; return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
-      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${(r.p.type==='manual'||r.p.type==='weekly_short') ? String(r.p.reason||'벌점').replace(/</g,'&lt;') : `${r.n}교시 ${r.p.type==='noshow' ? '무단결석' : `늦은 ${r.p.to==='absent'?'불참':'해제'} 변경`}`}${r.p.canceled?' · 관리자 취소':''}</span>
+      <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${(r.p.type==='manual'||r.p.type==='weekly_short') ? String(r.p.reason||'벌점').replace(/</g,'&lt;') : `${r.n}교시 ${r.p.type==='noshow' ? '무단결석' : `늦은 ${r.p.to==='absent'?'불참':(r.p.to==='early'?'중간퇴실':'해제')} 변경`}`}${r.p.canceled?' · 관리자 취소':''}</span>
       <span style="font-weight:700;color:var(--red);flex:0 0 auto">${r.p.canceled?0:(r.p.points||1)}점</span>
     </div>`).join('');
   el.innerHTML = `
@@ -2603,7 +2628,8 @@ function initDraft() {
   DAYS.forEach(day => {
     const sched = currentStudent.schedule[day] || '';
     // partials: 관리자가 지정한 중간입실 교시({교시: 시간}) — 저장 시 그대로 보존
-    draftSchedule[day] = { reason: '', reasons: {}, periods: {}, partials: parsePartials(sched) };
+    // earlies: 중간퇴실 교시({교시: 퇴실시간})
+    draftSchedule[day] = { reason: '', reasons: {}, periods: {}, partials: parsePartials(sched), earlies: parseEarlies(sched) };
 
     const reasonMatch = sched.match(/x\(([^)]+)\)/);
     if (reasonMatch) draftSchedule[day].reason = reasonMatch[1];
@@ -2623,6 +2649,17 @@ function parsePartials(sched) {
   const out = {};
   if (!sched || sched === '-') return out;
   for (const m of sched.matchAll(/(?:^|,)\s*m(\d+)(?:\(([^)]*)\))?/gi)) {
+    out[Number(m[1])] = m[2] || '';
+  }
+  return out;
+}
+
+// 스케줄 문자열에서 중간퇴실 교시 → 퇴실시간('' 가능) 맵 추출
+// 형식: e9(20:30) = 9교시 도중 20:30에 나감, e9 = 시간 미지정
+function parseEarlies(sched) {
+  const out = {};
+  if (!sched || sched === '-') return out;
+  for (const m of sched.matchAll(/(?:^|,)\s*e(\d+)(?:\(([^)]*)\))?/gi)) {
     out[Number(m[1])] = m[2] || '';
   }
   return out;
@@ -2650,6 +2687,11 @@ function parsePeriodStatus(sched, pNum) {
   for (const t of tokens) {
     const m = t.match(/^m(\d+)(?:\(([^)]*)\))?$/i);
     if (m && Number(m[1]) === pNum) return 'partial';
+  }
+  // 0-1) 중간퇴실(역세모): e9 또는 e9(20:30) — 교시 도중 나가는 별도 상태
+  for (const t of tokens) {
+    const m = t.match(/^e(\d+)(?:\(([^)]*)\))?$/i);
+    if (m && Number(m[1]) === pNum) return 'early';
   }
   // 1) 명시적 결석: x10 또는 x10(사유)
   for (const t of tokens) {
@@ -2855,6 +2897,7 @@ function buildDailyPeriods() {
       </div>
       <div class="period-toggle">
         <button class="toggle-btn${(status==='attend'||status==='partial')?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
+        <button class="toggle-btn${status==='early'?' early':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'early')"`:' disabled'} title="교시 도중에 나감">중간퇴실</button>
         <button class="toggle-btn${status==='absent'?' absent':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
       </div>
     </div>
@@ -2863,6 +2906,12 @@ function buildDailyPeriods() {
       <input class="reason-input" type="text" placeholder="예: 수학학원"
         value="${((dayDraft.reasons&&dayDraft.reasons[p.n])||'').replace(/"/g,'&quot;')}"
         ${isToday?`oninput="setReason('${currentDayTab}',${p.n},this.value)"`:'readonly'}>
+    </div>
+    <div class="early-time${status==='early'?' show':''}" id="early-${currentDayTab}-${p.n}">
+      <span class="early-label">나가는 시간</span>
+      <input class="early-input" type="text" inputmode="numeric" placeholder="숫자만 (예: 2030 → 20:30)"
+        value="${((dayDraft.earlies&&dayDraft.earlies[p.n])||'').replace(/"/g,'&quot;')}"
+        ${isToday?`oninput="setEarlyTime('${currentDayTab}',${p.n},this)"`:'readonly'}>
     </div>`;
   }).join('');
 }
@@ -2871,16 +2920,37 @@ function setPeriod(day, pNum, status) {
   if (day !== todayDay) { showToast('🔒 오늘 일정만 수정할 수 있습니다'); return; }
   const prev = draftSchedule[day].periods[pNum];
   // 같은 버튼 다시 누르면 none으로
-  draftSchedule[day].periods[pNum] = prev === status ? 'none' : status;
+  const next = prev === status ? 'none' : status;
+  draftSchedule[day].periods[pNum] = next;
+  // 중간퇴실이면 퇴실시간 칸 준비, 벗어나면 시간 제거(다른 상태에 시간이 남지 않게)
+  if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
+  if (next === 'early') {
+    if (draftSchedule[day].earlies[pNum] === undefined) draftSchedule[day].earlies[pNum] = '';
+  } else {
+    delete draftSchedule[day].earlies[pNum];
+  }
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
   buildDailyPeriods();
   buildWeeklyTable();
-  // 불참 선택 시 사유 입력칸이 저장 버튼에 가려지지 않게 화면 중앙으로 스크롤
-  if (draftSchedule[day].periods[pNum] === 'absent') {
+  // 불참·중간퇴실 선택 시 입력칸이 저장 버튼에 가려지지 않게 화면 중앙으로 스크롤
+  if (next === 'absent') {
     const reasonEl = document.getElementById(`reason-${day}-${pNum}`);
     if (reasonEl) reasonEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  } else if (next === 'early') {
+    const earlyEl = document.getElementById(`early-${day}-${pNum}`);
+    if (earlyEl) earlyEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
+}
+
+// '오늘 일정' 탭의 중간퇴실 시간 입력 — 숫자만 받아 "시:분"으로 정규화
+function setEarlyTime(day, pNum, el) {
+  const val = _normalizePartialTime(el.value);
+  el.value = val;
+  if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
+  draftSchedule[day].earlies[pNum] = val;
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
 }
 
 function setReason(day, pNum, val) {
@@ -2902,6 +2972,7 @@ function buildWeeklyTable() {
     && !(scheduleEditEnabled && weeklyEditedDays.has(todayDay))) ? todayDay : null;
   const baseStr = badgeDay ? (baseScheduleRaw[badgeDay] || '-') : '-';
   const basePartials = badgeDay ? parsePartials(baseStr) : {};
+  const baseEarlies = badgeDay ? parseEarlies(baseStr) : {};
   let todayDiffCount = 0;
 
   let html = `<thead><tr><th>교시</th>${DAYS.map(d=>`<th${d===todayDay?' class="wk-th-todaycol"':''}>${d}${d===todayDay?'<span class="wk-th-today">오늘</span>':''}</th>`).join('')}</tr></thead><tbody>`;
@@ -2930,6 +3001,11 @@ function buildWeeklyTable() {
         const t = ((draftSchedule[day]?.partials&&draftSchedule[day].partials[pNum])||'').replace(/"/g,'&quot;');
         cell = `<span class="wk-cell-partial" onclick="wkToggle('${day}',${pNum})" title="중간입실">△</span>`
           + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="시간" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetPartialTime('${day}',${pNum},this)"`:'readonly'}>`;
+      } else if (status === 'early') {
+        // 역세모(▽): 중간퇴실 — 나가는 시간을 숫자만 입력(예: 2030 → 20:30)
+        const t = ((draftSchedule[day]?.earlies&&draftSchedule[day].earlies[pNum])||'').replace(/"/g,'&quot;');
+        cell = `<span class="wk-cell-early" onclick="wkToggle('${day}',${pNum})" title="중간퇴실">▽</span>`
+          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="퇴실" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetEarlyTime('${day}',${pNum},this)"`:'readonly'}>`;
       } else {
         cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       }
@@ -2940,9 +3016,11 @@ function buildWeeklyTable() {
         const bSt = parsePeriodStatus(baseStr, pNum);
         const dReason = (draftSchedule[day]?.reasons && draftSchedule[day].reasons[pNum]) || '';
         const dTime = (draftSchedule[day]?.partials && draftSchedule[day].partials[pNum]) || '';
+        const dEarly = (draftSchedule[day]?.earlies && draftSchedule[day].earlies[pNum]) || '';
         const diff = bSt !== status
           || (status === 'absent' && (parsePeriodReason(baseStr, pNum) || '') !== dReason)
-          || (status === 'partial' && (basePartials[pNum] || '') !== dTime);
+          || (status === 'partial' && (basePartials[pNum] || '') !== dTime)
+          || (status === 'early' && (baseEarlies[pNum] || '') !== dEarly);
         if (diff) {
           todayDiffCount++;
           tdCls = ' class="wk-todaycol wk-today-diff"';
@@ -2967,9 +3045,9 @@ function wkToggle(day, pNum) {
     showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
     return;
   }
-  // 터치 순환: 공란(·) → O(참여) → X(불참) → 세모(중간입실) → 공란
+  // 터치 순환: 공란(·) → O(참여) → X(불참) → 세모(중간입실) → 역세모(중간퇴실) → 공란
   const cur = draftSchedule[day]?.periods[pNum] || 'none';
-  const order = { none:'attend', attend:'absent', absent:'partial', partial:'none' };
+  const order = { none:'attend', attend:'absent', absent:'partial', partial:'early', early:'none' };
   const next = order[cur] || 'attend';
   draftSchedule[day].periods[pNum] = next;
   weeklyEditedDays.add(day); // 주간 표에서 고친 요일 → base 저장 대상
@@ -2979,6 +3057,13 @@ function wkToggle(day, pNum) {
     if (draftSchedule[day].partials[pNum] === undefined) draftSchedule[day].partials[pNum] = '';
   } else {
     delete draftSchedule[day].partials[pNum];
+  }
+  // 중간퇴실(역세모)도 동일 — 퇴실시간 칸 준비/제거
+  if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
+  if (next === 'early') {
+    if (draftSchedule[day].earlies[pNum] === undefined) draftSchedule[day].earlies[pNum] = '';
+  } else {
+    delete draftSchedule[day].earlies[pNum];
   }
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
@@ -3017,6 +3102,17 @@ function wkSetPartialTime(day, pNum, el) {
   document.getElementById('save-fab').classList.add('show');
 }
 
+// 주간표 역세모(중간퇴실) 시간 입력 — 숫자만 입력받아 정규화
+function wkSetEarlyTime(day, pNum, el) {
+  const val = _normalizePartialTime(el.value);
+  el.value = val;
+  if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
+  draftSchedule[day].earlies[pNum] = val;
+  weeklyEditedDays.add(day);
+  isDirty = true;
+  document.getElementById('save-fab').classList.add('show');
+}
+
 // ── 저장 ──
 async function saveSchedule() {
   // 마감(교시 시작 5시간 전) 이후의 출석 취소 → 벌점 경고 후 진행
@@ -3024,7 +3120,7 @@ async function saveSchedule() {
   // 불참 → 참여 복귀 교시: 이미 기록된 늦은 변경 벌점을 취소한다 (저장 후 처리)
   const penaltyReversals = computePenaltyReversals();
   if (latePenalties.length) {
-    const lines = latePenalties.map(c => ` · ${c.n}교시 (참여 → ${c.to==='absent'?'불참':'해제'})`).join('\n');
+    const lines = latePenalties.map(c => ` · ${c.n}교시 (참여 → ${c.to==='absent'?'불참':(c.to==='early'?'중간퇴실':'해제')})`).join('\n');
     const ok = confirm(
       `⚠️ 변경 마감이 지났습니다 (교시 시작 5시간 전 마감)\n\n` +
       `지금 저장하면 벌점 ${latePenalties.length}점이 부여됩니다:\n${lines}\n\n그래도 저장할까요?`);
@@ -3048,6 +3144,11 @@ async function saveSchedule() {
         // 세모(중간입실) → m교시(입실시간). 시간 미입력이면 m교시만 저장. (관리앱과 동일 형식)
         const t = (dd.partials && dd.partials[p.n]) || '';
         tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
+        hasAny = true;
+      } else if (state === 'early') {
+        // 역세모(중간퇴실) → e교시(퇴실시간). 시간 미입력이면 e교시만 저장. (관리앱과 동일 형식)
+        const t = (dd.earlies && dd.earlies[p.n]) || '';
+        tokens.push(t ? `e${p.n}(${t})` : `e${p.n}`);
         hasAny = true;
       } else if (state === 'absent') {
         const reason = (dd.reasons && dd.reasons[p.n]) || dd.reason || '';
@@ -3317,8 +3418,8 @@ function _dayMinutes(dayName) {
   const periods = periodsFor(dayName);
   return periods.reduce((sum, p) => {
     const st = draftSchedule[dayName].periods[p.n];
-    // 중간입실(partial)도 출석으로 집계
-    return sum + ((st === 'attend' || st === 'partial') ? (PERIOD_MIN[p.n] || 60) : 0);
+    // 중간입실(partial)·중간퇴실(early)도 출석으로 집계
+    return sum + ((st === 'attend' || st === 'partial' || st === 'early') ? (PERIOD_MIN[p.n] || 60) : 0);
   }, 0);
 }
 
