@@ -10106,9 +10106,31 @@ setInterval(subscribePenaltyBoard, 60000); // 자정 넘어가면 오늘/어제 
 // 문제: 밥 먹으러 나가면서 외출을 안 누르면 그 시간이 그대로 학습시간으로 잡힌다.
 // 안 찍고 나간 것은 어디에도 흔적이 남지 않으므로(자동문은 버튼을 눌러야 열리고,
 // 와이파이 로그는 기기 식별이 안 됨) 사후에 자동으로 알아낼 방법이 없다.
-// → "오래 앉아 있었다는데 외출이 거의 없다"는 정황만 짚어 사람이 확인하게 한다.
-const AWAYMISS_MIN_STAY_MIN = 8 * 60; // 재실 8시간 이상
-const AWAYMISS_MAX_AWAY_MIN = 30;     // 외출 30분 미만
+// → "정황"만 짚어 사람이 확인하게 한다. 판정은 두 가지를 함께 본다:
+//
+//  (A) 밖에 있던 시간이 거의 없다 = 외출 + '세션 사이 공백'
+//      ★공백을 반드시 더해야 한다: 외출 버튼 대신 퇴실→재입실로 밥 먹으러 가는 학생이 많고,
+//        그 경우 밥시간은 이미 제대로 빠져 있는데 외출만 보면 0분이라 억울하게 걸린다.
+//  (B) 식사시간을 자리에서 보냈다 = 교시 사이 식사 구간에 '입실 중'이었던 시간
+//      (A)만 보면 오후에 몇 시간 나갔다 온 학생이 점심을 통째로 앉아서 보내도 안 걸린다.
+//      외출을 찍긴 했지만 두 끼에 비해 턱없이 짧은 경우도 여기서 잡힌다.
+const AWAYMISS_MIN_STAY_MIN = 8 * 60; // 재실 8시간 이상 (공통 전제)
+const AWAYMISS_MAX_AWAY_MIN = 30;     // (A) 외출+공백이 30분 미만
+const AWAYMISS_MEAL_SAT_MIN = 45;     // (B) 식사시간 중 자리에 있던 시간이 45분 이상
+
+// 식사시간 = 교시 사이의 빈 구간. 시간표(PERIOD_BOUNDS)에서 그대로 끌어와
+// 시간표가 바뀌어도 따라가게 한다. 3교시 끝~4교시 시작 = 점심, 6교시 끝~7교시 시작 = 저녁.
+function _awayMissMealWindows(dayIso) {
+  const B = (typeof PERIOD_BOUNDS !== 'undefined') ? PERIOD_BOUNDS : null;
+  if (!B || !B[3] || !B[4] || !B[6] || !B[7]) return [];
+  const [Y, M, D] = dayIso.split('-').map(Number);
+  const base = new Date(Y, M - 1, D, 0, 0, 0, 0).getTime();
+  const mk = min => base + min * 60000;
+  return [
+    { name: '점심', s: mk(B[3][1]), e: mk(B[4][0]) },
+    { name: '저녁', s: mk(B[6][1]), e: mk(B[7][0]) }
+  ].filter(w => w.e > w.s);
+}
 let _awayMissDocs = [];
 let _awayMissKey = '';
 let _awayMissUnsub = null;
@@ -10148,34 +10170,56 @@ function renderAwayMissBoard() {
   const day = (_awayMissDay === 'today') ? today : yesterday;
   const nowTs = Date.now();
 
-  // 학생별 집계: 인정 학습시간 합 + 외출 합 (진행 중 세션은 지금까지로 잠정 계산)
+  const meals = _awayMissMealWindows(day);
+
+  // 학생별로 그날 세션을 모은다 (공백 계산 때문에 세션 목록이 필요하다)
   const by = {};
   _awayMissDocs.forEach(s => {
-    if (!s || s.inDate !== day || !s.studentName) return;
+    if (!s || s.inDate !== day || !s.studentName || typeof s.inTs !== 'number') return;
     if (window.isNonStudent && window.isNonStudent(s.studentName)) return;
-    let min = 0, away = s.awayMs || 0;
-    if (s.status === 'closed' && typeof s.durationMin === 'number') {
-      min = s.durationMin;
-    } else if (s.status === 'open') {
-      if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, SH.sessCapTs(s.inTs)) - s.awayStartTs);
-      min = SH.sessDurationMin(s.inTs, nowTs, away);
-    }
-    const b = (by[s.studentName] = by[s.studentName] || { name: s.studentName, seat: s.seat, min: 0, awayMs: 0, open: false });
-    b.min += min; b.awayMs += away;
-    if (s.status === 'open') b.open = true;
+    const b = (by[s.studentName] = by[s.studentName] || { name: s.studentName, seat: s.seat, list: [] });
+    b.list.push(s);
     if (s.seat) b.seat = s.seat;
   });
 
-  const all = Object.values(by).map(b => ({ ...b, awayMin: Math.round(b.awayMs / 60000) }));
-  const flagged = all
-    .filter(b => b.min >= AWAYMISS_MIN_STAY_MIN && b.awayMin < AWAYMISS_MAX_AWAY_MIN)
-    .sort((a, b) => (b.min - a.min) || (a.awayMin - b.awayMin));
+  const all = Object.values(by).map(b => {
+    const list = b.list.slice().sort((x, y) => x.inTs - y.inTs);
+    let min = 0, awayMs = 0, gapMs = 0, mealSatMs = 0, open = false;
+    let prevOut = null;
+    list.forEach(s => {
+      let away = s.awayMs || 0;
+      let endTs;
+      if (s.status === 'closed' && typeof s.durationMin === 'number') {
+        min += s.durationMin; endTs = s.outTs || s.inTs;
+      } else if (s.status === 'open') {
+        if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, SH.sessCapTs(s.inTs)) - s.awayStartTs);
+        min += SH.sessDurationMin(s.inTs, nowTs, away);
+        endTs = Math.min(nowTs, SH.sessCapTs(s.inTs));
+        open = true;
+      } else { endTs = s.outTs || s.inTs; }
+      awayMs += away;
+      // (A) 세션 사이 공백 = 퇴실하고 나가 있던 시간
+      if (prevOut != null && s.inTs > prevOut) gapMs += s.inTs - prevOut;
+      prevOut = Math.max(prevOut == null ? 0 : prevOut, endTs);
+      // (B) 식사시간 중 '입실 중'이던 시간 — 그 세션의 외출만큼은 빼준다(외출 시각까지는 알 수 없어 보수적으로)
+      let ov = 0;
+      meals.forEach(w => { ov += Math.max(0, Math.min(endTs, w.e) - Math.max(s.inTs, w.s)); });
+      mealSatMs += Math.max(0, ov - away);
+    });
+    return { ...b, min, open,
+      awayMin: Math.round(awayMs / 60000),
+      gapMin: Math.round(gapMs / 60000),
+      outMin: Math.round((awayMs + gapMs) / 60000),
+      mealSatMin: Math.round(mealSatMs / 60000) };
+  });
 
-  // 참고값: 같은 날 외출을 제대로 찍은 학생들의 외출 시간 중앙값.
-  // ※ 실제로 얼마나 나가 있었는지는 알 수 없다 — 보정값을 정하는 근거가 아니라
-  //   "보통 이 정도는 나간다"는 비교 기준일 뿐이다. 확인은 사람이 해야 한다.
-  const okAway = all.filter(b => b.awayMin >= AWAYMISS_MAX_AWAY_MIN).map(b => b.awayMin).sort((x, y) => x - y);
-  const median = okAway.length ? okAway[Math.floor(okAway.length / 2)] : null;
+  const flagged = all.filter(b => {
+    if (b.min < AWAYMISS_MIN_STAY_MIN) return false;
+    b._reasons = [];
+    if (b.outMin < AWAYMISS_MAX_AWAY_MIN) b._reasons.push(`밖에 있던 시간 ${b.outMin}분`);
+    if (b.mealSatMin >= AWAYMISS_MEAL_SAT_MIN) b._reasons.push(`식사시간 자리 지킴 ${b.mealSatMin}분`);
+    return b._reasons.length > 0;
+  }).sort((a, b) => (b.mealSatMin - a.mealSatMin) || (a.outMin - b.outMin) || (b.min - a.min));
 
   if (summary) summary.textContent = flagged.length ? `${flagged.length}명` : '';
 
@@ -10184,24 +10228,34 @@ function renderAwayMissBoard() {
     return;
   }
 
-  const rows = flagged.map(b => `
+  const rows = flagged.map(b => {
+    const nameJs = String(b.name).replace(/'/g, "\\'");
+    return `
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #F3F4F6">
-      <div style="flex:0 0 88px;cursor:pointer" onclick="showStudentSessionsModal('${String(b.name).replace(/'/g,"\\'")}')" title="입·퇴실 기록 열기(시간 보정)">
+      <div style="flex:0 0 88px;cursor:pointer" onclick="showStudentSessionsModal('${nameJs}')" title="입·퇴실 기록 열기(시간 보정)">
         <div style="font-size:12.5px;font-weight:700;color:#1F2937">${b.name}</div>
         <div style="font-size:10.5px;font-weight:500;color:#9CA3AF">${b.seat || '?'}번</div>
       </div>
       <div style="flex:1;display:flex;flex-wrap:wrap;gap:5px;font-size:11px">
         <span style="background:#EEF2FF;color:#4338A8;border-radius:8px;padding:3px 8px;font-weight:600">재실 ${_fmtRangeMin(b.min)}${b.open ? ' (진행 중)' : ''}</span>
-        <span style="background:${b.awayMin ? '#FFF4E5' : '#FDE7E7'};color:${b.awayMin ? '#9A5B00' : '#8B1A1A'};border-radius:8px;padding:3px 8px;font-weight:600">외출 ${b.awayMin}분</span>
+        <span style="background:#F3F4F6;color:#4B5563;border-radius:8px;padding:3px 8px;font-weight:600" title="외출 버튼 + 퇴실했다 다시 들어온 시간">외출 ${b.awayMin}분${b.gapMin ? ` + 공백 ${b.gapMin}분` : ''}</span>
+        ${b._reasons.map(r => `<span style="background:#FFF4E5;color:#9A5B00;border-radius:8px;padding:3px 8px;font-weight:700">${r}</span>`).join('')}
       </div>
-      <button onclick="showStudentSessionsModal('${String(b.name).replace(/'/g,"\\'")}')"
+      <button onclick="showStudentSessionsModal('${nameJs}')"
         style="flex:0 0 auto;background:#fff;color:#4A3FA8;border:1px solid #8F82E4;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer">기록 열기</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
+  const mealLabel = meals.length
+    ? meals.map(w => `${w.name} ${SH.sessFmtKoTime(w.s)}~${SH.sessFmtKoTime(w.e)}`).join(' / ')
+    : '시간표 없음';
   body.innerHTML = rows + `
     <div style="margin-top:8px;padding:8px 10px;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;font-size:11px;color:#92400E;line-height:1.6">
-      재실 ${AWAYMISS_MIN_STAY_MIN / 60}시간 이상인데 외출이 ${AWAYMISS_MAX_AWAY_MIN}분 미만 = 식사 시간이 학습시간에 그대로 잡혀 있을 수 있습니다.
-      ${median != null ? `같은 날 외출을 찍은 학생들의 <b>중앙값은 ${median}분</b>입니다(참고용 비교값 — 실제 외출 시간이 아닙니다).` : ''}
+      재실 ${AWAYMISS_MIN_STAY_MIN / 60}시간 이상이면서 둘 중 하나에 해당하면 표시합니다 —
+      <b>밖에 있던 시간(외출 + 퇴실 공백)이 ${AWAYMISS_MAX_AWAY_MIN}분 미만</b>이거나,
+      <b>식사시간에 자리를 지킨 시간이 ${AWAYMISS_MEAL_SAT_MIN}분 이상</b>.
+      <br>식사시간은 시간표의 교시 사이 빈 구간입니다(${mealLabel}).
+      <br>퇴실했다 다시 들어온 시간은 이미 학습시간에서 빠져 있으므로 걸리지 않습니다.
       <br>실제로 얼마나 나가 있었는지는 기록에 남지 않으므로 <b>CCTV 등으로 확인한 뒤</b> '기록 열기'에서 외출 시간을 직접 넣어 주세요.
     </div>`;
 }
