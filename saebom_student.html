@@ -1035,6 +1035,98 @@ body{
   animation:butterflyHover 3.2s ease-in-out infinite;
 }
 
+/* ══ 주간 시간표 가시성 개선 (2026-07-23) ══
+   휴대폰(375px)에서 칸이 44~51px로 눌러지지 않고 글씨가 10~11px라 학생이 못 고치던 문제.
+   · 요일 칸을 넓히고(가로 스크롤 + 교시 열 고정) 탭 영역을 칸 전체로 넓힌다
+   · 관리앱 스케줄 모달과 같은 색언어(출석=초록/중간입실=주황/결석=빨강 채움)
+   ※ 이 블록은 스타일 맨 끝이라 위쪽 규칙을 모두 덮어쓴다 — 순서를 바꾸지 말 것. */
+.weekly-legend{
+  display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin-bottom:10px;
+  padding:10px 12px;border-radius:14px;background:rgba(255,255,255,.82);
+  border:1px solid rgba(226,232,240,.92);box-shadow:0 6px 16px rgba(28,28,30,.06);
+  font-size:12px;font-weight:600;color:#334155;
+}
+.weekly-legend .wl-item{display:flex;align-items:center;gap:5px}
+.weekly-legend .wl-chip{
+  min-width:26px;height:24px;border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:800;
+}
+.weekly-legend .wl-hint{
+  flex:1 1 100%;font-size:11.5px;font-weight:600;color:#64748B;line-height:1.45;
+  border-top:1px dashed rgba(100,116,139,.28);padding-top:7px;margin-top:1px;
+}
+.weekly-table-wrap{
+  overflow-x:auto;-webkit-overflow-scrolling:touch;
+  border-radius:18px;border:1px solid rgba(226,232,240,.92);
+  box-shadow:0 12px 30px rgba(15,23,42,.06);background:#fff;
+}
+/* 요일 한 칸 최소 64px 확보 → 375px 화면에서는 가로로 밀어서 본다(교시 열은 고정).
+   table-layout:fixed — 사유 입력칸이 있는 요일만 넓어지던 들쭉날쭉한 열폭을 6요일 균등으로 고정. */
+.weekly-table{width:100%;min-width:460px;border-collapse:separate;border-spacing:0;table-layout:fixed}
+.weekly-table th:not(:first-child){width:calc((100% - 76px)/6)}
+.weekly-table th{
+  background:linear-gradient(115deg,#0A84FF,#5E5CE6);color:#fff;
+  padding:12px 6px;font-size:13px;font-weight:800;letter-spacing:.2px;
+  position:sticky;top:0;z-index:3;
+}
+.weekly-table th:first-child{
+  text-align:center;padding-left:6px;min-width:76px;width:76px;
+  left:0;z-index:5;box-shadow:2px 0 6px rgba(15,23,42,.10);
+}
+.weekly-table td{
+  padding:8px 5px;border-bottom:1px solid #EEF2F7;text-align:center;font-size:13px;
+  vertical-align:middle;min-width:64px;
+}
+.weekly-table td:first-child{
+  position:sticky;left:0;z-index:2;background:#F8FAFC;min-width:76px;width:76px;
+  box-shadow:2px 0 6px rgba(15,23,42,.06);
+}
+.weekly-table tbody tr:nth-child(even) td{background:#FBFCFE}
+.weekly-table tbody tr:nth-child(even) td:first-child{background:#F3F6FA}
+.weekly-table tr:last-child td{border-bottom:none}
+.weekly-table tr:hover td{background:inherit}
+/* 오늘 요일 열 강조 */
+.weekly-table th.wk-th-todaycol{background:linear-gradient(115deg,#0A84FF,#7C3AED)}
+.weekly-table td.wk-todaycol{background:#F0F7FF}
+.weekly-table tbody tr:nth-child(even) td.wk-todaycol{background:#E8F2FF}
+/* 상태 칩 — 칸 전체가 탭 영역 (최소 40px 높이) */
+.wk-cell-attend,.wk-cell-absent,.wk-cell-partial,.wk-cell-empty{
+  display:flex;align-items:center;justify-content:center;
+  width:100%;min-height:40px;box-sizing:border-box;
+  border-radius:10px;font-size:17px;font-weight:800;cursor:pointer;
+  -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;
+  transition:transform .12s ease,filter .12s ease;
+}
+.wk-cell-attend:active,.wk-cell-absent:active,.wk-cell-partial:active,.wk-cell-empty:active{transform:scale(.93)}
+.wk-cell-attend{background:#D6F0DC;color:#1B7A3E;border:1.5px solid #3FA35F}
+.wk-cell-absent{background:#FBD5D5;color:#A81E1E;border:1.5px dashed #DB4E4E}
+.wk-cell-partial{background:#FFE9C2;color:#B45309;border:1.5px solid #E08A1E}
+.wk-cell-empty{background:#F1F5F9;color:#B6C2D2;border:1.5px dashed #D3DBE5;font-size:20px}
+/* 사유·시간 입력칸 */
+.wk-cell-input,.wk-cell-input.reason{
+  margin-top:5px;width:100%;max-width:none;box-sizing:border-box;
+  border:1.5px solid #D9E1EC;border-radius:9px;padding:6px 4px;
+  font-size:12.5px;font-weight:600;text-align:center;outline:none;color:var(--text);
+  background:#fff;min-height:32px;font-family:inherit;
+}
+.wk-cell-input::placeholder{color:#B6C2D2;font-weight:500}
+.wk-cell-input:focus{border-color:#0A84FF;box-shadow:0 0 0 3px rgba(10,132,255,.14)}
+.wk-period-label{font-size:13.5px;color:#0F172A;font-weight:800;letter-spacing:-.2px}
+.wk-period-time{font-size:10.5px;color:#7A8798;font-weight:600;margin-top:2px;white-space:nowrap}
+.weekly-table td.wk-today-diff{background:#FFF8EC}
+.weekly-table tbody tr:nth-child(even) td.wk-today-diff{background:#FEF3DF}
+.wk-today-badge{
+  display:block;width:max-content;margin:5px auto 0;font-size:10px;font-weight:800;
+  color:#B45309;background:#FDEBD0;border:1px dashed #E0A94F;border-radius:7px;
+  padding:2px 7px;line-height:1.5;white-space:nowrap;
+}
+.wk-th-today{display:block;font-size:9.5px;font-weight:800;opacity:.95;letter-spacing:.5px;margin-top:2px}
+/* 화면이 넓으면 가로 스크롤 없이 꽉 차게 */
+@media (min-width:560px){
+  .weekly-table{min-width:100%}
+  .weekly-table td,.weekly-table th{min-width:0}
+}
+
 @keyframes ambientFloat{to{transform:translate3d(24px,-18px,0) scale(1.1)}}
 @keyframes logoArrival{from{opacity:0;transform:translateY(18px) scale(.72) rotate(-8deg)}to{opacity:1;transform:none}}
 @keyframes riseIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
@@ -1254,6 +1346,13 @@ body{
     <div id="tab-weekly" style="display:none">
       <div class="section-label">WEEKLY · 주간 시간표</div>
       <div id="weekly-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px">🔒 주간 시간표 수정이 잠겨 있습니다. 관리자가 허용할 때만 수정할 수 있습니다.</div>
+      <div class="weekly-legend">
+        <div class="wl-item"><span class="wl-chip" style="background:#D6F0DC;color:#1B7A3E;border:1.5px solid #3FA35F">O</span>참여</div>
+        <div class="wl-item"><span class="wl-chip" style="background:#FBD5D5;color:#A81E1E;border:1.5px dashed #DB4E4E">X</span>불참</div>
+        <div class="wl-item"><span class="wl-chip" style="background:#FFE9C2;color:#B45309;border:1.5px solid #E08A1E">△</span>중간입실</div>
+        <div class="wl-item"><span class="wl-chip" style="background:#F1F5F9;color:#B6C2D2;border:1.5px dashed #D3DBE5">·</span>공란</div>
+        <div class="wl-hint">👆 칸을 <b>탭할 때마다</b> 공란 → O(참여) → X(불참) → △(중간입실) 순서로 바뀝니다. X는 사유, △는 입실시간을 아래 칸에 적어 주세요. · 표가 잘리면 <b>좌우로 밀어서</b> 보세요(교시 칸은 고정).</div>
+      </div>
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
@@ -2752,7 +2851,7 @@ function buildWeeklyTable() {
   const basePartials = badgeDay ? parsePartials(baseStr) : {};
   let todayDiffCount = 0;
 
-  let html = `<thead><tr><th>교시</th>${DAYS.map(d=>`<th>${d}${d===todayDay?'<span class="wk-th-today">오늘</span>':''}</th>`).join('')}</tr></thead><tbody>`;
+  let html = `<thead><tr><th>교시</th>${DAYS.map(d=>`<th${d===todayDay?' class="wk-th-todaycol"':''}>${d}${d===todayDay?'<span class="wk-th-today">오늘</span>':''}</th>`).join('')}</tr></thead><tbody>`;
 
   allPeriods.forEach(pNum => {
     const isSatOnly = pNum <= 6;
@@ -2782,8 +2881,8 @@ function buildWeeklyTable() {
         cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       }
 
-      // 오늘 요일: 고정 시간표(base)와 다른 셀에 '오늘만' 배지
-      let tdCls = '';
+      // 오늘 요일: 열 전체를 옅게 강조 + 고정 시간표(base)와 다른 셀에 '오늘만' 배지
+      let tdCls = day === todayDay ? ' class="wk-todaycol"' : '';
       if (day === badgeDay) {
         const bSt = parsePeriodStatus(baseStr, pNum);
         const dReason = (draftSchedule[day]?.reasons && draftSchedule[day].reasons[pNum]) || '';
@@ -2793,7 +2892,7 @@ function buildWeeklyTable() {
           || (status === 'partial' && (basePartials[pNum] || '') !== dTime);
         if (diff) {
           todayDiffCount++;
-          tdCls = ' class="wk-today-diff"';
+          tdCls = ' class="wk-todaycol wk-today-diff"';
           cell += `<div class="wk-today-badge">오늘만</div>`;
         }
       }
