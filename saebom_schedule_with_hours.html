@@ -9126,6 +9126,12 @@ loadStudentsFromFirebase();
 loadTodayCheckinFromFirebase();
 // 무단결석 벌점 판정 — 지난 날짜분 소급(멱등·기기간 완료표시 공유). 학생 로드가 끝난 뒤 여유를 두고 실행.
 setTimeout(() => { try { window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e)); } catch(e) {} }, 20000);
+// 오늘분은 교시가 끝나는 대로 즉시 판정 (5분마다 확인 — 실제 조회는 교시 종료+15분이 지난 때만)
+setTimeout(() => {
+  const run = () => { try { window.assessNoShowIntraday().catch(e => console.error('무단결석 즉시판정 오류:', e)); } catch(e) {} };
+  run();
+  setInterval(run, 5 * 60000);
+}, 35000);
 setTimeout(() => { try { window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e)); } catch(e) {} }, 25000);
 setTimeout(() => { try { window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e)); } catch(e) {} }, 30000);
 // 예약 퇴원(withdrawAt) 자동 처리 — 키오스크가 2시에 꺼져 있었어도 로드 시 소급 처리된다.
@@ -9541,7 +9547,8 @@ window.renderStudyroomBoard = renderStudyroomBoard;
 
 // ── 오늘 벌점 현황판 (대시보드) ──
 // 한 카드에 모으는 것: (1)오늘 날짜 벌점 — 늦은 변경 1점, 학생앱이 저장 시점에 실시간 기록,
-// (2)어제 무단결석 2점 — 오늘 새벽 assessNoShowPenalties가 확정하므로 관리자가 '오늘' 확인할 대상이다.
+// (2)무단결석 2점 — 오늘분은 교시 종료 직후 assessNoShowIntraday가 바로 올리고, 어제분은
+//    오늘 새벽 assessNoShowPenalties가 확정한 잔여분(밤새 앱이 꺼져 있었던 교시 등)이 올라온다.
 // (어제 늦은 변경은 어제 이미 이 카드에 떴으므로 다시 올리지 않는다.)
 // date 단일 필드 'in' 쿼리라 복합 색인이 필요 없다.
 let _penaltyBoardDocs = [];
@@ -10436,7 +10443,46 @@ window.assessNoShowPenalties = async function() {
   }
 };
 
-async function _assessNoShowForDate(dIso, d0, dayName) {
+// ── 당일 즉시판정 ──
+// 끝난 교시는 출결이 이미 확정이므로 새벽 최종 판정을 기다리지 않고 그 자리에서 부과한다.
+// 종료 후 유예 15분 — NFC 태그·세션 문서가 늦게 들어오는 여유. 최종 판정(D+1 02:00)은 그대로 돌며,
+// 이미 기록된 교시는 재판정에서 건너뛰므로(멱등) 중복 부과되지 않는다.
+const NOSHOW_INTRADAY_GRACE_MIN = 15;
+const _intradayNoShowDone = {}; // { 'YYYY-MM-DD': Set(교시) } — 같은 교시 재조회 방지(탭 수명 동안)
+let _intradayNoShowNextTs = 0;  // 세션 0건으로 물러났을 때의 백오프
+
+window.assessNoShowIntraday = async function() {
+  if (!(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr)) return;
+  const now = Date.now();
+  if (now < _intradayNoShowNextTs) return;
+
+  // 운영일 기준: 00:00~01:59는 아직 전날(11교시가 익일 새벽에 걸침)
+  const d = new Date(now);
+  if (d.getHours() < 2) d.setDate(d.getDate() - 1);
+  d.setHours(0, 0, 0, 0);
+  const d0 = d.getTime();
+  const dayName = ['일','월','화','수','목','금','토'][d.getDay()];
+  if (dayName === '일') return;
+  const dIso = SH.sessIsoDate(d0);
+
+  const mins = (now - d0) / 60000; // 그날 자정 기준 경과 분 (11교시는 1440~1500)
+  const done = (_intradayNoShowDone[dIso] = _intradayNoShowDone[dIso] || new Set());
+  const ready = new Set();
+  Object.keys(NOSHOW_PERIOD_TIMES).forEach(k => {
+    const pn = Number(k);
+    if (done.has(pn)) return;
+    if (mins >= NOSHOW_PERIOD_TIMES[pn][1] + NOSHOW_INTRADAY_GRACE_MIN) ready.add(pn);
+  });
+  if (!ready.size) return;
+
+  const ok = await _assessNoShowForDate(dIso, d0, dayName, ready);
+  if (ok) ready.forEach(pn => done.add(pn));
+  else _intradayNoShowNextTs = now + 30 * 60000; // 아직 세션 0건(휴관 등) — 30분 뒤 재시도
+};
+
+// onlyPeriods: Set(교시) — 주면 그 교시만 판정하고 '그날 완료' 표시는 남기지 않는다(당일 부분판정).
+// null이면 종전대로 그날 전체를 확정 판정한다. 반환값은 판정이 실제로 수행됐는지 여부.
+async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
   try {
     // 1) 그날 입실 세션 (11교시가 익일 새벽에 걸치므로 다음날 inDate도 함께 조회)
     const nextIso = SH.sessIsoDate(d0 + 24 * 3600 * 1000);
@@ -10451,9 +10497,11 @@ async function _assessNoShowForDate(dIso, d0, dayName) {
         .push([s.inTs, typeof s.outTs === 'number' ? s.outTs : Date.now()]);
     });
     if (dayCount === 0) {
+      // 당일 부분판정은 아직 아무도 안 온 이른 시간일 수 있으므로 완료표시 없이 물러난다(나중에 재시도).
+      if (onlyPeriods) return false;
       console.log(`[무단결석] ${dIso}: 입실 세션 없음(휴관/미가동 추정) — 판정 건너뜀`);
       await _markNoshowDone(dIso, { skipped: '세션 없음', at: Date.now(), by: DOOR_DEVICE_ID });
-      return;
+      return true;
     }
 
     // 2) 그날 유효 스케줄 = 고정 시간표(base)에 그날의 당일변경(daily_reports)을 덮어쓴 값
@@ -10488,6 +10536,7 @@ async function _assessNoShowForDate(dIso, d0, dayName) {
       const sessions = sessByName[name] || [];
       const missed = [];
       parsed.periods.forEach(pn => { // periods = o + △(중간입실) + ▽(중간퇴실) 모두 '출석 예정'
+        if (onlyPeriods && !onlyPeriods.has(pn)) return; // 당일 부분판정 — 끝난 교시만
         // 방학 평일 오전(1~6교시) 무단결석 판정은 2026-07-22부터 적용(사용자 확정).
         // 그 전 날짜는 오전 교시가 운영되지 않았거나 전환 과도기라 소급 판정하지 않는다.
         // ※토요일 오전은 원래부터 판정 대상이므로 제외하지 않는다.
@@ -10501,11 +10550,17 @@ async function _assessNoShowForDate(dIso, d0, dayName) {
       if (missed.length) writes.push(_writeNoShowPenalty(dIso, dayName, seatKey, bd.seat || st.seat, name, missed));
     });
     await Promise.all(writes);
+    if (onlyPeriods) {
+      console.log(`[무단결석] ${dIso}(${dayName}) ${[...onlyPeriods].join('·')}교시 즉시판정 — 벌점 대상 ${writes.length}명`);
+      return true;
+    }
     await _markNoshowDone(dIso, { at: Date.now(), by: DOOR_DEVICE_ID, students: writes.length });
     console.log(`[무단결석] ${dIso}(${dayName}) 판정 완료 — 벌점 대상 ${writes.length}명`);
+    return true;
   } catch(e) {
     // 완료표시를 남기지 않는다 → 다음 시작/리셋 때 재시도(판정은 멱등)
     console.error('무단결석 판정 실패:', dIso, e);
+    return false;
   }
 }
 
