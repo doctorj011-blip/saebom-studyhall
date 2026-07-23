@@ -1676,6 +1676,54 @@ function periodsFor(dayName) {
   return VACATION_MODE ? list.filter(p => !VACATION_HIDDEN_PERIODS.has(p.n)) : list;
 }
 
+// 지금이 몇 교시 중인지 — 교시 시작~끝 사이면 그 교시 객체, 아니면 null.
+// (쉬는 시간은 교시 중이 아니다. 방학 여부에 따라 교시 구성이 달라지므로 periodsFor를 쓴다.)
+function currentPeriodNow() {
+  const toMin = t => { const a = String(t).split(':').map(Number); return a[0]*60 + (a[1]||0); };
+  const now = new Date();
+  const mins = now.getHours()*60 + now.getMinutes();
+  // 00:00~01:00은 전날 저녁 일정의 연장(11교시) — 요일도 전날로 본다.
+  if (mins < 60) {
+    const yName = DAY_NAMES[(now.getDay()+6)%7];
+    if (yName === '일') return null;
+    return periodsFor(yName).find(p => p.n === 11) || null;
+  }
+  const dayName = DAY_NAMES[now.getDay()];
+  if (dayName === '일') return null;
+  return periodsFor(dayName).find(p => {
+    const [s, e] = p.t.split('~');
+    const st = toMin(s), en = toMin(e);
+    return en > st && mins >= st && mins < en;
+  }) || null;
+}
+
+// ── 교시 중 접속 잔소리 ──
+// 교시가 진행 중일 때 앱을 열면 사진과 함께 한마디 띄운다. 막지는 않는다 — 닫으면 그대로 사용.
+// 같은 교시에는 한 번만(방학 설정이 늦게 도착해 다시 호출돼도 중복으로 뜨지 않도록 키로 막는다).
+let _studyNagKey = '';
+function maybeShowStudyNag() {
+  const p = currentPeriodNow();
+  if (!p) return;
+  const key = new Date().toDateString() + '#' + p.n;
+  if (_studyNagKey === key) return;
+  _studyNagKey = key;
+  document.getElementById('study-nag-modal')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'study-nag-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML = `<div style="background:var(--card);border-radius:var(--r-lg);overflow:hidden;width:100%;max-width:330px;box-shadow:var(--shadow-lg);text-align:center">
+    <img src="study-nag.jpg" alt="" style="width:100%;display:block">
+    <div style="padding:18px 20px 20px">
+      <div style="font-size:19px;font-weight:800;color:var(--text);line-height:1.45">공부할 땐 좀 하자~</div>
+      <div style="font-size:12.5px;color:var(--text2);margin-top:8px">지금 <b>${p.label}</b> (${p.t}) 진행 중이에요.</div>
+      <button onclick="document.getElementById('study-nag-modal')?.remove()"
+        style="width:100%;margin-top:16px;padding:12px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:14px;font-weight:700;cursor:pointer">네, 공부할게요</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+}
+
 // ── 상태 ──
 let currentStudent = null;
 let currentDayTab = '월';
@@ -2453,6 +2501,9 @@ function enterApp() {
   buildWeeklyTable();
   buildMyStats();
 
+  // 교시 중이면 잔소리 한 번 (방학 설정이 늦게 오면 subscribeVacationMode에서 다시 확인한다)
+  try { maybeShowStudyNag(); } catch(e) {}
+
   // Firebase에서 기존 스케줄 & 공지 로드
   if (window._firebaseReady) {
     loadStudentScheduleFromFirebase();
@@ -2523,6 +2574,8 @@ function subscribeVacationMode() {
       try {
         buildWeeklyTable();
         buildDailyPeriods();
+        // 방학이면 오전에도 교시가 있다 — 설정이 늦게 도착했으니 여기서 한 번 더 확인
+        maybeShowStudyNag();
       } catch(e) { console.error('방학 시간표 반영 실패:', e); }
     });
   } catch(e) {}
