@@ -1743,7 +1743,14 @@ const STUDY_NAG_BY_GENDER = {
 };
 let _studyNagKey = '';
 let _studyNagGender = '';   // 지금 떠 있는 팝업이 어느 성별로 그려졌는지(뒤늦게 성별을 알면 다시 그린다)
+// settings/vacation_mode 를 아직 못 읽었으면 교시 구성이 확정 전이다.
+// ★방학에는 11교시(00:00~01:00)가 없는데 기본값(VACATION_MODE=false)에는 있으므로,
+//   설정이 도착하기 전에 판단하면 방학 중 자정 무렵에 '없는 11교시'로 잔소리가 뜬다.
+//   그래서 설정이 올 때까지 미룬다(구독이 실패해도 몇 초 뒤 기본값으로 진행 — 아래 타이머).
+let _vacationLoaded = false;
+setTimeout(() => { if (!_vacationLoaded) { _vacationLoaded = true; try { maybeShowStudyNag(); } catch(e) {} } }, 6000);
 function maybeShowStudyNag() {
+  if (!_vacationLoaded) return;
   const p = currentPeriodNow();
   if (!p) return;
   const key = new Date().toDateString() + '#' + p.n;
@@ -2634,11 +2641,19 @@ function subscribeVacationMode() {
     const ref = window._fsDoc(db, 'settings', 'vacation_mode');
     window._fsOnSnapshot(ref, snap => {
       const next = snap.exists() ? !!snap.data().enabled : false;
-      if (next === VACATION_MODE) return;
+      const first = !_vacationLoaded;
+      _vacationLoaded = true;          // 이제 교시 구성이 확정됐다
+      if (next === VACATION_MODE && !first) return;
       VACATION_MODE = next;
       try {
         buildWeeklyTable();
         buildDailyPeriods();
+        // 교시 구성이 바뀌었으니 이미 떠 있는 잔소리도 다시 판단한다.
+        // 지금이 교시 중이 아니면(방학의 11교시처럼 사라진 교시면) 닫는다.
+        if (!currentPeriodNow()) {
+          document.getElementById('study-nag-modal')?.remove();
+          _studyNagKey = '';
+        }
         // 방학이면 오전에도 교시가 있다 — 설정이 늦게 도착했으니 여기서 한 번 더 확인
         maybeShowStudyNag();
       } catch(e) { console.error('방학 시간표 반영 실패:', e); }
