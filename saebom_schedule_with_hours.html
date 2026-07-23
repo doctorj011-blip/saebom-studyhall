@@ -1807,7 +1807,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <!-- 방학 시간표 -->
       <div style="background:#FFF7ED;border:1.5px solid #F5A524;border-radius:10px;padding:12px 14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:#7C2D12;margin-bottom:6px">🌞 방학 시간표</div>
-        <div style="font-size:11px;color:#9A3412;margin-bottom:10px">켜면 평일도 토요일과 같이 <b>1~11교시</b>로 운영합니다(오전 1교시 9:00~). 끄면 평일은 7~11교시(저녁)만 표시됩니다. 관리자앱·학생앱·학부모앱에 함께 적용됩니다.</div>
+        <div style="font-size:11px;color:#9A3412;margin-bottom:10px">켜면 평일도 오전 1교시(9:00~)부터 <b>1~10교시</b>로 운영합니다(11교시 00:00~01:00은 방학엔 제외). 끄면 평일은 7~11교시(저녁)만 표시됩니다. 관리자앱·학생앱·학부모앱에 함께 적용됩니다.</div>
         <div style="display:flex;align-items:center;gap:10px">
           <button id="vacation-mode-toggle-btn" onclick="toggleVacationMode()"
             style="padding:8px 18px;background:#bdc1c6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
@@ -3067,7 +3067,7 @@ function updateVacationModeBtn(enabled) {
     return;
   }
   if (enabled) {
-    btn.textContent = '🌞 방학 시간표 (1~11교시)';
+    btn.textContent = '🌞 방학 시간표 (1~10교시)';
     btn.style.background = '#F5A524';
     if (status) { status.textContent = '평일도 오전 1교시부터 운영합니다'; status.style.color = '#9A3412'; }
   } else {
@@ -3104,14 +3104,14 @@ window.toggleVacationMode = async function() {
       return;
     }
     const next = btn.dataset.enabled !== '1';
-    if (next && !confirm('방학 시간표로 전환할까요?\n\n평일도 1~11교시로 운영됩니다.\n(기존에 입력된 저녁 7~11교시 일정은 그대로 유지되고, 오전 1~6교시 칸이 새로 열립니다)')) return;
+    if (next && !confirm('방학 시간표로 전환할까요?\n\n평일도 1~10교시로 운영됩니다. (11교시 00:00~01:00은 방학엔 운영하지 않습니다)\n기존에 입력된 저녁 7~10교시 일정은 그대로 유지되고, 오전 1~6교시 칸이 새로 열립니다.')) return;
     if (!next && !confirm('학기 시간표로 되돌릴까요?\n\n평일 오전 1~6교시 칸이 화면에서 사라집니다.\n(저장된 값 자체는 지워지지 않지만, 이후 학생·관리자가 그 요일을 저장하면 오전 일정은 사라집니다)')) return;
     await window._fsSetDoc(window._fsDoc(db, 'settings', 'vacation_mode'), {
       enabled: next,
       updatedAt: window._fsServerTimestamp()
     });
     applyVacationMode(next);
-    showAdminToast(next ? '🌞 방학 시간표로 전환됨 (평일 1~11교시)' : '📚 학기 시간표로 전환됨 (평일 7~11교시)');
+    showAdminToast(next ? '🌞 방학 시간표로 전환됨 (평일 1~10교시)' : '📚 학기 시간표로 전환됨 (평일 7~11교시)');
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 
