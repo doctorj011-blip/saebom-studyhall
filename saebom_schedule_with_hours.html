@@ -11520,6 +11520,49 @@ window.renderUsageLog = function() {
 // 관리자 기기 토큰을 그대로 실어 보내고, 함수가 settings/admin_auth.hash 와 대조한다.
 const NETLOG_ENDPOINT = 'https://us-central1-saebom-studyhall.cloudfunctions.net/gatewayLogs';
 let _netLogData = [];
+let _netHourData = [];
+
+// 서비스의 시간대별 실사용을 KST 0~23시로 집계.
+// Cloudflare가 주는 hour 는 UTC라 +9 해야 한다. 차단된 질의는 콘텐츠 0바이트라 뺀다.
+function netHourly(svc) {
+  const buckets = new Array(24).fill(0);
+  let any = false;
+  (_netHourData || []).forEach(r => {
+    if (!r.hour || r.blocked) return;
+    if (!svc.re || !svc.re.test(r.domain)) return;
+    if (svc.content && !svc.content.test(r.domain)) return;   // 실사용 도메인만
+    const t = new Date(r.hour);
+    if (isNaN(t)) return;
+    const h = (t.getUTCHours() + 9) % 24;                     // → KST
+    buckets[h] += r.count; any = true;
+  });
+  return any ? buckets : null;
+}
+
+// 24시간 막대그래프. 면학관 운영시간(8~22시)을 옅게 칠해 자습 중 사용이 눈에 띄게 한다.
+function netHourlyChart(buckets, color) {
+  const max = Math.max.apply(null, buckets) || 1;
+  const bars = buckets.map((n, h) => {
+    const pct = n ? Math.max(6, Math.round(n / max * 100)) : 0;
+    const open = (h >= 8 && h <= 22);
+    return '<div title="' + h + '시 — ' + n.toLocaleString() + '건" style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;'
+      + (open ? 'background:rgba(108,93,211,.07);' : '') + '">'
+      + (n ? '<div style="height:' + pct + '%;background:' + color + ';border-radius:2px 2px 0 0"></div>' : '')
+      + '</div>';
+  }).join('');
+  const labels = buckets.map((n, h) => '<div style="flex:1;text-align:center;font-size:8px;color:var(--color-text-tertiary)">'
+    + (h % 3 === 0 ? h : '') + '</div>').join('');
+  // 동점이면 나중 시각을 고른다(indexOf 는 앞쪽을 집어서, 아직 진행 중인 이른 시각이
+  // 지나간 진짜 피크를 가리는 일이 생긴다 — 실제로 10시와 20시가 251로 동점이었다).
+  let peak = 0;
+  buckets.forEach((n, h) => { if (n >= max) peak = h; });
+  return '<div style="margin:8px 0 4px">'
+    + '<div style="display:flex;gap:1px;height:54px;align-items:stretch">' + bars + '</div>'
+    + '<div style="display:flex;gap:1px;margin-top:2px">' + labels + '</div>'
+    + '<div style="font-size:10px;color:var(--color-text-tertiary);margin-top:3px">'
+    + '시간대별 실사용(KST) · 최다 <b style="color:' + color + '">' + peak + '시 ' + max.toLocaleString() + '건</b>'
+    + ' <span style="opacity:.7">· 옅은 배경 = 운영시간 8~22시</span></div></div>';
+}
 
 // 도메인 분류 — 순서가 곧 우선순위다(위에서 먼저 걸리면 그걸로 확정).
 // 시스템·배경(애플/구글 동기화, CDN, 광고·분석)이 전체의 60% 안팎을 차지해서
@@ -11591,11 +11634,14 @@ window.loadNetLog = async function(silent) {
     const r = await fetch(NETLOG_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, minutes })
+      // 시간대 그래프용 도메인×시각(5천행)은 응답이 크다 — 30초마다 도는 실시간 모드에선 빼고,
+      // 1시간 이상 창을 볼 때만 함께 받는다.
+      body: JSON.stringify({ token, minutes, hourly: minutes >= 60 })
     });
     const j = await r.json();
     if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
     _netLogData = j.domains || [];
+    _netHourData = j.domainHour || [];   // 실시간 모드에선 비어 있음(요청 안 함)
     document.getElementById('netlog-total').textContent = (j.total || 0).toLocaleString();
     const atEl = document.getElementById('netlog-live-at');
     if (atEl) atEl.textContent = new Date().toLocaleTimeString('ko-KR', { hour12:false });
@@ -11642,7 +11688,7 @@ window.renderNetLog = function() {
     grand += d.total;
     catTotal[c.cat] = (catTotal[c.cat] || 0) + d.total;
     catReal[c.cat] = (catReal[c.cat] || 0) + real;
-    const cur = svc.get(c.name) || { name:c.name, cat:c.cat, total:0, blocked:0, real:0, domains:[] };
+    const cur = svc.get(c.name) || { name:c.name, cat:c.cat, svc:c, total:0, blocked:0, real:0, domains:[] };
     cur.total += d.total; cur.blocked += d.blocked; cur.real += real;
     cur.domains.push(Object.assign({ _real: real > 0 }, d));
     svc.set(c.name, cur);
@@ -11683,9 +11729,15 @@ window.renderNetLog = function() {
     const realTag = r.real > 0
       ? '<span style="padding:1px 7px;border-radius:9px;background:#FFF3E0;color:#E65100;font-weight:700;font-size:10px;margin-left:5px">실사용 ' + r.real.toLocaleString() + '</span>'
       : '<span style="padding:1px 7px;border-radius:9px;background:#ECEFF1;color:#78909C;font-weight:700;font-size:10px;margin-left:5px">실사용 없음</span>';
-    const sub = r.domains.sort((a,b)=>b.total-a.total).slice(0,8)
+    const domList = r.domains.sort((a,b)=>b.total-a.total).slice(0,8)
       .map(d => '<div style="font-size:10.5px;color:' + (d._real ? '#E65100' : 'var(--color-text-tertiary)') + ';padding:1px 0">'
         + (d._real ? '● ' : '○ ') + d.domain + ' — ' + d.total.toLocaleString() + (d.blocked ? ' (차단 ' + d.blocked.toLocaleString() + ')' : '') + '</div>').join('');
+    // 펼치면 시간대 그래프부터 보여준다 — '언제 많이 썼나'가 도메인 목록보다 궁금한 정보다
+    const buckets = r.svc ? netHourly(r.svc) : null;
+    const chart = buckets ? netHourlyChart(buckets, '#E65100')
+      : (_netHourData && _netHourData.length ? ''
+         : '<div style="font-size:10px;color:var(--color-text-tertiary);margin:6px 0">실시간 모드에선 시간대 그래프를 받지 않습니다. 1시간 이상 기간을 고르세요.</div>');
+    const sub = chart + domList;
     return '<div style="padding:8px 14px;border-bottom:1px solid #F1EFFB;cursor:pointer' + (r.real ? '' : ';opacity:.62') + '" onclick="var s=this.querySelector(\'.nl-sub\');s.style.display=s.style.display===\'none\'?\'block\':\'none\'">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:4px">'
       + '<div style="font-size:12.5px;color:#1E1B4B;font-weight:600">' + r.name

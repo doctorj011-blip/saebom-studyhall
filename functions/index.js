@@ -930,7 +930,7 @@ function isKnownDecision(d) {
 }
 
 // Cloudflare Gateway DNS 집계를 가져온다. HTTP 조회와 야간 스냅샷이 함께 쓴다.
-async function fetchGatewayDns(minutes, debug) {
+async function fetchGatewayDns(minutes, debug, hourly) {
   const start = new Date(Date.now() - minutes * 60 * 1000).toISOString();
   // 도메인별 집계와 시간대별 집계를 한 요청에 담는다(별칭 2개).
   const query = `
@@ -953,6 +953,14 @@ async function fetchGatewayDns(minutes, debug) {
             count
             dimensions { datetimeHour }
           }
+          ${hourly ? `byDomainHour: gatewayResolverQueriesAdaptiveGroups(
+            filter: { datetime_gt: $start }
+            limit: 5000
+            orderBy: [count_DESC]
+          ) {
+            count
+            dimensions { queryNameReversed datetimeHour resolverDecision }
+          }` : ''}
         }
       }
     }`;
@@ -998,7 +1006,7 @@ async function fetchGatewayDns(minutes, debug) {
     decisions[k] = (decisions[k] || 0) + row.count;
     if (!isKnownDecision(d)) unknownDecisions[k] = (unknownDecisions[k] || 0) + row.count;
   });
-  const hourly = (acct.byHour || []).map(row => ({
+  const hourlyTotals = (acct.byHour || []).map(row => ({
     hour: row.dimensions && row.dimensions.datetimeHour,
     count: row.count
   }));
@@ -1010,13 +1018,23 @@ async function fetchGatewayDns(minutes, debug) {
     count: row.count
   }));
 
+  // 도메인×시각 — 서비스별 시간대 분포용. 분류는 클라이언트가 하므로 원본을 그대로 넘긴다.
+  // hour 는 UTC라 화면에서 KST(+9)로 바꿔야 한다. 응답이 커지므로 hourly:true 일 때만 실린다.
+  const domainHour = !hourly ? undefined : (acct.byDomainHour || []).map(row => ({
+    domain: unreverseDomain(row.dimensions && row.dimensions.queryNameReversed),
+    hour: row.dimensions && row.dimensions.datetimeHour,
+    blocked: isBlockedDecision(row.dimensions && row.dimensions.resolverDecision),
+    count: row.count
+  }));
+
   return {
     minutes,
     domains,
+    domainHour,
     decisions,
     unknownDecisions,
     rawRows,
-    hourly,
+    hourly: hourlyTotals,
     total: domains.reduce((s, d) => s + d.total, 0),
     blocked: domains.reduce((s, d) => s + d.blocked, 0)
   };
@@ -1043,7 +1061,7 @@ exports.gatewayLogs = onRequest(
       let minutes = parseInt(b.minutes, 10);
       if (!minutes || isNaN(minutes)) minutes = (parseInt(b.hours, 10) || 24) * 60;
       minutes = Math.min(Math.max(minutes, 1), 43200);   // 1분 ~ 30일
-      const out = await fetchGatewayDns(minutes, !!b.debug);
+      const out = await fetchGatewayDns(minutes, !!b.debug, !!b.hourly);
       res.json({ ok: true, ...out });
     } catch (e) {
       logger.error('[Gateway] 조회 실패', e);
