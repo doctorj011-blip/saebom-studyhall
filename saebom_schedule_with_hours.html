@@ -1467,8 +1467,12 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <div style="border:1.5px solid #C7D2FE;background:#F5F7FF;border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <div style="font-size:12px;font-weight:700;color:#1E1B4B">📋 플래너 검사</div>
-            <button id="apc-ai-btn" onclick="window.apcAiRun()"
-              style="background:#6C5DD3;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">검사하기</button>
+            <div style="display:flex;gap:6px">
+              <button onclick="window.apcGiveMerit()" title="이 플래너에 재량 상점 부여"
+                style="background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:700;cursor:pointer">🎁 상점</button>
+              <button id="apc-ai-btn" onclick="window.apcAiRun()"
+                style="background:#6C5DD3;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">검사하기</button>
+            </div>
           </div>
           <div id="apc-ai-result" style="display:none"></div>
         </div>
@@ -7673,6 +7677,7 @@ setInterval(() => {
     if (window.assessWeeklyGoals) window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e));
     // 끝난 주기(1주기 7/20~8/31, 이후 월간) 개근·순공 상점 판정 — 주기 종료 다음날부터
     if (window.assessCycleMerits) window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e));
+    if (window.assessPlannerExcellence) window.assessPlannerExcellence().catch(e => console.error('플래너 우수 판정 오류:', e));
     // (예약 퇴원은 이 블록 위에서 날짜 변경 즉시 처리한다 — 2시를 기다리지 않는다)
     showAdminToast('🌅 날짜가 바뀌었습니다. 입퇴실 기록을 초기화합니다.');
   }
@@ -9520,6 +9525,7 @@ setTimeout(() => {
 }, 35000);
 setTimeout(() => { try { window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e)); } catch(e) {} }, 25000);
 setTimeout(() => { try { window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e)); } catch(e) {} }, 30000);
+setTimeout(() => { try { window.assessPlannerExcellence().catch(e => console.error('플래너 우수 판정 오류:', e)); } catch(e) {} }, 35000);
 // 예약 퇴원(withdrawAt) 자동 처리 — 키오스크가 2시에 꺼져 있었어도 로드 시 소급 처리된다.
 setTimeout(() => { try { window.autoWithdrawExpired().catch(e => console.error('예약 자동퇴원 오류:', e)); } catch(e) {} }, 25000);
 // 인수인계 미확인 배지 — 조교가 탭을 열지 않아도 앞 조 메모가 남아 있음을 알아채게 한다.
@@ -11158,6 +11164,12 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
 const WEEKLY_START_ISO = '2026-07-20'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
 const WEEKLY_END_ISO = '2026-08-31';   // 1주기 종료 — 이 날짜 이후로 끝나는 주는 판정 안 함(다음 주기 정해지면 연장)
 const WEEKLY_MERIT_POINTS = 2;
+// 플래너 성실 상점(주간) — 그 주 출석한 날 대비 플래너 제출 비율이 기준 이상이면 부여.
+//   출석 안 한 날은 분모에서 뺀다(결석날 제출을 강제하지 않음 — 미제출 벌점 폐지와 일관).
+//   적게 온 주(출석<3일)는 표본이 작아 판정 제외.
+const PLANNER_WEEKLY_POINTS = 2;
+const PLANNER_SUBMIT_RATE = 0.8;
+const PLANNER_MIN_ATTEND = 3;
 const _WEEKLY_DN = ['일','월','화','수','목','금','토'];
 function _periodDurMin(pn){ const w = NOSHOW_PERIOD_TIMES[pn]; return w ? (w[1] - w[0]) : 0; }
 function _mondayOf(dateLike){ const x = new Date(dateLike); x.setHours(0,0,0,0); x.setDate(x.getDate() - ((x.getDay()+6)%7)); return x; } // 월=주 시작
@@ -11200,10 +11212,10 @@ async function _assessWeekGoals(monDate, weekIso){
     // 1) 순공 집계 (inDate 'in' 30개 청크)
     const chunks = []; for (let i = 0; i < queryIsos.length; i += 30) chunks.push(queryIsos.slice(i, i+30));
     const snaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, SESS_COL), where('inDate', 'in', c)))));
-    let sessCount = 0; const minByName = {};
+    let sessCount = 0; const minByName = {}; const attendDaysByName = {};
     snaps.forEach(snap => snap.forEach(x => {
       const s = x.data(); if (!s.studentName || typeof s.inTs !== 'number') return;
-      if (dayIsos.includes(s.inDate)) sessCount++;
+      if (dayIsos.includes(s.inDate)) { sessCount++; (attendDaysByName[s.studentName] = attendDaysByName[s.studentName] || new Set()).add(s.inDate); }
       let m = 0;
       if (s.status === 'closed' && typeof s.durationMin === 'number') m = s.durationMin;
       else if (s.status === 'open') { let away = s.awayMs || 0; if (s.awayStartTs) away += Math.max(0, Math.min(Date.now(), sessCapTs(s.inTs)) - s.awayStartTs); m = sessDurationMin(s.inTs, Date.now(), away); }
@@ -11224,16 +11236,35 @@ async function _assessWeekGoals(monDate, weekIso){
       (rptMap[seatKey] = rptMap[seatKey] || {})[date] = r.schedule;
     }));
 
+    // 플래너 제출일 집계(성실 상점용) — planners.seat(학생앱 _plSeatKey 규칙) → 그 주 제출 날짜 Set
+    const plSnaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, 'planners'), where('date', 'in', c)))));
+    const subByKey = {};
+    plSnaps.forEach(snap => snap.forEach(x => {
+      const v = x.data(); if (!v || !v.seat || !v.date || !dayIsos.includes(v.date)) return;
+      (subByKey[v.seat] = subByKey[v.seat] || new Set()).add(v.date);
+    }));
+
     // 3) 학생별 판정
-    const writes = [];
+    const writes = [], plWrites = [];
     baseSnap.forEach(bdoc => {
       const seatKey = bdoc.id;
       if ((parseInt(seatKey) || 0) >= 54) return; // 관리자석
       const st = (window.STUDENTS || []).find(s => (s.seat || '').replace(/[^0-9]/g, '') === seatKey);
       if (!st) return;
-      const goalH = Number(st.weeklyGoalH) || 0;
-      if (goalH <= 0) return; // 목표 미설정 → 판정 제외
       if (window.isTestStudent && window.isTestStudent(st.name)) return;
+
+      // 플래너 성실 상점(목표 순공과 독립 — 목표 미설정 학생도 대상)
+      // planners.seat 은 순수 숫자로 저장돼 있다(실측: "11"). 좌석 숫자로 매칭한다.
+      const attDates = attendDaysByName[st.name] || new Set();
+      if (attDates.size >= PLANNER_MIN_ATTEND) {
+        const plKey = String(st.seat).replace(/[^0-9]/g, '');
+        const subDates = subByKey[plKey] || new Set();
+        const onAttend = [...attDates].filter(dd => subDates.has(dd)).length;
+        if (onAttend / attDates.size >= PLANNER_SUBMIT_RATE) plWrites.push(_writePlannerWeeklyMerit(st, seatKey, weekIso, satIso, onAttend, attDates.size));
+      }
+
+      const goalH = Number(st.weeklyGoalH) || 0;
+      if (goalH <= 0) return; // 목표 미설정 → 순공 판정 제외
       const bd = bdoc.data();
       // 차감: base 출석예정이었으나 effective(daily_reports)에서 빠진 교시의 예정분
       let deductMin = 0;
@@ -11251,9 +11282,9 @@ async function _assessWeekGoals(monDate, weekIso){
       const actualMin = minByName[st.name] || 0;
       if (actualMin >= adjGoalMin) writes.push(_writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin)); // 달성만 보상, 미달 벌점 없음
     });
-    await Promise.all(writes);
-    await _markWeeklyDone(weekIso, { at: Date.now(), students: writes.length });
-    console.log(`[주간목표] ${weekIso} 판정 완료 — ${writes.length}명`);
+    await Promise.all([...writes, ...plWrites]);
+    await _markWeeklyDone(weekIso, { at: Date.now(), students: writes.length, planner: plWrites.length });
+    console.log(`[주간목표] ${weekIso} 판정 완료 — 목표 ${writes.length}명 · 플래너성실 ${plWrites.length}명`);
   } catch(e){ console.error('주간 목표 판정 실패:', weekIso, e); } // 완료표시 안 남김 → 다음 시작 때 재시도(멱등)
 }
 
@@ -11265,6 +11296,18 @@ async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actua
     name: st.name, seatKey, date: satIso, day: _WEEKLY_DN[new Date(satIso + 'T00:00:00').getDay()],
     points: WEEKLY_MERIT_POINTS, type: 'auto',
     reason: `주간 목표순공 달성 (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
+    canceled: !!prev.canceled, createdAt: new Date().toISOString()
+  });
+}
+
+// 플래너 성실 상점 → merits/auto_plwk_{weekIso}_{seatKey} (멱등). 취소상태 보존.
+async function _writePlannerWeeklyMerit(st, seatKey, weekIso, satIso, sub, att){
+  const ref = doc(db, 'merits', `auto_plwk_${weekIso}_${seatKey}`);
+  let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
+  await setDoc(ref, {
+    name: st.name, seatKey, date: satIso, day: _WEEKLY_DN[new Date(satIso + 'T00:00:00').getDay()],
+    points: PLANNER_WEEKLY_POINTS, type: 'auto',
+    reason: `플래너 성실 (${sub}/${att}일 제출)`,
     canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
@@ -11376,6 +11419,47 @@ async function _cycleScheduleLoad(cyc){
   });
   return out;
 }
+
+// ── 플래너 우수 상점 자동판정 — 주기 내 검사 quality '우수' 누적 N회마다 +⌊N/5⌋점 ──
+// 날짜당 1회 집계: planner_ai_reviews 문서ID가 {seat}_{date}라 한 날짜엔 문서 1건뿐 →
+//   quality가 재검사로 흔들려도 그 날은 한 번만 세어지고, 재검사 파밍이 불가능하다.
+// merits/auto_plexc_{cycleId}_{seatNum} 고정ID로 멱등 갱신, 취소상태 보존.
+const PLANNER_EXCELLENCE_PER = 5;
+window.assessPlannerExcellence = async function(){
+  try {
+    const db = await window.waitDb(); if (!db) return;
+    const { collection, doc, getDoc, getDocs, setDoc } = window._fs;
+    const snap = await getDocs(collection(db, 'planner_ai_reviews'));
+    const cntBySeat = {};
+    snap.forEach(x => {
+      const v = x.data();
+      if (!v || v.status !== 'done' || v.quality !== '우수' || !v.date) return;
+      if (v.date < CYCLE1.start || v.date > CYCLE1.end) return; // 주기 내만
+      const seatNum = String(v.seat || '').replace(/[^0-9]/g, '');
+      if (!seatNum) return;
+      cntBySeat[seatNum] = (cntBySeat[seatNum] || 0) + 1;
+    });
+    const todayIso = SH.sessIsoDate(Date.now());
+    for (const [seatNum, cnt] of Object.entries(cntBySeat)) {
+      const pts = Math.floor(cnt / PLANNER_EXCELLENCE_PER);
+      if (pts <= 0) continue; // 아직 5회 미만
+      const st = (window.STUDENTS || []).find(s => (s.seat || '').replace(/[^0-9]/g, '') === seatNum);
+      const name = st ? st.name : (seatNum + '번');
+      if (st && window.isTestStudent && window.isTestStudent(name)) continue;
+      const ref = doc(db, 'merits', `auto_plexc_${CYCLE1.id}_${seatNum}`);
+      let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
+      if (prev.type === 'auto' && prev.points === pts) continue; // 변화 없으면 재기록 생략
+      const dISO = prev.date || todayIso;
+      await setDoc(ref, {
+        name, seatKey: seatNum, date: dISO,
+        day: _WEEKLY_DN[new Date(dISO + 'T00:00:00').getDay()],
+        points: pts, type: 'auto', reason: `플래너 우수 ${cnt}회`,
+        canceled: !!prev.canceled, createdAt: new Date().toISOString()
+      });
+    }
+    console.log('[플래너우수] 판정 완료 —', Object.keys(cntBySeat).length, '명 집계');
+  } catch(e){ console.error('플래너 우수 판정 실패:', e); }
+};
 
 window.assessCycleMerits = async function(){
   for (let i = 0; i < 100 && !(window.STUDENTS && window.STUDENTS.length && window.parseScheduleStr); i++) await new Promise(r => setTimeout(r, 300));
@@ -14055,6 +14139,32 @@ window.apcCloseModal = function() {
   const modal = document.getElementById('apc-modal');
   if (modal) modal.style.display = 'none';
   if (_apcAiUnsub) { _apcAiUnsub(); _apcAiUnsub = null; }
+};
+
+// 재량 상점 — 검사 모달에서 원장이 이 플래너에 직접 상점을 얹는다(자동 판정과 별개).
+// 자동 상점(주간 성실·우수)이 놓치는 '이건 정말 잘 썼다'를 사람이 포착하는 수단.
+// merits 자동ID 저장, 날짜는 보고 있는 학습일(_apcDate)에 귀속. type 없이(수기), reason에 플래너 태그.
+window.apcGiveMerit = async function() {
+  const s = _apcStudents().find(x => _apcSeatKey(x.seat) === _apcSeat);
+  if (!s) { alert('학생 정보를 찾을 수 없습니다'); return; }
+  const seatNum = String(s.seat).replace(/[^0-9]/g, '');
+  const raw = prompt(`${s.name} 학생에게 줄 상점 점수 (1~3)`, '1');
+  if (raw == null) return;
+  const pts = Math.max(1, Math.min(3, Math.round(Number(raw) || 0)));
+  if (!pts) { alert('점수를 1 이상 입력하세요'); return; }
+  const reason = (prompt('사유', '플래너 성실 작성') || '').trim();
+  try {
+    const db = await window.waitDb();
+    if (!db) { alert('DB 준비 안 됨'); return; }
+    const { collection, doc, setDoc, serverTimestamp } = window._fs;
+    const [y, m, d] = _apcDate.split('-').map(Number);
+    const dayName = ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()];
+    const ref = doc(collection(db, 'merits'));
+    await setDoc(ref, { name: s.name, seatKey: seatNum, date: _apcDate, day: dayName, points: pts, reason: reason ? `플래너 · ${reason}` : '플래너 상점', canceled: false, createdAt: serverTimestamp(), createdBy: 'admin' });
+    _meritDocsTs = 0;
+    try { applyMeritBadges(); } catch(e){}
+    showAdminToast(`🎁 ${s.name} +${pts}점 부여했습니다`);
+  } catch(e) { console.error('플래너 상점 부여 실패:', e); alert('부여 실패: ' + (e.message || e)); }
 };
 
 // 코멘트 로드
