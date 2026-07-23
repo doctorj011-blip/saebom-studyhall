@@ -1095,6 +1095,11 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div class="sr-fs-hint">화면을 누르면 닫힙니다</div>
   </div>
 
+  <!-- 스탠드 책상 이동 승인 (조교석) — 어느 탭을 보고 있든 위에 뜬다. 배경 클릭으로 닫히지 않음(승인/거절 버튼으로만) -->
+  <div id="sd-approve" style="position:fixed;inset:0;z-index:100000;display:none;background:rgba(20,16,50,0.72);align-items:center;justify-content:center;padding:20px">
+    <div id="sd-approve-card" style="background:#fff;border-radius:20px;width:min(94vw,420px);box-shadow:0 20px 70px rgba(0,0,0,0.35);overflow:hidden"></div>
+  </div>
+
   <!-- 오늘 입실 현황 -->
   <div class="checkin-today-wrap">
     <div class="checkin-today-title"><i class="ti ti-users" style="font-size:14px"></i> 오늘 입실 현황 <span class="checkin-today-count" id="checkin-today-count">0명</span></div>
@@ -1686,6 +1691,23 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
           이 기기 등록 해제(로그아웃)
         </button>
       </div>
+    </div>
+
+    <!-- 스탠드 책상 이동 승인 (조교석) -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        🚶 스탠드 책상 이동 승인 (조교석)
+      </div>
+      <div style="font-size:12px;color:#4A3FA8;margin-bottom:12px;line-height:1.6">
+        이 기기를 <b>조교석</b>으로 지정하면, 학생이 교시 중 스탠드 책상 이동을 요청할 때
+        <b>어느 화면을 보고 있든</b> 승인 창이 자동으로 떠오릅니다.<br>
+        ⚠️ <b>현관 키오스크에는 켜지 마세요</b> — 조교가 실제로 보는 기기에서만 켭니다. (설정은 기기마다 따로 저장됩니다)
+      </div>
+      <label style="display:inline-flex;align-items:center;gap:10px;cursor:pointer;padding:8px 4px">
+        <input type="checkbox" id="ta-station-toggle" onchange="toggleTaStation(this.checked)"
+          style="width:20px;height:20px;accent-color:#6C5DD3;cursor:pointer">
+        <span id="ta-station-label" style="font-size:13px;font-weight:700;color:#4A3FA8">이 기기를 조교석으로 사용</span>
+      </label>
     </div>
 
     <!-- 데이터 관리 -->
@@ -9745,6 +9767,156 @@ onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   if (changed) renderStudyroomAlerts();
   renderStudyroomBoard();
 });
+
+// ══════════════════════════════════════════════════════════════
+// 🚶 스탠드 책상 이동 승인 (조교석)
+// 이 기기가 '조교석'(설정 토글 ON)일 때만, 학생의 교시 중 이동 요청을 전체화면 창으로 띄운다.
+// 키오스크(토글 OFF)에는 뜨지 않는다. 승인/거절은 문서 status로 학생앱에 즉시 전달된다.
+// '해당 교시까지 유효' — 다른 교시로 넘어간 미결 요청과 어제 문서는 자동으로 지운다(만료).
+// 여러 기기가 함께 정리해도 무해하다(삭제는 멱등).
+// standdesk_requests/{id}: {name, seat, period, periodLabel, date, status, createdAt}
+// ══════════════════════════════════════════════════════════════
+const STANDDESK_COL = 'standdesk_requests';
+const _standDeskReqs = {};      // id -> data (알고 있는 요청들)
+let _standDeskCurId = null;     // 지금 승인창에 떠 있는 요청 id
+
+window.isTaStation = function() {
+  try { return localStorage.getItem('saebom_ta_station') === '1'; } catch(e) { return false; }
+};
+window.toggleTaStation = function(on) {
+  try { localStorage.setItem('saebom_ta_station', on ? '1' : '0'); } catch(e) {}
+  _refreshTaStationUI();
+  if (window.isTaStation()) _standDeskPump(); else _hideStandDeskApprove();
+};
+function _refreshTaStationUI() {
+  const cb = document.getElementById('ta-station-toggle');
+  const lb = document.getElementById('ta-station-label');
+  const on = window.isTaStation();
+  if (cb) cb.checked = on;
+  if (lb) lb.innerHTML = on
+    ? '✅ 이 기기가 <b>조교석</b>입니다 — 승인 창이 켜져 있어요'
+    : '이 기기를 조교석으로 사용';
+}
+
+function _sdToday() { return window.studyroomDayKey ? window.studyroomDayKey() : null; }
+function _sdCurPeriod() { try { return (typeof window.getCurrentPeriod === 'function') ? window.getCurrentPeriod() : null; } catch(e) { return null; } }
+function _sdTs(r) { const c = r && r.createdAt; if (!c) return 0; if (typeof c.toMillis === 'function') return c.toMillis(); if (c.seconds) return c.seconds * 1000; return 0; }
+
+// 만료/지난 요청 정리 — 오늘이 아닌 문서, 또는 다른 교시로 넘어간 미결 요청을 삭제한다.
+// (쉬는 시간(curP=null)에는 방금 교시의 미결 요청을 지우지 않는다 — 조교가 아직 결정 중일 수 있어서)
+function _standDeskSweep() {
+  const today = _sdToday();
+  const curP = _sdCurPeriod();
+  Object.values(_standDeskReqs).forEach(r => {
+    const oldDay = today && r.date !== today;
+    // 다른 교시로 넘어갔으면 미결(대기)이든 결정됨이든 정리 대상. 쉬는 시간(curP=null)엔 유지.
+    const periodOver = curP !== null && r.period !== curP;
+    if (oldDay || periodOver) {
+      delete _standDeskReqs[r.id];
+      if (_standDeskCurId === r.id) _standDeskCurId = null;
+      try { deleteDoc(doc(db, STANDDESK_COL, r.id)); } catch(e) {}
+    }
+  });
+}
+
+// 조교석이면 지금 유효한 미결 요청 중 가장 먼저 온 것을 승인창에 띄운다.
+function _standDeskPump() {
+  if (!window.isTaStation()) { _hideStandDeskApprove(); return; }
+  const today = _sdToday();
+  const curP = _sdCurPeriod();
+  const pend = Object.values(_standDeskReqs)
+    .filter(r => r.status === 'pending' && (!today || r.date === today) && (curP === null || r.period === curP))
+    .sort((a, b) => _sdTs(a) - _sdTs(b));
+  if (!pend.length) { _standDeskCurId = null; _hideStandDeskApprove(); return; }
+  const cur = pend[0];
+  if (_standDeskCurId === cur.id && document.getElementById('sd-approve')?.style.display === 'flex') return;
+  _standDeskCurId = cur.id;
+  _showStandDeskApprove(cur, pend.length);
+}
+
+function _showStandDeskApprove(r, count) {
+  const wrap = document.getElementById('sd-approve');
+  const card = document.getElementById('sd-approve-card');
+  if (!wrap || !card) return;
+  const initial = String(r.name || '?')[0];
+  const more = count > 1
+    ? `<div style="font-size:12px;font-weight:700;color:#EA580C;margin-top:8px">대기 중인 다른 요청 ${count - 1}건</div>` : '';
+  card.innerHTML = `
+    <div style="background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;padding:20px 22px;text-align:center">
+      <div style="font-size:34px;line-height:1">🚶</div>
+      <div style="font-size:16px;font-weight:800;margin-top:6px">스탠드 책상 이동 요청</div>
+    </div>
+    <div style="padding:22px;text-align:center">
+      <div style="display:flex;align-items:center;justify-content:center;gap:12px">
+        <div style="width:48px;height:48px;border-radius:14px;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;color:#6C5DD3">${initial}</div>
+        <div style="text-align:left">
+          <div style="font-size:20px;font-weight:800;color:#1E1B4B">${r.name || ''} <span style="font-size:14px;color:#888;font-weight:600">${r.seat || ''}</span></div>
+          <div style="font-size:13px;color:#6C5DD3;font-weight:700">${r.periodLabel || (r.period + '교시')} 진행 중 · 이동 요청</div>
+        </div>
+      </div>
+      ${more}
+      <div style="display:flex;gap:10px;margin-top:22px">
+        <button onclick="rejectStandDesk('${r.id}')" style="flex:1;padding:14px;background:#fff;color:#C62828;border:2px solid #C62828;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer">거절</button>
+        <button onclick="approveStandDesk('${r.id}')" style="flex:1.4;padding:14px;background:#2D7A4F;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:800;cursor:pointer">승인</button>
+      </div>
+    </div>`;
+  wrap.style.display = 'flex';
+  _sdBeep();
+}
+function _hideStandDeskApprove() {
+  const wrap = document.getElementById('sd-approve');
+  if (wrap) wrap.style.display = 'none';
+}
+
+// 승인/거절 — 문서 status를 바꾸면 학생앱 리스너가 즉시 결과를 띄운다.
+window.approveStandDesk = async function(id) {
+  try { await setDoc(doc(db, STANDDESK_COL, id), { status: 'approved', decidedAt: serverTimestamp(), decidedBy: 'ta' }, { merge: true }); }
+  catch(e) { alert('승인 실패: ' + e.message); return; }
+  if (_standDeskReqs[id]) _standDeskReqs[id].status = 'approved';
+  if (_standDeskCurId === id) _standDeskCurId = null;
+  if (window.showAdminToast) showAdminToast('✅ 스탠드 책상 이동 승인');
+  _standDeskPump();
+};
+window.rejectStandDesk = async function(id) {
+  try { await setDoc(doc(db, STANDDESK_COL, id), { status: 'rejected', decidedAt: serverTimestamp(), decidedBy: 'ta' }, { merge: true }); }
+  catch(e) { alert('거절 실패: ' + e.message); return; }
+  if (_standDeskReqs[id]) _standDeskReqs[id].status = 'rejected';
+  if (_standDeskCurId === id) _standDeskCurId = null;
+  if (window.showAdminToast) showAdminToast('❌ 스탠드 책상 이동 거절');
+  _standDeskPump();
+};
+
+// 주의 환기용 짧은 알림음(브라우저 자동재생 정책상 조교가 기기를 한 번이라도 만졌으면 울린다)
+function _sdBeep() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    const ac = new Ctx();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = 880;
+    o.connect(g); g.connect(ac.destination);
+    g.gain.setValueAtTime(0.0001, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.18, ac.currentTime + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, ac.currentTime + 0.4);
+    o.start(); o.stop(ac.currentTime + 0.42);
+    o.onended = () => { try { ac.close(); } catch(e) {} };
+  } catch(e) {}
+}
+
+// 교시 경계가 지나면(예: 8교시 시작) 지난 교시의 대기 요청을 자동 만료 처리하기 위해 주기 점검.
+setInterval(() => { try { _standDeskSweep(); _standDeskPump(); } catch(e) {} }, 30000);
+
+onSnapshot(collection(db, STANDDESK_COL), (snapshot) => {
+  snapshot.docChanges().forEach(ch => {
+    const id = ch.doc.id;
+    if (ch.type === 'removed') { delete _standDeskReqs[id]; if (_standDeskCurId === id) _standDeskCurId = null; return; }
+    _standDeskReqs[id] = { id, ...ch.doc.data() };
+  });
+  _standDeskSweep();
+  _standDeskPump();
+});
+
+_refreshTaStationUI();
 
 function renderStudyroomAlerts() {
   const section = document.getElementById('studyroom-req-section');

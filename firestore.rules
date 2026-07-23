@@ -18,6 +18,8 @@ rules_version = '2';
 //                 허용하고 update는 차단(기록 위조 방지)
 //   - 2026-07-23  net_daily 추가 — 와이파이 일별 추이. 서버(netDailySnapshot)만 쓰므로
 //                 클라이언트는 read 전용
+//   - 2026-07-24  standdesk_requests 추가 — 교시 중 스탠드 책상 이동 조교 승인
+//                 (학생앱 요청/취소, 관리앱 조교석 승인/거절)
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -70,6 +72,16 @@ service cloud.firestore {
 
     // 스터디룸 신청
     match /studyroom_requests/{id} { allow read, write: if true; }
+
+    // 스탠드 책상 이동 승인: 학생앱이 요청(create)·취소(delete), 관리앱(조교석)이 승인/거절(update).
+    // 로그인 없는 정적 앱이라 개방하되 형식만 검증한다(status는 세 값, 이름 30자 이내).
+    match /standdesk_requests/{id} {
+      allow read, delete: if true;
+      allow create, update: if request.resource.data.name is string
+        && request.resource.data.name.size() <= 30
+        && request.resource.data.date is string
+        && request.resource.data.status in ['pending', 'approved', 'rejected'];
+    }
 
     // 스케줄 변경 벌점: 학생앱이 기록, 관리자앱이 취소/복구, 세 앱 모두 조회
     match /penalties/{id} {

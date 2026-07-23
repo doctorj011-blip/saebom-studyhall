@@ -1284,6 +1284,12 @@ body{
         <div class="quick-card-sub">교시별 스터디룸 배정</div>
         <div class="quick-card-bg">🚪</div>
       </div>
+      <div class="quick-card" onclick="requestStandDesk()">
+        <div class="quick-card-icon">🚶</div>
+        <div class="quick-card-title">스탠드 책상 이동</div>
+        <div class="quick-card-sub">교시 중 조교 승인 후 이동</div>
+        <div class="quick-card-bg">🚶</div>
+      </div>
       <div class="quick-card" onclick="openSection('focus','#6C5DD3')">
         <div class="quick-card-icon"><i class="ti ti-eye" style="color:var(--amber)"></i></div>
         <div class="quick-card-title">SEE EYES</div>
@@ -2580,6 +2586,7 @@ function enterApp() {
     loadEventsList();
     loadMyPenalties();
     loadMyMerits();
+    restoreStandDeskWait();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
@@ -2592,6 +2599,7 @@ function enterApp() {
       loadEventsList();
       loadMyPenalties();
       loadMyMerits();
+      restoreStandDeskWait();
     }, { once: true });
   }
 }
@@ -4670,6 +4678,155 @@ window.cancelStudyroom = async function(reqId) {
   } catch(e) { alert('취소 실패: ' + e.message); }
 };
 
+// ══════════════════════════════════════════════════════════════
+// 🚶 스탠드 책상 이동 요청 — 교시 중 조교 승인제
+// 교시가 진행 중일 때만 요청할 수 있고, 조교가 승인하면 '조용히 이동' 안내가 뜬다.
+// 요청→대기→(승인/거절/만료)를 하나의 전체화면 오버레이(#standdesk-overlay)로 처리하므로
+// 어느 탭에 있든 결과가 화면 위에 뜬다. 대기 중 새로고침해도 이어지도록 문서 id를
+// sessionStorage에 보관하고, enterApp에서 복원한다.
+// standdesk_requests/{id}: {name, seat, period, periodLabel, date, status, createdAt}
+//   status: pending → approved | rejected. 교시가 지나면 관리앱이 문서를 지운다(만료).
+// ══════════════════════════════════════════════════════════════
+const STANDDESK_COL = 'standdesk_requests';
+const _SD_OVERLAY_CSS = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:10001;display:flex;align-items:center;justify-content:center;padding:20px';
+const _SD_CARD_CSS = 'background:var(--card);border-radius:var(--r-lg);padding:26px 24px;width:100%;max-width:330px;box-shadow:var(--shadow-lg);text-align:center';
+const _SD_BTN_CANCEL = 'flex:1;padding:11px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:14px;font-weight:600;cursor:pointer';
+const _SD_BTN_GO = 'flex:2;padding:11px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:14px;font-weight:700;cursor:pointer';
+
+let _standDeskWaitId = null;   // 지금 승인을 기다리는 요청 문서 id
+let _standDeskUnsub = null;
+
+function _standDeskStopListen() {
+  if (_standDeskUnsub) { try { _standDeskUnsub(); } catch(e) {} _standDeskUnsub = null; }
+}
+function _standDeskSaveWait(id) {
+  _standDeskWaitId = id || null;
+  try {
+    if (id) sessionStorage.setItem('saebom_standdesk_wait', id);
+    else sessionStorage.removeItem('saebom_standdesk_wait');
+  } catch(e) {}
+}
+
+// 홈 퀵카드 진입점
+window.requestStandDesk = function() {
+  const db = window._db;
+  if (!db || !currentStudent) { alert('앱을 다시 열어 주세요.'); return; }
+  if (_standDeskWaitId) { showStandDeskOverlay('pending'); return; }   // 이미 대기 중
+  const p = currentPeriodNow();
+  if (!p) { showToast('지금은 교시 중이 아니에요 — 쉬는 시간엔 자유롭게 이동하세요.'); return; }
+  showStandDeskConfirm(p);
+};
+
+function showStandDeskConfirm(p) {
+  document.getElementById('standdesk-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'standdesk-overlay';
+  ov.style.cssText = _SD_OVERLAY_CSS;
+  ov.innerHTML = `<div style="${_SD_CARD_CSS}">
+    <div style="font-size:40px;margin-bottom:8px">🚶</div>
+    <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:6px">스탠드 책상으로 이동</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.55">지금 <b>${p.label}</b> (${p.t}) 진행 중이에요.<br>조교 선생님 승인을 받은 뒤 이동해요.</div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="document.getElementById('standdesk-overlay').remove()" style="${_SD_BTN_CANCEL}">취소</button>
+      <button onclick="submitStandDesk(${p.n})" style="${_SD_BTN_GO}">승인 요청</button>
+    </div>
+  </div>`;
+  document.body.appendChild(ov);
+}
+
+window.submitStandDesk = async function(periodNum) {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  try {
+    const today = studyroomDayKey();
+    // 같은 교시에 내 미결 요청이 이미 있으면(다른 기기 등) 그걸 이어서 대기
+    const snap = await window._fsGetDocs(window._fsCollection(db, STANDDESK_COL));
+    let existId = null;
+    snap.forEach(d => {
+      const r = d.data();
+      if (r.name === currentStudent.name && r.date === today && r.period === periodNum && r.status === 'pending') existId = d.id;
+    });
+    let id = existId;
+    if (!id) {
+      const ref = await window._fsAddDoc(window._fsCollection(db, STANDDESK_COL), {
+        name: currentStudent.name, seat: currentStudent.seat,
+        period: periodNum, periodLabel: `${periodNum}교시`,
+        date: today, status: 'pending', createdAt: window._fsServerTimestamp()
+      });
+      id = ref.id;
+    }
+    _standDeskSaveWait(id);
+    _standDeskListen();
+    showStandDeskOverlay('pending');
+  } catch(e) { alert('요청 실패: ' + e.message); }
+};
+
+// 대기 중인 내 요청 문서의 상태 변화를 감시한다(승인/거절/삭제=만료).
+function _standDeskListen() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  _standDeskStopListen();
+  _standDeskUnsub = window._fsOnSnapshot(window._fsCollection(db, STANDDESK_COL), snap => {
+    if (!_standDeskWaitId) return;
+    let found = null;
+    snap.forEach(d => { if (d.id === _standDeskWaitId) found = { id: d.id, ...d.data() }; });
+    if (!found) { _standDeskSaveWait(null); _standDeskStopListen(); showStandDeskOverlay('expired'); return; }
+    if (found.status === 'approved') { _standDeskSaveWait(null); _standDeskStopListen(); showStandDeskOverlay('approved'); }
+    else if (found.status === 'rejected') { _standDeskSaveWait(null); _standDeskStopListen(); showStandDeskOverlay('rejected'); }
+  });
+}
+
+function showStandDeskOverlay(state) {
+  document.getElementById('standdesk-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'standdesk-overlay';
+  ov.style.cssText = _SD_OVERLAY_CSS;
+  let body;
+  if (state === 'pending') {
+    body = `<div style="font-size:40px;margin-bottom:10px">⏳</div>
+      <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:6px">조교 승인 대기중…</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.55">조교 선생님이 승인하면 바로 알려드릴게요.<br>잠시만 기다려 주세요.</div>
+      <button onclick="cancelStandDesk()" style="${_SD_BTN_CANCEL};width:100%;margin-top:18px">요청 취소</button>`;
+  } else if (state === 'approved') {
+    body = `<div style="font-size:46px;margin-bottom:10px">✅</div>
+      <div style="font-size:19px;font-weight:800;color:#1AB5A3;margin-bottom:8px">승인되었어요!</div>
+      <div style="font-size:16px;color:var(--text);line-height:1.6;font-weight:700">조용히 이동해 주세요~</div>
+      <button onclick="document.getElementById('standdesk-overlay').remove()" style="${_SD_BTN_GO};width:100%;margin-top:18px">확인</button>`;
+  } else if (state === 'rejected') {
+    body = `<div style="font-size:46px;margin-bottom:10px">🙅</div>
+      <div style="font-size:18px;font-weight:800;color:var(--red);margin-bottom:6px">지금은 어려워요</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.55">조교 선생님이 이동을 승인하지 않았어요.<br>자리에서 계속 공부해 주세요.</div>
+      <button onclick="document.getElementById('standdesk-overlay').remove()" style="${_SD_BTN_CANCEL};width:100%;margin-top:18px">확인</button>`;
+  } else { // expired
+    body = `<div style="font-size:44px;margin-bottom:10px">⌛</div>
+      <div style="font-size:17px;font-weight:800;color:var(--text);margin-bottom:6px">요청이 만료되었어요</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.55">교시가 끝났거나 요청이 취소되었어요.<br>필요하면 다시 요청해 주세요.</div>
+      <button onclick="document.getElementById('standdesk-overlay').remove()" style="${_SD_BTN_CANCEL};width:100%;margin-top:18px">확인</button>`;
+  }
+  ov.innerHTML = `<div style="${_SD_CARD_CSS}">${body}</div>`;
+  document.body.appendChild(ov);
+}
+
+window.cancelStandDesk = async function() {
+  const db = window._db;
+  const id = _standDeskWaitId;
+  _standDeskSaveWait(null);
+  _standDeskStopListen();
+  document.getElementById('standdesk-overlay')?.remove();
+  if (db && id) { try { await window._fsDeleteDoc(window._fsDoc(db, STANDDESK_COL, id)); } catch(e) {} }
+  showToast('스탠드 책상 요청을 취소했어요.');
+};
+
+// 새로고침/재접속 시 대기 중이던 요청을 복원 (enterApp에서 호출)
+function restoreStandDeskWait() {
+  let id = null;
+  try { id = sessionStorage.getItem('saebom_standdesk_wait'); } catch(e) {}
+  if (!id) return;
+  _standDeskWaitId = id;
+  _standDeskListen();
+  showStandDeskOverlay('pending');
+}
+
 // ── 대기 모드 후 재연결 처리 ──
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
@@ -4679,6 +4836,8 @@ document.addEventListener('visibilitychange', function() {
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
   if (activeTab === 'seatmap') buildStudentSeatmap();
   if (activeTab === 'studyroom') loadStudyroomData();
+  // 스탠드 책상 승인 대기 중이면 리스너 재연결(대기 화면에서 백그라운드 후 복귀)
+  if (_standDeskWaitId && !_standDeskUnsub) _standDeskListen();
 });
 
 // ── 초기화 ──
