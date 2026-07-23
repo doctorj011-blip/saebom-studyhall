@@ -11525,7 +11525,9 @@ let _netLogData = [];
 const NET_SERVICES = [
   { name:'인스타그램',   cat:'sns',    re:/instagram|cdninstagram/i },
   { name:'페이스북',     cat:'sns',    re:/facebook|fbcdn|(^|\.)fb\.com/i },
-  { name:'틱톡',         cat:'video',  re:/tiktok|pangle|byteoversea|bytewlb|musical\.ly|douyin/i },
+  // pangle·byteoversea 는 틱톡이 아니라 바이트댄스 '광고 SDK'다(무료앱·게임에 널리 박혀 있음).
+  // 틱톡으로 묶으면 틱톡이 차단을 뚫은 것처럼 보인다 — 실제로 그렇게 오독했다. 아래 광고·분석으로 보낸다.
+  { name:'틱톡',         cat:'video',  re:/tiktok|musical\.ly|douyin/i },
   { name:'유튜브',       cat:'video',  re:/youtube|ytimg|googlevideo/i },
   { name:'넷플릭스',     cat:'video',  re:/netflix|nflx/i },
   { name:'스포티파이',   cat:'video',  re:/spotify/i },
@@ -11536,7 +11538,9 @@ const NET_SERVICES = [
   { name:'X(트위터)',    cat:'sns',    re:/twitter|twimg|(^|\.)x\.com/i },
   { name:'스냅챗',       cat:'sns',    re:/snapchat|sc-cdn/i },
   { name:'텔레그램',     cat:'sns',    re:/telegram|\bt\.me/i },
-  { name:'게임',         cat:'game',   re:/applovin|unity3d|unityads|roblox|nexon|ncsoft|netmarble|krafton|pubg|supercell|epicgames|steampowered|riotgames|garena|playfab|gameanalytics|ironsrc|vungle/i },
+  // 실제 게임 서비스만. applovin·unityads·ironsrc·vungle 은 '게임 광고 SDK'라
+  // 게임을 안 해도 광고 붙은 앱만 있으면 잡힌다 → 아래 광고·분석으로 보냄.
+  { name:'게임',         cat:'game',   re:/roblox|nexon|ncsoft|netmarble|krafton|pubg|supercell|epicgames|steampowered|steamserver|riotgames|garena|playfab/i },
   { name:'네이버',       cat:'other',  re:/naver(?!.*vibe)/i },
   { name:'매쓰플랫',     cat:'study',  re:/mathflat/i },
   { name:'미맥스터디',   cat:'study',  re:/mimacstudy/i },
@@ -11545,7 +11549,7 @@ const NET_SERVICES = [
   // ↓ 여기부터는 배경 통신. 위에서 안 걸린 것만 내려온다.
   { name:'애플 기기',    cat:'system', re:/apple|aapl|icloud|itunes|akadns/i },
   { name:'구글 기기',    cat:'system', re:/google|gstatic|gvt1|gvt2|googleapis|doubleclick|firebase|crashlytics|gcp\./i },
-  { name:'광고·분석',    cat:'system', re:/analytics|adjust|appsflyer|segment\.io|moloco|datadoghq|sentry|branch\.io|app-measurement|tgclab|dsp-api/i },
+  { name:'광고·분석',    cat:'system', re:/analytics|adjust|appsflyer|segment\.io|moloco|datadoghq|sentry|branch\.io|app-measurement|tgclab|dsp-api|pangle|byteoversea|bytewlb|applovin|unityads|unity3d|ironsrc|vungle|gameanalytics/i },
   { name:'네트워크·CDN', cat:'system', re:/akamai|cloudfront|cdnetworks|kgslb|cloudflare|amazonaws|azureedge|fastly|nel\.goog|wpad|in-addr\.arpa|\.lan$|connectivitycheck|stun\.|tplinkcloud|lgthinq|krsys|op1top/i },
   { name:'윈도우·MS',    cat:'system', re:/microsoft|windowsupdate|msftconnecttest|office|live\.com|bing/i }
 ];
