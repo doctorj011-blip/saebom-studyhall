@@ -220,6 +220,11 @@ body.admin-device .topbar-tabs{display:flex}
 .sess-open{color:#C62828;font-weight:600}
 .sess-dur{margin-left:auto;color:var(--color-text-secondary);font-weight:600}
 .sess-away{color:#B45309;font-weight:600}
+/* 외출 구간 펼쳐보기 — 세션 문서엔 합계(awayMs)만 있어 언제 나갔는지는 checkin_logs 로 본다 */
+.sess-away-btn{background:#FEF3C7;border:1px solid #FDE68A;color:#B45309;border-radius:6px;font-size:10px;font-weight:600;padding:1px 5px;cursor:pointer;margin-left:4px;white-space:nowrap}
+.sess-away-btn:hover{background:#FDE68A}
+.sess-away-wrap{padding:6px 12px 8px 40px;background:#FFFBEB;border-top:0.5px dashed #FDE68A;font-size:11px;color:#92400E;line-height:1.7}
+.sess-away-open{color:#B91C1C;font-weight:700}
 /* 세션 수동 보정(입·퇴실 기록 수정/추가) — 외출 복귀를 안 눌러 시간이 안 잡힌 경우 등 */
 .sess-edit-btn{background:#EEF2FF;border:1px solid #C7D2FE;color:#4A3FA8;border-radius:6px;font-size:10px;font-weight:600;padding:2px 6px;cursor:pointer;flex-shrink:0}
 .sess-edit-btn:hover{background:#DDD6FE}
@@ -3663,14 +3668,21 @@ window.showStudentSessionsModal = async function(name){
           const d = sessDurationMin(s.inTs, nowTs, s.awayMs || 0); dayMin += d;
           durTxt = _fmtRangeMin(d);
         }
+        // 외출은 세션 문서에 합계(awayMs)로만 남는다 → 언제 나갔는지는 눌러서 checkin_logs 로 확인
+        const wrapId = `awd_${date}_${i}`;
+        const awayBtn = (awayMin > 0 || date === todayIso)
+          ? `<button class="sess-away-btn" onclick="sessAwayDetail('${date}','${wrapId}',${s.inTs},${s.outTs || 0},this)"
+               title="외출 구간 보기">외출 ${awayMin}분 ▾</button>`
+          : '';
         return `<div class="sess-row">
           <span class="sess-idx">${i+1}</span>
           <span class="sess-in">입실 ${fmtClock(s.inTs)}</span>
           <span class="sess-arrow">→</span>
           <span>${outTxt}</span>
-          <span class="sess-dur">${durTxt}${awayMin > 0 ? ` <span style="font-size:10px;color:#999">(외출 ${awayMin}분 제외)</span>` : ''}</span>
+          <span class="sess-dur">${durTxt}${awayBtn}</span>
           <button class="sess-edit-btn" onclick="sessEditOpen('${String(s._id).replace(/'/g,"\\'")}')" title="이 기록 수정">✏️</button>
-        </div>`;
+        </div>
+        <div class="sess-away-wrap" id="${wrapId}" style="display:none"></div>`;
       }).join('');
 
       grandMin += dayMin; dayCount++;
@@ -3699,6 +3711,76 @@ window.showStudentSessionsModal = async function(name){
   } catch(e) {
     console.error('입·퇴실 상세 조회 실패:', e);
     setBody(`<div style="text-align:center;padding:32px;color:#C62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`);
+  }
+};
+
+// ── 외출 구간 펼쳐보기 ──
+// 세션 문서에는 외출 '합계'(awayMs)만 남아서, 화면만 봐서는 몇 시에 몇 번 나갔는지 알 수 없다.
+// 개별 외출/복귀 시각은 감사기록 checkin_logs 에 `away:true` 로 남아 있으므로 눌렀을 때만 읽는다
+// (하루치만 조회 — 한 달치를 미리 읽으면 문서 수천 건이라 읽기 비용이 크다).
+// 복귀 기록이 없는 외출은 빨갛게 표시한다 = 그 구간이 통째로 학습시간에서 빠진 경우.
+window._sessAwayCache = {};
+window.sessAwayDetail = async function(dateIso, wrapId, inTs, outTs, btn){
+  const wrap = document.getElementById(wrapId);
+  const ctx = window._sessModal;
+  if (!wrap || !ctx) return;
+  if (wrap.style.display !== 'none') { // 접기
+    wrap.style.display = 'none';
+    if (btn) btn.textContent = btn.textContent.replace('▴', '▾');
+    return;
+  }
+  wrap.style.display = '';
+  if (btn) btn.textContent = btn.textContent.replace('▾', '▴');
+  wrap.innerHTML = '불러오는 중...';
+  try {
+    // checkin_logs 의 date 는 무패딩 레거시 키('2026-7-23')
+    const [y, m, d] = dateIso.split('-').map(Number);
+    const legacy = `${y}-${m}-${d}`;
+    let logs = window._sessAwayCache[legacy];
+    if (!logs) {
+      const db = await window.waitDb();
+      const { collection, getDocs, query, where } = window._fs;
+      const snap = await getDocs(query(collection(db, 'checkin_logs'), where('date', '==', legacy)));
+      logs = snap.docs.map(x => x.data());
+      window._sessAwayCache[legacy] = logs;
+    }
+    const end = outTs || Date.now();
+    const evs = logs
+      .filter(l => l.studentName === ctx.name && l.away === true && typeof l.ts === 'number'
+                   && l.ts >= inTs && l.ts <= end + 60000)
+      .sort((a, b) => a.ts - b.ts);
+    if (!evs.length) {
+      wrap.innerHTML = '이 기록에 남은 외출 내역이 없습니다 <span style="color:#B91C1C">— 외출을 누르지 않고 나갔다면 기록에 안 남습니다</span>';
+      return;
+    }
+    // out → in 짝짓기. 짝 없는 out = 복귀 미입력
+    const fmt = ts => { const t = new Date(ts); return `${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}`; };
+    const lines = [];
+    let openOut = null, sum = 0;
+    evs.forEach(e => {
+      if (e.type === 'out') {
+        if (openOut) lines.push({ from: openOut, to: null });
+        openOut = e.ts;
+      } else if (e.type === 'in' && openOut) {
+        lines.push({ from: openOut, to: e.ts }); openOut = null;
+      }
+    });
+    if (openOut) lines.push({ from: openOut, to: null });
+    const html = lines.map((L, i) => {
+      if (L.to == null) {
+        const mins = Math.max(0, Math.round((end - L.from) / 60000));
+        return `<div>${i+1}. ${fmt(L.from)} 외출 → <span class="sess-away-open">복귀 기록 없음</span>` +
+               ` (퇴실까지 ${_fmtRangeMin(mins)}이 학습시간에서 빠짐)</div>`;
+      }
+      const mins = Math.max(0, Math.round((L.to - L.from) / 60000));
+      sum += mins;
+      return `<div>${i+1}. ${fmt(L.from)} → ${fmt(L.to)} · ${_fmtRangeMin(mins)}</div>`;
+    }).join('');
+    wrap.innerHTML = html + (sum > 0
+      ? `<div style="margin-top:4px;font-weight:700">복귀까지 확인된 외출 합계 ${_fmtRangeMin(sum)}</div>` : '');
+  } catch(e) {
+    console.error('외출 내역 조회 실패:', e);
+    wrap.innerHTML = `<span style="color:#C62828">조회 실패: ${e.message || e}</span>`;
   }
 };
 
