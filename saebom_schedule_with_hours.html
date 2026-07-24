@@ -6192,6 +6192,9 @@ function buildSeatCard(seatNum) {
   // 스터디룸 대기 여부
   const inStudyRoom = studyRoomStudents && Object.values(studyRoomStudents).some(arr => arr.includes(student.name));
 
+  // 이 교시 스탠드 책상 이동이 승인된 학생 (module 스크립트의 standdesk 미러가 판정)
+  const atStandDesk = !!(window._sdApprovedNames && window._sdApprovedNames().has(student.name));
+
   const rec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
   const recOut = todayRecords.find(r => r.studentName === student.name && r.outTime);
 
@@ -6210,7 +6213,10 @@ function buildSeatCard(seatNum) {
     </div>
     <!-- 이름/번호 -->
     <div style="padding:4px 6px 3px;flex:1;display:flex;flex-direction:column;justify-content:center">
-      <div style="font-size:9px;color:#9CA3AF;margin-bottom:1px">${seatNum}번</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1px">
+        <span style="font-size:9px;color:#9CA3AF">${seatNum}번</span>
+        ${atStandDesk ? '<span style="font-size:8px;background:#F3E8FF;color:#7C3AED;border:1px solid #DDD6FE;border-radius:4px;padding:0 3px;font-weight:800;line-height:1.5">🧍스탠드</span>' : ''}
+      </div>
       <div style="display:flex;align-items:center;gap:3px">
         <span style="font-size:12px;font-weight:700;color:#1F2937">${student.name}</span>
         ${genderIcon}
@@ -9898,6 +9904,23 @@ function _sdEligible() {
   return (typeof window.isAdminDevice === 'function') ? window.isAdminDevice() : false;
 }
 
+// 배치도 배지용 — 이 교시에 스탠드 책상 이동이 승인된 학생 이름 집합.
+// 쉬는 시간(curP=null)에는 방금 교시 승인분을 그대로 보여준다(다음 교시 시작 때 sweep이 지우면 사라짐).
+window._sdApprovedNames = function() {
+  const today = _sdToday();
+  const curP = _sdCurPeriod();
+  const s = new Set();
+  Object.values(_standDeskReqs).forEach(r => {
+    if (r.status === 'approved' && (!today || r.date === today) && (curP === null || r.period === curP)) s.add(r.name);
+  });
+  return s;
+};
+
+// 승인/만료로 배지 상태가 바뀌면 배치도를 다시 그린다 (classic 스크립트의 buildFloorplan 경유)
+function _sdRefreshFloorplan() {
+  try { if (document.getElementById('fp-room') && typeof window.buildFloorplan === 'function') window.buildFloorplan(); } catch(e) {}
+}
+
 function _sdToday() { return window.studyroomDayKey ? window.studyroomDayKey() : null; }
 function _sdCurPeriod() { try { return (typeof window.getCurrentPeriod === 'function') ? window.getCurrentPeriod() : null; } catch(e) { return null; } }
 function _sdTs(r) { const c = r && r.createdAt; if (!c) return 0; if (typeof c.toMillis === 'function') return c.toMillis(); if (c.seconds) return c.seconds * 1000; return 0; }
@@ -9907,6 +9930,7 @@ function _sdTs(r) { const c = r && r.createdAt; if (!c) return 0; if (typeof c.t
 function _standDeskSweep() {
   const today = _sdToday();
   const curP = _sdCurPeriod();
+  let removed = false;
   Object.values(_standDeskReqs).forEach(r => {
     const oldDay = today && r.date !== today;
     // 다른 교시로 넘어갔으면 미결(대기)이든 결정됨이든 정리 대상. 쉬는 시간(curP=null)엔 유지.
@@ -9914,9 +9938,11 @@ function _standDeskSweep() {
     if (oldDay || periodOver) {
       delete _standDeskReqs[r.id];
       if (_standDeskCurId === r.id) _standDeskCurId = null;
+      removed = true;
       try { deleteDoc(doc(db, STANDDESK_COL, r.id)); } catch(e) {}
     }
   });
+  return removed;
 }
 
 // 자격이 있는 화면이면 지금 유효한 미결 요청 중 가장 먼저 온 것을 승인창에 띄운다.
@@ -10004,7 +10030,7 @@ function _sdBeep() {
 }
 
 // 교시 경계가 지나면(예: 8교시 시작) 지난 교시의 대기 요청을 자동 만료 처리하기 위해 주기 점검.
-setInterval(() => { try { _standDeskSweep(); _standDeskPump(); } catch(e) {} }, 30000);
+setInterval(() => { try { if (_standDeskSweep()) _sdRefreshFloorplan(); _standDeskPump(); } catch(e) {} }, 30000);
 
 onSnapshot(collection(db, STANDDESK_COL), (snapshot) => {
   snapshot.docChanges().forEach(ch => {
@@ -10014,6 +10040,7 @@ onSnapshot(collection(db, STANDDESK_COL), (snapshot) => {
   });
   _standDeskSweep();
   _standDeskPump();
+  _sdRefreshFloorplan();
 });
 
 // 키오스크 모드 진입/해제 시 즉시 재판정(진입하면 승인창 숨김, 해제하면 대기 요청 표시).
