@@ -905,7 +905,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <!-- 오늘 스터디룸 신청 현황 (교시별 출석 바로 아래) -->
       <div class="card" id="studyroom-board-section" style="display:none">
         <div class="card-title" style="justify-content:space-between">
-          <span><i class="ti ti-layout-grid" style="font-size:14px;color:#7C3AED"></i> 오늘 스터디룸 신청 현황</span>
+          <span onclick="toggleStudyroomBoard()" style="cursor:pointer;user-select:none" title="스터디룸 신청 현황 접기/펼치기"><i id="studyroom-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#7C3AED;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-layout-grid" style="font-size:14px;color:#7C3AED"></i> 오늘 스터디룸 신청 현황</span>
           <span style="display:flex;align-items:center;gap:8px">
             <span id="studyroom-board-dup"></span>
             <span id="studyroom-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
@@ -10292,7 +10292,7 @@ function _boardSetCollapsed(id, collapsed) {
 // 벌점·스케줄변동은 접힘, 입실현황·교시별출석은 펼침)
 function restoreBoardCollapse() {
   const st = _boardCollapseState();
-  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board', 'seatcam-board'].forEach(id => {
+  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board', 'seatcam-board', 'studyroom-board'].forEach(id => {
     if (st[id] != null) _boardApplyCollapse(id, !!st[id]);
   });
 }
@@ -10322,6 +10322,11 @@ window.togglePeriodBoard = function() {
   const body = document.getElementById('period-board-body');
   if (!body) return;
   _boardSetCollapsed('period-board', body.style.display !== 'none');
+};
+window.toggleStudyroomBoard = function() {
+  const body = document.getElementById('studyroom-board-body');
+  if (!body) return;
+  _boardSetCollapsed('studyroom-board', body.style.display !== 'none');
 };
 
 function _penIsoDate(ts) {
