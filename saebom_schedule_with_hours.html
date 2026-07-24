@@ -946,6 +946,16 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="awaymiss-board-body" style="display:none"></div>
     </div>
+    <!-- CCTV 자리비움 감지 — 면학관 PC의 새봄재석감지 엔진이 seat_presence/current 를 1분마다 갱신.
+         입실 중(외출 아님)인데 카메라에 안 보이는 학생을 표시한다. 참고용 신호일 뿐
+         순공시간·상벌점에는 반영하지 않는다. 문서가 없으면(엔진 미가동) 카드 자체를 숨긴다. -->
+    <div class="card" id="seatcam-board-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span onclick="toggleSeatcamBoard()" style="cursor:pointer;user-select:none" title="CCTV 자리비움 접기/펼치기"><i id="seatcam-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#0E7490;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-video" style="font-size:14px;color:#0E7490" aria-hidden="true"></i> CCTV 자리비움 감지</span>
+        <span id="seatcam-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+      </div>
+      <div id="seatcam-board-body"></div>
+    </div>
     </div>
     <!-- 스터디룸 초과 경고 -->
     <div class="card" id="studyroom-overflow-section" style="display:none">
@@ -10281,7 +10291,7 @@ function _boardSetCollapsed(id, collapsed) {
 // 벌점·스케줄변동은 접힘, 입실현황·교시별출석은 펼침)
 function restoreBoardCollapse() {
   const st = _boardCollapseState();
-  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board'].forEach(id => {
+  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board', 'seatcam-board'].forEach(id => {
     if (st[id] != null) _boardApplyCollapse(id, !!st[id]);
   });
 }
@@ -10574,6 +10584,124 @@ window.renderAwayMissBoard = renderAwayMissBoard;
 subscribeAwayMissBoard();
 setInterval(subscribeAwayMissBoard, 60000); // 자정 넘어가면 오늘/어제 날짜로 재구독
 setInterval(renderAwayMissBoard, 5 * 60000); // 진행 중 세션의 재실시간이 늘어나므로 주기적으로 다시 판정
+
+// ── CCTV 자리비움 감지 현황판 (대시보드) ──
+// 면학관 PC의 새봄재석감지 엔진이 seat_presence/current 문서를 1분마다 통째로 갱신한다.
+// (문서: updated=ISO시각, seats={좌석번호:{present,last_seen,cam,...}}, cameras={번호:{ok,persons}})
+// 여기서는 "입실 중(외출 아님)인데 그 좌석이 카메라에 안 보임"만 골라 보여준다.
+// ★참고용 신호다 — 감지 오차(가림·미탐)가 있으므로 순공시간·상벌점에 자동 반영하지 않는다.
+const SEATCAM_STALE_MIN = 5;    // 문서가 이 시간 이상 안 갱신되면 '엔진 중단'으로 표시
+const SEATCAM_GRACE_MIN = 6;    // 입실 직후 이 시간 동안은 판정 유예(엔진 사이클 대기)
+const SEATCAM_LONG_MIN = 30;    // 이 시간 이상 자리 비움이면 빨간 강조
+let _seatcamDoc = null;
+let _seatcamTimer = null;
+
+onSnapshot(doc(db, 'seat_presence', 'current'),
+  snap => {
+    _seatcamDoc = snap.exists() ? snap.data() : null;
+    renderSeatcamBoard();
+    // 경과 분·엔진 중단 감시는 스냅샷이 안 와도 갱신돼야 하므로 1분 타이머 병행
+    if (_seatcamDoc && !_seatcamTimer) _seatcamTimer = setInterval(renderSeatcamBoard, 60000);
+  },
+  e => console.error('CCTV 자리비움 현황판 구독 실패:', e));
+
+window.toggleSeatcamBoard = function() {
+  const body = document.getElementById('seatcam-board-body');
+  if (!body) return;
+  _boardSetCollapsed('seatcam-board', body.style.display !== 'none');
+};
+
+function renderSeatcamBoard() {
+  const sec = document.getElementById('seatcam-board-section');
+  const body = document.getElementById('seatcam-board-body');
+  const summary = document.getElementById('seatcam-board-summary');
+  if (!sec || !body) return;
+  if (!_seatcamDoc || !_seatcamDoc.seats) { sec.style.display = 'none'; return; } // 엔진 미가동
+  sec.style.display = '';
+
+  const seats = _seatcamDoc.seats;
+  const now = Date.now();
+  // 엔진의 updated는 타임존 없는 로컬 ISO — Date.parse가 로컬로 해석(엔진·키오스크 같은 시간대)
+  const updatedTs = Date.parse(_seatcamDoc.updated || '') || 0;
+  const staleMin = updatedTs ? Math.round((now - updatedTs) / 60000) : null;
+  const updatedLabel = updatedTs ? SH.sessFmtKoTime(updatedTs) : '?';
+
+  if (staleMin == null || staleMin >= SEATCAM_STALE_MIN) {
+    if (summary) summary.textContent = '⚠️ 중단됨';
+    body.innerHTML = `<div style="text-align:center;padding:18px;color:#C62828;font-size:12px">
+      감지 시스템이 멈춰 있습니다 (마지막 갱신 ${updatedLabel}).<br>
+      면학관 PC의 새봄재석감지 폴더에서 '3_감지시작'을 실행해 주세요.</div>`;
+    return;
+  }
+
+  // 입실 중(열린 기록) 학생 목록 — 세션 재구성 전이면 빈 배열
+  const records = (typeof todayRecords !== 'undefined') ? todayRecords : [];
+  const openRecs = records.filter(r => r && !r.outTime && r.studentName
+    && !(window.isNonStudent && window.isNonStudent(r.studentName)));
+
+  const flagged = [];   // 입실 중 + 외출 아님 + 좌석 폴리곤 있음 + 카메라에 안 보임
+  let okCount = 0, coveredIn = 0;
+  const openSeatKeys = new Set();
+  openRecs.forEach(r => {
+    const seatKey = String(r.seat || '').replace('번', '');
+    openSeatKeys.add(seatKey);
+    const cov = seats[seatKey];
+    if (!cov) return;                                   // 좌석 영역 미설정 = 판정 대상 아님
+    if (window.awayInfo && window.awayInfo(r.studentName)) return; // 외출 중 = 비어 있는 게 정상
+    coveredIn++;
+    if (cov.present) { okCount++; return; }
+    if (r.inTs && now - r.inTs < SEATCAM_GRACE_MIN * 60000) return; // 입실 직후 유예
+    const lastTs = cov.last_seen ? (Date.parse(cov.last_seen) || 0) : 0;
+    const sinceTs = Math.max(lastTs, r.inTs || 0);
+    const min = sinceTs ? Math.round((now - sinceTs) / 60000) : null;
+    flagged.push({ name: r.studentName, seat: seatKey, min, neverSeen: !lastTs || lastTs < (r.inTs || 0) });
+  });
+  flagged.sort((a, b) => (b.min || 0) - (a.min || 0));
+
+  // 반대 방향: 카메라에는 사람이 있는데 그 좌석 입실 기록이 없음 (미입실 착석)
+  const ghostSeats = Object.keys(seats)
+    .filter(k => seats[k] && seats[k].present && !openSeatKeys.has(k))
+    .sort((a, b) => (parseInt(a) || 999) - (parseInt(b) || 999));
+
+  if (summary) summary.textContent =
+    (flagged.length ? `${flagged.length}명 자리비움` : '이상 없음') + ` · 재석 ${okCount}/${coveredIn}`;
+
+  const rows = flagged.map(f => {
+    const nameJs = String(f.name).replace(/'/g, "\\'");
+    const hot = !f.neverSeen && f.min >= SEATCAM_LONG_MIN;
+    const chip = f.neverSeen
+      ? `입실 후 감지된 적 없음`
+      : `${f.min}분째 자리 비움`;
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid #F3F4F6">
+      <div style="flex:0 0 88px;cursor:pointer" onclick="showStudentSessionsModal('${nameJs}')" title="입·퇴실 기록 열기(외출 보정)">
+        <div style="font-size:12.5px;font-weight:700;color:#1F2937">${f.name}</div>
+        <div style="font-size:10.5px;font-weight:500;color:#9CA3AF">${f.seat}번</div>
+      </div>
+      <div style="flex:1;display:flex;flex-wrap:wrap;gap:5px;font-size:11px">
+        <span style="background:${hot ? '#FDE7E7' : '#FFF4E5'};color:${hot ? '#8B1A1A' : '#9A5B00'};border-radius:8px;padding:3px 8px;font-weight:700">📹 ${chip}</span>
+      </div>
+      <button onclick="showStudentSessionsModal('${nameJs}')"
+        style="flex:0 0 auto;background:#fff;color:#4A3FA8;border:1px solid #8F82E4;border-radius:7px;padding:4px 9px;font-size:11px;font-weight:700;cursor:pointer">기록 열기</button>
+    </div>`;
+  }).join('');
+
+  const ghostLine = ghostSeats.length
+    ? `<div style="margin-top:8px;padding:7px 10px;background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;font-size:11px;color:#1E40AF">
+        👤 카메라에는 사람이 보이는데 입실 기록이 없는 좌석: <b>${ghostSeats.map(s => s + '번').join(', ')}</b></div>`
+    : '';
+
+  const emptyLine = flagged.length ? '' :
+    `<div style="text-align:center;padding:16px;color:#9CA3AF;font-size:12.5px">입실 중인 학생 모두 자리에서 감지됨 👍</div>`;
+
+  body.innerHTML = emptyLine + rows + ghostLine + `
+    <div style="margin-top:8px;padding:8px 10px;background:#ECFEFF;border:1px solid #A5F3FC;border-radius:8px;font-size:11px;color:#155E75;line-height:1.6">
+      면학관 CCTV로 좌석 영역에 사람이 보이는지 1분마다 확인합니다(마지막 갱신 ${updatedLabel}).
+      좌석 영역을 그려둔 좌석만 판정하며, 가림·미탐 오차가 있으니 <b>참고용</b>으로만 쓰고
+      실제 조치 전에는 CCTV로 확인해 주세요. 순공시간·상벌점에는 반영되지 않습니다.
+    </div>`;
+}
+window.renderSeatcamBoard = renderSeatcamBoard;
 
 // ── 오늘 스케줄 변동 현황판 (대시보드) ──
 // 고정 시간표(schedule_base)와 현재 적용 스케줄(schedules)을 '오늘 요일'에서 비교해,

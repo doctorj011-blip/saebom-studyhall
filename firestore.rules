@@ -20,6 +20,8 @@ rules_version = '2';
 //                 클라이언트는 read 전용
 //   - 2026-07-24  standdesk_requests 추가 — 교시 중 스탠드 책상 이동 조교 승인
 //                 (학생앱 요청/취소, 관리앱 조교석 승인/거절)
+//   - 2026-07-25  seat_presence 추가 — CCTV 좌석 재석 감지(새봄재석감지 엔진이 current
+//                 문서 하나를 1분마다 REST로 갱신, 관리앱 대시보드가 읽음)
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -110,6 +112,16 @@ service cloud.firestore {
 
     // 좌석 상태: 태블릿 디텍터가 쓰고 대시보드가 읽음
     match /seat_status/{seat} { allow read, write: if true; }
+
+    // CCTV 좌석 재석 감지: 면학관 PC의 새봄재석감지 엔진(로그인 없는 REST)이
+    // current 문서 하나만 1분마다 통째로 갱신하고, 관리앱 대시보드가 읽는다.
+    // 참고용 신호 데이터라 개방하되 문서 ID와 최소 형식만 제한한다.
+    match /seat_presence/{id} {
+      allow read: if true;
+      allow write: if id == 'current'
+        && request.resource.data.updated is string
+        && request.resource.data.seats is map;
+    }
 
     // 검수 피드백: 대시보드가 사람 판정 결과 기록
     match /feedback_events/{id} { allow read, write: if true; }
