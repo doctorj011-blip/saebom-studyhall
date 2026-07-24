@@ -11674,7 +11674,9 @@ async function _assessWeekGoals(monDate, weekIso){
     const subByKey = {};
     plSnaps.forEach(snap => snap.forEach(x => {
       const v = x.data(); if (!v || !v.seat || !v.date || !dayIsos.includes(v.date)) return;
-      (subByKey[v.seat] = subByKey[v.seat] || new Set()).add(v.date);
+      // 좌석은 숫자로 정규화 — 옛 학생앱이 '1번'처럼 저장한 문서도 좌석 숫자로 집계되도록
+      const k = String(v.seat).replace(/[^0-9]/g, '') || String(v.seat);
+      (subByKey[k] = subByKey[k] || new Set()).add(v.date);
     }));
 
     // 3) 학생별 판정
@@ -14424,7 +14426,9 @@ let _apcAiLastComment = ''; // "코멘트에 복사" 버튼이 참조하는 최�
 
 const _apcIso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 const _apcEsc = s => String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const _apcSeatKey = seat => String(seat).replace(/[^0-9a-zA-Z가-힣]/g, '_'); // 학생앱 업로드 경로와 동일 규칙
+// 학생앱 _plSeatKey와 동일 규칙: 숫자만 남긴다. 옛 학생앱이 '1번'처럼 접미사 붙은 좌석으로
+// 저장한 문서도 있으므로(1번 박지윤, 2026-07-20~24), 문서 쪽 seat도 이 함수로 정규화해 매칭한다.
+const _apcSeatKey = seat => { const s = String(seat); return s.replace(/[^0-9]/g, '') || s.replace(/[^0-9a-zA-Z가-힣]/g, '_'); };
 
 // 기본으로 열 학습일 — 새벽 2시 리셋 기준.
 // 정오 이전이면 아직 '어제 학습분'을 받는 구간(정상 ~02:00, 지각 ~12:00)이라 어제를,
@@ -14459,9 +14463,9 @@ async function _apcLoad() {
       getDocs(query(collection(db, 'planner_comments'), where('date', '==', _apcDate))),
       getDocs(query(collection(db, 'planner_ai_reviews'), where('date', '==', _apcDate)))
     ]);
-    psnap.forEach(d => { const v = d.data(); if (v && v.seat) _apcSubs[v.seat] = v; });
-    csnap.forEach(d => { const v = d.data(); if (v && v.seat) _apcCmtCount[v.seat] = (v.comments || []).length; });
-    aisnap.forEach(d => { const v = d.data(); if (v && v.seat) _apcAi[v.seat] = v; });
+    psnap.forEach(d => { const v = d.data(); if (v && v.seat) _apcSubs[_apcSeatKey(v.seat)] = v; });
+    csnap.forEach(d => { const v = d.data(); if (v && v.seat) _apcCmtCount[_apcSeatKey(v.seat)] = (v.comments || []).length; });
+    aisnap.forEach(d => { const v = d.data(); if (v && v.seat) _apcAi[_apcSeatKey(v.seat)] = v; });
   } catch(e) {
     console.warn('[planner admin] 조회 실패:', e.message || e);
   }

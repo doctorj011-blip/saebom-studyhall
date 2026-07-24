@@ -2080,7 +2080,7 @@ async function _ppLoadMonth() {
   _ppDates = {};
   if (!currentStudent || !window._storage) return;
   try {
-    const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const seat = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');  // 학생앱 업로드 키와 동일 규칙(숫자 우선)
     const monthPrefix = _ppYear + '-' + String(_ppMonth+1).padStart(2,'0');
     const seatRef = window._storageRef(window._storage, 'planners/' + seat);
     const result = await window._listAll(seatRef);
@@ -2129,7 +2129,7 @@ async function _ppLoadComments(ds) {
   if (!commentsArea || !commentsList || !currentStudent) return;
   try {
     if (!window._getDoc || !window._doc || !window._db) return;
-    const seat = String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const seat = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');  // 학생앱 업로드 키와 동일 규칙(숫자 우선)
     const snap = await window._getDoc(window._doc(window._db, 'planner_comments', seat + '_' + ds));
     if (snap.exists()) {
       const comments = snap.data().comments || [];

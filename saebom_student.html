@@ -2111,11 +2111,11 @@ function hideLoginError() { document.getElementById('login-error').style.display
 async function tryLogin() {
   document.getElementById('login-error').style.display='none';
 
-  // 1) 로컬 STUDENTS 배열에서 먼저 검색
-  let matched = STUDENTS.filter(s => s.phone && window._loginKey(s) === pinBuffer);
-
-  // 2) 없으면 Firebase students 컬렉션에서 검색
-  if (matched.length === 0 && window._db) {
+  // 1) Firebase students 컬렉션에서 먼저 검색 — 로컬 STUDENTS 배열은 초기 배포용 스냅샷이라
+  //    좌석('1번' vs '1')·스케줄이 실데이터와 어긋난다. 로컬을 먼저 보면 그 학생만 옛 데이터로
+  //    로그인돼 플래너 좌석키가 달라지는 사고가 났다(1번 박지윤). 로컬은 Firebase 실패 시 폴백.
+  let matched = [];
+  if (window._db) {
     try {
       const { getDocs, collection, query, where } = window._fs;
       // 색인 2개로 조회(전체 다운로드 방지): 뒷 4자리(phoneLast4) + 지정 PIN(loginPin).
@@ -2149,6 +2149,11 @@ async function tryLogin() {
         }
       });
     } catch(e) { console.error('Firebase 로그인 검색 실패:', e); }
+  }
+
+  // 2) Firebase에서 못 찾으면(오프라인·장애 포함) 로컬 STUDENTS 배열로 폴백
+  if (matched.length === 0) {
+    matched = STUDENTS.filter(s => s.phone && window._loginKey(s) === pinBuffer);
   }
 
   // 3) 초대 명단(신규 자가등록) 대조 — 아직 등록되지 않은 초대자만 후보로
@@ -4920,7 +4925,12 @@ let plannerStorageRef = null;
 const PL_DUE_HOUR = 2;    // 정시 마감 (D+1 02:00)
 const PL_LATE_HOUR = 12;  // 지각 마감 (D+1 12:00) — 이후 미제출 확정
 // 좌석키 — Storage 경로(planners/{좌석}/)와 문서 ID(planners/{좌석}_{날짜})가 이 규칙을 공유한다.
-const _plSeatKey = () => String(currentStudent.seat).replace(/[^0-9a-zA-Z가-힣]/g, '_');
+// 숫자만 남긴다: 세션에 '1번'처럼 접미사 붙은 좌석이 남아 있어도 실좌석('1')과 같은 키가 되도록.
+// (관리앱·학부모앱·성실상점 집계가 전부 숫자 좌석키로 매칭한다)
+const _plSeatKey = () => {
+  const raw = String(currentStudent.seat);
+  return raw.replace(/[^0-9]/g, '') || raw.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+};
 const _plIso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 const _plParse = ds => { const [y,m,d] = ds.split('-').map(Number); return new Date(y, m-1, d); };
 // 학습일 ds 기준 마감 시각(ms)
@@ -5072,7 +5082,7 @@ async function loadPlannerMonthData() {
   try {
     const st = await getPlannerStorage();
     const storage = st.storage;
-    const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const seat = _plSeatKey();   // 업로드 경로와 같은 규칙 — 다르면 올린 사진이 달력에 안 보인다
     const monthPrefix = `${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
     const listRef = st.ref(storage, `planners/${seat}`);
     const result = await st.listAll(listRef);
@@ -5167,7 +5177,7 @@ async function plannerLoadComments(dateStr) {
   const list = document.getElementById('planner-comments-list');
   if (!area || !list || !currentStudent) return;
   try {
-    const seat = currentStudent.seat.replace(/[^0-9a-zA-Z가-힣]/g, '_');
+    const seat = _plSeatKey();   // 관리앱이 코멘트를 저장하는 키와 같은 규칙
     const docId = seat + '_' + dateStr;
     const snap = await window._fsGetDoc(window._fsDoc(window._db, 'planner_comments', docId));
     if (snap.exists()) {
