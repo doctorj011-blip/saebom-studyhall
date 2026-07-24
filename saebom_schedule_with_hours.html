@@ -1095,16 +1095,18 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div class="sr-fs-hint">화면을 누르면 닫힙니다</div>
   </div>
 
-  <!-- 스탠드 책상 이동 승인 (조교석) — 어느 탭을 보고 있든 위에 뜬다. 배경 클릭으로 닫히지 않음(승인/거절 버튼으로만) -->
-  <div id="sd-approve" style="position:fixed;inset:0;z-index:100000;display:none;background:rgba(20,16,50,0.72);align-items:center;justify-content:center;padding:20px">
-    <div id="sd-approve-card" style="background:#fff;border-radius:20px;width:min(94vw,420px);box-shadow:0 20px 70px rgba(0,0,0,0.35);overflow:hidden"></div>
-  </div>
-
   <!-- 오늘 입실 현황 -->
   <div class="checkin-today-wrap">
     <div class="checkin-today-title"><i class="ti ti-users" style="font-size:14px"></i> 오늘 입실 현황 <span class="checkin-today-count" id="checkin-today-count">0명</span></div>
     <div class="checkin-today-list" id="checkin-today-list"></div>
   </div>
+</div>
+
+<!-- 스탠드 책상 이동 승인 — 어느 탭을 보고 있든 위에 뜬다. 배경 클릭으로 닫히지 않음(승인/거절 버튼으로만).
+     ★섹션(.section) 안에 두면 탭 전환 시 display:none인 부모에 같이 숨겨지므로 반드시 섹션 밖(전역)에 둘 것.
+       (2026-07-24 실사고: sec-checkin 안에 있어서 입실·퇴실 탭에서만 보였음) -->
+<div id="sd-approve" style="position:fixed;inset:0;z-index:100000;display:none;background:rgba(20,16,50,0.72);align-items:center;justify-content:center;padding:20px">
+  <div id="sd-approve-card" style="background:#fff;border-radius:20px;width:min(94vw,420px);box-shadow:0 20px 70px rgba(0,0,0,0.35);overflow:hidden"></div>
 </div>
 
 <!-- 스케줄 -->
