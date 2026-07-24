@@ -2975,7 +2975,7 @@ function buildDailyPeriods() {
       <span class="early-label">나가는 시간</span>
       <input class="early-input" type="text" inputmode="numeric" placeholder="숫자만 (예: 2030 → 20:30)"
         value="${((dayDraft.earlies&&dayDraft.earlies[p.n])||'').replace(/"/g,'&quot;')}"
-        ${isToday?`oninput="setEarlyTime('${currentDayTab}',${p.n},this)"`:'readonly'}>
+        ${isToday?`oninput="setEarlyTime('${currentDayTab}',${p.n},this)" onblur="finishEarlyTime('${currentDayTab}',${p.n},this)"`:'readonly'}>
     </div>`;
   }).join('');
 }
@@ -3007,14 +3007,25 @@ function setPeriod(day, pNum, status) {
   }
 }
 
-// '오늘 일정' 탭의 중간퇴실 시간 입력 — 숫자만 받아 "시:분"으로 정규화
+// '오늘 일정' 탭의 중간퇴실 시간 입력 — 타이핑 중에는 숫자만 남기고,
+// "시:분" 변환은 입력이 끝난 뒤(onblur·저장 시)에만 한다.
+// (타이핑 도중 콜론·분 보정을 하면 "1650"이 "15:59"처럼 망가진다 — 실사고)
 function setEarlyTime(day, pNum, el) {
-  const val = _normalizePartialTime(el.value);
+  const val = _stripTimeDigits(el.value);
   el.value = val;
   if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
   draftSchedule[day].earlies[pNum] = val;
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
+}
+
+// 입력이 끝나면(onblur) "시:분"으로 확정 표기
+function finishEarlyTime(day, pNum, el) {
+  const val = _normalizePartialTime(el.value);
+  if (el.value === val) return;
+  el.value = val;
+  if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
+  draftSchedule[day].earlies[pNum] = val;
 }
 
 function setReason(day, pNum, val) {
@@ -3064,12 +3075,12 @@ function buildWeeklyTable() {
         // 세모(△): 중간입실 — 입실 시간을 숫자만 입력(예: 730 → 7:30)
         const t = ((draftSchedule[day]?.partials&&draftSchedule[day].partials[pNum])||'').replace(/"/g,'&quot;');
         cell = `<span class="wk-cell-partial" onclick="wkToggle('${day}',${pNum})" title="중간입실">△</span>`
-          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="시간" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetPartialTime('${day}',${pNum},this)"`:'readonly'}>`;
+          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="시간" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetPartialTime('${day}',${pNum},this)" onblur="wkFinishPartialTime('${day}',${pNum},this)"`:'readonly'}>`;
       } else if (status === 'early') {
         // 역세모(▽): 중간퇴실 — 나가는 시간을 숫자만 입력(예: 2030 → 20:30)
         const t = ((draftSchedule[day]?.earlies&&draftSchedule[day].earlies[pNum])||'').replace(/"/g,'&quot;');
         cell = `<span class="wk-cell-early" onclick="wkToggle('${day}',${pNum})" title="중간퇴실">▽</span>`
-          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="퇴실" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetEarlyTime('${day}',${pNum},this)"`:'readonly'}>`;
+          + `<input class="wk-cell-input" type="text" inputmode="numeric" placeholder="퇴실" value="${t}" onclick="event.stopPropagation()" ${editable?`oninput="wkSetEarlyTime('${day}',${pNum},this)" onblur="wkFinishEarlyTime('${day}',${pNum},this)"`:'readonly'}>`;
       } else {
         cell = `<span class="wk-cell-empty" onclick="wkToggle('${day}',${pNum})">·</span>`;
       }
@@ -3155,10 +3166,15 @@ function _normalizePartialTime(raw) {
   return hh + ':' + mm;
 }
 
-// 주간표 세모(중간입실) 시간 입력 — 숫자만 입력받아 정규화
+// 타이핑 도중용: 숫자만 남기고 4자리로 자르기만 한다(콜론·분 보정 없음)
+function _stripTimeDigits(raw) {
+  return String(raw || '').replace(/[^0-9]/g, '').slice(0, 4);
+}
+
+// 주간표 세모(중간입실) 시간 입력 — 타이핑 중에는 숫자만
 function wkSetPartialTime(day, pNum, el) {
-  const val = _normalizePartialTime(el.value);
-  el.value = val; // 입력창에 정규화된 값(시:분) 즉시 반영
+  const val = _stripTimeDigits(el.value);
+  el.value = val;
   if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
   draftSchedule[day].partials[pNum] = val;
   weeklyEditedDays.add(day); // 주간 표에서 고친 요일 → base 저장 대상
@@ -3166,15 +3182,31 @@ function wkSetPartialTime(day, pNum, el) {
   document.getElementById('save-fab').classList.add('show');
 }
 
-// 주간표 역세모(중간퇴실) 시간 입력 — 숫자만 입력받아 정규화
-function wkSetEarlyTime(day, pNum, el) {
+function wkFinishPartialTime(day, pNum, el) {
   const val = _normalizePartialTime(el.value);
+  if (el.value === val) return;
+  el.value = val;
+  if (!draftSchedule[day].partials) draftSchedule[day].partials = {};
+  draftSchedule[day].partials[pNum] = val;
+}
+
+// 주간표 역세모(중간퇴실) 시간 입력 — 타이핑 중에는 숫자만
+function wkSetEarlyTime(day, pNum, el) {
+  const val = _stripTimeDigits(el.value);
   el.value = val;
   if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
   draftSchedule[day].earlies[pNum] = val;
   weeklyEditedDays.add(day);
   isDirty = true;
   document.getElementById('save-fab').classList.add('show');
+}
+
+function wkFinishEarlyTime(day, pNum, el) {
+  const val = _normalizePartialTime(el.value);
+  if (el.value === val) return;
+  el.value = val;
+  if (!draftSchedule[day].earlies) draftSchedule[day].earlies = {};
+  draftSchedule[day].earlies[pNum] = val;
 }
 
 // ── 저장 ──
@@ -3206,12 +3238,13 @@ async function saveSchedule() {
         hasAny = true;
       } else if (state === 'partial') {
         // 세모(중간입실) → m교시(입실시간). 시간 미입력이면 m교시만 저장. (관리앱과 동일 형식)
-        const t = (dd.partials && dd.partials[p.n]) || '';
+        // blur 없이 바로 저장해도 "1650" 같은 숫자열이 "16:50"으로 확정되게 여기서도 정규화
+        const t = _normalizePartialTime((dd.partials && dd.partials[p.n]) || '');
         tokens.push(t ? `m${p.n}(${t})` : `m${p.n}`);
         hasAny = true;
       } else if (state === 'early') {
         // 역세모(중간퇴실) → e교시(퇴실시간). 시간 미입력이면 e교시만 저장. (관리앱과 동일 형식)
-        const t = (dd.earlies && dd.earlies[p.n]) || '';
+        const t = _normalizePartialTime((dd.earlies && dd.earlies[p.n]) || '');
         tokens.push(t ? `e${p.n}(${t})` : `e${p.n}`);
         hasAny = true;
       } else if (state === 'absent') {

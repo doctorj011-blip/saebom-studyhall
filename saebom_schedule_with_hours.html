@@ -7561,8 +7561,10 @@ function _normalizePartialTime(raw) {
   if (Number(mm) > 59) mm = '59';
   return hh + ':' + mm;
 }
+// 타이핑 중에는 숫자만 남긴다 — 도중에 콜론·분 보정을 하면 "1650"이 "15:59"로 망가짐.
+// "시:분" 확정은 확인 버튼(saveEarlyTime/savePartialTime)에서 _normalizePartialTime이 수행.
 window.formatPartialTimeInput = function(el) {
-  el.value = _normalizePartialTime(el.value);
+  el.value = String(el.value || '').replace(/[^0-9]/g, '').slice(0, 4);
 };
 
 window.savePartialTime = function(day, p) {
