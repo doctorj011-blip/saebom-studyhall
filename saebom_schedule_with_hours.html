@@ -1693,21 +1693,17 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
     </div>
 
-    <!-- 스탠드 책상 이동 승인 (조교석) -->
+    <!-- 스탠드 책상 이동 승인 안내 (자동 — 설정 불필요) -->
     <div class="card">
       <div class="card-title" style="margin-bottom:4px">
-        🚶 스탠드 책상 이동 승인 (조교석)
+        🚶 스탠드 책상 이동 승인
       </div>
-      <div style="font-size:12px;color:#4A3FA8;margin-bottom:12px;line-height:1.6">
-        이 기기를 <b>조교석</b>으로 지정하면, 학생이 교시 중 스탠드 책상 이동을 요청할 때
-        <b>어느 화면을 보고 있든</b> 승인 창이 자동으로 떠오릅니다.<br>
-        ⚠️ <b>현관 키오스크에는 켜지 마세요</b> — 조교가 실제로 보는 기기에서만 켭니다. (설정은 기기마다 따로 저장됩니다)
+      <div style="font-size:12px;color:#4A3FA8;line-height:1.6">
+        학생이 교시 중 스탠드 책상 이동을 요청하면, <b>등록된 관리자 기기 전부</b>에
+        어느 화면을 보고 있든 승인 창이 자동으로 떠오릅니다. 별도 설정은 없습니다.<br>
+        단, <b>현관 키오스크</b>(입실·퇴실 전체화면, <code>#kiosk</code>로 실행된 기기)에는 뜨지 않습니다 —
+        학생이 조작하는 화면이라 승인 버튼을 노출하지 않습니다.
       </div>
-      <label style="display:inline-flex;align-items:center;gap:10px;cursor:pointer;padding:8px 4px">
-        <input type="checkbox" id="ta-station-toggle" onchange="toggleTaStation(this.checked)"
-          style="width:20px;height:20px;accent-color:#6C5DD3;cursor:pointer">
-        <span id="ta-station-label" style="font-size:13px;font-weight:700;color:#4A3FA8">이 기기를 조교석으로 사용</span>
-      </label>
     </div>
 
     <!-- 데이터 관리 -->
@@ -2541,12 +2537,14 @@ window.enterKioskMode = function() {
   const el = document.documentElement;
   if (el.requestFullscreen) el.requestFullscreen().catch(()=>{});
   acquireWakeLock(); // 화면 절전 방지 시작
+  if (window._sdRecheck) window._sdRecheck(); // 키오스크 화면에선 스탠드 책상 승인창 숨김
 };
 window.exitKioskMode = function() {
   document.body.classList.remove('kiosk-mode');
   stopKioskClock();
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   releaseWakeLock();
+  if (window._sdRecheck) window._sdRecheck(); // 관리 화면 복귀 → 밀린 승인 요청 표시
 };
 // ESC 등으로 브라우저 전체화면이 해제되면 키오스크 모드도 함께 해제
 document.addEventListener('fullscreenchange', () => {
@@ -2554,6 +2552,7 @@ document.addEventListener('fullscreenchange', () => {
     document.body.classList.remove('kiosk-mode');
     stopKioskClock();
     releaseWakeLock();
+    if (window._sdRecheck) window._sdRecheck();
   }
 });
 
@@ -9884,22 +9883,15 @@ const STANDDESK_COL = 'standdesk_requests';
 const _standDeskReqs = {};      // id -> data (알고 있는 요청들)
 let _standDeskCurId = null;     // 지금 승인창에 떠 있는 요청 id
 
-window.isTaStation = function() {
-  try { return localStorage.getItem('saebom_ta_station') === '1'; } catch(e) { return false; }
-};
-window.toggleTaStation = function(on) {
-  try { localStorage.setItem('saebom_ta_station', on ? '1' : '0'); } catch(e) {}
-  _refreshTaStationUI();
-  if (window.isTaStation()) _standDeskPump(); else _hideStandDeskApprove();
-};
-function _refreshTaStationUI() {
-  const cb = document.getElementById('ta-station-toggle');
-  const lb = document.getElementById('ta-station-label');
-  const on = window.isTaStation();
-  if (cb) cb.checked = on;
-  if (lb) lb.innerHTML = on
-    ? '✅ 이 기기가 <b>조교석</b>입니다 — 승인 창이 켜져 있어요'
-    : '이 기기를 조교석으로 사용';
+// 승인창을 띄울 자격 — 설정 없이 자동 판정한다(구 '조교석 토글'은 폐기, 2026-07-24).
+//   · 현관 키오스크는 제외: #kiosk 바로가기로 실행됐거나(_kioskAuto) 키오스크 모드가 켜진 화면.
+//     입실·퇴실 화면은 학생이 조작하므로 승인 버튼이 노출되면 안 된다.
+//   · 등록된 관리자 기기가 아니면 제외(미등록 기기는 입실·퇴실 화면만 보는 공개 화면).
+//   → 그 외 모든 관리앱 인스턴스는 어느 탭을 보고 있든 승인창이 뜬다.
+function _sdEligible() {
+  if (window._kioskAuto) return false;
+  if (document.body.classList.contains('kiosk-mode')) return false;
+  return (typeof window.isAdminDevice === 'function') ? window.isAdminDevice() : false;
 }
 
 function _sdToday() { return window.studyroomDayKey ? window.studyroomDayKey() : null; }
@@ -9923,9 +9915,9 @@ function _standDeskSweep() {
   });
 }
 
-// 조교석이면 지금 유효한 미결 요청 중 가장 먼저 온 것을 승인창에 띄운다.
+// 자격이 있는 화면이면 지금 유효한 미결 요청 중 가장 먼저 온 것을 승인창에 띄운다.
 function _standDeskPump() {
-  if (!window.isTaStation()) { _hideStandDeskApprove(); return; }
+  if (!_sdEligible()) { _hideStandDeskApprove(); return; }
   const today = _sdToday();
   const curP = _sdCurPeriod();
   const pend = Object.values(_standDeskReqs)
@@ -10020,7 +10012,9 @@ onSnapshot(collection(db, STANDDESK_COL), (snapshot) => {
   _standDeskPump();
 });
 
-_refreshTaStationUI();
+// 키오스크 모드 진입/해제 시 즉시 재판정(진입하면 승인창 숨김, 해제하면 대기 요청 표시).
+// classic 스크립트의 enterKioskMode/exitKioskMode/fullscreenchange가 호출한다.
+window._sdRecheck = () => { try { _standDeskPump(); } catch(e) {} };
 
 function renderStudyroomAlerts() {
   const section = document.getElementById('studyroom-req-section');
