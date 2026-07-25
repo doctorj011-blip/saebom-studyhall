@@ -182,13 +182,19 @@
   }
   .tick.is-near { background: rgba(232,181,32,.45); height: 28px; }
   .tick.is-now { background: var(--gold); height: 46px; box-shadow: 0 0 18px rgba(232,181,32,.5); }
+  /* 라벨은 해당 시각 칸 중심((i+0.5)/24)에 못 박는다.
+     격자로 두면 글자 너비 때문에 칸이 벌어져 눈금과 어긋난다. */
   .clock-scale {
-    display: grid; grid-template-columns: repeat(4, 1fr);
-    margin-top: 10px; font-size: 11.5px; color: var(--on-dark-mute);
+    position: relative; height: 15px; margin-top: 10px;
+    font-size: 11.5px; color: var(--on-dark-mute);
     font-variant-numeric: tabular-nums;
   }
-  .clock-scale span + span { text-align: center; }
-  .clock-scale span:last-child { text-align: right; }
+  .clock-scale span { position: absolute; top: 0; white-space: nowrap; transform: translateX(-50%); }
+  .clock-scale span:nth-child(1) { left: 0; transform: none; }        /* 0시 */
+  .clock-scale span:nth-child(2) { left: 27.08%; }                    /* 6시 */
+  .clock-scale span:nth-child(3) { left: 52.08%; }                    /* 12시 */
+  .clock-scale span:nth-child(4) { left: 77.08%; }                    /* 18시 */
+  .clock-scale span:nth-child(5) { right: 0; left: auto; transform: none; } /* 23시 */
 
   @media (max-width: 900px) {
     .hero-inner { grid-template-columns: 1fr; gap: 0; min-height: 0; }
@@ -250,7 +256,7 @@
       <div class="clock-now" id="clock-now">연중무휴 24시간 개방</div>
     </div>
     <div class="ticks" id="ticks" aria-hidden="true"></div>
-    <div class="clock-scale"><span>0시</span><span>6시</span><span>12시</span><span>18시</span></div>
+    <div class="clock-scale"><span>0시</span><span>6시</span><span>12시</span><span>18시</span><span>23시</span></div>
   </div>
 </div>
 
@@ -1073,8 +1079,8 @@
     function paint() {
       var t = seoulHour();
       for (var i = 0; i < 24; i++) {
-        var raw = Math.abs(i - t.h);
-        var diff = Math.min(raw, 24 - raw);
+        // 일직선 띠이므로 23시↔0시를 이웃으로 보지 않는다(반대쪽 끝이 혼자 켜져 보임).
+        var diff = Math.abs(i - t.h);
         els[i].className = 'tick' + (diff === 0 ? ' is-now' : (diff === 1 ? ' is-near' : ''));
       }
       if (label) {
