@@ -9943,6 +9943,8 @@ function _refreshCheckinUI(){
   if (window.renderSeatcamBoard) window.renderSeatcamBoard(); // CCTV 현황판은 입실 상태와 조인하므로 같이 갱신
   if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
   else if (document.getElementById('fp-room')) buildFloorplan();
+  // 신청 현황판도 같이 — 칩의 '퇴실' 표시가 입퇴실과 조인되므로 매분 틱을 기다리지 않고 즉시 반영한다
+  if (window.renderStudyroomBoard) { try { window.renderStudyroomBoard(); } catch(e){} }
   try { buildHoursTable(); } catch(e){} // 1일 사용시간 표 갱신
   if (window._todayModalRender) { try { window._todayModalRender(); } catch(e){} }
 }
@@ -10093,6 +10095,15 @@ onSnapshot(doc(db, 'settings', 'meal_away_sms'), (snap) => {
   console.error('❌ 식사시간 외출 알림 구독 에러:', error);
 });
 
+// ── 스터디룸 신청자의 퇴실 여부 ──
+// 배치도 명단(_syncStudyRoomStudents)과 현황판(renderStudyroomBoard)이 같은 기준으로 판단하도록
+// 한 곳에 모았다. 재입실해서 열린 기록이 있으면 퇴실로 보지 않는다(외출·재입실 오표시 방지).
+function _srCheckedOut(name) {
+  const out     = todayRecords.some(r => r.studentName === name && r.outTime);
+  const present = todayRecords.some(r => r.studentName === name && !r.outTime);
+  return out && !present;
+}
+
 function _syncStudyRoomStudents() {
   // studyRoomStudents(현재 사용자)·studyRoomWaiting(다음 교시 대기자) 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
@@ -10119,10 +10130,8 @@ function _syncStudyRoomStudents() {
     const end   = PERIOD_END[p]   || 0;
     const room  = data.room;
 
-    // 이미 퇴실한 학생은 제외
-    const isCheckedOut = todayRecords.some(r => r.studentName === data.name && r.outTime);
-    const isPresent    = todayRecords.some(r => r.studentName === data.name && !r.outTime);
-    if (isCheckedOut && !isPresent) return;
+    // 이미 퇴실한 학생은 제외 (현황판은 지우지 않고 '퇴실'로만 표시한다 — renderStudyroomBoard)
+    if (_srCheckedOut(data.name)) return;
 
     // 현재 교시 진행 중 → 방 안(사용자)
     if (adjMin >= start && adjMin <= end) {
@@ -10518,7 +10527,10 @@ function renderStudyroomBoard() {
   section.style.display = 'block';
   if (summary) {
     const pend = shown.filter(r => r.status === 'pending').length;
-    summary.textContent = `신청 ${shown.length}건` + (pend ? ` · 대기 ${pend}건` : '');
+    const gone = shown.filter(r => _srCheckedOut(r.name)).length;
+    summary.textContent = `신청 ${shown.length}건`
+      + (pend ? ` · 대기 ${pend}건` : '')
+      + (gone ? ` · 퇴실 ${gone}건` : '');
   }
   _renderStudyroomDupBtn();
 
@@ -10526,10 +10538,14 @@ function renderStudyroomBoard() {
   const td = 'padding:6px 8px;border:1px solid #EDE4F7;vertical-align:top;min-width:90px';
   const chip = (r) => {
     const pend = r.status === 'pending';
-    const bg = r.lock ? '#FEE2E2' : pend ? '#FEF3C7' : '#EDE7FF';
-    const fg = r.lock ? '#B91C1C' : pend ? '#B45309' : '#5B21B6';
-    const safeReason = (r.reason || '').replace(/"/g, '&quot;');
-    return `<span title="${safeReason}" style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;margin:2px 2px 0 0">${r.lock ? '🔒 ' : ''}${r.name}<span style="color:#9CA3AF;font-weight:400"> ${r.seat}</span>${pend ? ' ⏳' : ''}</span>`;
+    // 퇴실한 학생은 신청을 지우지 않고 회색·취소선으로만 구분한다 —
+    // 룸이 찬 것으로 오해하지 않도록. 실제 배정·정원은 배치도 명단 기준이라 영향 없다.
+    const gone = _srCheckedOut(r.name);
+    const bg = gone ? '#F3F4F6' : r.lock ? '#FEE2E2' : pend ? '#FEF3C7' : '#EDE7FF';
+    const fg = gone ? '#9CA3AF' : r.lock ? '#B91C1C' : pend ? '#B45309' : '#5B21B6';
+    const safeReason = ((gone ? '퇴실 — ' : '') + (r.reason || '')).replace(/"/g, '&quot;');
+    const nameHtml = gone ? `<span style="text-decoration:line-through">${r.name}</span>` : r.name;
+    return `<span title="${safeReason}" style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;margin:2px 2px 0 0">${r.lock ? '🔒 ' : ''}${nameHtml}<span style="color:#9CA3AF;font-weight:400"> ${r.seat}</span>${pend ? ' ⏳' : ''}${gone ? ' 👋퇴실' : ''}</span>`;
   };
   const cell = (p, room) => {
     const arr = byPeriod[p][room] || [];
