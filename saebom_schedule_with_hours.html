@@ -1963,8 +1963,12 @@ function allPeriodsBySat(isSat) {
   return VACATION_MODE ? list.filter(p => !VACATION_HIDDEN_PERIODS.has(p)) : list;
 }
 function allPeriodsForDay(day) { return allPeriodsBySat(isSatLike(day)); }
+// 오늘 운영하지 않는 교시인가 — 방학의 11교시. VACATION_MODE는 이 classic 블록의 지역 바인딩이라
+// module 블록(스터디룸 배정·현황판 등)은 반드시 이 window 함수를 경유해서 물어봐야 한다.
+function isPeriodOffToday(p) { return !!VACATION_MODE && VACATION_HIDDEN_PERIODS.has(Number(p)); }
 window.isSatLike = isSatLike;
 window.periodsForDay = periodsForDay;
+window.isPeriodOffToday = isPeriodOffToday;
 
 // ── 현재 교시 표시 ──
 // PERIODS_* 의 시각 문자열('6:00~6:50' 등)은 12시간제라 오전/오후가 모호하다.
@@ -3083,6 +3087,9 @@ function applyVacationMode(enabled) {
       if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || '월');
       if (window.buildDashboard) window.buildDashboard();
       if (window.updateNowPeriodChip) window.updateNowPeriodChip();
+      // 스터디룸(배치도 명단·신청 현황판)도 교시 구성을 따라간다 — 방학이면 11교시가 빠진다
+      if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
+      if (window.renderStudyroomBoard) window.renderStudyroomBoard();
     } catch(e) { console.error('방학 시간표 반영 실패:', e); }
   }
 }
@@ -6212,6 +6219,9 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
 // 1인 단독 사용(lock) 승인 룸은 배정에서 제외하고, 본인이 단독 사용 승인자면 그 룸으로 안내한다.
 // 반환: 배정된 룸 번호 또는 null (배정 가능한 룸이 없으면 초과 경고까지 처리)
 function autoAssignStudyroom(student, curPeriod) {
+  // 오늘 운영하지 않는 교시(방학의 11교시)에는 배정하지 않는다 — 없는 교시로 신청 문서가
+  // 생기면 현황판·에어컨 예냉까지 그 교시를 실재하는 것으로 취급한다.
+  if (window._srPeriodOff && window._srPeriodOff(curPeriod)) return null;
   // 본인이 이 교시 단독 사용 승인자면 자기 룸으로 (모듈 미로드 시 null → 일반 배정)
   const myLock = window._myLockedRoom ? window._myLockedRoom(student.name, curPeriod) : null;
   if (myLock && studyRoomStudents[myLock]) {
@@ -10104,6 +10114,17 @@ function _srCheckedOut(name) {
   return out && !present;
 }
 
+// ── 오늘 운영하지 않는 교시인가 (스터디룸 공통) ──
+// 방학에는 11교시(00:00~01:00)가 없다 — 3앱 공통 규칙(VACATION_HIDDEN_PERIODS).
+// 스터디룸은 교시 목록을 자기가 만들어 쓰는 곳이 여러 군데라(배치도·현황판·자동배정)
+// 판정을 여기 하나로 모은다. getCurrentPeriod()는 앱 전역이라 건드리지 않고 여기서 막는다.
+window._srPeriodOff = function(p) {
+  // 판정은 classic 블록의 isPeriodOffToday()가 한다(VACATION_MODE의 원본이 거기 있다).
+  // 아직 로드 전이면 '운영함'으로 본다 — 없는 교시를 잠깥 허용하는 쪽이, 있는 교시를
+  // 통째로 막아 배정·현황판이 비는 것보다 낫다.
+  return typeof window.isPeriodOffToday === 'function' ? window.isPeriodOffToday(p) : false;
+};
+
 function _syncStudyRoomStudents() {
   // studyRoomStudents(현재 사용자)·studyRoomWaiting(다음 교시 대기자) 초기화 후 approved 항목으로 재구성
   studyRoomStudents = { 1: [], 2: [], 3: [] };
@@ -10117,13 +10138,14 @@ function _syncStudyRoomStudents() {
   const PERIOD_START = {1:540,2:610,3:680,4:810,5:880,6:950,7:1080,8:1140,9:1230,10:1350,11:1440};
   const PERIOD_END   = {1:600,2:670,3:750,4:870,5:940,6:1020,7:1130,8:1220,9:1320,10:1430,11:1500};
 
-  // 다음 교시 = 시작시각이 현재 시각 이후인 가장 이른 교시
+  // 다음 교시 = 시작시각이 현재 시각 이후인 가장 이른 교시 (방학의 11교시처럼 없는 교시는 건너뜀)
   let nextP = null;
-  for (let p = 1; p <= 11; p++) { if (PERIOD_START[p] > adjMin) { nextP = p; break; } }
+  for (let p = 1; p <= 11; p++) { if (!window._srPeriodOff(p) && PERIOD_START[p] > adjMin) { nextP = p; break; } }
 
   Object.values(_knownStudyroomReqs).forEach(data => {
     if (data.status !== 'approved') return;
     if (data.date !== today) return;
+    if (window._srPeriodOff(data.period)) return; // 방학의 11교시 — 이미 쌓인 신청도 무시
 
     const p = data.period;
     const start = PERIOD_START[p] || 0;
@@ -10497,8 +10519,9 @@ function renderStudyroomBoard() {
   if (!section || !body) return;
   const today = window.studyroomDayKey();
   // 오늘 신청분만, 거절된 건 제외 (취소는 이미 목록에서 삭제됨)
+  // 오늘 운영하지 않는 교시(방학의 11교시)는 표에서 제외 — 학기 중 기록은 그대로 보인다
   const todays = Object.values(_knownStudyroomReqs)
-    .filter(r => r.date === today && r.status !== 'rejected');
+    .filter(r => r.date === today && r.status !== 'rejected' && !window._srPeriodOff(r.period));
   if (!todays.length) {
     section.style.display = 'block';
     if (summary) summary.textContent = '';

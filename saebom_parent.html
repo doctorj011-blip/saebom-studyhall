@@ -531,9 +531,22 @@ body{
         <div class="card-title"><i class="ti ti-calendar-event"></i> 주간 스케줄</div>
         <div id="schedule-content" style="overflow-x:auto">불러오는 중...</div>
       </div>
+    </div>
+
+    <!-- 상벌점 탭 (예전엔 스케줄 탭 맨 아래에 붙어 있어 눈에 띄지 않았다) -->
+    <div id="tab-score" style="display:none">
       <div id="p-score-offset-note"></div>
       <div id="merit-card"></div>
       <div id="penalty-card"></div>
+      <!-- 두 카드는 기록이 0건이면 아무것도 그리지 않으므로, 둘 다 비면 이 안내를 대신 띄운다 -->
+      <div id="p-score-empty" class="card" style="display:none;text-align:center;color:#9CA3AF;font-size:13px;padding:34px 16px;line-height:1.7">
+        🌱 아직 상점·벌점 기록이 없습니다.<br>규정을 잘 지키고 있다는 뜻입니다.
+      </div>
+      <div class="card" style="font-size:11.5px;color:#6B7280;line-height:1.7">
+        · <b>상점</b>은 주간 목표 순공 달성·주기 개근 등으로 자동 부여되며, 선생님이 직접 주기도 합니다.<br>
+        · <b>벌점</b>은 교시 시작 5시간 전 마감 이후의 늦은 변경(교시당 1점)과 무단결석(교시당 2점)입니다.<br>
+        · 상점이 쌓이면 벌점을 자동으로 상쇄합니다.
+      </div>
     </div>
 
     <!-- 플래너 탭 -->
@@ -572,6 +585,7 @@ body{
     <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-chart-bar"></i>학습현황</button>
     <button class="app-tab" onclick="showTab('events',this)"><i class="ti ti-trophy"></i>이벤트</button>
     <button class="app-tab" onclick="showTab('schedule',this)"><i class="ti ti-calendar-event"></i>스케줄</button>
+    <button class="app-tab" onclick="showTab('score',this)"><i class="ti ti-scale"></i>상벌점</button>
     <button class="app-tab" onclick="showTab('planner',this)"><i class="ti ti-notebook"></i>플래너</button>
   </div>
 </div>
@@ -648,7 +662,9 @@ function showTab(id, btn) {
   if (id === 'notice') loadNotices();
   if (id === 'status') { buildMyStats(); paInit(); }
   if (id === 'events') buildEvents();
-  ['notice','status','events','schedule','planner'].forEach(t => {
+  // 상벌점 탭: 열 때마다 다시 읽는다(선생님이 방금 준 상점·벌점도 바로 보이게)
+  if (id === 'score') { loadParentMerits(); loadParentPenalties(); }
+  ['notice','status','events','schedule','score','planner'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
@@ -885,7 +901,7 @@ async function loadParentPenalties() {
       });
     });
     window._pCycPen = monthTotal; renderParentOffsetNote();
-    if (!rows.length) { el.innerHTML = ''; return; }
+    if (!rows.length) { el.innerHTML = ''; renderParentScoreEmpty(); return; }
     const list = rows.slice(0, 15).map(r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
         <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${(r.p.type==='manual'||r.p.type==='weekly_short') ? String(r.p.reason||'벌점').replace(/</g,'&lt;') : `${r.n}교시 ${r.p.type==='noshow' ? '무단결석 (변경 없이 미입실)' : `늦은 ${r.p.to==='absent'?'불참':(r.p.to==='early'?'중간퇴실':'해제')} 변경`}`}${r.p.canceled?' · 관리자 취소':''}</span>
@@ -900,7 +916,19 @@ async function loadParentPenalties() {
         <div style="margin-top:4px">${list}</div>
         <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전 마감 이후의 출석 취소는 교시당 1점, 변경 없이 오지 않으면(무단결석) 교시당 2점이 부여됩니다.</div>
       </div>`;
+    renderParentScoreEmpty();
   } catch(e) { console.warn('벌점 조회 실패:', e); }
+}
+
+// ── 상벌점 탭 빈 상태 ──
+// 상점·벌점 카드는 기록이 0건이면 아무것도 그리지 않는다. 전용 탭이 되면서 둘 다 비면
+// 빈 화면이 되므로, 그때만 안내를 대신 띄운다.
+function renderParentScoreEmpty() {
+  const empty = document.getElementById('p-score-empty');
+  if (!empty) return;
+  const hasMerit = !!(document.getElementById('merit-card')   || {}).innerHTML;
+  const hasPen   = !!(document.getElementById('penalty-card') || {}).innerHTML;
+  empty.style.display = (hasMerit || hasPen) ? 'none' : 'block';
 }
 
 // ── 상점 (merits/{autoId} 문서 — 관리자가 수동 부여) ──
@@ -928,7 +956,7 @@ async function loadParentMerits() {
       rows.push({ date: doc.date, day: doc.day, pts: pts, reason: doc.reason });
     });
     window._pCycMerit = monthTotal; renderParentOffsetNote();
-    if (!rows.length) { el.innerHTML = ''; return; }
+    if (!rows.length) { el.innerHTML = ''; renderParentScoreEmpty(); return; }
     const list = rows.slice(0, 15).map(r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(5,150,105,0.14)">
         <span>${r.date.slice(5).replace('-','/')} ${r.day ? `(${r.day})` : ''} ${r.reason ? String(r.reason).replace(/</g,'&lt;') : '상점'}</span>
@@ -942,6 +970,7 @@ async function loadParentMerits() {
         </div>
         <div style="margin-top:4px">${list}</div>
       </div>`;
+    renderParentScoreEmpty();
   } catch(e) { console.warn('상점 조회 실패:', e); }
 }
 

@@ -1290,11 +1290,11 @@ body{
         <div class="quick-card-sub">교시 중 조교 승인 후 이동</div>
         <div class="quick-card-bg">🚶</div>
       </div>
-      <div class="quick-card" onclick="openSection('focus','#6C5DD3')">
-        <div class="quick-card-icon"><i class="ti ti-eye" style="color:var(--amber)"></i></div>
-        <div class="quick-card-title">SEE EYES</div>
-        <div class="quick-card-sub">학습 집중 관리 프로그램</div>
-        <div class="quick-card-bg"><i class="ti ti-eye"></i></div>
+      <div class="quick-card" onclick="openSection('score','#6C5DD3')">
+        <div class="quick-card-icon">⚖️</div>
+        <div class="quick-card-title">상점 · 벌점</div>
+        <div class="quick-card-sub">내 상벌점 내역 · 상쇄 현황</div>
+        <div class="quick-card-bg">⚖️</div>
       </div>
       <div class="quick-card" id="home-seatmap-card" style="display:none" onclick="openSection('seatmap','#6C5DD3')">
         <div class="quick-card-icon">🪑</div>
@@ -1356,11 +1356,26 @@ body{
       <div class="section-label">TODAY · 오늘 일정</div>
       <div id="daily-edit-banner" style="font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px">✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.</div>
       <div id="weekly-goal-card"></div>
+      <div class="day-tabs" id="student-day-tabs"></div>
+      <div id="daily-periods"></div>
+    </div>
+
+    <!-- 상점 · 벌점 (홈 퀵카드로 진입 — 예전엔 '오늘 일정' 탭 상단에 끼워 있었다) -->
+    <div id="tab-score" style="display:none">
+      <div class="section-label">SCORE · 상점 · 벌점</div>
       <div id="score-offset-note"></div>
       <div id="merit-card"></div>
       <div id="penalty-card"></div>
-      <div class="day-tabs" id="student-day-tabs"></div>
-      <div id="daily-periods"></div>
+      <!-- 두 카드가 모두 비었을 때만 보이는 안내 (카드는 기록이 0건이면 아무것도 그리지 않는다) -->
+      <div id="score-empty" style="display:none;text-align:center;color:var(--text3);font-size:13px;padding:34px 16px;line-height:1.7">
+        🌱 아직 상점·벌점 기록이 없습니다.<br>규정을 잘 지키고 있다는 뜻이에요.
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:14px;line-height:1.6">
+        · 상점은 주간 목표 순공 달성·개근 등으로 자동 부여되고, 관리자 선생님이 직접 주기도 합니다.<br>
+        · 벌점은 교시 시작 5시간 전 마감 이후의 늦은 변경(교시당 1점)과 무단결석(교시당 2점)입니다.<br>
+        · 상점이 쌓이면 벌점을 자동으로 상쇄합니다.
+      </div>
+      <div style="height:60px"></div>
     </div>
 
     <!-- 주간 시간표 -->
@@ -1991,7 +2006,7 @@ function renderPenaltyCard() {
     });
   });
   window._cycPenTotal = monthTotal; renderOffsetNote();
-  if (!rows.length) { el.innerHTML = ''; return; }
+  if (!rows.length) { el.innerHTML = ''; renderScoreEmpty(); return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
       <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${(r.p.type==='manual'||r.p.type==='weekly_short') ? String(r.p.reason||'벌점').replace(/</g,'&lt;') : `${r.n}교시 ${r.p.type==='noshow' ? '무단결석' : `늦은 ${r.p.to==='absent'?'불참':(r.p.to==='early'?'중간퇴실':'해제')} 변경`}`}${r.p.canceled?' · 관리자 취소':''}</span>
@@ -2006,6 +2021,18 @@ function renderPenaltyCard() {
       <div style="margin-top:4px">${list}</div>
       <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전까지 변경하면 벌점이 없습니다. 늦은 변경은 교시당 1점, 변경 없이 안 오면(무단결석) 교시당 2점입니다.</div>
     </div>`;
+  renderScoreEmpty();
+}
+
+// ── 상벌점 화면 빈 상태 ──
+// 상점·벌점 카드는 기록이 0건이면 아무것도 그리지 않는다(그게 원래 설계다). 전용 화면이 되면서
+// 둘 다 비면 완전 빈 페이지가 되므로, 그때만 안내 문구를 대신 띄운다.
+function renderScoreEmpty() {
+  const empty = document.getElementById('score-empty');
+  if (!empty) return;
+  const hasMerit = !!(document.getElementById('merit-card')   || {}).innerHTML;
+  const hasPen   = !!(document.getElementById('penalty-card') || {}).innerHTML;
+  empty.style.display = (hasMerit || hasPen) ? 'none' : 'block';
 }
 
 // ── 주간 목표순공 카드 (관리자가 설정, 학생은 조회만) ──
@@ -2059,7 +2086,7 @@ function renderMeritCard() {
     rows.push({ date: doc.date, day: doc.day, pts: pts, reason: doc.reason });
   });
   window._cycMeritTotal = monthTotal; renderOffsetNote();
-  if (!rows.length) { el.innerHTML = ''; return; }
+  if (!rows.length) { el.innerHTML = ''; renderScoreEmpty(); return; }
   const list = rows.slice(0, 10).map(r => `
     <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(5,150,105,0.14)">
       <span>${String(r.date).slice(5).replace('-','/')} ${r.day ? `(${r.day})` : ''} ${r.reason ? String(r.reason).replace(/</g,'&lt;') : '상점'}</span>
@@ -2073,6 +2100,7 @@ function renderMeritCard() {
       </div>
       <div style="margin-top:4px">${list}</div>
     </div>`;
+  renderScoreEmpty();
 }
 
 // 상점↔벌점 자동 상쇄 요약 — 이번 주기 상점총합·벌점총합으로 계산(계산식). 상쇄가 있을 때만 표시.
@@ -2662,6 +2690,8 @@ function subscribeVacationMode() {
       try {
         buildWeeklyTable();
         buildDailyPeriods();
+        // 스터디룸 신청 버튼도 교시 구성을 따라간다 — 방학이면 11교시 버튼이 사라진다
+        try { buildStudyroomPeriodBtns(); } catch(e) {}
         // 교시 구성이 바뀌었으니 이미 떠 있는 잔소리도 다시 판단한다.
         // 지금이 교시 중이 아니면(방학의 11교시처럼 사라진 교시면) 닫는다.
         if (!currentPeriodNow()) {
@@ -2796,7 +2826,8 @@ const SECTION_NAMES = {
   planner: '플래너',
   studyroom: '스터디룸 신청',
   seatmap: '자리 선택',
-  focus: 'SEE EYES'
+  score: '상점 · 벌점',
+  focus: 'SEE EYES'   // 홈 퀵카드에서 내렸다(2026-07-25) — 화면은 남아 있으나 진입점 없음
 };
 
 function openSection(id, color) {
@@ -2853,9 +2884,11 @@ function showTab(id, btn) {
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','focus'].forEach(t => {
+  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','score','focus'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
+  // 상벌점 화면: 열 때마다 최신으로 다시 읽는다(관리자가 방금 준 상점도 바로 보이게)
+  if (id === 'score') { loadMyMerits(); loadMyPenalties(); }
   // 집중 감지 탭: 열면 좌석 표시, 벗어나면 카메라 중지
   if (id === 'focus') { if (window.fmOnOpen) window.fmOnOpen(); }
   else { if (window.fmOnLeave) window.fmOnLeave(); }
@@ -4438,16 +4471,20 @@ const STUDYROOM_CAPACITY = 3;
 let studyroomUnsubscribe = null;
 
 // 오늘 운영 교시 목록 (일요일=null). 일반 신청 버튼과 단독 사용 모달이 공유한다.
+// ★방학에는 11교시(00:00~01:00)가 없다 — VACATION_HIDDEN_PERIODS로 반드시 걸러낼 것.
+//   여기서 막지 않으면 없는 교시로 스터디룸 신청 문서가 생겨 관리앱 현황판·에어컨 예냉까지
+//   그 교시를 실재하는 것으로 취급한다(2026-07-25 발견 — periodsFor()를 쓰지 않은 유일한 곳이었다).
 function studyroomPeriodsToday() {
   const today = DAY_NAMES[new Date().getDay()];
   if (today === '일') return null;
-  return isSatLike(today)
+  const list = isSatLike(today)
     ? [{n:1,t:'09:00~10:00'},{n:2,t:'10:10~11:10'},{n:3,t:'11:20~12:30'},
        {n:4,t:'13:30~14:30'},{n:5,t:'14:40~15:40'},{n:6,t:'15:50~17:00'},
        {n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}]
     : [{n:7,t:'18:00~18:50'},{n:8,t:'19:00~20:20'},{n:9,t:'20:30~22:00'},
        {n:10,t:'22:30~23:50'},{n:11,t:'00:00~01:00'}];
+  return VACATION_MODE ? list.filter(p => !VACATION_HIDDEN_PERIODS.has(p.n)) : list;
 }
 
 function buildStudyroomPeriodBtns() {
@@ -4512,6 +4549,13 @@ async function _studyroomAvailability(db, periodNum) {
 async function applyStudyroom(periodNum) {
   const db = window._db;
   if (!db || !currentStudent) return;
+  // 오늘 없는 교시는 신청 차단 — 방학모드 설정이 늦게 도착해 11교시 버튼이 한 번 그려졌더라도
+  // 여기서 막힌다(버튼 목록만 믿으면 그 짧은 틈에 신청이 들어간다).
+  if (VACATION_MODE && VACATION_HIDDEN_PERIODS.has(Number(periodNum))) {
+    alert('방학 기간에는 11교시를 운영하지 않습니다.');
+    buildStudyroomPeriodBtns();
+    return;
+  }
   try {
     const st = await _studyroomAvailability(db, periodNum);
     if (st.periodReqs.some(r => r.name === currentStudent.name)) { alert(`이미 ${periodNum}교시 스터디룸을 신청하셨습니다.`); return; }
