@@ -1825,6 +1825,25 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         </div>
       </div>
 
+      <!-- 식사시간 외출 알림 -->
+      <div style="background:#F0FDF4;border:1.5px solid #16A34A;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#14532D;margin-bottom:6px">🍚 식사시간 외출 알림</div>
+        <div style="font-size:11px;color:#166534;margin-bottom:10px">
+          외출·복귀는 원래 학부모 알림을 보내지 않지만, <b>점심·저녁 식사시간</b>에 누른 외출/복귀는 예외로 발송합니다.
+          단 <b>학부모앱 공지에서 수신을 희망한 학부모님에게만</b> 갑니다(미응답이면 보내지 않습니다).
+          식사시간은 시간표의 교시 사이 빈 구간을 따라갑니다.
+          <br><b>주의:</b> 문자가 간다는 걸 알면 외출을 아예 안 누르고 나갈 수 있습니다(그 시간이 학습시간에 그대로 잡힙니다).
+          '외출 미기록 의심' 현황판이 늘어나면 여기서 끄세요.
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button id="meal-away-sms-toggle-btn" onclick="toggleMealAwaySms()"
+            style="padding:8px 18px;background:#bdc1c6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
+            🍚 식사 외출 알림
+          </button>
+          <span id="meal-away-sms-status" style="font-size:11px;color:#888"></span>
+        </div>
+      </div>
+
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <a href="https://doctorj011-blip.github.io/saebom-studyhall/saebom_student.html" target="_blank"
           style="padding:6px 12px;background:#6C5DD3;color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none">
@@ -2976,6 +2995,7 @@ function loadSettingsTab() {
   loadSeatSelectionStatus();
   loadScheduleEditStatus();
   loadVacationModeStatus();
+  loadMealAwaySmsStatus();
   try {
     const k = document.getElementById('cfg-key');
     const s = document.getElementById('cfg-secret');
@@ -3125,6 +3145,84 @@ window.toggleVacationMode = async function() {
     });
     applyVacationMode(next);
     showAdminToast(next ? '🌞 방학 시간표로 전환됨 (평일 1~10교시)' : '📚 학기 시간표로 전환됨 (평일 7~11교시)');
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
+
+// ── 식사시간 외출 알림 토글 (settings/meal_away_sms) ──
+// 관리자앱만 읽는다(발송 주체가 키오스크라서). 문서가 없으면 '켜짐'으로 본다.
+// 끄면 외출/복귀는 원래 원칙대로 완전 무발송으로 돌아간다.
+function applyMealAwaySms(enabled) {
+  MEAL_AWAY_SMS = !!enabled;
+  updateMealAwaySmsBtn(MEAL_AWAY_SMS);
+}
+window.applyMealAwaySms = applyMealAwaySms;
+
+function updateMealAwaySmsBtn(enabled) {
+  const btn = document.getElementById('meal-away-sms-toggle-btn');
+  const status = document.getElementById('meal-away-sms-status');
+  if (!btn) return;
+  if (enabled === null) {
+    btn.textContent = '⚠️ 상태 확인 실패';
+    btn.style.background = '#E0A800';
+    if (status) { status.textContent = '새로고침 후 다시 확인하세요'; status.style.color = '#B45309'; }
+    btn.dataset.enabled = '';
+    return;
+  }
+  const mw = _mealWindowsMin();
+  const fmt = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+  const label = mw.length ? mw.map(w => `${w.name} ${fmt(w.s)}~${fmt(w.e)}`).join(' · ') : '식사시간 계산 불가';
+  // 학부모 응답 집계 — 실제 발송 대상이 몇 명인지 원장이 바로 알 수 있게 함
+  const real = (window.STUDENTS || []).filter(s => s.name && !window.isNonStudent?.(s.name));
+  const yes = real.filter(s => s.mealAwaySms === true).length;
+  const no  = real.filter(s => s.mealAwaySms === false).length;
+  const non = real.length - yes - no;
+  const tally = `희망 ${yes}명 · 비희망 ${no}명 · 미응답 ${non}명`;
+  if (enabled) {
+    btn.textContent = '🍚 식사 외출 알림 켜짐';
+    btn.style.background = '#16A34A';
+    if (status) { status.textContent = `${tally} · ${label}`; status.style.color = '#15803D'; }
+  } else {
+    btn.textContent = '🔕 식사 외출 알림 꺼짐';
+    btn.style.background = '#bdc1c6';
+    if (status) { status.textContent = '모든 외출·복귀가 무발송입니다'; status.style.color = '#888'; }
+  }
+  btn.dataset.enabled = enabled ? '1' : '0';
+}
+
+async function loadMealAwaySmsStatus() {
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('DB 연결 대기 시간 초과');
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'meal_away_sms'));
+    applyMealAwaySms(snap.exists() ? !!snap.data().enabled : true);
+  } catch(e) {
+    console.error('식사 외출 알림 상태 조회 실패:', e);
+    updateMealAwaySmsBtn(null);
+  }
+}
+window.loadMealAwaySmsStatus = loadMealAwaySmsStatus;
+
+window.toggleMealAwaySms = async function() {
+  try {
+    const db = await window.waitDb();
+    if (!db) { showAdminToast('❌ DB 연결 실패 — 잠시 후 다시 시도하세요'); return; }
+    const btn = document.getElementById('meal-away-sms-toggle-btn');
+    // 상태 조회에 실패했으면(dataset 비어 있음) 화면값을 믿지 않고 실제 값을 다시 읽는다
+    if (btn.dataset.enabled !== '0' && btn.dataset.enabled !== '1') {
+      const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'meal_away_sms'));
+      applyMealAwaySms(snap.exists() ? !!snap.data().enabled : true);
+      showAdminToast('🔄 현재 상태를 불러왔습니다 — 다시 눌러 변경하세요');
+      return;
+    }
+    const next = btn.dataset.enabled !== '1';
+    if (next && !confirm('식사시간 외출 알림을 켤까요?\n\n점심·저녁 식사시간에 외출/복귀를 누르면 학부모님께 알림이 발송됩니다.\n(그 외 시간대 외출은 발송하지 않습니다)')) return;
+    if (!next && !confirm('식사시간 외출 알림을 끌까요?\n\n외출·복귀가 모두 무발송으로 돌아갑니다.')) return;
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'meal_away_sms'), {
+      enabled: next,
+      updatedAt: window._fsServerTimestamp()
+    });
+    applyMealAwaySms(next);
+    showAdminToast(next ? '🍚 식사시간 외출 알림 켜짐' : '🔕 식사시간 외출 알림 꺼짐');
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 
@@ -5768,10 +5866,17 @@ window.checkinAway = function() {
     const openRec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
     if (!openRec) { showAdminToast(`ℹ️ ${student.name} 학생은 입실 중이 아닙니다`); checkinReset(); return; }
     window._checkinProcessing = true;
-    const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    const nowMs = Date.now();
+    const timeStr = new Date(nowMs).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     window._awayStudents[student.name] = timeStr;
     student.awayAt = timeStr;
-    _showAwayDone(student, '🚶', '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
+    // 점심·저녁 식사시간 외출은 학부모가 수신을 희망한 경우에만 알림을 보낸다(그 외는 무발송 유지).
+    // 키오스크 문구도 사실대로 바꿔 준다 — 학생이 "문자 안 간다"고 알고 누르면 안 되므로.
+    const mealName = mealAwayTargetFor(student, nowMs);
+    _showAwayDone(student, '🚶',
+      mealName ? `외출 처리 · 잘 다녀오세요 (학부모님께 ${mealName} 외출 알림 발송)`
+               : '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
+    if (mealName) sendAwaySMS(student, false, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, false, timeStr);
     // 세션 문서에 외출 시작(awayStartTs) 기록 — 사용시간 제외의 원본
     waitSessionApi().then(api => api.away(student, false)).catch(console.error);
@@ -5794,10 +5899,19 @@ window.checkinAwayReturn = function() {
     if (window._checkinProcessing) return;
     const student = document.getElementById('confirm-ok-btn')._student;
     window._checkinProcessing = true;
-    const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    const nowMs = Date.now();
+    const timeStr = new Date(nowMs).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+    // 복귀 알림은 '나간 시각'으로 판정한다 — 12:35에 점심 먹으러 나가 14:00에 돌아오면
+    // 복귀 시각만 보면 식사시간이 아니어서, 외출 알림만 가고 복귀 알림이 빠지게 된다.
+    // 시작 epoch는 세션 문서에서 오므로 다른 키오스크에서 외출한 학생도 잡힌다(없으면 현재 시각으로 폴백).
+    const awayStartMs = (window._awayStartTs && window._awayStartTs[student.name]) || nowMs;
+    const mealName = mealAwayTargetFor(student, awayStartMs);
     delete window._awayStudents[student.name];
     student.awayAt = '';
-    _showAwayDone(student, '✅', '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
+    _showAwayDone(student, '✅',
+      mealName ? `복귀 완료 · 어서 오세요 (학부모님께 ${mealName} 복귀 알림 발송)`
+               : '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
+    if (mealName) sendAwaySMS(student, true, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, true, timeStr);
     // 세션 문서에 외출 구간(awayMs) 정산 — 사용시간 제외의 원본
     waitSessionApi().then(api => api.away(student, true)).catch(console.error);
@@ -5891,6 +6005,14 @@ const KAKAO_TPL_IN      = 'KA01TP260709121458561DgoFe7pMzpj';
 const KAKAO_TPL_OUT     = 'KA01TP260709121603152525pt2KJg4c';
 const KAKAO_TPL_SCHEDULE = 'KA01TP260709121409976QtDWcbbbT51';
 const KAKAO_TPL_ABSENT  = 'KA01TP260709121315474MwHiN8I4BEU';
+// 식사(점심·저녁) 외출/복귀 알림 — 2026-07-25 신설.
+// ★비어 있으면 문자(LMS)로 폴백해서 발송한다. 알림톡은 카카오 승인된 템플릿만 보낼 수 있어
+//   승인 전에도 기능이 돌아가게 한 것이다(미입실 알림도 문자로 시작해 알림톡으로 옮겼다).
+//   솔라피에서 아래 문구로 템플릿을 승인받은 뒤 ID를 넣으면 자동으로 알림톡으로 전환된다.
+//   외출: "[새봄면학관] #{이름} 학생이 #{시간}에 #{구분} 식사를 위해 외출하였습니다."
+//   복귀: "[새봄면학관] #{이름} 학생이 #{시간}에 #{구분} 식사 외출에서 복귀하였습니다."
+const KAKAO_TPL_AWAY      = '';
+const KAKAO_TPL_AWAY_BACK = '';
 
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   // 테스트 계정은 입퇴실 알림톡을 보내지 않는다
@@ -5935,6 +6057,95 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
     logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
     showAdminToast(`⚠️ 알림톡 오류: ${e.message}`);
     console.error('[알림톡] 발송 오류:', e);
+  }
+}
+
+// ── 식사시간 외출 알림 (2026-07-25) ──
+// 원칙은 '외출/복귀는 학부모 알림 없음'이다(잠깐 나갔다 오는 것까지 알릴 필요가 없고,
+// 알림이 늘어나면 정작 중요한 미입실 알림이 소음에 묻힌다). 점심·저녁 식사 외출만 예외로 보낸다.
+// ★부작용을 알고 넣는다: "외출을 누르면 부모님께 문자가 간다"를 알면 아예 안 누르고 나갈 유인이
+//   생기고, 그러면 그 시간이 학습시간에 그대로 잡힌다('외출 미기록 의심' 현황판이 그 문제 때문에 있다).
+//   → settings/meal_away_sms 로 언제든 끌 수 있게 했다. 부작용이 보이면 그 스위치를 내리면 된다.
+const MEAL_AWAY_GRACE_MIN = 15;  // 식사구간 앞뒤 여유 — 12:25에 나가도 '점심 외출'로 본다
+let MEAL_AWAY_SMS = true;        // settings/meal_away_sms.enabled (문서가 없으면 켜진 것으로 본다)
+
+// 식사시간 = 교시 사이의 빈 구간. 3교시 끝~4교시 시작=점심(12:30~13:30),
+// 6교시 끝~7교시 시작=저녁(17:00~18:00). 시간표(PERIOD_BOUNDS)에서 끌어오므로 교시 시각이
+// 바뀌면 함께 따라간다. 모듈 쪽 _awayMissMealWindows 와 같은 규칙(그쪽은 epoch, 여기는 '자정부터 분').
+function _mealWindowsMin() {
+  const B = PERIOD_BOUNDS;
+  if (!B || !B[3] || !B[4] || !B[6] || !B[7]) return [];
+  return [
+    { name: '점심', s: B[3][1], e: B[4][0] },
+    { name: '저녁', s: B[6][1], e: B[7][0] }
+  ].filter(w => w.e > w.s);
+}
+
+// 이 시각(epoch)이 식사시간대에 걸치면 '점심'/'저녁', 아니면 null
+function mealWindowNameAt(ts) {
+  const d = new Date(ts);
+  const min = d.getHours() * 60 + d.getMinutes();
+  for (const w of _mealWindowsMin()) {
+    if (min >= w.s - MEAL_AWAY_GRACE_MIN && min <= w.e + MEAL_AWAY_GRACE_MIN) return w.name;
+  }
+  return null;
+}
+window.mealWindowNameAt = mealWindowNameAt;
+
+// 이 외출이 학부모 알림 대상인가 — 대상이면 '점심'/'저녁', 아니면 null.
+// 조건 셋을 모두 만족해야 한다: (1)기능 켜짐 (2)학부모가 수신을 희망 (3)식사시간대.
+// ★(2)는 학부모앱에서 학부모가 직접 고른 students.mealAwaySms 값이다. 미응답(null)이면 보내지 않는다
+//   — "희망자에게만 보낸다"가 원칙이므로 응답이 없으면 발송하지 않는 쪽이 기본값이다.
+function mealAwayTargetFor(student, ts) {
+  if (!MEAL_AWAY_SMS) return null;
+  if (!student || student.mealAwaySms !== true) return null;
+  return mealWindowNameAt(ts);
+}
+window.mealAwayTargetFor = mealAwayTargetFor;
+
+// 식사 외출/복귀 학부모 알림. 템플릿 ID가 비어 있으면 문자(LMS)로 폴백한다.
+async function sendAwaySMS(student, isReturn, timeStr, mealName) {
+  if (!MEAL_AWAY_SMS) return;
+  if (student.mealAwaySms !== true) return;        // 수신 희망자만 (이중 방어)
+  if (window.isTestStudent(student.name)) return;  // 테스트 계정은 발송 안 함
+  const parentPhone = (student.parent || '').replace(/-/g, '');
+  // 입퇴실 알림과 동일: 유효한 번호가 없으면 실패 토스트 없이 조용히 생략(관리자 등)
+  if (parentPhone.length < 10) return;
+
+  const type       = isReturn ? 'away_back' : 'away';
+  const typeLabel  = isReturn ? `${mealName} 복귀` : `${mealName} 외출`;
+  const templateId = isReturn ? KAKAO_TPL_AWAY_BACK : KAKAO_TPL_AWAY;
+  const variables  = { '#{이름}': student.name, '#{시간}': timeStr, '#{구분}': mealName };
+  const text = isReturn
+    ? `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 ${mealName} 식사 외출에서 복귀하였습니다.😊`
+    : `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 ${mealName} 식사를 위해 외출하였습니다.`;
+
+  console.log(`[식사외출알림] 발송 시도 → ${student.name} (${parentPhone}) ${typeLabel}`, templateId ? '알림톡' : '문자(LMS)');
+
+  try {
+    let raw, success;
+    if (templateId) {
+      const sendFn = window.solapiAlimtalkSend;
+      if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다'); return; }
+      raw = await sendFn(parentPhone, KAKAO_PF_ID, templateId, variables);
+      if (raw?.error === 'NO_KEY') { showAdminToast('⚠️ 솔라피 API 설정을 먼저 해주세요'); return; }
+      success = !!(raw.errorCount === 0 || (raw.groupId && !raw.errorCount));
+    } else {
+      const sendFn = window.solapiSend;
+      if (!sendFn) { showAdminToast('⚠️ 문자 모듈 로드 전입니다'); return; }
+      raw = await sendFn(parentPhone, text);
+      if (raw === false) return;   // 키 미설정 — solapiSend가 이미 안내 토스트를 띄웠다
+      success = raw === true;
+    }
+    const logFn = window.saveSmsLog || saveSmsLog;
+    logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success, error: success ? null : JSON.stringify(raw), time: timeStr });
+    if (success) showAdminToast(`✅ ${student.name} 학부모님께 ${typeLabel} 알림 발송`);
+    else showAdminToast(`⚠️ ${typeLabel} 알림 실패: ${JSON.stringify(raw)}`);
+  } catch(e) {
+    const logFn = window.saveSmsLog || saveSmsLog;
+    logFn({ student: student.name, seat: student.seat, phone: parentPhone, type, typeLabel, text, success: false, error: e.message, time: timeStr });
+    showAdminToast(`⚠️ ${typeLabel} 알림 오류: ${e.message}`);
+    console.error('[식사외출알림] 발송 오류:', e);
   }
 }
 
@@ -6133,9 +6344,19 @@ function buildCheckinTodayList() {
 
 // 외출 경과 시간은 그리는 시점에 계산되므로, 외출 중인 학생이 있는 동안만 1분마다 다시 그린다.
 // (세션 스냅샷은 외출 시작/복귀 때만 오기 때문에 그것만으론 '몇 분째'가 멈춰 있다)
+// 배치도의 퇴실 사유(fpOutReason)도 '현재 교시' 기준이라 교시가 바뀌면 다시 그려야 한다 —
+// 외출자가 없으면 위 조건에서 걸러지므로 교시 변화는 따로 확인한다(안 하면 지난 교시 기준 문구가 남는다).
+let _fpLastPeriodKey = '';
 setInterval(() => {
-  if (!window._awayStudents || Object.keys(window._awayStudents).length === 0) return;
-  try { buildCheckinTodayList(); } catch(e){}
+  const hasAway = !!(window._awayStudents && Object.keys(window._awayStudents).length);
+  let periodChanged = false;
+  try {
+    const info = (typeof _currentPeriodInfo === 'function') ? _currentPeriodInfo() : null;
+    const key = info ? `${info.phase}_${(info.current && info.current.n) || (info.next && info.next.n) || ''}` : '';
+    if (key !== _fpLastPeriodKey) { _fpLastPeriodKey = key; periodChanged = true; }
+  } catch(e){}
+  if (!hasAway && !periodChanged) return;
+  if (hasAway) { try { buildCheckinTodayList(); } catch(e){} }
   try { if (!fpEditMode && document.getElementById('fp-room')) buildFloorplan(); } catch(e){}
 }, 60000);
 
@@ -6167,6 +6388,57 @@ function getFpStatus(student) {
   if (recOut) return 'out';
   return 'registered';
 }
+
+// ── 배치도: 퇴실인 이유 ──
+// '퇴실' 배지만 보면 왜 자리에 없는지 알 수 없다 — 일정을 다 마치고 정상 하원한 것인지,
+// 학원 때문에 그 교시를 빠지기로 한 것인지, 출석해야 하는데 그냥 가버린 것인지 구분이 안 된다.
+// 오늘 요일 스케줄(사람이 입력한 사유가 가장 정확하다)과 현재 교시를 맞춰 한 줄로 만든다.
+// warn=true 는 '출석 예정인데 자리에 없다' = 조교가 확인해야 하는 상태.
+function fpOutReason(student) {
+  if (!student) return null;
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  const day = getTodayDayName();
+  const raw = (student.schedule && student.schedule[day]) || '-';
+  if (!raw || raw === '-') return { text: '오늘 일정 없음', warn: false };
+  const sc = parseScheduleStr(raw);
+  if (!sc.periods.size && !sc.absentPeriods.size) return { text: '오늘 일정 없음', warn: false };
+
+  // 진행 중인 교시(phase 'in')일 때만 curP가 있다. 쉬는시간·수업 전이면 nextP로 다음 교시를 본다.
+  const info = (typeof _currentPeriodInfo === 'function') ? _currentPeriodInfo() : { phase: 'closed' };
+  const curP  = (info.phase === 'in' && info.current) ? parseInt(info.current.n) : null;
+  const nextP = ((info.phase === 'break' || info.phase === 'before') && info.next) ? parseInt(info.next.n) : null;
+
+  // 1) 지금 교시가 '불참'으로 적혀 있으면 적힌 사유가 곧 퇴실 이유다
+  if (curP && sc.absentPeriods.has(curP)) {
+    const why = sc.absentReasons[curP];
+    return { text: why ? `${curP}교시 불참 · ${esc(why)}` : `${curP}교시 불참`, warn: false };
+  }
+  // 2) 지금 교시에 출석해야 하는 학생
+  if (curP && sc.periods.has(curP)) {
+    if (sc.partials.has(curP)) {
+      const t = sc.partialTimes[curP];
+      return { text: `${curP}교시 중간입실${t ? ' ' + esc(t) : ''} 예정`, warn: false };
+    }
+    if (sc.earlies.has(curP)) {
+      const t = sc.earlyTimes[curP];
+      return { text: `${curP}교시 중간퇴실${t ? ' ' + esc(t) : ''}`, warn: false };
+    }
+    return { text: `${curP}교시 출석 예정`, warn: true };  // ← 확인 필요
+  }
+  // 3) 교시 사이·수업 전 — 다음에 올 예정인 교시를 알려준다
+  const from = (nextP != null) ? nextP : (curP != null ? curP + 1 : null);
+  if (from != null) {
+    const upcoming = [...sc.periods].filter(p => p >= from).sort((a,b) => a - b);
+    if (upcoming.length) {
+      const p = upcoming[0];
+      const t = sc.partials.has(p) ? sc.partialTimes[p] : null;
+      return { text: `${p}교시 예정${t ? ' ' + esc(t) : ''}`, warn: false };
+    }
+  }
+  // 4) 남은 예정 교시가 없다 = 오늘 몫을 다 하고 하원
+  return { text: '오늘 일정 종료', warn: false };
+}
+window.fpOutReason = fpOutReason;
 
 function calcDday(expiry) {
   if (!expiry) return null;
@@ -6403,6 +6675,9 @@ function buildFloorplan() {
     .fp-badge-away-long { background:#DC2626; color:#fff; }
     .fp-badge-out { background:#9CA3AF; color:#fff; }
     .fp-badge-absent { background:#F3F4F6; color:#9CA3AF; }
+    /* 퇴실 사유 한 줄 — 칸이 좁으므로 넘치면 …로 자르고 전체 문구는 칸 title(마우스 올림)로 본다 */
+    .fp-reason { font-size:8.5px; color:#6B7280; line-height:1.2; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+    .fp-reason-warn { color:#B91C1C; font-weight:700; }
     .fp-dday { font-size:9px; color:#5B5FEF; font-weight:600; }
     .fp-gender-f { color:#E05C8A; }
     .fp-gender-m { color:#4A90D9; }
@@ -6477,7 +6752,7 @@ function buildFloorplan() {
             ? '<span class="fp-gender-m">♂</span>'
             : student ? '<span class="fp-gender-f">♀</span>' : '';
 
-          let cellCls, badgeCls, badgeText;
+          let cellCls, badgeCls, badgeText, outReason = null;
           // 스터디룸 사용 여부 확인
           const inStudyRoomGrid = student && Object.entries(studyRoomStudents).some(([room, arr]) => arr.includes(student.name));
           const studyRoomNum = inStudyRoomGrid ? Object.entries(studyRoomStudents).find(([r,arr]) => arr.includes(student.name))?.[0] : null;
@@ -6494,7 +6769,12 @@ function buildFloorplan() {
             badgeCls = longAway ? 'fp-badge-away-long' : 'fp-badge-away';
             badgeText = `🚶외출 ${aw && aw.min != null ? aw.min + '분' : (aw ? aw.at : '')}`;
           } else if (status === 'out') {
-            cellCls = 'fp-cell-out'; badgeCls = 'fp-badge-out'; badgeText = '퇴실';
+            cellCls = 'fp-cell-out'; badgeCls = 'fp-badge-out';
+            // 언제 나갔는지 + 왜 없는지를 함께 보여준다(퇴실 기록이 여러 건이면 가장 마지막 것)
+            const outRecs = todayRecords.filter(r2 => r2.studentName === student.name && r2.outTime);
+            const lastOut = outRecs.length ? outRecs[outRecs.length - 1] : null;
+            badgeText = `퇴실${lastOut?.outTime ? ' ' + lastOut.outTime : ''}`;
+            outReason = fpOutReason(student);
           } else {
             cellCls = 'fp-cell-absent'; badgeCls = 'fp-badge-absent'; badgeText = '미입실';
           }
@@ -6506,7 +6786,10 @@ function buildFloorplan() {
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
           const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}>
+          // 좁은 칸에서 사유가 잘리므로 전체 문구는 칸 title로도 남긴다
+          const reasonTitle = outReason ? ` title="${badgeText} · ${outReason.text}"` : '';
+
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -6517,6 +6800,7 @@ function buildFloorplan() {
               ${studyroomBadge}
               ${ddayStr}
             </div>
+            ${outReason ? `<div class="fp-reason${outReason.warn ? ' fp-reason-warn' : ''}">${outReason.warn ? '⚠️ ' : ''}${outReason.text}</div>` : ''}
           </div>`;
         } else {
           // 빈 칸
@@ -6837,6 +7121,8 @@ function _studentDocData(student, ns) {
     수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
     금: student.schedule?.['금']||'-', 토: student.schedule?.['토']||'-',
     hours: student.hours||{}, fee: student.fee||0, feeMemo: student.feeMemo||'',
+    // 좌석 교환·이동으로 문서를 덮어쓸 때도 학부모가 고른 알림 수신 희망은 따라가야 한다
+    ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
     updatedAt: window._fsServerTimestamp()
   };
 }
@@ -9209,6 +9495,9 @@ async function saveStudentToFirebase(student) {
     ...(student.withdrawAt ? { withdrawAt: String(student.withdrawAt) } : {}),
     ...(student.nextStudent ? { nextStudent: student.nextStudent } : {}),
     ...(student.grade ? { grade: String(student.grade) } : {}),   // 학년(학습분석 또래 비교) 보존
+    // 식사 외출 알림 수신 희망(학부모가 학부모앱에서 고른 값) — 관리자 저장으로 지워지면 안 된다.
+    // 미응답(null/undefined)은 필드를 아예 쓰지 않아 '아직 안 골랐음'을 유지한다.
+    ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
     updatedAt: serverTimestamp()
   });
 }
@@ -9442,7 +9731,10 @@ async function loadStudentsFromFirebase() {
           // nextStudent=그 자리를 예약한 신규생.
           loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
           nextStudent: v.nextStudent || null,
-          grade: v.grade || ''   // 학년 — 학습분석의 또래 교재 추천 기준
+          grade: v.grade || '',   // 학년 — 학습분석의 또래 교재 추천 기준
+          // 식사 외출 알림 수신 희망 — 학부모앱에서 학부모가 직접 고른다.
+          // null = 아직 응답 안 함(= 발송 안 함). true/false 만 응답으로 본다.
+          mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null)
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -9532,7 +9824,10 @@ async function loadStudentsFromFirebase() {
         // 로컬 학생 객체에서 사라지고, 다음 저장(setDoc)에 반영돼 실제 문서에서도 지워진다.
         loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
         nextStudent: v.nextStudent || null,
-        grade: v.grade || ''   // 학년 — 학습분석의 또래 교재 추천 기준
+        grade: v.grade || '',   // 학년 — 학습분석의 또래 교재 추천 기준
+        // 식사 외출 알림 수신 희망(학부모앱에서 학부모가 고른 값). null = 미응답 = 발송 안 함.
+        // ★학부모앱이 이 필드를 쓰면 이 스냅샷으로 키오스크에 즉시 반영된다.
+        mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null)
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영.
       // ★ 원본은 세션 문서의 awayStartTs 다(= _awayStartTs 에 이름이 있으면 세션 기준 외출).
@@ -9786,6 +10081,16 @@ onSnapshot(doc(db, 'settings', 'vacation_mode'), (snap) => {
   if (window.applyVacationMode) window.applyVacationMode(enabled);
 }, (error) => {
   console.error('❌ 방학 시간표 구독 에러:', error);
+});
+
+// ── 식사시간 외출 알림(settings/meal_away_sms) 실시간 구독 ──
+// 설정 탭을 열지 않아도 반영되어야 하고(발송 판단이 키오스크에서 일어난다),
+// 키오스크 2대가 같은 값을 보게 실시간으로 받는다. 문서가 없으면 켜진 것으로 본다.
+onSnapshot(doc(db, 'settings', 'meal_away_sms'), (snap) => {
+  const enabled = snap.exists() ? !!snap.data().enabled : true;
+  if (window.applyMealAwaySms) window.applyMealAwaySms(enabled);
+}, (error) => {
+  console.error('❌ 식사시간 외출 알림 구독 에러:', error);
 });
 
 function _syncStudyRoomStudents() {

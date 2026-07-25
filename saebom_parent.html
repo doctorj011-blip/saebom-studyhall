@@ -509,6 +509,8 @@ body{
     <!-- 현황 탭 -->
     <!-- 공지 탭 -->
     <div id="tab-notice">
+      <!-- 식사시간 외출 알림 수신 조사 — 미응답이면 눈에 띄게, 응답 후엔 접힌 한 줄로 -->
+      <div id="meal-away-optin"></div>
       <div id="notice-list"></div>
     </div>
 
@@ -762,7 +764,12 @@ async function refreshParentData() {
     if (!seat) return;
     const snap = await window._getDoc(window._doc(window._db, 'students', seat));
     if (snap.exists()) {
-      currentStudent.hours = _normalizeHours(snap.data().hours);
+      const d = snap.data();
+      currentStudent.hours = _normalizeHours(d.hours);
+      // 알림 수신 설정도 서버값으로 맞춘다 — 다른 기기에서 바꿨거나 좌석 이동으로 달라졌을 수 있다
+      const prevOptIn = currentStudent.mealAwaySms;
+      currentStudent.mealAwaySms = (typeof d.mealAwaySms === 'boolean') ? d.mealAwaySms : null;
+      if (currentStudent.mealAwaySms !== prevOptIn) renderMealAwayOptIn();
       try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
     }
   } catch(e) { console.error('학부모 데이터 갱신 실패:', e); }
@@ -786,10 +793,69 @@ async function loadAllData() {
   startScheduleRealtime();      // 스케줄도 실시간 구독
   startVacationModeRealtime();  // 방학/학기 교시 구성
   loadNotices();
-  refreshParentData();          // 최신 hours 재조회 (캐시 갱신)
+  renderMealAwayOptIn();        // 식사 외출 알림 수신 조사(캐시값으로 먼저 그림)
+  refreshParentData();          // 최신 hours·수신설정 재조회 (캐시 갱신)
   loadParentPenalties();        // 스케줄 변경 벌점 내역
   loadParentMerits();           // 상점 내역
 }
+
+// ── 식사시간 외출 알림 수신 조사 (students.mealAwaySms) ──
+// 자녀가 점심·저녁 식사를 하러 나갈 때(키오스크 '외출') 학부모께 알림을 보내는 기능인데,
+// 모두에게 보내면 알림이 하루 6건까지 늘어 정작 중요한 미입실 알림이 묻힌다.
+// → '희망하신 분에게만' 보낸다. true=희망 / false=비희망 / 필드없음=미응답(발송 안 함).
+// 미응답이면 공지 탭 맨 위에 크게 띄워 응답을 받고, 응답 후에는 접힌 한 줄로 줄여 언제든 바꾸게 한다.
+function renderMealAwayOptIn() {
+  const el = document.getElementById('meal-away-optin');
+  if (!el || !currentStudent) return;
+  const v = (typeof currentStudent.mealAwaySms === 'boolean') ? currentStudent.mealAwaySms : null;
+  if (v === null) {
+    el.innerHTML = `
+      <div class="card" style="border:1.5px solid var(--brand);background:var(--brand-50)">
+        <div class="card-title" style="margin-bottom:8px"><i class="ti ti-message-2-question"></i> 알림 수신 조사 — 응답 부탁드립니다</div>
+        <div style="font-size:12.5px;color:#5A4A18;line-height:1.65;margin-bottom:14px">
+          현재는 <b>입실·퇴실</b> 알림톡만 보내드리고 있습니다.
+          이와 별도로 자녀가 <b>점심·저녁 식사를 하러 나갈 때와 돌아올 때</b>도 알림톡을 받으시겠습니까?
+          <br><span style="color:#8A7020">하루 최대 4건이 추가로 발송됩니다. 언제든 이 화면에서 바꾸실 수 있습니다.</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="setMealAwayOptIn(true)" style="flex:1;padding:13px;background:linear-gradient(135deg,var(--brand-light),var(--brand));color:#fff;border:none;border-radius:12px;font-size:13.5px;font-weight:700;cursor:pointer">받겠습니다</button>
+          <button onclick="setMealAwayOptIn(false)" style="flex:1;padding:13px;background:#fff;color:#6B7280;border:1.5px solid var(--border);border-radius:12px;font-size:13.5px;font-weight:700;cursor:pointer">받지 않겠습니다</button>
+        </div>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:10px">
+      <i class="ti ${v ? 'ti-bell-ringing' : 'ti-bell-off'}" style="font-size:17px;color:${v ? 'var(--brand)' : '#9CA3AF'}"></i>
+      <div style="flex:1;font-size:12.5px;color:#4B5563;line-height:1.5">
+        식사시간 외출 알림 <b style="color:${v ? 'var(--brand-dark)' : '#6B7280'}">${v ? '받는 중' : '받지 않음'}</b>
+      </div>
+      <button onclick="setMealAwayOptIn(${!v})" style="padding:8px 14px;background:var(--brand-50);color:var(--brand-dark);border:1.5px solid var(--brand-light);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">${v ? '끄기' : '받기'}</button>
+    </div>`;
+}
+
+// 학부모가 고른 값을 students/{좌석} 문서에 저장.
+// ★반드시 merge 로 그 필드만 쓴다 — 통째로 setDoc 하면 시간표·누적시간이 날아간다.
+window.setMealAwayOptIn = async function(want) {
+  if (!currentStudent) return;
+  const seat = String(currentStudent.seat || '').replace('번','');
+  // 화면이 즉시 바뀌게 로컬을 먼저 반영하고, 저장이 실패하면 되돌린다
+  const prev = currentStudent.mealAwaySms;
+  currentStudent.mealAwaySms = !!want;
+  renderMealAwayOptIn();
+  try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
+  if (!seat || !window._db || !window._setDoc || !window._doc) return; // Firebase 미연결(더미) — 저장 없음
+  try {
+    await window._setDoc(window._doc(window._db, 'students', seat), { mealAwaySms: !!want }, { merge: true });
+    if (window.saTrack) saTrack('meal_away_optin', { app_name: '학부모앱', tab_name: want ? 'on' : 'off' });
+  } catch(e) {
+    console.error('식사 외출 알림 설정 저장 실패:', e);
+    currentStudent.mealAwaySms = prev;
+    renderMealAwayOptIn();
+    try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e2) {}
+    alert('설정 저장에 실패했습니다. 통신 상태를 확인하고 다시 시도해 주세요.');
+  }
+};
 
 // ── 벌점 (penalties/{날짜}_{좌석} 문서) ──
 // 늦은 변경(교시 시작 5시간 전 마감 이후 출석 취소) = 교시당 1점 — 학생앱이 기록.
