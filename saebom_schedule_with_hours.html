@@ -1900,7 +1900,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     </div>
     <div class="sched-modal-body" id="sched-modal-body"></div>
     <div class="sched-modal-footer">
-      <button class="sched-cancel-btn" onclick="closeScheduleModal()">취소</button>
+      <button class="sched-cancel-btn" onclick="closeScheduleModal()">닫기</button>
       <button class="sched-save-btn" style="background:#6C5DD3" onclick="fixScheduleAsBase()" title="이 시간표를 고정(원본)으로 저장합니다. 매일 새벽 2시에 이 값으로 리셋됩니다.">🔒 고정</button>
       <button class="sched-save-btn" onclick="saveSchedule(false)" title="오늘 하루만 적용되는 변동 저장. 다음날 새벽 2시에 고정 시간표로 리셋됩니다.">저장(당일)</button>
     </div>
@@ -7184,7 +7184,7 @@ window.setEditGender = function(g) {
 
 window.closeScheduleModal = function() {
   document.getElementById('schedule-modal-overlay').style.display = 'none';
-  document.getElementById('absent-reason-popup')?.remove();
+  _closeSchedPopups();
   _schedEditIdx = -1;
   _schedDraft = {};
 }
@@ -7408,6 +7408,7 @@ function renderScheduleModal() {
 
 function togglePeriod(day, p, e) {
   // 클릭 순환: 공란 → 출석 → 중간입실 → 중간퇴실 → 공란 (결석은 우클릭)
+  _closeSchedPopups(); // 확인/건너뛰기 없이 다음 교시로 넘어가도 이전 팝업이 남지 않게
   const draft = _schedDraft[day];
   if (!draft.absentPeriods) draft.absentPeriods = new Set();
   if (!draft.absentReasons) draft.absentReasons = {};
@@ -7450,6 +7451,7 @@ function togglePeriod(day, p, e) {
 function clearPeriod(day, p, e) {
   // 우클릭: 출석→결석(사유팝업), 결석→공란
   e.preventDefault();
+  _closeSchedPopups();
   const draft = _schedDraft[day];
   if (!draft.absentPeriods) draft.absentPeriods = new Set();
   if (!draft.absentReasons) draft.absentReasons = {};
@@ -7474,9 +7476,16 @@ function clearPeriod(day, p, e) {
   }
 }
 
+// 교시 입력 팝업(결석사유·중간입실·중간퇴실)은 서로 id가 달라 각자만 지우면 화면에 겹쳐 남는다.
+// 한 번에 하나만 떠 있어야 하므로 어떤 팝업을 열든/셀을 건드리든 셋 다 정리한다.
+function _closeSchedPopups() {
+  document.getElementById('absent-reason-popup')?.remove();
+  document.getElementById('partial-time-popup')?.remove();
+  document.getElementById('early-time-popup')?.remove();
+}
+
 function showAbsentReasonPopup(day, p, e) {
-  const old = document.getElementById('absent-reason-popup');
-  if (old) old.remove();
+  _closeSchedPopups();
   const popup = document.createElement('div');
   popup.id = 'absent-reason-popup';
   const x = Math.min(e.clientX, window.innerWidth - 230);
@@ -7508,8 +7517,7 @@ window.saveAbsentReason = function(day, p) {
 };
 
 window.showPartialTimePopup = function(day, p, e) {
-  const old = document.getElementById('partial-time-popup');
-  if (old) old.remove();
+  _closeSchedPopups();
   const popup = document.createElement('div');
   popup.id = 'partial-time-popup';
   const x = Math.min(e.clientX, window.innerWidth - 230);
@@ -7533,8 +7541,7 @@ window.showPartialTimePopup = function(day, p, e) {
 };
 
 window.showEarlyTimePopup = function(day, p, e) {
-  const old = document.getElementById('early-time-popup');
-  if (old) old.remove();
+  _closeSchedPopups();
   const popup = document.createElement('div');
   popup.id = 'early-time-popup';
   const x = Math.min(e.clientX, window.innerWidth - 230);
@@ -7656,7 +7663,9 @@ function saveSchedule(commitBase) {
     });
   }
 
-  closeScheduleModal();
+  // 저장해도 모달은 열어둔다 — '닫기'/✕를 눌러야 닫힘(연속 수정 편의, 사용자 요청 2026-07-25).
+  // 남아 있던 사유·시간 팝업만 정리하고 뒤쪽 목록/표는 즉시 갱신한다.
+  _closeSchedPopups();
   buildStudentList(document.getElementById('student-search').value);
   buildScheduleTable(currentDay);
   // Firebase에 저장
