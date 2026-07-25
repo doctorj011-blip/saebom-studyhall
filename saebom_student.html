@@ -5355,14 +5355,8 @@ async function plannerNextMonth() {
   renderPlannerCalendar();
 }
 
-// 토스트 (학생앱용 - 기존 showAdminToast와 별도)
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
-}
+// 토스트는 위(showToast)에 한 번만 정의한다 — 여기 있던 동일한 중복 정의를 지웠다.
+// 같은 script 블록이라 뒤엣것이 조용히 이겼고, 한쪽만 고치면 반영이 안 되는 함정이었다.
 
 // ══════════════════════════════════════════
 //  📈 학습 분석 (학부모앱과 같은 화면 · 학습현황 탭 하단)
