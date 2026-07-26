@@ -15704,12 +15704,25 @@ function _apcAiRenderPanel(v) {
   btn.textContent = '다시 검사';
   _apcAiLastComment = v.comment || '';
   const qColor = _APC_AI_COLORS[v.quality] || '#6B7280';
+  // 수치 요약 — 학습분석이 이 값(수정본 우선)으로 그려지므로 여기서 확인·교정할 수 있게 보여준다
+  const stEff = v.statsFixed || v.stats || null;
+  let stLine = '';
+  if (stEff) {
+    const subj = (stEff.subjects || []).map(s => `${_apcEsc(s.name)}${s.minutes != null ? ' ' + s.minutes + '분' : ''}`).join(' · ');
+    stLine = `총 ${stEff.total_minutes != null ? stEff.total_minutes + '분' : '?'} / 계획 ${stEff.planned_count || 0}·완료 ${stEff.completed_count || 0}` +
+      (subj ? `<br>${subj}` : '');
+  }
   box.innerHTML = `
     <div style="display:flex;flex-direction:column;gap:7px">
       <div><span style="border:1px solid ${qColor};color:${qColor};font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">${_apcEsc(v.quality || '')}</span></div>
       <div id="apc-ai-summary" style="font-size:12px;color:#555;line-height:1.55">
         <b style="color:#1E1B4B">요약</b> · ${_apcEsc(v.summary || '')}${v.summaryEditedAt ? ' <span style="color:#9CA3AF">(수정됨)</span>' : ''}
         <button onclick="window.apcAiSummaryEdit()" title="요약 수정"
+          style="background:none;border:none;color:#9CA3AF;font-size:11px;cursor:pointer;padding:0 2px">✏️</button>
+      </div>
+      <div id="apc-ai-stats" style="font-size:12px;color:#555;line-height:1.55">
+        <b style="color:#1E1B4B">수치</b>${v.statsFixed ? ' <span style="color:#0E7490;font-weight:700">(수정됨)</span>' : ''} · ${stLine || '판독된 수치 없음'}
+        <button onclick="window.apcAiStatsEdit()" title="수치 수정 — 학습분석에 반영"
           style="background:none;border:none;color:#9CA3AF;font-size:11px;cursor:pointer;padding:0 2px">✏️</button>
       </div>
       <div style="background:#fff;border:1px solid #C7D2FE;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#333;line-height:1.6;white-space:pre-wrap">${_apcEsc(v.comment || '')}</div>
@@ -15781,6 +15794,145 @@ window.apcAiSummarySave = async function() {
     // 화면은 onSnapshot이 갱신하지만, 규칙 오류 등으로 못 받는 경우를 대비해 로컬도 맞춰 둔다.
     if (_apcAi[_apcSeat]) { _apcAi[_apcSeat].summary = text; _apcAi[_apcSeat].summaryEditedAt = Date.now(); }
     _apcAiRenderPanel(_apcAi[_apcSeat]);
+  } catch(e) {
+    showAdminToast('❌ 저장 실패: ' + e.message);
+  }
+};
+
+// ── 수치 수정(statsFixed) — AI 판독 오류를 사람이 바로잡아 학습분석에 반영 ──
+// 원본(stats)은 건드리지 않고 statsFixed 에 저장한다. 학습분석·다음 검사의 이전 기록이
+// statsFixed 를 우선하므로, 여기서 고친 값이 그래프와 이후 코멘트 비교의 기준이 된다.
+// 시간대별(hourly) 그래프는 칸 단위 판독이라 손으로 고치기 어렵고 '분포 참고용'이므로
+// AI 원본을 그대로 유지한다(총량·과목별 수치는 전부 여기서 고친 값을 쓴다).
+const _APC_ST_SUBJECTS = ['국어', '수학', '영어', '과학', '사회', '한국사', '제2외국어', '기타'];
+const _APC_ST_KINDS = ['문제집', '인강', '학원', '기타'];
+let _apcStDraft = null;
+
+function _apcStSel(options, cur, cls) {
+  return `<select class="${cls}" style="border:1px solid #D1D5DB;border-radius:6px;padding:3px 4px;font-size:12px">` +
+    options.map(o => `<option value="${_apcEsc(o)}"${o === cur ? ' selected' : ''}>${_apcEsc(o)}</option>`).join('') + '</select>';
+}
+
+function _apcStRenderEditor() {
+  const wrap = document.getElementById('apc-ai-stats');
+  if (!wrap || !_apcStDraft) return;
+  const d = _apcStDraft;
+  const subjRows = (d.subjects || []).map((s, i) => `
+    <div class="apc-st-subj" style="display:flex;gap:5px;align-items:center">
+      ${_apcStSel(_APC_ST_SUBJECTS, s.name, 'st-name')}
+      <input class="st-min" type="number" min="0" step="10" value="${s.minutes != null ? s.minutes : ''}" placeholder="분"
+        style="width:58px;border:1px solid #D1D5DB;border-radius:6px;padding:3px 6px;font-size:12px">
+      <input class="st-detail" type="text" value="${_apcEsc(s.detail || '')}" placeholder="교재·범위"
+        style="flex:1;min-width:0;border:1px solid #D1D5DB;border-radius:6px;padding:3px 6px;font-size:12px">
+      <button onclick="window.apcStDelRow('subjects',${i})" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;padding:0 2px">✕</button>
+    </div>`).join('');
+  const matRows = (d.materials || []).map((m, i) => `
+    <div class="apc-st-mat" style="display:flex;gap:5px;align-items:center">
+      <input class="st-mname" type="text" value="${_apcEsc(m.name || '')}" placeholder="교재/강좌 이름"
+        style="flex:1;min-width:0;border:1px solid #D1D5DB;border-radius:6px;padding:3px 6px;font-size:12px">
+      ${_apcStSel(_APC_ST_KINDS, m.kind || '문제집', 'st-mkind')}
+      ${_apcStSel(_APC_ST_SUBJECTS, m.subject || '기타', 'st-msubj')}
+      <button onclick="window.apcStDelRow('materials',${i})" style="background:none;border:none;color:#C62828;cursor:pointer;font-size:13px;padding:0 2px">✕</button>
+    </div>`).join('');
+  wrap.innerHTML = `
+    <div style="border:1px solid #C7D2FE;border-radius:8px;padding:9px 10px;background:#F8FAFF;display:flex;flex-direction:column;gap:7px">
+      <div style="font-size:12px;font-weight:700;color:#1E1B4B">수치 수정 <span style="font-weight:400;color:#6B7280">— 저장하면 학습분석이 이 값으로 그려집니다</span></div>
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px;color:#555;flex-wrap:wrap">
+        총 학습시간 <input id="apc-st-total" type="number" min="0" step="10" value="${d.total_minutes != null ? d.total_minutes : ''}"
+          style="width:64px;border:1px solid #D1D5DB;border-radius:6px;padding:3px 6px;font-size:12px">분
+        · 계획 <input id="apc-st-planned" type="number" min="0" value="${d.planned_count || 0}"
+          style="width:44px;border:1px solid #D1D5DB;border-radius:6px;padding:3px 6px;font-size:12px">개
+        · 완료 <input id="apc-st-completed" type="number" min="0" value="${d.completed_count || 0}"
+          style="width:44px;border:1px solid #D1D5DB;border-radius:6px;padding:3px 6px;font-size:12px">개
+      </div>
+      <div style="font-size:11.5px;font-weight:700;color:#4C3FB8">과목별 시간</div>
+      <div id="apc-st-subj-rows" style="display:flex;flex-direction:column;gap:4px">${subjRows || '<div style="font-size:11.5px;color:#9CA3AF">과목 없음</div>'}</div>
+      <div style="font-size:11.5px;font-weight:700;color:#4C3FB8;margin-top:2px">교재·인강 <span style="font-weight:400;color:#6B7280">(또래 추천에 쓰이는 이름 — 오타 교정)</span></div>
+      <div id="apc-st-mat-rows" style="display:flex;flex-direction:column;gap:4px">${matRows || '<div style="font-size:11.5px;color:#9CA3AF">교재 없음</div>'}</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:2px">
+        <button onclick="window.apcStAddRow('subjects')" style="background:#EEF2FF;color:#4C3FB8;border:1px solid #C7D2FE;border-radius:7px;padding:4px 9px;font-size:11.5px;cursor:pointer">+ 과목</button>
+        <button onclick="window.apcStAddRow('materials')" style="background:#EEF2FF;color:#4C3FB8;border:1px solid #C7D2FE;border-radius:7px;padding:4px 9px;font-size:11.5px;cursor:pointer">+ 교재</button>
+        <span style="flex:1"></span>
+        <button onclick="window.apcAiStatsCancel()" style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer">취소</button>
+        <button onclick="window.apcAiStatsSave()" style="background:#4C3FB8;color:#fff;border:none;border-radius:7px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer">수치 저장</button>
+      </div>
+      <div style="font-size:11px;color:#9CA3AF">시간대별 그래프는 원본 판독을 유지합니다. 총 학습시간을 비우면 과목 합계로 채웁니다.</div>
+    </div>`;
+}
+
+// 화면 입력값 → 초안(draft) 회수. 행 추가/삭제로 다시 그리기 전에 반드시 불러 입력을 보존한다.
+function _apcStReadDraft() {
+  const d = _apcStDraft; if (!d) return;
+  const num = el => { const v = el && el.value.trim(); return v === '' ? null : Math.max(0, parseInt(v, 10) || 0); };
+  d.total_minutes = num(document.getElementById('apc-st-total'));
+  d.planned_count = num(document.getElementById('apc-st-planned')) || 0;
+  d.completed_count = num(document.getElementById('apc-st-completed')) || 0;
+  document.querySelectorAll('#apc-st-subj-rows .apc-st-subj').forEach((row, i) => {
+    if (!d.subjects[i]) return;
+    d.subjects[i].name = row.querySelector('.st-name').value;
+    d.subjects[i].minutes = num(row.querySelector('.st-min'));
+    d.subjects[i].detail = row.querySelector('.st-detail').value.trim();
+  });
+  document.querySelectorAll('#apc-st-mat-rows .apc-st-mat').forEach((row, i) => {
+    if (!d.materials[i]) return;
+    d.materials[i].name = row.querySelector('.st-mname').value.trim();
+    d.materials[i].kind = row.querySelector('.st-mkind').value;
+    d.materials[i].subject = row.querySelector('.st-msubj').value;
+  });
+}
+
+window.apcAiStatsEdit = function() {
+  const v = _apcAi[_apcSeat];
+  if (!v || v.status !== 'done') return;
+  const base = v.statsFixed || v.stats || {};
+  _apcStDraft = JSON.parse(JSON.stringify({
+    total_minutes: base.total_minutes != null ? base.total_minutes : null,
+    planned_count: base.planned_count || 0,
+    completed_count: base.completed_count || 0,
+    subjects: base.subjects || [],
+    materials: base.materials || []
+  }));
+  _apcStRenderEditor();
+};
+
+window.apcStAddRow = function(kind) {
+  _apcStReadDraft();
+  if (kind === 'subjects') _apcStDraft.subjects.push({ name: '기타', minutes: null, detail: '' });
+  else _apcStDraft.materials.push({ raw: '', name: '', kind: '문제집', subject: '기타' });
+  _apcStRenderEditor();
+};
+
+window.apcStDelRow = function(kind, i) {
+  _apcStReadDraft();
+  _apcStDraft[kind].splice(i, 1);
+  _apcStRenderEditor();
+};
+
+window.apcAiStatsCancel = function() { _apcStDraft = null; _apcAiRenderPanel(_apcAi[_apcSeat] || null); };
+
+window.apcAiStatsSave = async function() {
+  const v = _apcAi[_apcSeat];
+  if (!v || !_apcSeat || !_apcCurrentDate) return;
+  _apcStReadDraft();
+  const d = _apcStDraft; if (!d) return;
+  const subjects = d.subjects.filter(s => s.name);
+  const subjSum = subjects.reduce((a, s) => a + (s.minutes || 0), 0);
+  const statsFixed = {
+    total_minutes: d.total_minutes != null ? d.total_minutes : (subjSum || null),
+    planned_count: d.planned_count,
+    completed_count: d.completed_count,
+    subjects,
+    // 시간대 분포는 손으로 못 고치는 영역 — AI 원본을 그대로 실어 그래프가 계속 그려지게 한다
+    hourly: (v.stats && v.stats.hourly) || [],
+    materials: d.materials.filter(m => m.name).map(m => ({ raw: m.raw || m.name, name: m.name, kind: m.kind, subject: m.subject }))
+  };
+  try {
+    await updateDoc(doc(db, 'planner_ai_reviews', `${_apcSeat}_${_apcCurrentDate}`),
+      { statsFixed, statsFixedAt: serverTimestamp() });
+    if (_apcAi[_apcSeat]) _apcAi[_apcSeat].statsFixed = statsFixed;
+    _apcStDraft = null;
+    _apcAiRenderPanel(_apcAi[_apcSeat]);
+    showAdminToast('✅ 수치를 수정했습니다 — 학습분석에 반영됩니다');
   } catch(e) {
     showAdminToast('❌ 저장 실패: ' + e.message);
   }
@@ -15936,7 +16088,7 @@ async function _saRenderAll(days, cutIso, todayIso) {
       getDocs(query(collection(db, 'planner_ai_reviews'), where('date', '>=', cutIso)))
     ]);
     att = a;
-    r.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat) reviewsAll.push(v); });
+    r.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat) { if (v.statsFixed) v.stats = v.statsFixed; reviewsAll.push(v); } });
   } catch(e) {
     box.innerHTML = `<div style="color:#C62828;font-size:13px;text-align:center;padding:40px 0">조회 실패: ${_apcEsc(e.message || e)}</div>`;
     return;
@@ -16160,8 +16312,9 @@ window.saRender = async function() {
       getDocs(query(collection(db, 'planner_ai_reviews'), where('date', '>=', cutIso))),
       stu ? _saAttendance(stu.name, cutIso, todayIso) : Promise.resolve({ mins: {}, ins: {} })
     ]);
-    mine.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) reviews.push(v); });
-    all.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat && v.seat !== seatKey) peerAll.push(v); });
+    // 수치 수정본(statsFixed)이 있으면 그걸 쓴다 — 학습분석은 사람이 교정한 값이 기준
+    mine.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) { if (v.statsFixed) v.stats = v.statsFixed; reviews.push(v); } });
+    all.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat && v.seat !== seatKey) { if (v.statsFixed) v.stats = v.statsFixed; peerAll.push(v); } });
     attend = att.mins; attendIn = att.ins;
   } catch(e) {
     box.innerHTML = `<div style="color:#C62828;font-size:13px;text-align:center;padding:40px 0">조회 실패: ${_apcEsc(e.message || e)}</div>`;

@@ -1353,7 +1353,8 @@ async function paInit() {
     if (window._getDocs && window._query && window._collection && window._where) {
       const snap = await window._getDocs(window._query(
         window._collection(window._db, 'planner_ai_reviews'), window._where('seat', '==', seatKey)));
-      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) list.push(v); });
+      // 선생님이 수치를 교정(statsFixed)했으면 그 값을 쓴다 — 분석은 교정본이 기준
+      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
     }
   } catch(e) {
     // 검사 결과를 못 읽어도 순공 기반 분석은 보여줄 수 있으므로 빈 배열로 계속 진행한다

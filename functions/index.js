@@ -879,7 +879,9 @@ async function plannerAiHistory(seat, beforeDate) {
       .slice(0, 4);
     if (!list.length) return '';
     const lines = list.map((h, i) => {
-      const st = h.stats || {};
+      // 선생님이 교정한 수치(statsFixed)가 있으면 그걸 쓴다 — 틀린 판독으로 "어제보다 줄었다"는
+      // 엉뚱한 비교를 하지 않도록, 이력의 기준도 분석 화면과 같은 교정본이어야 한다.
+      const st = h.statsFixed || h.stats || {};
       const subj = (st.subjects || []).map(s => s.name + (s.minutes != null ? ` ${s.minutes}분` : '')).join(', ');
       const parts = [h.quality || ''];
       if (st.total_minutes != null) parts.push(`총 ${st.total_minutes}분`);
@@ -889,7 +891,7 @@ async function plannerAiHistory(seat, beforeDate) {
       return line;
     });
     // 같은 학생은 며칠씩 같은 교재를 이어 쓴다 — 흘려 쓴 교재명을 대조할 단서로 넣는다.
-    const mats = [...new Set(list.flatMap(h => ((h.stats || {}).materials || []).map(m => m && m.name).filter(Boolean)))];
+    const mats = [...new Set(list.flatMap(h => (((h.statsFixed || h.stats) || {}).materials || []).map(m => m && m.name).filter(Boolean)))];
     const matLine = mats.length
       ? `\n\n[참고: 최근 이 학생이 쓴 교재]\n${mats.join(', ')}\n※ 글씨 대조용 단서일 뿐이다. 목록에 있다는 이유로 오늘 글씨를 그 이름으로 단정하지 말 것.`
       : '';
@@ -1061,7 +1063,19 @@ async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, 
   if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
   const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
   const out = JSON.parse(text);
+  // 사람이 교정한 수치(statsFixed)는 재검사가 와도 지우지 않는다 — 교정은 사진을 직접
+  // 본 사람의 확정값이라, 새 판독이 그걸 덮으면 학습분석이 도로 틀어진다.
+  // (문서 전체를 교체(set)하는 방식은 유지하되 이 필드만 이월한다)
+  let keep = {};
+  try {
+    const prev = await reviewRef.get();
+    if (prev.exists) {
+      const p = prev.data() || {};
+      if (p.statsFixed) keep = { statsFixed: p.statsFixed, statsFixedAt: p.statsFixedAt || null };
+    }
+  } catch (e) { logger.warn('statsFixed 이월 실패 — 새 결과만 기록', { seat, date: dateStr, message: e.message }); }
   await reviewRef.set({
+    ...keep,
     seat, date: dateStr, name: name || null,
     status: 'done',
     quality: out.quality, summary: out.summary, comment: out.comment,

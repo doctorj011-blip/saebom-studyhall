@@ -214,6 +214,13 @@ service cloud.firestore {
                        .hasOnly(['summary', 'summaryEditedAt'])
                     && request.resource.data.summary is string
                     && request.resource.data.summary.size() <= 1000;
+      // 검사 수치 교정(statsFixed) — 손글씨 판독이라 교재명 오타·시간 오독이 생기는데,
+      // 학습분석이 이 수치로 그려지므로 관리앱에서 사람이 바로잡을 수 있어야 한다.
+      // AI 원본(stats)은 그대로 두고 statsFixed만 쓴다 — 분석·다음 검사 이력이 이걸 우선하고,
+      // 재검사가 와도 서버가 이 필드를 보존한다. quality·comment·stats는 여전히 서버 전용.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['statsFixed', 'statsFixedAt'])
+                    && request.resource.data.statsFixed is map;
     }
 
     // 자동문 원격 명령: current 문서만, action=open, 30초 이내
