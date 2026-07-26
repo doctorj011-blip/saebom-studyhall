@@ -2041,8 +2041,12 @@ function renderWeeklyGoalCard() {
   const el = document.getElementById('weekly-goal-card');
   if (!el || !currentStudent) return;
   const g = Number(currentStudent.weeklyGoalH) || 0;
+  // 챌린지 주간(관리자앱 WEEKLY_CHALLENGES와 짝): 그 주만 안내 문구·상점을 다르게 표시
+  const _d = new Date();
+  const _iso = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+  const isChalWeek = _iso >= '2026-07-27' && _iso <= '2026-08-02';
   const sub = g
-    ? `주 ${g}시간 · 달성하면 상점 2점 (미달 벌점 없음)`
+    ? (isChalWeek ? `주 ${g}시간 · 🔥 챌린지 주간! 달성하면 상점 10점 (일요일 순공도 포함)` : `주 ${g}시간 · 달성하면 상점 2점 (미달 벌점 없음)`)
     : '관리자가 설정한 목표가 여기에 표시됩니다';
   el.innerHTML = `
     <div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
