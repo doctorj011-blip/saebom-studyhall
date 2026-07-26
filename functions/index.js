@@ -1413,16 +1413,19 @@ exports.netDailySnapshot = onSchedule(
   }
 );
 
-// ── 유튜브 차단 토글 ─────────────────────────────────────────────────
-// 관리앱 와이파이 탭의 버튼이 호출한다. Cloudflare DNS 정책 중 유튜브 전용
-// 규칙(block-youtube-toggle) 하나의 enabled만 켜고 끈다. 인스타·넷플릭스
-// 등을 막는 block-youtube-instagram 정책은 여기서 절대 손대지 않는다.
+// ── 서비스별 차단 토글 (유튜브·카카오톡) ──────────────────────────────
+// 관리앱 와이파이 탭의 버튼이 호출한다. Cloudflare DNS 정책 중 서비스별 전용
+// 규칙(block-*-toggle)의 enabled만 켜고 끈다. 인스타·넷플릭스 등을 막는
+// block-youtube-instagram 정책은 여기서 절대 손대지 않는다.
 // 주의: CF_API_TOKEN에 Zero Trust "Edit" 권한이 있어야 변경(PUT)이 된다.
-//       Read 전용 토큰이면 조회만 되고 변경은 Cloudflare가 거절한다.
-const YT_RULE_ID = '8e796b54-049a-411d-8da3-3b0322f67fb6';   // block-youtube-toggle
+//       (2026-07-26 saebom-studyhall-functions 토큰으로 교체 완료)
+const NETBLOCK_RULES = {
+  youtube: '8e796b54-049a-411d-8da3-3b0322f67fb6',   // block-youtube-toggle (YouTube·Kids·Music)
+  kakao: 'be1c5d78-81ed-4c06-8275-8b2cf4211ddd'      // block-kakaotalk-toggle (Kakao Talk)
+};
 
-async function cfYtRule(method, body) {
-  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID.value()}/gateway/rules/${YT_RULE_ID}`;
+async function cfToggleRule(ruleId, method, body) {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID.value()}/gateway/rules/${ruleId}`;
   const r = await fetch(url, {
     method,
     headers: { 'Authorization': `Bearer ${CF_API_TOKEN.value()}`, 'Content-Type': 'application/json' },
@@ -1436,43 +1439,50 @@ async function cfYtRule(method, body) {
   return j.result;
 }
 
-exports.youtubeBlockToggle = onRequest(
-  {
-    region: 'us-central1',
-    secrets: [CF_API_TOKEN, CF_ACCOUNT_ID],
-    cors: ['https://saebom-studyhall.web.app', 'https://doctorj011-blip.github.io', 'http://localhost:8961', 'http://127.0.0.1:8961'],
-    maxInstances: 3
-  },
-  async (req, res) => {
-    if (req.method !== 'POST') { res.status(405).json({ error: 'POST만 허용' }); return; }
-    try {
-      const b = req.body || {};
-      const authSnap = await db.doc('settings/admin_auth').get();
-      const want = authSnap.exists ? (authSnap.data() || {}).hash : null;
-      if (!want || (b.token || '') !== want) { res.status(403).json({ error: '관리자 기기가 아닙니다' }); return; }
+const _netBlockHandler = async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).json({ error: 'POST만 허용' }); return; }
+  try {
+    const b = req.body || {};
+    const authSnap = await db.doc('settings/admin_auth').get();
+    const want = authSnap.exists ? (authSnap.data() || {}).hash : null;
+    if (!want || (b.token || '') !== want) { res.status(403).json({ error: '관리자 기기가 아닙니다' }); return; }
 
-      const cur = await cfYtRule('GET');
-      if (typeof b.enabled !== 'boolean') { res.json({ ok: true, blocked: !!cur.enabled }); return; }
+    const target = b.target || 'youtube';   // 구버전 클라이언트(target 없음)는 유튜브
+    const ruleId = NETBLOCK_RULES[target];
+    if (!ruleId) { res.status(400).json({ error: `모르는 대상: ${target}` }); return; }
 
-      // Gateway 규칙 갱신은 PUT(전체 교체)뿐이라 기존 내용을 그대로 되돌려
-      // 보내면서 enabled만 바꾼다. 읽기전용 필드(id, created_at 등)는 추린다.
-      const upd = await cfYtRule('PUT', {
-        name: cur.name,
-        description: cur.description || '',
-        action: cur.action,
-        traffic: cur.traffic || '',
-        identity: cur.identity || '',
-        device_posture: cur.device_posture || '',
-        precedence: cur.precedence,
-        filters: cur.filters,
-        rule_settings: cur.rule_settings,
-        enabled: b.enabled
-      });
-      logger.info(`[YouTube] 차단 ${upd.enabled ? 'ON' : 'OFF'} (규칙 v${upd.version})`);
-      res.json({ ok: true, blocked: !!upd.enabled, version: upd.version });
-    } catch (e) {
-      logger.error('[YouTube] 토글 실패', e);
-      res.status(500).json({ error: String((e && e.message) || e) });
-    }
+    const cur = await cfToggleRule(ruleId, 'GET');
+    if (typeof b.enabled !== 'boolean') { res.json({ ok: true, target, blocked: !!cur.enabled }); return; }
+
+    // Gateway 규칙 갱신은 PUT(전체 교체)뿐이라 기존 내용을 그대로 되돌려
+    // 보내면서 enabled만 바꾼다. 읽기전용 필드(id, created_at 등)는 추린다.
+    const upd = await cfToggleRule(ruleId, 'PUT', {
+      name: cur.name,
+      description: cur.description || '',
+      action: cur.action,
+      traffic: cur.traffic || '',
+      identity: cur.identity || '',
+      device_posture: cur.device_posture || '',
+      precedence: cur.precedence,
+      filters: cur.filters,
+      rule_settings: cur.rule_settings,
+      enabled: b.enabled
+    });
+    logger.info(`[NetBlock] ${target} 차단 ${upd.enabled ? 'ON' : 'OFF'} (규칙 v${upd.version})`);
+    res.json({ ok: true, target, blocked: !!upd.enabled, version: upd.version });
+  } catch (e) {
+    logger.error('[NetBlock] 토글 실패', e);
+    res.status(500).json({ error: String((e && e.message) || e) });
   }
-);
+};
+
+const _netBlockOpts = {
+  region: 'us-central1',
+  secrets: [CF_API_TOKEN, CF_ACCOUNT_ID],
+  cors: ['https://saebom-studyhall.web.app', 'https://doctorj011-blip.github.io', 'http://localhost:8961', 'http://127.0.0.1:8961'],
+  maxInstances: 3
+};
+
+exports.netBlockToggle = onRequest(_netBlockOpts, _netBlockHandler);
+// 이전 이름 — 배포 시점에 열려 있던 옛 관리앱 페이지가 아직 부를 수 있어 남겨둔다.
+exports.youtubeBlockToggle = onRequest(_netBlockOpts, _netBlockHandler);
