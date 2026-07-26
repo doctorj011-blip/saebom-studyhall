@@ -920,6 +920,97 @@ function reconcilePlannerStats(st, ctx) {
   return st;
 }
 
+// ── 검사 요청 구성·결과 기록 공용 헬퍼 ──
+// 실시간 검사(plannerAiReview)와 밤 배치 검사가 이 두 함수를 똑같이 쓴다.
+// 검사 품질을 결정하는 건 모델·프롬프트·사진 구성 셋뿐이므로, 여기가 같으면
+// 배치 검사도 실시간과 정확도가 동일하다 — 다른 건 Batch API 반값 요금뿐.
+
+async function plannerAiConfig() {
+  const cfgSnap = await db.collection('ai_config').doc('planner').get();
+  const cfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
+  return { model: cfg.model || PLANNER_AI_MODEL, sysPrompt: cfg.prompt || PLANNER_AI_PROMPT };
+}
+
+// 사진 다운로드 → 전처리(축소·확대본) → 메시지 content 조립
+async function buildPlannerAiUserContent(seat, dateStr, name, url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`사진 다운로드 실패 (HTTP ${res.status})`);
+  let buf = Buffer.from(await res.arrayBuffer());
+  let mediaType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
+
+  // 요즘 폰 사진은 10MB를 예사로 넘는데 Claude API 이미지 상한이 10MB다(2026-07-21 23번 실패).
+  // 어차피 긴 변 1568px를 넘으면 API가 내부적으로 축소하므로 미리 줄여도 판독 품질 손해가
+  // 없고, 용량·메모리·비용·지연이 모두 줄어든다.
+  // ⚠️ .rotate()는 생략 금지 — sharp는 출력 시 EXIF를 버리므로, 방향 태그를 미리 픽셀에
+  //    반영해 두지 않으면 오히려 눕거나 뒤집힌 사진이 모델에 전달된다.
+  const tiles = [];   // 계획표·메모 확대본(전체 사진 뒤에 함께 보낸다)
+  try {
+    const norm = await sharp(buf).rotate().toBuffer();          // EXIF 반영한 고해상 원본
+    const meta = await sharp(norm).metadata();
+    const W = meta.width || 0, H = meta.height || 0;
+
+    // 세로로 긴 A4 플래너일 때만 확대본을 만든다(양식이 고정: 왼쪽 위 계획표, 왼쪽 아래 메모).
+    // 왜 굳이 잘라 보내나: API는 긴 변을 1568px로 맞추므로 세로로 긴 전체 사진을 보내면
+    // 가로 해상도가 1176px밖에 안 남아 작은 손글씨(교재명·문항번호)가 뭉갠다.
+    // 가로세로 비가 1에 가까운 조각으로 자르면 같은 1568px 안에 글자가 2배 크게 담긴다.
+    if (W > 1600 && H > 1600 && H > W) {
+      const cut = async (x0, y0, x1, y1) => sharp(norm)
+        .extract({
+          left: Math.round(W * x0), top: Math.round(H * y0),
+          width: Math.round(W * (x1 - x0)), height: Math.round(H * (y1 - y0))
+        })
+        .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 88 }).toBuffer();
+      tiles.push(await cut(0.02, 0.12, 0.62, 0.62));   // 계획표(과목·내용·확인)
+      tiles.push(await cut(0.02, 0.50, 0.62, 0.92));   // 못한 것·메모·한마디
+    }
+
+    if (W > 1568 || H > 1568 || buf.length > 4 * 1024 * 1024) {
+      buf = await sharp(norm)
+        .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 85 }).toBuffer();
+      mediaType = 'image/jpeg';
+    }
+  } catch (e) {
+    logger.warn('사진 전처리 실패 — 원본으로 진행', { seat, date: dateStr, message: e.message });
+  }
+  // 상한 10MB는 base64 문자열 길이 기준이다(원본 7.9MB가 base64로 10.5MB가 되어 거부됐음).
+  // 원본 바이트로 재면 통과할 것처럼 보이니 주의.
+  const b64 = buf.toString('base64');
+  if (b64.length > 10 * 1024 * 1024) throw new Error('사진이 너무 큽니다 — 축소 후에도 10MB를 넘습니다');
+
+  const [history, stuCtx] = await Promise.all([
+    plannerAiHistory(seat, dateStr),
+    plannerAiStudentCtx(seat, dateStr)
+  ]);
+
+  return [
+    { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
+    ...tiles.map(t => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: t.toString('base64') } })),
+    { type: 'text', text: `학생: ${name || seat + '번'}${stuCtx} / 학습일: ${dateStr}(${'일월화수목금토'[new Date(dateStr).getDay()]})` +
+      (tiles.length ? `\n사진 ${tiles.length + 1}장: 1) 플래너 전체 2) 왼쪽 위(계획표) 확대 3) 왼쪽 아래(메모) 확대 — 글자는 확대본으로 읽을 것.` : '') +
+      `\n이 플래너를 검사하고 결과를 작성해 주세요.${history}` }
+  ];
+}
+
+// 모델 응답 → planner_ai_reviews 문서 기록 (extra: 배치가 billing 표식 등을 얹는다)
+async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, extra) {
+  if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
+  const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
+  const out = JSON.parse(text);
+  await reviewRef.set({
+    seat, date: dateStr, name: name || null,
+    status: 'done',
+    quality: out.quality, summary: out.summary, comment: out.comment,
+    stats: reconcilePlannerStats(out.stats, { seat, date: dateStr }) || null,
+    model,
+    usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens },
+    doneAt: new Date().toISOString(),
+    ...(extra || {})
+  });
+  return out;
+}
+
 exports.plannerAiReview = onDocumentCreated(
   // concurrency:1 필수 — 기본값 80이면 "전체 검사" 20여건이 한 인스턴스에 몰려
   // 사진 Buffer+base64가 겹쳐 OOM으로 컨테이너가 통째로 죽는다(catch/finally도 못 돌아
@@ -940,62 +1031,9 @@ exports.plannerAiReview = onDocumentCreated(
 
       await reviewRef.set({ seat, date: dateStr, name: req.name || null, status: 'running', startedAt: new Date().toISOString() }, { merge: true });
 
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`사진 다운로드 실패 (HTTP ${res.status})`);
-      let buf = Buffer.from(await res.arrayBuffer());
-      let mediaType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
-
-      // 요즘 폰 사진은 10MB를 예사로 넘는데 Claude API 이미지 상한이 10MB다(2026-07-21 23번 실패).
-      // 어차피 긴 변 1568px를 넘으면 API가 내부적으로 축소하므로 미리 줄여도 판독 품질 손해가
-      // 없고, 용량·메모리·비용·지연이 모두 줄어든다.
-      // ⚠️ .rotate()는 생략 금지 — sharp는 출력 시 EXIF를 버리므로, 방향 태그를 미리 픽셀에
-      //    반영해 두지 않으면 오히려 눕거나 뒤집힌 사진이 모델에 전달된다.
-      const tiles = [];   // 계획표·메모 확대본(전체 사진 뒤에 함께 보낸다)
-      try {
-        const norm = await sharp(buf).rotate().toBuffer();          // EXIF 반영한 고해상 원본
-        const meta = await sharp(norm).metadata();
-        const W = meta.width || 0, H = meta.height || 0;
-
-        // 세로로 긴 A4 플래너일 때만 확대본을 만든다(양식이 고정: 왼쪽 위 계획표, 왼쪽 아래 메모).
-        // 왜 굳이 잘라 보내나: API는 긴 변을 1568px로 맞추므로 세로로 긴 전체 사진을 보내면
-        // 가로 해상도가 1176px밖에 안 남아 작은 손글씨(교재명·문항번호)가 뭉갠다.
-        // 가로세로 비가 1에 가까운 조각으로 자르면 같은 1568px 안에 글자가 2배 크게 담긴다.
-        if (W > 1600 && H > 1600 && H > W) {
-          const cut = async (x0, y0, x1, y1) => sharp(norm)
-            .extract({
-              left: Math.round(W * x0), top: Math.round(H * y0),
-              width: Math.round(W * (x1 - x0)), height: Math.round(H * (y1 - y0))
-            })
-            .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 88 }).toBuffer();
-          tiles.push(await cut(0.02, 0.12, 0.62, 0.62));   // 계획표(과목·내용·확인)
-          tiles.push(await cut(0.02, 0.50, 0.62, 0.92));   // 못한 것·메모·한마디
-        }
-
-        if (W > 1568 || H > 1568 || buf.length > 4 * 1024 * 1024) {
-          buf = await sharp(norm)
-            .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 85 }).toBuffer();
-          mediaType = 'image/jpeg';
-        }
-      } catch (e) {
-        logger.warn('사진 전처리 실패 — 원본으로 진행', { seat, date: dateStr, message: e.message });
-      }
-      // 상한 10MB는 base64 문자열 길이 기준이다(원본 7.9MB가 base64로 10.5MB가 되어 거부됐음).
-      // 원본 바이트로 재면 통과할 것처럼 보이니 주의.
-      const b64 = buf.toString('base64');
-      if (b64.length > 10 * 1024 * 1024) throw new Error('사진이 너무 큽니다 — 축소 후에도 10MB를 넘습니다');
-
       // 모델/프롬프트 덮어쓰기(선택) — ai_config/planner { model, prompt }
-      const cfgSnap = await db.collection('ai_config').doc('planner').get();
-      const cfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
-      const model = cfg.model || PLANNER_AI_MODEL;
-      const sysPrompt = cfg.prompt || PLANNER_AI_PROMPT;
-
-      const [history, stuCtx] = await Promise.all([
-        plannerAiHistory(seat, dateStr),
-        plannerAiStudentCtx(seat, dateStr)
-      ]);
+      const { model, sysPrompt } = await plannerAiConfig();
+      const content = await buildPlannerAiUserContent(seat, dateStr, req.name, url);
 
       const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
       const msg = await client.messages.create({
@@ -1003,37 +1041,152 @@ exports.plannerAiReview = onDocumentCreated(
         max_tokens: 2048,
         system: sysPrompt,
         output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: b64 } },
-            ...tiles.map(t => ({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: t.toString('base64') } })),
-            { type: 'text', text: `학생: ${req.name || seat + '번'}${stuCtx} / 학습일: ${dateStr}(${'일월화수목금토'[new Date(dateStr).getDay()]})` +
-              (tiles.length ? `\n사진 ${tiles.length + 1}장: 1) 플래너 전체 2) 왼쪽 위(계획표) 확대 3) 왼쪽 아래(메모) 확대 — 글자는 확대본으로 읽을 것.` : '') +
-              `\n이 플래너를 검사하고 결과를 작성해 주세요.${history}` }
-          ]
-        }]
+        messages: [{ role: 'user', content }]
       });
 
-      if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
-      const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
-      const out = JSON.parse(text);
-
-      await reviewRef.set({
-        seat, date: dateStr, name: req.name || null,
-        status: 'done',
-        quality: out.quality, summary: out.summary, comment: out.comment,
-        stats: reconcilePlannerStats(out.stats, { seat, date: dateStr }) || null,
-        model,
-        usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens },
-        doneAt: new Date().toISOString()
-      });
+      const out = await writePlannerAiResult(reviewRef, seat, dateStr, req.name, model, msg);
       logger.info('plannerAiReview 완료', { seat, date: dateStr, quality: out.quality });
     } catch (e) {
       logger.error('plannerAiReview', { seat, date: dateStr, message: e.message });
       await reviewRef.set({ seat: seat || null, date: dateStr || null, status: 'error', error: e.message, doneAt: new Date().toISOString() }, { merge: true });
     } finally {
       await snap.ref.delete().catch(() => {});   // 요청 문서는 1회용 — 처리 후 정리
+    }
+  }
+);
+
+// ══════════════════════════════════════
+// 📓🌙 플래너 밤 배치 검사 — Batch API (토큰 요금 50%)
+// ══════════════════════════════════════
+// 전원 자동 검사는 아침에 결과만 있으면 되는 작업이라 실시간일 필요가 없다.
+// Batch API는 같은 모델·프롬프트·사진 구성(위 공용 헬퍼)으로 요금만 절반이고
+// 보통 1시간 내 완료된다(최대 24시간 보장). 관리앱의 개별 '다시 검사' 버튼은
+// 기존 실시간 경로(plannerAiReview) 그대로라 급한 재검사도 여전히 가능하다.
+//
+// 흐름: 접수(02:10·12:10 KST) → planner_ai_batches/{batchId} 문서로 추적
+//       → 수거(10분마다 폴링, 완료되면 학생별 리뷰 문서 기록).
+//   · 02:10 — 정시 마감(02:00) 직후, 어제 학습분 전체 접수
+//   · 12:10 — 지각 마감(12:00) 직후, 그 사이 새로 낸 지각 제출분만 추가 접수
+//   · 이미 done인 검사는 건너뛰되, 검사 후 사진이 교체됐으면(updatedAt > doneAt) 다시 검사
+
+function kstYesterday() {
+  const d = new Date(Date.now() + 9 * 3600 * 1000);   // KST 벽시계
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+async function runPlannerBatchSubmit(label) {
+  const ds = kstYesterday();
+  const { model, sysPrompt } = await plannerAiConfig();
+  const psnap = await db.collection('planners').where('date', '==', ds).get();
+  if (psnap.empty) { logger.info('plannerBatch 접수 — 제출 없음', { ds, label }); return; }
+
+  // 검사 대상 선별 — 진행 중이거나 이미 현재 사진으로 검사된 학생은 제외
+  const targets = [];
+  for (const doc of psnap.docs) {
+    const v = doc.data() || {};
+    if (!v.seat || !v.url) continue;
+    const rSnap = await db.collection('planner_ai_reviews').doc(`${v.seat}_${ds}`).get();
+    if (rSnap.exists) {
+      const r = rSnap.data() || {};
+      if (r.status === 'running') continue;
+      if (r.status === 'done' && !(v.updatedAt && r.doneAt && v.updatedAt > r.doneAt)) continue;
+    }
+    targets.push(v);
+  }
+  if (!targets.length) { logger.info('plannerBatch 접수 — 새 대상 없음', { ds, label }); return; }
+
+  // 사진 전처리는 메모리를 아끼려 한 명씩 순차 처리(실시간 검사의 OOM 사고 교훈)
+  const requests = [], names = {};
+  for (const v of targets) {
+    try {
+      const content = await buildPlannerAiUserContent(v.seat, ds, v.name, v.url);
+      const cid = `${v.seat}_${ds}`;
+      requests.push({
+        custom_id: cid,
+        params: {
+          model, max_tokens: 2048, system: sysPrompt,
+          output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
+          messages: [{ role: 'user', content }]
+        }
+      });
+      names[cid] = v.name || null;
+    } catch (e) {
+      logger.warn('plannerBatch 대상 준비 실패 — 건너뜀', { seat: v.seat, ds, message: e.message });
+    }
+  }
+  if (!requests.length) return;
+
+  const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
+  const batch = await client.messages.batches.create({ requests });
+
+  await db.collection('planner_ai_batches').doc(batch.id).set({
+    status: 'pending', date: ds, label, model, count: requests.length, names,
+    createdAt: new Date().toISOString()
+  });
+  // 관리앱에 '검사 중' 표시
+  await Promise.all(requests.map(r => {
+    const cut = r.custom_id.lastIndexOf('_');
+    return db.collection('planner_ai_reviews').doc(r.custom_id).set(
+      { seat: r.custom_id.slice(0, cut), date: ds, name: names[r.custom_id], status: 'running', startedAt: new Date().toISOString() },
+      { merge: true });
+  }));
+  logger.info('plannerBatch 접수 완료', { ds, label, batchId: batch.id, count: requests.length });
+}
+
+exports.plannerBatchNight = onSchedule(
+  { schedule: '10 2 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '1GiB', maxInstances: 1 },
+  async () => { try { await runPlannerBatchSubmit('night'); } catch (e) { logger.error('plannerBatchNight', { message: e.message }); } }
+);
+exports.plannerBatchNoon = onSchedule(
+  { schedule: '10 12 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '1GiB', maxInstances: 1 },
+  async () => { try { await runPlannerBatchSubmit('noon'); } catch (e) { logger.error('plannerBatchNoon', { message: e.message }); } }
+);
+
+// 수거 — pending 배치가 있을 때만 API를 조회하므로 평상시 비용은 Firestore 읽기 1회뿐
+exports.plannerBatchCollect = onSchedule(
+  { schedule: 'every 10 minutes', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, maxInstances: 1 },
+  async () => {
+    const pend = await db.collection('planner_ai_batches').where('status', '==', 'pending').limit(5).get();
+    if (pend.empty) return;
+    const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
+    for (const bdoc of pend.docs) {
+      const b = bdoc.data() || {};
+      try {
+        const batch = await client.messages.batches.retrieve(bdoc.id);
+        if (batch.processing_status !== 'ended') {
+          // 보장 시한(24h)을 훌쩍 넘기면 포기 처리 — 학생들이 '검사 중'에 멈춰 있지 않게
+          if (Date.now() - Date.parse(b.createdAt) > 26 * 3600 * 1000) {
+            await bdoc.ref.set({ status: 'error', error: 'timeout' }, { merge: true });
+            for (const cid of Object.keys(b.names || {})) {
+              const cut = cid.lastIndexOf('_');
+              await db.collection('planner_ai_reviews').doc(cid).set(
+                { seat: cid.slice(0, cut), date: cid.slice(cut + 1), status: 'error', error: '배치 시간 초과 — 다시 검사해 주세요', doneAt: new Date().toISOString() },
+                { merge: true });
+            }
+          }
+          continue;
+        }
+        let ok = 0, fail = 0;
+        for await (const r of await client.messages.batches.results(bdoc.id)) {
+          const cid = r.custom_id;
+          const cut = cid.lastIndexOf('_');
+          const seat = cid.slice(0, cut), rds = cid.slice(cut + 1);
+          const reviewRef = db.collection('planner_ai_reviews').doc(cid);
+          try {
+            if (r.result.type !== 'succeeded') throw new Error(`배치 처리 실패 (${r.result.type})`);
+            await writePlannerAiResult(reviewRef, seat, rds, (b.names || {})[cid], b.model, r.result.message, { billing: 'batch' });
+            ok++;
+          } catch (e) {
+            fail++;
+            await reviewRef.set({ seat, date: rds, status: 'error', error: e.message, doneAt: new Date().toISOString() }, { merge: true });
+          }
+        }
+        await bdoc.ref.set({ status: 'done', ok, fail, doneAt: new Date().toISOString() }, { merge: true });
+        logger.info('plannerBatch 수거 완료', { batchId: bdoc.id, ok, fail });
+      } catch (e) {
+        logger.error('plannerBatchCollect', { batchId: bdoc.id, message: e.message });
+      }
     }
   }
 );
