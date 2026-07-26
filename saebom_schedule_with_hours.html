@@ -12006,6 +12006,10 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
 const WEEKLY_START_ISO = '2026-07-20'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
 const WEEKLY_END_ISO = '2026-08-31';   // 1주기 종료 — 이 날짜 이후로 끝나는 주는 판정 안 함(다음 주기 정해지면 연장)
 const WEEKLY_MERIT_POINTS = 2;
+// 특별 챌린지 주간(원장 지정): 해당 주만 전원 목표를 고정값으로 판정 + 상점 오버라이드 + 승인변경 차감 없음.
+// weeklyGoalH DB값과 무관하게 여기 값으로 판정하므로, 챌린지 주간의 판정(다음 월요일 02:00)이
+// 돌기 전에 weeklyGoalH를 원래 값으로 되돌려도 판정에는 영향 없다.
+const WEEKLY_CHALLENGES = { '2026-07-27': { goalH: 45, points: 10, label: '주간 순공 챌린지(45시간) 달성' } };
 // 플래너 성실 상점(주간) — 그 주 출석한 날 대비 플래너 제출 비율이 기준 이상이면 부여.
 //   출석 안 한 날은 분모에서 뺀다(결석날 제출을 강제하지 않음 — 미제출 벌점 폐지와 일관).
 //   적게 온 주(출석<3일)는 표본이 작아 판정 제외.
@@ -12107,12 +12111,14 @@ async function _assessWeekGoals(monDate, weekIso){
         if (onAttend / attDates.size >= PLANNER_SUBMIT_RATE) plWrites.push(_writePlannerWeeklyMerit(st, seatKey, weekIso, satIso, onAttend, attDates.size));
       }
 
-      const goalH = Number(st.weeklyGoalH) || 0;
+      const chal = WEEKLY_CHALLENGES[weekIso];
+      const goalH = chal ? chal.goalH : (Number(st.weeklyGoalH) || 0);
       if (goalH <= 0) return; // 목표 미설정 → 순공 판정 제외
       const bd = bdoc.data();
       // 차감: base 출석예정이었으나 effective(daily_reports)에서 빠진 교시의 예정분
+      // (챌린지 주간은 전원 고정 목표라 차감 없음 — 실순공이 goalH 이상이어야 달성)
       let deductMin = 0;
-      for (let i = 0; i < 6; i++){
+      if (!chal) for (let i = 0; i < 6; i++){
         const baseStr = bd[dayNames[i]] || '-';
         const bp = window.parseScheduleStr(baseStr);
         if (!bp || !bp.periods || !bp.periods.size) continue;
@@ -12124,7 +12130,7 @@ async function _assessWeekGoals(monDate, weekIso){
       const adjGoalMin = Math.max(0, goalH*60 - deductMin);
       if (adjGoalMin <= 0) return; // 그 주 예정이 전부 승인결석 → 대상 아님
       const actualMin = minByName[st.name] || 0;
-      if (actualMin >= adjGoalMin) writes.push(_writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin)); // 달성만 보상, 미달 벌점 없음
+      if (actualMin >= adjGoalMin) writes.push(_writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin, chal)); // 달성만 보상, 미달 벌점 없음
     });
     await Promise.all([...writes, ...plWrites]);
     await _markWeeklyDone(weekIso, { at: Date.now(), students: writes.length, planner: plWrites.length });
@@ -12132,14 +12138,14 @@ async function _assessWeekGoals(monDate, weekIso){
   } catch(e){ console.error('주간 목표 판정 실패:', weekIso, e); } // 완료표시 안 남김 → 다음 시작 때 재시도(멱등)
 }
 
-// 달성 상점 → merits/{고정ID} (멱등). 취소상태 보존.
-async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin){
+// 달성 상점 → merits/{고정ID} (멱등). 취소상태 보존. 챌린지 주간이면 상점·문구 오버라이드.
+async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin, chal){
   const ref = doc(db, 'merits', `auto_wk_${weekIso}_${seatKey}`);
   let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
   await setDoc(ref, {
     name: st.name, seatKey, date: satIso, day: _WEEKLY_DN[new Date(satIso + 'T00:00:00').getDay()],
-    points: WEEKLY_MERIT_POINTS, type: 'auto',
-    reason: `주간 목표순공 달성 (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
+    points: (chal && chal.points) || WEEKLY_MERIT_POINTS, type: 'auto',
+    reason: `${(chal && chal.label) || '주간 목표순공 달성'} (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
     canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
