@@ -1312,6 +1312,16 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <b>실사용</b> = 사진·영상·음원을 실제로 받아온 횟수(사람이 화면을 봐야 발생). <b>실사용 없음</b>은 앱이 백그라운드로 두드리기만 했거나 차단당한 것 — 학생이 쓴 게 아닙니다.
   </div>
 
+  <!-- 유튜브 차단 토글 — Cloudflare의 유튜브 전용 규칙(block-youtube-toggle) 하나만 켜고 끈다.
+       인스타·게임 등 나머지 차단(block-youtube-instagram)은 여기서 안 건드린다. -->
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:#fff;border:1.5px solid #EF9A9A;border-radius:14px;padding:13px 16px;margin-bottom:12px;flex-wrap:wrap">
+    <div style="min-width:220px;flex:1">
+      <div style="font-size:14px;font-weight:700;color:#1E1B4B">📺 유튜브 차단 <span id="ytblock-state" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#ECEFF1;color:#78909C">확인 중…</span></div>
+      <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px;line-height:1.5">면학관 와이파이의 유튜브(본체·Kids·Music)만 켜고 끕니다. 인스타·게임 등 다른 차단은 그대로예요.<br>이미 보고 있던 기기는 DNS 캐시가 남아 몇 분 뒤부터 막힙니다. LTE·5G로 보는 건 못 막아요.</div>
+    </div>
+    <button id="ytblock-btn" onclick="ytBlockToggle()" disabled style="padding:9px 18px;border-radius:10px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:#ECEFF1;color:#78909C;white-space:nowrap">…</button>
+  </div>
+
   <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
     <div style="background:linear-gradient(135deg,#FCEBEB,#FFCDD2);border:1.5px solid #F09595;border-radius:14px;padding:12px;text-align:center">
       <div style="font-size:10px;color:#C62828;font-weight:700;margin-bottom:4px">비학습 <span style="font-weight:500">실사용</span></div>
@@ -2507,7 +2517,7 @@ window.showSection = function(id,btn){
   if (id === 'usagelog') { loadUsageLog(); }
   // 와이파이 탭을 벗어나면 실시간 폴링 중지 — 안 그러면 백그라운드에서 계속 돈다
   if (id !== 'netlog' && window.netLogStopLive) window.netLogStopLive();
-  if (id === 'netlog') { loadNetLog(); loadNetDaily(); }
+  if (id === 'netlog') { loadNetLog(); loadNetDaily(); ytBlockLoad(); }
   if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
   if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
@@ -13189,6 +13199,66 @@ window.renderUsageLog = function() {
 const NETLOG_ENDPOINT = 'https://us-central1-saebom-studyhall.cloudfunctions.net/gatewayLogs';
 let _netLogData = [];
 let _netHourData = [];
+
+// ── 유튜브 차단 토글 ──
+// Cloudflare에 유튜브 전용 규칙(block-youtube-toggle)을 따로 만들어 두고 그 규칙의
+// enabled만 켜고 끈다. 인스타·게임 등 나머지 차단 정책은 손대지 않는다.
+// Cloudflare 토큰이 public 저장소에 못 들어가는 사정은 gatewayLogs와 같아서 함수가 대신 한다.
+const YTBLOCK_ENDPOINT = 'https://us-central1-saebom-studyhall.cloudfunctions.net/youtubeBlockToggle';
+let _ytBlocked = null;   // null = 아직 모름(확인 실패 포함)
+
+function ytBlockRender(pending) {
+  const st = document.getElementById('ytblock-state');
+  const btn = document.getElementById('ytblock-btn');
+  if (!st || !btn) return;
+  if (_ytBlocked === null) {
+    st.textContent = '확인 실패'; st.style.background = '#ECEFF1'; st.style.color = '#78909C';
+    btn.textContent = '다시 확인'; btn.disabled = false;
+    btn.style.background = '#EEF2FF'; btn.style.color = '#4A3FA8';
+    return;
+  }
+  st.textContent = _ytBlocked ? '차단 중' : '허용 중';
+  st.style.background = _ytBlocked ? '#FCEBEB' : '#E8F5E9';
+  st.style.color = _ytBlocked ? '#C62828' : '#2D7A4F';
+  btn.disabled = !!pending;
+  btn.textContent = pending ? '적용 중…' : (_ytBlocked ? '차단 해제' : '차단하기');
+  btn.style.background = _ytBlocked ? '#E8F5E9' : '#C62828';
+  btn.style.color = _ytBlocked ? '#2D7A4F' : '#fff';
+}
+
+async function _ytBlockCall(body) {
+  const token = localStorage.getItem('saebom_admin_token');
+  if (!token) throw new Error('관리자 기기 등록이 필요합니다');
+  const r = await fetch(YTBLOCK_ENDPOINT, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.assign({ token }, body || {}))
+  });
+  const j = await r.json();
+  if (!r.ok || j.error) throw new Error(j.error || ('HTTP ' + r.status));
+  return j;
+}
+
+window.ytBlockLoad = async function() {
+  const st = document.getElementById('ytblock-state');
+  if (st) st.textContent = '확인 중…';
+  try { _ytBlocked = (await _ytBlockCall()).blocked; }
+  catch (e) { console.error('[유튜브 차단] 상태 확인 실패:', e); _ytBlocked = null; }
+  ytBlockRender();
+};
+
+window.ytBlockToggle = async function() {
+  if (_ytBlocked === null) { ytBlockLoad(); return; }   // 확인 실패 상태면 재확인부터
+  const next = !_ytBlocked;
+  ytBlockRender(true);
+  try {
+    _ytBlocked = (await _ytBlockCall({ enabled: next })).blocked;
+    if (window.showToast) showToast(_ytBlocked ? '📵 유튜브 차단을 켰어요' : '📺 유튜브를 허용했어요');
+  } catch (e) {
+    console.error('[유튜브 차단] 변경 실패:', e);
+    alert('변경 실패: ' + e.message);
+  }
+  ytBlockRender();
+};
 
 // 서비스의 시간대별 실사용을 KST 0~23시로 집계.
 // Cloudflare가 주는 hour 는 UTC라 +9 해야 한다. 차단된 질의는 콘텐츠 0바이트라 뺀다.
