@@ -13616,7 +13616,10 @@ const NET_SERVICES = [
   { name:'매쓰플랫',     cat:'study',  re:/mathflat/i },
   { name:'미맥스터디',   cat:'study',  re:/mimacstudy/i },
   { name:'인강·학습',    cat:'study',  re:/ebs\.|megastudy|etoos|daekyo|chunjae|visang|kollus|classroom\.google|khanacademy|wolframalpha|qanda|mathpresso|coursera|udemy|neis|saebom/i },
-  { name:'카카오톡',     cat:'sns',    re:/talk-pilsner|katalk|(^|\.)kakao|onkakao|kakaocdn|daumcdn|tiara\.daum/i, content:/kakaocdn|daumcdn/i },
+  // 카카오톡은 실사용 판정(content) 없음 — 메시지가 '도착만 해도' 프로필·사진 미리보기를
+  // kakaocdn에서 자동으로 받아와서, 빈 면학관에서도 실사용이 찍혔다(2026-07-27 실측 t1.kakaocdn 7건).
+  // 메신저는 DNS로 수신과 사용을 구별할 수 없으므로 게임처럼 집계만 한다.
+  { name:'카카오톡',     cat:'sns',    re:/talk-pilsner|katalk|(^|\.)kakao|onkakao|kakaocdn|daumcdn|tiara\.daum/i },
   // ↓ 여기부터는 배경 통신. 위에서 안 걸린 것만 내려온다.
   { name:'애플 기기',    cat:'system', re:/apple|aapl|icloud|itunes|akadns/i },
   { name:'구글 기기',    cat:'system', re:/google|gstatic|gvt1|gvt2|googleapis|doubleclick|firebase|crashlytics|gcp\./i },
