@@ -75,6 +75,9 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .topbar-title{color:#1E1B4B;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
 .topbar-tabs{display:none;gap:2px}
 body.admin-device .topbar-tabs{display:flex}
+/* 원장 전용 탭(신문고·설정): 원장 기기로 등록된 기기에서만 표시 */
+.tab-btn.director-only{display:none}
+body.director-device .tab-btn.director-only{display:inline-block}
 .tab-btn{padding:6px 14px;border:none;background:rgba(255,255,255,0.35);color:#1E1B4B;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s}
 .tab-btn.active{background:#fff;color:#6C5DD3;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
 .content{padding:16px}
@@ -856,7 +859,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn" onclick="showSection('dashboard',this)">대시보드</button>
     <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
     <button class="tab-btn" onclick="showSection('handover',this)">📝 인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
-    <button class="tab-btn" onclick="showSection('shinmungo',this)">🔔 신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
+    <button class="tab-btn director-only" onclick="showSection('shinmungo',this)">🔔 신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
     <button class="tab-btn" onclick="showSection('analytics',this)">📈 학습분석</button>
     <span class="tab-divider" aria-hidden="true"></span>
@@ -869,7 +872,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn" onclick="showSection('usagelog',this)">📊 사용기록</button>
     <button class="tab-btn" onclick="showSection('netlog',this)">🌐 와이파이</button>
     <button class="tab-btn" onclick="showSection('billing',this)">💳 수납</button>
-    <button class="tab-btn" onclick="showSection('settings',this)">⚙️ 설정</button>
+    <button class="tab-btn director-only" onclick="showSection('settings',this)">⚙️ 설정</button>
   </div>
 </div>
 
@@ -1581,8 +1584,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         <div style="min-width:0">
           <div style="font-size:15px;font-weight:700;color:#1E1B4B">🔔 신문고 접수함</div>
           <div style="font-size:11px;color:#888;margin-top:3px;line-height:1.6">
-            학생 신고를 확인하고 처리 상태를 표시하세요(학생앱에 그대로 회신됩니다).<br>
-            신고자는 <b>원장 비밀번호</b>로만 열람됩니다. 피신고 학생 벌점은 <b>관리 탭 학생 팝업</b>에서 부여하고,
+            👑 <b>원장 전용 탭</b> — 신고 확인·처리(학생앱에 그대로 회신)와 신고자 열람 모두 원장 기기에서만 됩니다.<br>
+            피신고 학생 벌점은 <b>관리 탭 학생 팝업</b>에서 부여하고,
             <b>조치 완료</b> 처리 시 신고자 상점 1점이 <b>자동 부여</b>됩니다(건당 1점).
           </div>
         </div>
@@ -1748,6 +1751,22 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
           style="padding:10px 20px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
           이 기기 등록 해제(로그아웃)
         </button>
+      </div>
+      <div style="border-top:1px solid #EEE;margin-top:14px;padding-top:12px">
+        <div style="font-size:12px;color:#4A3FA8;margin-bottom:10px;line-height:1.6">
+          👑 <b>원장 기기</b> — 신문고·설정 탭과 상벌점 부여/취소는 원장 기기에서만 쓸 수 있습니다.<br>
+          새 원장 기기 등록: 관리자 등록된 기기에서 <b>주소 뒤에 <code>?director</code></b> → 원장 비밀번호 입력.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button onclick="changeDirectorPassword()"
+            style="padding:10px 20px;background:#fff;color:#4A3FA8;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+            원장 비밀번호 변경
+          </button>
+          <button onclick="directorLogoutDevice()"
+            style="padding:10px 20px;background:#fff;color:#C62828;border:1.5px solid #C62828;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+            이 기기 원장 해제
+          </button>
+        </div>
       </div>
     </div>
 
@@ -2528,17 +2547,29 @@ function _afterAdminLogin() {
 }
 
 // ?admin(또는 #admin) 비밀 주소로 접속하면 관리자 로그인 창을 띄운다.
+// ?director 는 원장 기기 등록(원장 비밀번호) — 관리자 등록된 기기에서만 의미 있다.
 window.addEventListener('load', function () {
   _applyAdminDeviceUI();
   _validateAdminToken();
-  let wantAdmin = false;
-  try { wantAdmin = new URLSearchParams(location.search).has('admin') || /(^|[#&])admin(\b|=)/.test(location.hash); } catch (e) {}
+  _applyDirectorUI();
+  _validateDirectorToken();
+  let wantAdmin = false, wantDirector = false;
+  try {
+    const p = new URLSearchParams(location.search);
+    wantAdmin = p.has('admin') || /(^|[#&])admin(\b|=)/.test(location.hash);
+    wantDirector = p.has('director') || /(^|[#&])director(\b|=)/.test(location.hash);
+  } catch (e) {}
   if (wantAdmin && !window._kioskAuto) setTimeout(() => window.openAdminLogin('login'), 400);
+  else if (wantDirector && !window._kioskAuto) setTimeout(() => window.openDirectorLogin(), 400);
 });
 
 window.showSection = function(id,btn){
   // 입실·퇴실(공개 화면)만 열고, 나머지 관리 화면은 '등록된 관리자 기기'에서만 접근 가능
   if (id !== 'checkin' && !isAdminDevice()) {
+    return;
+  }
+  // 신문고·설정은 원장 기기 전용 (탭 복원 경로도 이 가드를 지나므로 조용히 무시)
+  if ((id === 'shinmungo' || id === 'settings') && !isDirectorDevice()) {
     return;
   }
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
@@ -4428,6 +4459,7 @@ window._penaltyPresetPick = function(val){
 // 수기 벌점 부과 — penalties/{오늘}_{좌석} 문서 periods에 type:'manual' 항목 병합.
 // 앵커 규칙(무단결석 2점이 최상단)에 따라 점수는 1~2로 강제.
 window.addManualPenalty = async function(seatKey, name){
+  if (!_requireDirector()) return;
   const pEl = document.getElementById('penalty-points-input');
   const rEl = document.getElementById('penalty-reason-input');
   let pts = Math.round(Number(pEl && pEl.value) || 0);
@@ -4458,6 +4490,7 @@ window.addManualPenalty = async function(seatKey, name){
 
 // 교시별 벌점 취소 ↔ 복구 토글 (문서는 남기고 canceled 플래그만 변경)
 window.togglePenaltyCancel = async function(docId, pn) {
+  if (!_requireDirector()) return;
   try {
     const db = window._adminDb;
     if (!db) return;
@@ -4487,6 +4520,7 @@ window.togglePenaltyCancel = async function(docId, pn) {
 // periods 를 빈 맵으로 덮어쓴다. 문서 껍데기(name/seatKey/date)는 규칙이 요구하므로 남긴다.
 // ⚠️ canceled 토글과 달리 항목 자체가 사라져 복구 불가 — 그래서 문구 입력 확인을 받는다.
 window.resetPenalties = async function(filterSeatKey) {
+  if (!_requireDirector()) return;
   const scope = filterSeatKey ? `${_nameForSeatKey(filterSeatKey) || filterSeatKey}(${filterSeatKey}번) 학생의` : '전체 학생의';
   const typed = prompt(`⚠️ ${scope} 누적 벌점을 모두 초기화합니다.\n지워진 기록은 되돌릴 수 없습니다.\n\n계속하려면 아래에 "초기화" 를 입력하세요.`);
   if (typed === null) return;
@@ -4597,6 +4631,7 @@ async function _renderMeritModalBody(seatKey, name){
 
 // 상점 부여 — merits 컬렉션에 자동 ID 문서 1건 저장(오늘 날짜)
 window.addMerit = async function(seatKey, name){
+  if (!_requireDirector()) return;
   const ptsEl = document.getElementById('merit-points-input');
   const reasonEl = document.getElementById('merit-reason-input');
   const pts = Math.max(1, Math.round(Number(ptsEl && ptsEl.value) || 0));
@@ -4621,6 +4656,7 @@ window.addMerit = async function(seatKey, name){
 
 // 상점 취소 ↔ 복구 토글 (문서는 남기고 canceled 플래그만 변경)
 window.toggleMeritCancel = async function(docId){
+  if (!_requireDirector()) return;
   try {
     const db = window._adminDb; if (!db) return;
     const { doc, getDoc, setDoc } = window._fs;
@@ -4634,6 +4670,105 @@ window.toggleMeritCancel = async function(docId){
     try { applyMeritBadges(); } catch(e){}
   } catch(e){ console.error('상점 취소/복구 실패:', e); alert('처리 실패: ' + (e.message || e)); }
 };
+
+// ══════════ 👑 원장 기기 등급 ══════════
+// 관리자 기기(마스터 비번) 위의 한 단계 — 조교 기기와 원장 기기를 구분한다.
+// 비밀번호는 신문고 열람용으로 만든 settings/shinmungo_auth(PBKDF2)를 그대로 쓴다.
+// 등록: 주소 뒤 ?director → 원장 비밀번호 입력 → localStorage 토큰(=해시).
+// 비밀번호를 바꾸면 다른 기기의 원장 등록은 다음 로드 시 자동 해제된다(마스터 비번과 동일 원리).
+// 원장 전용: 신문고 탭·설정 탭·상점 부여/취소·벌점 수동 부여/취소/초기화.
+const DIRECTOR_TOKEN_KEY = 'saebom_director_token';
+function isDirectorDevice() { return !!localStorage.getItem(DIRECTOR_TOKEN_KEY); }
+window.isDirectorDevice = isDirectorDevice;
+
+function _applyDirectorUI() {
+  document.body.classList.toggle('director-device', isDirectorDevice());
+}
+
+// 반환: 객체(설정됨) | null(서버에 미설정) | undefined(읽기 실패=판정 보류)
+async function _loadDirectorAuth() {
+  const db = await window.waitDb();
+  if (!db) return undefined;
+  try {
+    const { doc, getDoc } = window._fs;
+    const snap = await getDoc(doc(db, 'settings', 'shinmungo_auth'));
+    return snap.exists() ? snap.data() : null;
+  } catch (e) { console.warn('[원장인증] 읽기 실패:', e); return undefined; }
+}
+
+// 로드 시 토큰 검증: 서버 해시와 다르거나(비번 변경) 서버에 비번이 없으면 원장 해제
+async function _validateDirectorToken() {
+  if (!isDirectorDevice()) { _applyDirectorUI(); return; }
+  const auth = await _loadDirectorAuth();
+  if (auth === undefined) return;                 // 읽기 실패 → 유지(가용성 우선)
+  if (!auth || localStorage.getItem(DIRECTOR_TOKEN_KEY) !== auth.hash) {
+    localStorage.removeItem(DIRECTOR_TOKEN_KEY);
+    _applyDirectorUI();
+    // 원장 전용 화면이 열려 있었다면 대시보드로 물린다
+    const cur = document.querySelector('.section.active');
+    if (cur && (cur.id === 'sec-shinmungo' || cur.id === 'sec-settings')) {
+      const b = document.querySelector('.tab-btn[onclick*="dashboard"]');
+      if (b) window.showSection('dashboard', b);
+    }
+  }
+}
+
+window.openDirectorLogin = async function() {
+  if (!isAdminDevice()) { alert('먼저 관리자 기기로 등록하세요(?admin).'); return; }
+  const auth = await _loadDirectorAuth();
+  if (auth === undefined) { alert('네트워크 오류 — 잠시 후 다시 시도하세요.'); return; }
+  _smPinOverlay(auth ? 'login' : 'setup', async (pw, err, ov) => {
+    let hash;
+    if (auth) {
+      hash = await _hashPw(auth.salt, pw);
+      if (hash !== auth.hash) { err('비밀번호가 틀렸습니다'); return; }
+    } else {
+      const db = await window.waitDb(); if (!db) { err('DB 준비 안 됨'); return; }
+      const { doc, setDoc, serverTimestamp } = window._fs;
+      const salt = _randSalt();
+      hash = await _hashPw(salt, pw);
+      await setDoc(doc(db, 'settings', 'shinmungo_auth'), { salt, hash, updatedAt: serverTimestamp() });
+    }
+    localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
+    ov.remove();
+    _applyDirectorUI();
+    alert('✅ 이 기기가 원장 기기로 등록되었습니다.\n신문고·설정 탭과 상벌점 부여/취소를 쓸 수 있습니다.');
+  });
+};
+
+window.directorLogoutDevice = function() {
+  if (!confirm('이 기기의 원장 등록을 해제할까요?\n다시 쓰려면 주소 뒤에 ?director 로 재등록해야 합니다.')) return;
+  localStorage.removeItem(DIRECTOR_TOKEN_KEY);
+  _applyDirectorUI();
+  const b = document.querySelector('.tab-btn[onclick*="dashboard"]');
+  if (b) window.showSection('dashboard', b);
+};
+
+// 원장 비밀번호 변경 — 다른 원장 기기는 다음 로드 시 자동 해제
+window.changeDirectorPassword = async function() {
+  const auth = await _loadDirectorAuth();
+  if (auth === undefined) { alert('네트워크 오류 — 잠시 후 다시 시도하세요.'); return; }
+  if (!auth) { alert('아직 원장 비밀번호가 없습니다. ?director 로 최초 설정하세요.'); return; }
+  _smPinOverlay('change', async (pws, err, ov) => {
+    const curHash = await _hashPw(auth.salt, pws.cur);
+    if (curHash !== auth.hash) { err('현재 비밀번호가 틀렸습니다'); return; }
+    const db = await window.waitDb(); if (!db) { err('DB 준비 안 됨'); return; }
+    const { doc, setDoc, serverTimestamp } = window._fs;
+    const salt = _randSalt();
+    const hash = await _hashPw(salt, pws.pw);
+    await setDoc(doc(db, 'settings', 'shinmungo_auth'), { salt, hash, updatedAt: serverTimestamp() });
+    localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
+    ov.remove();
+    alert('✅ 원장 비밀번호가 변경되었습니다.\n다른 원장 기기는 새 비밀번호로 다시 등록해야 합니다.');
+  });
+};
+
+// 원장 전용 기능 가드 — 상점 부여/취소, 벌점 수동 부여/취소/초기화, 신문고 처리에서 호출
+function _requireDirector() {
+  if (isDirectorDevice()) return true;
+  alert('원장 전용 기능입니다.\n원장 기기에서만 사용할 수 있습니다.');
+  return false;
+}
 
 // ══════════ 🔔 신문고 접수함 ══════════
 // shinmungo_reports/{autoId} — 학생 기명 신고. 목록은 module 쪽 onSnapshot이
@@ -4717,6 +4852,7 @@ window.smAdminRender = function() {
 };
 
 window.smSetStatus = async function(id, status) {
+  if (!_requireDirector()) return;
   const r = (window._smReports||[]).find(x => x.id === id);
   if (!r) return;
   if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신되고, 신고자에게 상점 1점이 자동 부여됩니다(건당 1점).\n(피신고 학생 벌점은 관리 탭 학생 팝업에서 별도 부여하세요)')) return;
@@ -4749,24 +4885,31 @@ async function _smGrantMeritCore(id, r) {
 // ── 원장 비밀번호 게이트 ──
 // settings/shinmungo_auth {salt, hash} — 마스터 비번과 같은 PBKDF2 방식(_hashPw 재사용).
 // 문서가 없으면 최초 1회 설정 플로우. 통과하면 10분간 열람 유지(새로고침하면 풀림).
+// mode: 'setup'(최초 설정) | 'login'(확인/기기등록) | 'change'(비밀번호 변경)
+// onOk 인자: setup/login → 비밀번호 문자열, change → {cur, pw} 객체
 function _smPinOverlay(mode, onOk) {
   const old = document.getElementById('sm-pin-overlay'); if (old) old.remove();
   const ov = document.createElement('div');
   ov.id = 'sm-pin-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(30,27,75,0.45);z-index:99999;display:flex;align-items:center;justify-content:center';
   const inp = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;margin-bottom:8px';
+  const titles = { setup: '🔒 원장 비밀번호 설정', login: '🔒 원장 확인', change: '🔒 원장 비밀번호 변경' };
+  const subs = {
+    setup: '원장 전용 비밀번호를 만드세요.<br>⚠️ 조교·학생 앞에서 입력하지 마세요.',
+    login: '원장 비밀번호를 입력하세요.<br>⚠️ 조교·학생 앞에서 입력하지 마세요.',
+    change: '현재 비밀번호 확인 후 변경합니다.<br>다른 원장 기기는 자동 해제됩니다.'
+  };
   ov.innerHTML = `
     <div style="background:#fff;border-radius:14px;padding:22px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,0.25)">
-      <div style="font-size:15px;font-weight:700;color:#1E1B4B;margin-bottom:4px">${mode==='setup' ? '🔒 원장 비밀번호 설정' : '🔒 원장 확인'}</div>
-      <div style="font-size:11px;color:#888;margin-bottom:12px;line-height:1.6">${mode==='setup'
-        ? '신고자 열람에 쓸 원장 전용 비밀번호를 만드세요.<br>⚠️ 조교·학생 앞에서 입력하지 마세요.'
-        : '신고자를 열람합니다. 원장 비밀번호를 입력하세요.<br>⚠️ 조교·학생 앞에서 입력하지 마세요.'}</div>
-      <input id="sm-pin-1" type="password" autocomplete="off" placeholder="${mode==='setup' ? '새 비밀번호(6자 이상)' : '비밀번호'}" style="${inp}">
-      ${mode==='setup' ? `<input id="sm-pin-2" type="password" autocomplete="off" placeholder="비밀번호 확인" style="${inp}">` : ''}
+      <div style="font-size:15px;font-weight:700;color:#1E1B4B;margin-bottom:4px">${titles[mode]}</div>
+      <div style="font-size:11px;color:#888;margin-bottom:12px;line-height:1.6">${subs[mode]}</div>
+      ${mode==='change' ? `<input id="sm-pin-cur" type="password" autocomplete="off" placeholder="현재 비밀번호" style="${inp}">` : ''}
+      <input id="sm-pin-1" type="password" autocomplete="off" placeholder="${mode==='login' ? '비밀번호' : '새 비밀번호(6자 이상)'}" style="${inp}">
+      ${mode!=='login' ? `<input id="sm-pin-2" type="password" autocomplete="off" placeholder="비밀번호 확인" style="${inp}">` : ''}
       <div id="sm-pin-err" style="font-size:11px;color:#E53935;min-height:14px;margin-bottom:6px"></div>
       <div style="display:flex;gap:8px">
         <button id="sm-pin-cancel" style="flex:1;padding:9px;background:#F3F4F6;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">취소</button>
-        <button id="sm-pin-ok" style="flex:1;padding:9px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${mode==='setup' ? '설정' : '확인'}</button>
+        <button id="sm-pin-ok" style="flex:1;padding:9px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${mode==='login' ? '확인' : mode==='setup' ? '설정' : '변경'}</button>
       </div>
     </div>`;
   document.body.appendChild(ov);
@@ -4774,24 +4917,32 @@ function _smPinOverlay(mode, onOk) {
   document.getElementById('sm-pin-cancel').onclick = () => ov.remove();
   document.getElementById('sm-pin-ok').onclick = async () => {
     const p1 = document.getElementById('sm-pin-1').value;
-    if (mode === 'setup') {
+    if (mode !== 'login') {
       const p2 = document.getElementById('sm-pin-2').value;
       if (p1.length < 6) { err('6자 이상이어야 합니다'); return; }
       if (p1 !== p2) { err('비밀번호가 일치하지 않습니다'); return; }
     } else if (!p1) { err('비밀번호를 입력하세요'); return; }
+    let arg = p1;
+    if (mode === 'change') {
+      const cur = document.getElementById('sm-pin-cur').value;
+      if (!cur) { err('현재 비밀번호를 입력하세요'); return; }
+      arg = { cur, pw: p1 };
+    }
     const okBtn = document.getElementById('sm-pin-ok');
     okBtn.disabled = true;
-    try { await onOk(p1, err, ov); }
+    try { await onOk(arg, err, ov); }
     catch(e) { err('처리 실패: ' + (e.message||e)); }
     finally { const b = document.getElementById('sm-pin-ok'); if (b) b.disabled = false; }
   };
   document.getElementById('sm-pin-1').addEventListener('keydown', e => {
     if (e.key === 'Enter') document.getElementById('sm-pin-ok').click();
   });
-  setTimeout(() => { const i = document.getElementById('sm-pin-1'); if (i) i.focus(); }, 50);
+  setTimeout(() => { const i = document.getElementById(mode==='change' ? 'sm-pin-cur' : 'sm-pin-1'); if (i) i.focus(); }, 50);
 }
 
 window.smRevealReporter = async function(id) {
+  // 원장 기기는 이미 비밀번호로 등록된 상태 — 바로 열람 (비번 재입력 불필요)
+  if (isDirectorDevice()) { _smShowReporter(id); return; }
   if (Date.now() < _smUnlockUntil) { _smShowReporter(id); return; }
   const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
   const { doc, getDoc, setDoc, serverTimestamp } = window._fs;
@@ -4826,7 +4977,7 @@ function _smShowReporter(id) {
   if (!r || !box) return;
   const esc = s => String(s||'').replace(/</g,'&lt;');
   box.innerHTML = `신고자: <b style="color:#1E1B4B">${esc(r.reporterSeatKey)}번 ${esc(r.reporterName)}</b>
-    <span style="color:#B8B4D9;font-size:10.5px">(10분간 열람 유지)</span>
+    ${isDirectorDevice() ? '' : '<span style="color:#B8B4D9;font-size:10.5px">(10분간 열람 유지)</span>'}
     ${r.meritGiven ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>' : ''}`;
 }
 
