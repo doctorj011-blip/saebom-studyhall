@@ -730,15 +730,36 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 [과목별 시간(subjects[].minutes) 계산 — 중요]
 많은 플래너에는 오른쪽에 시간대별 타임테이블이 있고, 학생이 공부한 시간만큼 과목별 색으로 칠한다.
 이 경우 반드시 색칠을 세어 과목별 시간을 계산할 것. null로 두지 말 것.
-1. 색상 범례를 먼저 찾는다 — 보통 표 옆이나 아래에 "수학·영어·국어" 같은 과목명과 색 견본이 함께 있다.
-   범례가 없으면 계획 항목 옆에 칠해진 색으로 과목-색 대응을 추정한다.
+1. ★색-과목 대응은 **아래 우선순위대로** 정한다. 근거 없이 추측하지 말 것.
+   (1) 칠해진 칸 안에 글자가 적혀 있으면 그것이 최우선이다 ("뉴런", "학원 숙제", "통합과학" 등
+       교재·활동명이 칸 안에 쓰여 있으면 그 과목으로 본다).
+   (2) 왼쪽 '오늘 해야 하는 공부'의 **과목 칸이 색칠돼 있으면 그 색이 그 학생의 범례다.**
+       (예: 과목 칸의 '영어'가 초록으로, '수학'이 빨강으로 칠해져 있으면 이 학생은 그 색을 쓴다.)
+       색 견본이 붙은 별도 범례가 있으면 마찬가지로 그것을 따른다.
+       ※학생마다 쓰는 색이 다르다. 이 학생만의 범례가 보이면 아래 (3)의 공통 규정보다 **무조건 우선**한다.
+   (3) (1)·(2) 어느 근거도 없을 때만 새봄면학관 공통 규정을 적용한다 —
+       청록=국어, 보라=수학, 주황=영어, 갈색=탐구(과학·사회·한국사), 노랑=그 외.
+       형광펜 주황은 사진에서 붉은색·연어색으로 찍히는 일이 흔하고, 청록은 초록·하늘색으로 보일 수 있다.
+       실제 과목명(탐구·그 외가 무엇인지)은 계획에 적힌 내용으로 판단해 enum에 매핑한다.
+   검산: 칠해진 색의 과목 구성은 왼쪽 계획표의 과목 칸과 대체로 일치해야 한다.
+   계획에 없는 과목이 대량으로 나오거나, 완료(O)인 과목보다 미완료(△·X)인 과목에 시간이 훨씬 많이
+   잡히면 색을 잘못 짚었을 가능성이 크니 위 순서로 다시 볼 것.
+   ※근거가 (3)뿐이라 확신이 낮으면 summary에 어떤 색을 어느 과목으로 봤는지 한 줄로 남길 것.
 2. 표 한 줄이 몇 분인지 판단한다. 보통 한 줄 = 1시간이고 그 줄이 여러 칸으로 나뉘어 있다
    (6칸이면 한 칸 10분, 4칸이면 15분, 2칸이면 30분).
-3. 색깔별로 칠해진 칸 수를 세어 분으로 환산하고, 같은 색끼리 합쳐 과목별 minutes에 넣는다.
+3. ★표의 줄을 **맨 위(6시)부터 맨 아래까지 한 줄씩 순서대로** 훑으며 각 줄에 무슨 색이
+   얼마나 칠해졌는지 판단한다. 여러 줄을 눈대중으로 덩어리째 어림하지 말 것 — 그러면 꼭 빠뜨린다.
+   · 각 줄은 가운데 가로 점선으로 위·아래 두 칸(각 30분)으로 나뉜다.
+   · **줄이 위아래로 꽉 차 있으면 60분**이고, 점선 기준 한쪽 절반만 칠해졌을 때만 30분이다.
+     꽉 찬 줄을 30분으로 세는 실수가 반복됐다. 점선을 넘는지 반드시 확인할 것.
+   · 한 줄에 색이 두 개면 각각 30분씩 따로 센다.
+   그렇게 줄별로 판단한 값을 그대로 hourly 에 넣고, 같은 색끼리 합쳐 과목별 minutes 를 만든다.
 4. '점심', '저녁', '이동', '학원' 처럼 글자가 적힌 칸은 색이 칠해져 있어도 그 시간은 학습에서 뺀다.
    한 줄의 절반에만 글자가 있으면 나머지 절반만 학습으로 센다.
 5. 검산: 과목별 합계가 플래너에 적힌 TOTAL TIME(총 학습시간)과 크게 어긋나면 칸 단위를 다시 판단한다.
    부분적으로만 칠해진 칸은 반 칸으로 세지 말고 칠해진 것으로 센다.
+   ★TOTAL TIME 이 비어 있으면 맞춰볼 기준이 없어 값이 흔들리기 쉽다. 이때는 3번의 줄별 훑기를
+   **한 번 더 처음부터** 반복해 빠뜨린 줄이나 절반으로 잘못 센 줄이 없는지 확인한 뒤 확정할 것.
 6. 타임테이블 자체가 없거나 색칠이 전혀 없을 때만 minutes를 null로 둔다.
 - ★계산 순서를 지킬 것: 타임테이블이 있으면 **hourly를 먼저 완성**하고,
   **subjects[].minutes 는 hourly 를 과목별로 합산해서 만든다**(따로 어림하지 말 것).
@@ -751,11 +772,21 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 [시간대별 기록(hourly) — 위에서 센 색칠을 시간대별로도 남길 것]
 - 타임테이블의 각 줄이 몇 시인지 읽고, 그 시간대에 칠해진 과목과 분을 hourly에 넣는다.
 - hour 는 24시간제 정수(오전 9시=9, 오후 1시=13, 오후 9시=21, 자정=0, 새벽 1시=1).
-  오전/오후 표기가 없으면 [지금의 운영 상황]에 따라 오전 9시 시작으로 판단한다
-  (표가 6~9부터 시작하면 그대로 오전이고, 12 다음의 1,2,3은 오후 13,14,15시다.
-   밤까지 이어진 끝부분이 12를 다시 넘어갈 때만 0,1,2시로 본다).
+- ★표에 적힌 숫자는 12시간제라 **같은 숫자가 두 번 나온다**(6~12가 오전과 저녁에 각각 등장).
+  숫자만 보고 hour 를 정하지 말 것. 표는 위에서 아래로 하루가 이어지는 **하나의 연속된 시간축**이고,
+  굵은 가로선이 오전 / 오후 / 저녁 구간을 나눈다. 줄의 **위치(몇 번째 구간인지)** 로 판단한다.
+  새봄 플래너 표준 양식은 21줄이고 다음과 같이 대응한다:
+   · 첫 구간(굵은 선 위) 6,7,8,9,10,11,12 → 6,7,8,9,10,11,12 (오전 6시~정오)
+   · 둘째 구간 1,2,3,4,5 → 13,14,15,16,17 (오후)
+   · 셋째 구간(마지막 굵은 선 아래) 6,7,8,9,10,11,12,1,2 → 18,19,20,21,22,23,0,1,2 (저녁~새벽)
+  즉 **마지막 구간의 10·11은 오전 10·11시가 아니라 밤 22·23시**다. 이걸 오전으로 넣으면
+  같은 시간대에 낮 과목과 밤 과목이 겹쳐 시간대 분석이 통째로 틀어진다. 반드시 확인할 것.
+  양식이 달라 구간 구분이 없으면, 첫 줄부터 순서대로 한 시간씩 늘려가며 hour 를 매긴다.
 - 한 시간대에 두 과목이 칠해져 있으면 각각 따로 항목을 만든다.
 - 각 항목의 minutes 합은 subjects[].minutes 합과 일치해야 한다.
+- ★hourly 합계 = 플래너에 적힌 TOTAL TIME 이어야 한다. 두 값이 다르면 **hourly 쪽이 틀린 것**이니
+  덜 센 구간이 없는지(특히 반 칸만 센 줄, 밤 시간대 줄) 다시 세어 맞출 것.
+  총량은 hourly 합계로 확정되므로, hourly 를 적게 세면 그 학생의 총 학습시간이 그만큼 줄어든다.
 - 타임테이블이 없거나 시간대를 못 읽으면 hourly 는 빈 배열로 둔다.
 - materials: 플래너에 적힌 교재·인강을 각각 하나의 항목으로 뽑을 것
   · raw 에는 **그 줄에 적힌 글자를 본 그대로** 옮길 것. 페이지·범위·번호까지 포함하고,
@@ -904,7 +935,17 @@ function reconcilePlannerStats(st, ctx) {
   }
   if (!Object.keys(byS).length) return st;
 
-  const subs = Array.isArray(st.subjects) ? st.subjects.map(s => ({ ...s })) : [];
+  // ⚠️모델이 같은 과목을 여러 줄로 쪼개 내놓는 일이 있다(계획 항목이 여러 개일 때).
+  // 아래에서 이름이 같은 항목마다 그 과목의 '전체 합계'를 넣으므로, 중복을 안 합치면
+  // 총량이 과목 수만큼 곱해진다(2026-07-24 정시우 7/23: 국어 3줄 → 570분이 1530분으로).
+  const merged = [];
+  for (const s of (Array.isArray(st.subjects) ? st.subjects : [])) {
+    const hit = merged.find(x => x.name === s.name);
+    if (!hit) { merged.push({ ...s }); continue; }
+    hit.minutes = (Number(hit.minutes) || 0) + (Number(s.minutes) || 0);
+    if (s.detail && hit.detail !== s.detail) hit.detail = [hit.detail, s.detail].filter(Boolean).join(' / ');
+  }
+  const subs = merged;
   const before = subs.reduce((a, s) => a + (Number(s.minutes) || 0), 0);
   for (const s of subs) if (byS[s.name] != null) s.minutes = byS[s.name];
   // 색칠에는 있는데 과목 목록에서 빠진 과목도 살려 둔다(그래프에서 통째로 사라지는 것 방지)
@@ -921,7 +962,7 @@ function reconcilePlannerStats(st, ctx) {
 }
 
 // ── 검사 요청 구성·결과 기록 공용 헬퍼 ──
-// 실시간 검사(plannerAiReview)와 밤 배치 검사가 이 두 함수를 똑같이 쓴다.
+// 실시간 검사(plannerAiReview)와 밤 배치 검사가 이 헬퍼들을 똑같이 쓴다.
 // 검사 품질을 결정하는 건 모델·프롬프트·사진 구성 셋뿐이므로, 여기가 같으면
 // 배치 검사도 실시간과 정확도가 동일하다 — 다른 건 Batch API 반값 요금뿐.
 
@@ -929,6 +970,24 @@ async function plannerAiConfig() {
   const cfgSnap = await db.collection('ai_config').doc('planner').get();
   const cfg = cfgSnap.exists ? (cfgSnap.data() || {}) : {};
   return { model: cfg.model || PLANNER_AI_MODEL, sysPrompt: cfg.prompt || PLANNER_AI_PROMPT };
+}
+
+// 실시간·배치 공통 요청 옵션.
+// max_tokens 2048 이면 hourly 항목이 20개를 넘는 날 응답이 중간에 잘려
+// "Unterminated string in JSON" 으로 검사 자체가 실패한다(2026-07-24 윤지호 7/23).
+// 생성한 만큼만 과금되므로 넉넉히 잡는다.
+// 시스템 프롬프트(1만자 남짓)는 매 건 완전히 동일해서 캐싱하면 1/10 값이 된다
+// (실시간 검사는 concurrency:1 순차 실행이라 앞 건이 5분 캐시를 데워 주고,
+//  배치도 같은 프롬프트가 몰리므로 적중 가능성이 있다 — 50% 할인과 별도로 겹쳐 적용).
+// ※system 은 문자열이면 cache_control 을 못 붙이므로 블록 배열로 넘긴다.
+function plannerAiRequestParams(model, sysPrompt, content) {
+  return {
+    model,
+    max_tokens: 4096,
+    system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
+    output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
+    messages: [{ role: 'user', content }]
+  };
 }
 
 // 사진 다운로드 → 전처리(축소·확대본) → 메시지 content 조립
@@ -939,8 +998,7 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
   let mediaType = (res.headers.get('content-type') || 'image/jpeg').split(';')[0];
 
   // 요즘 폰 사진은 10MB를 예사로 넘는데 Claude API 이미지 상한이 10MB다(2026-07-21 23번 실패).
-  // 어차피 긴 변 1568px를 넘으면 API가 내부적으로 축소하므로 미리 줄여도 판독 품질 손해가
-  // 없고, 용량·메모리·비용·지연이 모두 줄어든다.
+  // 미리 줄이면 용량·메모리·비용·지연이 모두 줄어든다.
   // ⚠️ .rotate()는 생략 금지 — sharp는 출력 시 EXIF를 버리므로, 방향 태그를 미리 픽셀에
   //    반영해 두지 않으면 오히려 눕거나 뒤집힌 사진이 모델에 전달된다.
   const tiles = [];   // 계획표·메모 확대본(전체 사진 뒤에 함께 보낸다)
@@ -965,10 +1023,15 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
       tiles.push(await cut(0.02, 0.50, 0.62, 0.92));   // 못한 것·메모·한마디
     }
 
-    if (W > 1568 || H > 1568 || buf.length > 4 * 1024 * 1024) {
+    // 전체 사진은 모델이 그대로 받는 최대 해상도(긴 변 2576px)로 보낸다.
+    // 예전엔 상한이 1568px이라 그 값으로 줄였는데, 지금 모델은 2576px까지 축소 없이 본다.
+    // 타임테이블은 확대본이 따로 없어(확대본 2장은 왼쪽 계획표·메모 전용, 그것도 세로 사진일 때만)
+    // 이 전체 사진 한 장으로 칸을 세야 한다. 1568px로 줄이면 표가 작아져 30분/60분 칸 구분이
+    // 뭉개지고, 같은 플래너를 재검사할 때마다 총량이 100분씩 달라지는 원인이 됐다(2026-07-24).
+    if (W > 2576 || H > 2576 || buf.length > 4 * 1024 * 1024) {
       buf = await sharp(norm)
-        .resize({ width: 1568, height: 1568, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 85 }).toBuffer();
+        .resize({ width: 2576, height: 2576, fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 88 }).toBuffer();
       mediaType = 'image/jpeg';
     }
   } catch (e) {
@@ -1004,7 +1067,12 @@ async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, 
     quality: out.quality, summary: out.summary, comment: out.comment,
     stats: reconcilePlannerStats(out.stats, { seat, date: dateStr }) || null,
     model,
-    usage: { input: msg.usage.input_tokens, output: msg.usage.output_tokens },
+    // cacheRead 가 0 이면 캐싱이 안 먹고 있는 것(프롬프트가 바뀌었거나 캐시가 식은 뒤 온 요청)
+    usage: {
+      input: msg.usage.input_tokens, output: msg.usage.output_tokens,
+      cacheWrite: msg.usage.cache_creation_input_tokens || 0,
+      cacheRead: msg.usage.cache_read_input_tokens || 0
+    },
     doneAt: new Date().toISOString(),
     ...(extra || {})
   });
@@ -1036,13 +1104,7 @@ exports.plannerAiReview = onDocumentCreated(
       const content = await buildPlannerAiUserContent(seat, dateStr, req.name, url);
 
       const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
-      const msg = await client.messages.create({
-        model,
-        max_tokens: 2048,
-        system: sysPrompt,
-        output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
-        messages: [{ role: 'user', content }]
-      });
+      const msg = await client.messages.create(plannerAiRequestParams(model, sysPrompt, content));
 
       const out = await writePlannerAiResult(reviewRef, seat, dateStr, req.name, model, msg);
       logger.info('plannerAiReview 완료', { seat, date: dateStr, quality: out.quality });
@@ -1102,14 +1164,7 @@ async function runPlannerBatchSubmit(label) {
     try {
       const content = await buildPlannerAiUserContent(v.seat, ds, v.name, v.url);
       const cid = `${v.seat}_${ds}`;
-      requests.push({
-        custom_id: cid,
-        params: {
-          model, max_tokens: 2048, system: sysPrompt,
-          output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
-          messages: [{ role: 'user', content }]
-        }
-      });
+      requests.push({ custom_id: cid, params: plannerAiRequestParams(model, sysPrompt, content) });
       names[cid] = v.name || null;
     } catch (e) {
       logger.warn('plannerBatch 대상 준비 실패 — 건너뜀', { seat: v.seat, ds, message: e.message });
