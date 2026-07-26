@@ -22,6 +22,8 @@ rules_version = '2';
 //                 (학생앱 요청/취소, 관리앱 조교석 승인/거절)
 //   - 2026-07-25  seat_presence 추가 — CCTV 좌석 재석 감지(새봄재석감지 엔진이 current
 //                 문서 하나를 1분마다 REST로 갱신, 관리앱 대시보드가 읽음)
+//   - 2026-07-27  shinmungo_reports 추가 — 신문고(학생 기명 신고, delete 금지)
+//                 + settings 화이트리스트에 shinmungo_auth(원장 열람 비밀번호)
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -110,6 +112,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 신문고: 학생 기명 신고(학생앱 접수, 관리앱 처리). 신고자는 UI에서 원장 비밀번호로만
+    // 열람한다(규칙 수준 차단은 미인증 앱 구조상 불가 — 다른 컬렉션과 같은 개방 정책).
+    // 기록 보존을 위해 delete 는 막는다(허위신고 추적·분쟁 대비).
+    match /shinmungo_reports/{id} {
+      allow read: if true;
+      allow create, update: if request.resource.data.keys().hasAll(['reporterName', 'reporterSeatKey', 'category', 'body', 'date', 'status'])
+        && request.resource.data.reporterName is string
+        && request.resource.data.reporterName.size() <= 30
+        && request.resource.data.reporterSeatKey is string
+        && request.resource.data.category is string
+        && request.resource.data.category.size() <= 40
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 1200
+        && request.resource.data.date is string
+        && request.resource.data.status in ['new', 'checking', 'confirmed', 'rejected'];
+      allow delete: if false;
+    }
+
     // 좌석 상태: 태블릿 디텍터가 쓰고 대시보드가 읽음
     match /seat_status/{seat} { allow read, write: if true; }
 
@@ -174,7 +194,7 @@ service cloud.firestore {
     // meal_away_sms = 점심·저녁 식사시간 외출/복귀 학부모 알림 on/off. 관리자앱만 read/write.
     match /settings/{id} {
       allow read: if true;
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'admin_auth', 'seatSelection', 'vacation_mode', 'meal_away_sms'];
+      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'admin_auth', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'shinmungo_auth'];
     }
 
     // 문자 발송 로그

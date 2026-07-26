@@ -856,6 +856,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn" onclick="showSection('dashboard',this)">대시보드</button>
     <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
     <button class="tab-btn" onclick="showSection('handover',this)">📝 인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
+    <button class="tab-btn" onclick="showSection('shinmungo',this)">🔔 신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
     <button class="tab-btn" onclick="showSection('analytics',this)">📈 학습분석</button>
     <span class="tab-divider" aria-hidden="true"></span>
@@ -1569,6 +1570,30 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <div id="ho-list" style="display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
+  </div>
+</div>
+
+<!-- 신문고 접수함 -->
+<div id="sec-shinmungo" class="section">
+  <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="min-width:0">
+          <div style="font-size:15px;font-weight:700;color:#1E1B4B">🔔 신문고 접수함</div>
+          <div style="font-size:11px;color:#888;margin-top:3px;line-height:1.6">
+            학생 신고를 확인하고 처리 상태를 표시하세요(학생앱에 그대로 회신됩니다).<br>
+            신고자는 <b>원장 비밀번호</b>로만 열람됩니다. 피신고 학생 벌점은 <b>관리 탭 학생 팝업</b>에서,
+            신고자 상점은 <b>원장 확인 후 🎁 버튼</b>으로 부여하세요.
+          </div>
+        </div>
+        <div id="sm-filter-wrap" style="display:flex;gap:6px;flex:0 0 auto">
+          <button data-smf="open" onclick="smSetFilter('open')">처리 대기</button>
+          <button data-smf="done" onclick="smSetFilter('done')">처리 완료</button>
+          <button data-smf="all" onclick="smSetFilter('all')">전체</button>
+        </div>
+      </div>
+    </div>
+    <div id="sm-admin-list" style="display:flex;flex-direction:column;gap:10px"></div>
   </div>
 </div>
 
@@ -2522,6 +2547,7 @@ window.showSection = function(id,btn){
   btn.classList.add('active');
   if (id === 'settings') { loadSettingsTab(); }
   if (id === 'handover') { hoResetForm(); loadHandover(); }
+  if (id === 'shinmungo') { if (window.smAdminRender) window.smAdminRender(); }
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
   if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
@@ -4607,6 +4633,204 @@ window.toggleMeritCancel = async function(docId){
     if (document.getElementById('merit-modal-overlay')) await _renderMeritModalBody(data.seatKey, data.name);
     try { applyMeritBadges(); } catch(e){}
   } catch(e){ console.error('상점 취소/복구 실패:', e); alert('처리 실패: ' + (e.message || e)); }
+};
+
+// ══════════ 🔔 신문고 접수함 ══════════
+// shinmungo_reports/{autoId} — 학생 기명 신고. 목록은 module 쪽 onSnapshot이
+// window._smApplyReports 로 밀어 넣는다. 신고자(reporterName/SeatKey)는 이 화면에서
+// 절대 기본 노출하지 않고, 원장 비밀번호(settings/shinmungo_auth, 마스터 비번과 별개 —
+// 조교 기기도 관리자 등록이 돼 있어 마스터 비번 게이트로는 원장 전용이 안 된다)로만 연다.
+const SM_ADMIN_STATUS = {
+  new:       ['접수됨',   '#4338A8', '#EEF2FF'],
+  checking:  ['확인 중',  '#B45309', '#FEF3C7'],
+  confirmed: ['조치 완료','#059669', '#ECFDF5'],
+  rejected:  ['기각',     '#6B7280', '#F3F4F6']
+};
+let _smFilter = 'open';
+let _smUnlockUntil = 0;   // 원장 비번 통과 시 10분간 열람 유지
+window._smReports = [];
+
+window._smApplyReports = function(list) {
+  list.sort((a,b) => (b.createdMs||0) - (a.createdMs||0));
+  window._smReports = list;
+  const badge = document.getElementById('shinmungo-badge');
+  if (badge) {
+    const n = list.filter(r => r.status === 'new').length;
+    badge.style.display = n ? '' : 'none';
+    badge.textContent = n;
+  }
+  const sec = document.getElementById('sec-shinmungo');
+  if (sec && sec.classList.contains('active')) smAdminRender();
+};
+
+window.smSetFilter = function(f) { _smFilter = f; smAdminRender(); };
+
+function _smSeatLabel(seats) {
+  if (!seats) return '(좌석 미지정)';
+  return String(seats).split(',').map(s => {
+    const k = s.trim(); if (!k) return '';
+    const st = (window.STUDENTS||[]).find(x => String(x.seat||'').replace(/[^0-9]/g,'') === k);
+    return st ? `${k}번 ${st.name}` : `${k}번`;
+  }).filter(Boolean).join(' · ');
+}
+
+window.smAdminRender = function() {
+  document.querySelectorAll('#sm-filter-wrap [data-smf]').forEach(b => {
+    const on = b.dataset.smf === _smFilter;
+    b.style.cssText = 'padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid ' +
+      (on ? '#6C5DD3;background:#6C5DD3;color:#fff' : '#D8D4F0;background:#fff;color:#6C5DD3');
+  });
+  const el = document.getElementById('sm-admin-list');
+  if (!el) return;
+  const list = (window._smReports||[]).filter(r =>
+    _smFilter === 'all'  ? true :
+    _smFilter === 'open' ? (r.status === 'new' || r.status === 'checking') :
+                           (r.status === 'confirmed' || r.status === 'rejected'));
+  if (!list.length) {
+    el.innerHTML = '<div class="card" style="text-align:center;color:#999;font-size:12px;padding:28px">표시할 신고가 없습니다</div>';
+    return;
+  }
+  const esc = s => String(s||'').replace(/</g,'&lt;');
+  const btn = (label, fn, active, color) => `<button onclick="${fn}" style="padding:5px 11px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid ${active ? color+';background:'+color+';color:#fff' : '#DDD;background:#fff;color:#555'}">${label}</button>`;
+  el.innerHTML = list.map(r => {
+    const st = SM_ADMIN_STATUS[r.status] || SM_ADMIN_STATUS.new;
+    return `
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <div style="font-size:13px;font-weight:700;color:#1E1B4B">${esc(r.category)} <span style="font-weight:500;color:#888;font-size:11px">· ${esc(String(r.date||'').slice(5).replace('-','/'))} ${esc(r.time||'')}</span></div>
+        <span style="flex:0 0 auto;font-size:11px;font-weight:700;color:${st[1]};background:${st[2]};border-radius:16px;padding:3px 10px">${st[0]}</span>
+      </div>
+      <div style="font-size:12px;color:#4A3FA8;margin-top:6px;font-weight:600">대상: ${esc(_smSeatLabel(r.targetSeats))}</div>
+      <div style="font-size:12.5px;color:#333;margin-top:8px;line-height:1.65;word-break:break-word;background:#F8F8FB;border-radius:8px;padding:9px 11px">${esc(r.body)}</div>
+      <div id="sm-rep-${r.id}" style="font-size:11.5px;color:#888;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        신고자: 🔒 비공개
+        <button onclick="smRevealReporter('${r.id}')" style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #8F82E4;background:#EEF2FF;color:#4A3FA8">원장 확인</button>
+        ${r.meritGiven ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>' : ''}
+      </div>
+      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        ${btn('👀 확인 중',  `smSetStatus('${r.id}','checking')`,  r.status==='checking',  '#D97706')}
+        ${btn('✅ 조치 완료', `smSetStatus('${r.id}','confirmed')`, r.status==='confirmed', '#059669')}
+        ${btn('✖ 기각',     `smSetStatus('${r.id}','rejected')`,  r.status==='rejected',  '#6B7280')}
+      </div>
+    </div>`;
+  }).join('');
+};
+
+window.smSetStatus = async function(id, status) {
+  if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신됩니다.\n(피신고 학생 벌점은 관리 탭 학생 팝업에서 별도 부여하세요)')) return;
+  if (status === 'rejected' && !confirm('이 신고를 "기각"으로 표시할까요?\n학생앱에 기각으로 회신됩니다.')) return;
+  try {
+    const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
+    const { doc, setDoc } = window._fs;
+    await setDoc(doc(db, 'shinmungo_reports', id), { status, statusMs: Date.now() }, { merge: true });
+  } catch(e) { console.error('신문고 상태 변경 실패:', e); alert('처리 실패: ' + (e.message||e)); }
+};
+
+// ── 원장 비밀번호 게이트 ──
+// settings/shinmungo_auth {salt, hash} — 마스터 비번과 같은 PBKDF2 방식(_hashPw 재사용).
+// 문서가 없으면 최초 1회 설정 플로우. 통과하면 10분간 열람 유지(새로고침하면 풀림).
+function _smPinOverlay(mode, onOk) {
+  const old = document.getElementById('sm-pin-overlay'); if (old) old.remove();
+  const ov = document.createElement('div');
+  ov.id = 'sm-pin-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(30,27,75,0.45);z-index:99999;display:flex;align-items:center;justify-content:center';
+  const inp = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #8F82E4;border-radius:8px;font-size:13px;margin-bottom:8px';
+  ov.innerHTML = `
+    <div style="background:#fff;border-radius:14px;padding:22px;width:300px;box-shadow:0 12px 40px rgba(0,0,0,0.25)">
+      <div style="font-size:15px;font-weight:700;color:#1E1B4B;margin-bottom:4px">${mode==='setup' ? '🔒 원장 비밀번호 설정' : '🔒 원장 확인'}</div>
+      <div style="font-size:11px;color:#888;margin-bottom:12px;line-height:1.6">${mode==='setup'
+        ? '신고자 열람에 쓸 원장 전용 비밀번호를 만드세요.<br>⚠️ 조교·학생 앞에서 입력하지 마세요.'
+        : '신고자를 열람합니다. 원장 비밀번호를 입력하세요.<br>⚠️ 조교·학생 앞에서 입력하지 마세요.'}</div>
+      <input id="sm-pin-1" type="password" autocomplete="off" placeholder="${mode==='setup' ? '새 비밀번호(6자 이상)' : '비밀번호'}" style="${inp}">
+      ${mode==='setup' ? `<input id="sm-pin-2" type="password" autocomplete="off" placeholder="비밀번호 확인" style="${inp}">` : ''}
+      <div id="sm-pin-err" style="font-size:11px;color:#E53935;min-height:14px;margin-bottom:6px"></div>
+      <div style="display:flex;gap:8px">
+        <button id="sm-pin-cancel" style="flex:1;padding:9px;background:#F3F4F6;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">취소</button>
+        <button id="sm-pin-ok" style="flex:1;padding:9px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">${mode==='setup' ? '설정' : '확인'}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(ov);
+  const err = m => { const e = document.getElementById('sm-pin-err'); if (e) e.textContent = m; };
+  document.getElementById('sm-pin-cancel').onclick = () => ov.remove();
+  document.getElementById('sm-pin-ok').onclick = async () => {
+    const p1 = document.getElementById('sm-pin-1').value;
+    if (mode === 'setup') {
+      const p2 = document.getElementById('sm-pin-2').value;
+      if (p1.length < 6) { err('6자 이상이어야 합니다'); return; }
+      if (p1 !== p2) { err('비밀번호가 일치하지 않습니다'); return; }
+    } else if (!p1) { err('비밀번호를 입력하세요'); return; }
+    const okBtn = document.getElementById('sm-pin-ok');
+    okBtn.disabled = true;
+    try { await onOk(p1, err, ov); }
+    catch(e) { err('처리 실패: ' + (e.message||e)); }
+    finally { const b = document.getElementById('sm-pin-ok'); if (b) b.disabled = false; }
+  };
+  document.getElementById('sm-pin-1').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('sm-pin-ok').click();
+  });
+  setTimeout(() => { const i = document.getElementById('sm-pin-1'); if (i) i.focus(); }, 50);
+}
+
+window.smRevealReporter = async function(id) {
+  if (Date.now() < _smUnlockUntil) { _smShowReporter(id); return; }
+  const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
+  const { doc, getDoc, setDoc, serverTimestamp } = window._fs;
+  let auth;
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'shinmungo_auth'));
+    auth = snap.exists() ? snap.data() : null;
+  } catch(e) { alert('인증 정보 확인 실패: ' + (e.message||e)); return; }
+  if (!auth) {
+    _smPinOverlay('setup', async (pw, err, ov) => {
+      const salt = _randSalt();
+      const hash = await _hashPw(salt, pw);
+      await setDoc(doc(db, 'settings', 'shinmungo_auth'), { salt, hash, updatedAt: serverTimestamp() });
+      ov.remove();
+      _smUnlockUntil = Date.now() + 10*60*1000;
+      _smShowReporter(id);
+    });
+  } else {
+    _smPinOverlay('login', async (pw, err, ov) => {
+      const hash = await _hashPw(auth.salt, pw);
+      if (hash !== auth.hash) { err('비밀번호가 틀렸습니다'); return; }
+      ov.remove();
+      _smUnlockUntil = Date.now() + 10*60*1000;
+      _smShowReporter(id);
+    });
+  }
+};
+
+function _smShowReporter(id) {
+  const r = (window._smReports||[]).find(x => x.id === id);
+  const box = document.getElementById('sm-rep-' + id);
+  if (!r || !box) return;
+  const esc = s => String(s||'').replace(/</g,'&lt;');
+  box.innerHTML = `신고자: <b style="color:#1E1B4B">${esc(r.reporterSeatKey)}번 ${esc(r.reporterName)}</b>
+    <span style="color:#B8B4D9;font-size:10.5px">(10분간 열람 유지)</span>
+    ${r.meritGiven
+      ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>'
+      : `<button onclick="smGrantMerit('${id}')" style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #A7F3D0;background:#ECFDF5;color:#059669">🎁 신고자 상점 +1</button>`}`;
+}
+
+// 신고자 상점 부여 — 사유는 "학습 분위기 기여"로 기록해 상점현황에서도 신고 사실이 안 드러나게 한다
+window.smGrantMerit = async function(id) {
+  if (Date.now() >= _smUnlockUntil) { alert('원장 확인이 필요합니다'); return; }
+  const r = (window._smReports||[]).find(x => x.id === id);
+  if (!r) return;
+  if (r.meritGiven) { alert('이미 상점이 부여된 신고입니다'); return; }
+  if (!confirm(`신고자 ${r.reporterSeatKey}번 ${r.reporterName} 학생에게 상점 1점을 부여할까요?\n(상점 사유는 "학습 분위기 기여"로 기록되어 신고 사실이 드러나지 않습니다)`)) return;
+  try {
+    const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
+    const { collection, doc, setDoc, serverTimestamp } = window._fs;
+    const now = new Date();
+    const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
+    await setDoc(doc(collection(db, 'merits')), { name: r.reporterName, seatKey: String(r.reporterSeatKey), date: dateISO, day: dayName, points: 1, reason: '학습 분위기 기여', canceled: false, createdAt: serverTimestamp(), createdBy: 'shinmungo' });
+    await setDoc(doc(db, 'shinmungo_reports', id), { meritGiven: true }, { merge: true });
+    _meritDocsTs = 0;
+    try { applyMeritBadges(); } catch(e){}
+    alert('상점 1점이 부여되었습니다');
+  } catch(e) { console.error('신문고 상점 부여 실패:', e); alert('상점 부여 실패: ' + (e.message||e)); }
 };
 
 // ── 주기 순위·상쇄 현황 모달 ──
@@ -10227,6 +10451,13 @@ setInterval(() => {
   if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
   if (window.renderStudyroomBoard) window.renderStudyroomBoard();
 }, 60000);
+
+// 🔔 신문고 — 실시간 수신(탭 배지 + 접수함 렌더는 classic 쪽 _smApplyReports가 담당)
+onSnapshot(collection(db, 'shinmungo_reports'), (snap) => {
+  const list = [];
+  snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+  if (window._smApplyReports) window._smApplyReports(list);
+});
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;
