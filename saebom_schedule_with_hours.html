@@ -1582,8 +1582,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
           <div style="font-size:15px;font-weight:700;color:#1E1B4B">🔔 신문고 접수함</div>
           <div style="font-size:11px;color:#888;margin-top:3px;line-height:1.6">
             학생 신고를 확인하고 처리 상태를 표시하세요(학생앱에 그대로 회신됩니다).<br>
-            신고자는 <b>원장 비밀번호</b>로만 열람됩니다. 피신고 학생 벌점은 <b>관리 탭 학생 팝업</b>에서,
-            신고자 상점은 <b>원장 확인 후 🎁 버튼</b>으로 부여하세요.
+            신고자는 <b>원장 비밀번호</b>로만 열람됩니다. 피신고 학생 벌점은 <b>관리 탭 학생 팝업</b>에서 부여하고,
+            <b>조치 완료</b> 처리 시 신고자 상점 1점이 <b>자동 부여</b>됩니다(건당 1점).
           </div>
         </div>
         <div id="sm-filter-wrap" style="display:flex;gap:6px;flex:0 0 auto">
@@ -4717,14 +4717,34 @@ window.smAdminRender = function() {
 };
 
 window.smSetStatus = async function(id, status) {
-  if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신됩니다.\n(피신고 학생 벌점은 관리 탭 학생 팝업에서 별도 부여하세요)')) return;
-  if (status === 'rejected' && !confirm('이 신고를 "기각"으로 표시할까요?\n학생앱에 기각으로 회신됩니다.')) return;
+  const r = (window._smReports||[]).find(x => x.id === id);
+  if (!r) return;
+  if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신되고, 신고자에게 상점 1점이 자동 부여됩니다(건당 1점).\n(피신고 학생 벌점은 관리 탭 학생 팝업에서 별도 부여하세요)')) return;
+  if (status === 'rejected' && !confirm('이 신고를 "기각"으로 표시할까요?\n학생앱에 기각으로 회신됩니다.' + (r.meritGiven ? '\n⚠️ 이미 부여된 상점은 자동 회수되지 않습니다(상점현황에서 취소).' : ''))) return;
+  if (status === 'checking' && r.meritGiven && !confirm('"확인 중"으로 되돌릴까요?\n⚠️ 이미 부여된 상점은 자동 회수되지 않습니다(상점현황에서 취소).')) return;
   try {
     const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
     const { doc, setDoc } = window._fs;
     await setDoc(doc(db, 'shinmungo_reports', id), { status, statusMs: Date.now() }, { merge: true });
+    // 조치 완료 = 신고자 상점 자동 부여(건당 1점). meritGiven 플래그로 멱등 —
+    // 부여 실패 시 플래그가 안 남으니 '조치 완료'를 다시 눌러 재시도하면 된다.
+    if (status === 'confirmed' && !r.meritGiven) await _smGrantMeritCore(id, r);
   } catch(e) { console.error('신문고 상태 변경 실패:', e); alert('처리 실패: ' + (e.message||e)); }
 };
+
+// 신고자 상점 적립 — 화면에 신고자를 노출하지 않고 코드만 안다. 사유는 "학습 분위기 기여"로
+// 기록해 상점현황·학생 상점카드에서도 신고 사실이 안 드러나게 한다.
+async function _smGrantMeritCore(id, r) {
+  const db = await window.waitDb(); if (!db) throw new Error('db-not-ready');
+  const { collection, doc, setDoc, serverTimestamp } = window._fs;
+  const now = new Date();
+  const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
+  await setDoc(doc(collection(db, 'merits')), { name: r.reporterName, seatKey: String(r.reporterSeatKey), date: dateISO, day: dayName, points: 1, reason: '학습 분위기 기여', canceled: false, createdAt: serverTimestamp(), createdBy: 'shinmungo' });
+  await setDoc(doc(db, 'shinmungo_reports', id), { meritGiven: true }, { merge: true });
+  _meritDocsTs = 0;
+  try { applyMeritBadges(); } catch(e){}
+}
 
 // ── 원장 비밀번호 게이트 ──
 // settings/shinmungo_auth {salt, hash} — 마스터 비번과 같은 PBKDF2 방식(_hashPw 재사용).
@@ -4807,31 +4827,8 @@ function _smShowReporter(id) {
   const esc = s => String(s||'').replace(/</g,'&lt;');
   box.innerHTML = `신고자: <b style="color:#1E1B4B">${esc(r.reporterSeatKey)}번 ${esc(r.reporterName)}</b>
     <span style="color:#B8B4D9;font-size:10.5px">(10분간 열람 유지)</span>
-    ${r.meritGiven
-      ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>'
-      : `<button onclick="smGrantMerit('${id}')" style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #A7F3D0;background:#ECFDF5;color:#059669">🎁 신고자 상점 +1</button>`}`;
+    ${r.meritGiven ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>' : ''}`;
 }
-
-// 신고자 상점 부여 — 사유는 "학습 분위기 기여"로 기록해 상점현황에서도 신고 사실이 안 드러나게 한다
-window.smGrantMerit = async function(id) {
-  if (Date.now() >= _smUnlockUntil) { alert('원장 확인이 필요합니다'); return; }
-  const r = (window._smReports||[]).find(x => x.id === id);
-  if (!r) return;
-  if (r.meritGiven) { alert('이미 상점이 부여된 신고입니다'); return; }
-  if (!confirm(`신고자 ${r.reporterSeatKey}번 ${r.reporterName} 학생에게 상점 1점을 부여할까요?\n(상점 사유는 "학습 분위기 기여"로 기록되어 신고 사실이 드러나지 않습니다)`)) return;
-  try {
-    const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
-    const { collection, doc, setDoc, serverTimestamp } = window._fs;
-    const now = new Date();
-    const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
-    await setDoc(doc(collection(db, 'merits')), { name: r.reporterName, seatKey: String(r.reporterSeatKey), date: dateISO, day: dayName, points: 1, reason: '학습 분위기 기여', canceled: false, createdAt: serverTimestamp(), createdBy: 'shinmungo' });
-    await setDoc(doc(db, 'shinmungo_reports', id), { meritGiven: true }, { merge: true });
-    _meritDocsTs = 0;
-    try { applyMeritBadges(); } catch(e){}
-    alert('상점 1점이 부여되었습니다');
-  } catch(e) { console.error('신문고 상점 부여 실패:', e); alert('상점 부여 실패: ' + (e.message||e)); }
-};
 
 // ── 주기 순위·상쇄 현황 모달 ──
 // 이번 주기 상점총합 M·벌점총합 P로 자동 상쇄(_computeOffset) 계산 → 잔여 상점 순위 시상(1등10/2등5/3등3만원).
