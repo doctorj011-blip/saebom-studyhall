@@ -1439,6 +1439,32 @@ async function cfToggleRule(ruleId, method, body) {
   return j.result;
 }
 
+// 규칙의 enabled를 원하는 값으로 맞춘다. Gateway 규칙 갱신은 PUT(전체 교체)뿐이라
+// 기존 내용을 그대로 되돌려 보내면서 enabled만 바꾼다. 읽기전용 필드(id 등)는 추린다.
+async function cfSetRuleEnabled(ruleId, enabled) {
+  const cur = await cfToggleRule(ruleId, 'GET');
+  if (!!cur.enabled === enabled) return { changed: false, rule: cur };
+  const upd = await cfToggleRule(ruleId, 'PUT', {
+    name: cur.name,
+    description: cur.description || '',
+    action: cur.action,
+    traffic: cur.traffic || '',
+    identity: cur.identity || '',
+    device_posture: cur.device_posture || '',
+    precedence: cur.precedence,
+    filters: cur.filters,
+    rule_settings: cur.rule_settings,
+    enabled
+  });
+  return { changed: true, rule: upd };
+}
+
+// 카카오 자동연동 플래그 — settings/netblock.kakaoAuto. 문서/필드가 없으면 켜진 것(기본 자동).
+async function _kakaoAutoOn() {
+  const snap = await db.doc('settings/netblock').get();
+  return (snap.exists ? snap.data() : {}).kakaoAuto !== false;
+}
+
 const _netBlockHandler = async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ error: 'POST만 허용' }); return; }
   try {
@@ -1451,25 +1477,21 @@ const _netBlockHandler = async (req, res) => {
     const ruleId = NETBLOCK_RULES[target];
     if (!ruleId) { res.status(400).json({ error: `모르는 대상: ${target}` }); return; }
 
-    const cur = await cfToggleRule(ruleId, 'GET');
-    if (typeof b.enabled !== 'boolean') { res.json({ ok: true, target, blocked: !!cur.enabled }); return; }
+    // 자동연동 플래그 변경(카카오만 의미 있음) — 규칙이 아니라 스케줄러 동작 여부를 바꾼다.
+    if (target === 'kakao' && typeof b.auto === 'boolean') {
+      await db.doc('settings/netblock').set({ kakaoAuto: b.auto, updatedAt: new Date().toISOString() }, { merge: true });
+      logger.info(`[NetBlock] 카카오 교시 자동연동 ${b.auto ? 'ON' : 'OFF'}`);
+    }
+    const auto = target === 'kakao' ? await _kakaoAutoOn() : undefined;
 
-    // Gateway 규칙 갱신은 PUT(전체 교체)뿐이라 기존 내용을 그대로 되돌려
-    // 보내면서 enabled만 바꾼다. 읽기전용 필드(id, created_at 등)는 추린다.
-    const upd = await cfToggleRule(ruleId, 'PUT', {
-      name: cur.name,
-      description: cur.description || '',
-      action: cur.action,
-      traffic: cur.traffic || '',
-      identity: cur.identity || '',
-      device_posture: cur.device_posture || '',
-      precedence: cur.precedence,
-      filters: cur.filters,
-      rule_settings: cur.rule_settings,
-      enabled: b.enabled
-    });
-    logger.info(`[NetBlock] ${target} 차단 ${upd.enabled ? 'ON' : 'OFF'} (규칙 v${upd.version})`);
-    res.json({ ok: true, target, blocked: !!upd.enabled, version: upd.version });
+    if (typeof b.enabled !== 'boolean') {
+      const cur = await cfToggleRule(ruleId, 'GET');
+      res.json({ ok: true, target, blocked: !!cur.enabled, auto });
+      return;
+    }
+    const { rule } = await cfSetRuleEnabled(ruleId, b.enabled);
+    logger.info(`[NetBlock] ${target} 차단 ${rule.enabled ? 'ON' : 'OFF'} (규칙 v${rule.version})`);
+    res.json({ ok: true, target, blocked: !!rule.enabled, auto, version: rule.version });
   } catch (e) {
     logger.error('[NetBlock] 토글 실패', e);
     res.status(500).json({ error: String((e && e.message) || e) });
@@ -1486,3 +1508,40 @@ const _netBlockOpts = {
 exports.netBlockToggle = onRequest(_netBlockOpts, _netBlockHandler);
 // 이전 이름 — 배포 시점에 열려 있던 옛 관리앱 페이지가 아직 부를 수 있어 남겨둔다.
 exports.youtubeBlockToggle = onRequest(_netBlockOpts, _netBlockHandler);
+
+// ── 카카오톡 교시 자동연동 ────────────────────────────────────────────
+// 교시 중엔 차단, 쉬는 시간(교시 사이·식사)과 운영 전후엔 허용 (2026-07-27 원장 지시).
+// 매분 현재 교시 여부를 판정해 규칙 상태와 다르면 바꾼다(같으면 GET만 하고 끝).
+// settings/netblock.kakaoAuto=false면 아무것도 안 함(수동 모드 — 와이파이 탭 체크박스).
+// 교시표는 위 PERIOD_TIMES(앱 PERIODS와 동일). 요일 구성은 앱 periodsForDay()와 같은 규칙:
+//   토요일 또는 방학(settings/vacation_mode.enabled)=1~11교시, 그 외 평일=7~11교시,
+//   방학은 11교시 제외. 크론이 08~23시(KST)만 돌므로 학기 11교시(자정~새벽1시)는
+//   연동 대상 밖(허용 상태로 남음) — 자정 넘어 선택자습까지 막을 필요는 없다고 봤다.
+exports.kakaoScheduleTick = onSchedule(
+  {
+    schedule: '* 8-23 * * *',
+    timeZone: 'Asia/Seoul',
+    region: 'us-central1',
+    secrets: [CF_API_TOKEN, CF_ACCOUNT_ID],
+    maxInstances: 1
+  },
+  async () => {
+    if (!(await _kakaoAutoOn())) return;
+
+    const vacSnap = await db.doc('settings/vacation_mode').get();
+    const vacation = !!(vacSnap.exists && (vacSnap.data() || {}).enabled);
+
+    const kst = new Date(Date.now() + 9 * 3600 * 1000);
+    const satLike = kst.getUTCDay() === 6 || vacation;
+    const nowMin = kst.getUTCHours() * 60 + kst.getUTCMinutes();
+    let periods = satLike ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11] : [7, 8, 9, 10, 11];
+    if (vacation) periods = periods.filter(p => p !== 11);
+
+    const inClass = periods.some(p => {
+      const t = PERIOD_TIMES[p];
+      return t && nowMin >= t[0] && nowMin < t[1];
+    });
+    const { changed } = await cfSetRuleEnabled(NETBLOCK_RULES.kakao, inClass);
+    if (changed) logger.info(`[NetBlock] 카카오 교시연동 → ${inClass ? '차단(교시 중)' : '허용(쉬는 시간)'}`);
+  }
+);

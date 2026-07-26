@@ -1326,7 +1326,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;flex-wrap:wrap">
       <div style="min-width:220px;flex:1">
         <div style="font-size:14px;font-weight:700;color:#1E1B4B">💬 카카오톡 차단 <span id="netblock-state-kakao" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:#ECEFF1;color:#78909C">확인 중…</span></div>
-        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px;line-height:1.5">카카오톡 메신저만 켜고 끕니다. ⚠️같은 와이파이의 조교·선생님 폰 카톡도 함께 막히니 참고하세요(LTE는 됨).</div>
+        <div style="font-size:11px;color:var(--color-text-tertiary);margin-top:4px;line-height:1.5">자동연동을 켜면 <b>교시 중엔 차단, 쉬는 시간·식사 시간엔 허용</b>으로 1분 안에 자동 전환됩니다.<br>⚠️같은 와이파이의 조교·선생님 폰 카톡도 함께 막히니 참고하세요(LTE는 됨).</div>
+        <label style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;color:#4A3FA8;margin-top:6px;cursor:pointer"><input type="checkbox" id="netblock-auto-kakao" onchange="netBlockAutoChanged('kakao', this.checked)" style="accent-color:#6C5DD3"> 🕒 교시 자동연동</label>
       </div>
       <button id="netblock-btn-kakao" onclick="netBlockToggle('kakao')" disabled style="padding:9px 18px;border-radius:10px;border:none;font-size:13px;font-weight:700;cursor:pointer;background:#ECEFF1;color:#78909C;white-space:nowrap">…</button>
     </div>
@@ -13220,19 +13221,25 @@ const NETBLOCK_MSG = {
   kakao:   { on: '📵 카카오톡 차단을 켰어요', off: '💬 카카오톡을 허용했어요', label: '카카오톡' }
 };
 const _netBlockState = {};   // target → true/false/null(아직 모름·확인 실패)
+const _netBlockAuto = {};    // target → 자동연동 여부(현재 카카오만 씀)
 
 function netBlockRender(target, pending) {
   const st = document.getElementById('netblock-state-' + target);
   const btn = document.getElementById('netblock-btn-' + target);
   if (!st || !btn) return;
   const cur = _netBlockState[target];
+  const auto = !!_netBlockAuto[target];
+  const chk = document.getElementById('netblock-auto-' + target);
+  if (chk) chk.checked = auto;
+  // 자동연동 중엔 수동 버튼을 숨긴다 — 눌러봤자 1분 안에 스케줄러가 되돌린다.
+  btn.style.display = auto ? 'none' : '';
   if (cur === null || cur === undefined) {
     st.textContent = '확인 실패'; st.style.background = '#ECEFF1'; st.style.color = '#78909C';
     btn.textContent = '다시 확인'; btn.disabled = false;
     btn.style.background = '#EEF2FF'; btn.style.color = '#4A3FA8';
     return;
   }
-  st.textContent = cur ? '차단 중' : '허용 중';
+  st.textContent = (cur ? '차단 중' : '허용 중') + (auto ? ' · 자동' : '');
   st.style.background = cur ? '#FCEBEB' : '#E8F5E9';
   st.style.color = cur ? '#C62828' : '#2D7A4F';
   btn.disabled = !!pending;
@@ -13257,10 +13264,32 @@ window.netBlockLoadAll = function() {
   Object.keys(NETBLOCK_MSG).forEach(async (target) => {
     const st = document.getElementById('netblock-state-' + target);
     if (st) st.textContent = '확인 중…';
-    try { _netBlockState[target] = (await _netBlockCall(target)).blocked; }
+    try {
+      const j = await _netBlockCall(target);
+      _netBlockState[target] = j.blocked;
+      if (typeof j.auto === 'boolean') _netBlockAuto[target] = j.auto;
+    }
     catch (e) { console.error('[' + NETBLOCK_MSG[target].label + ' 차단] 상태 확인 실패:', e); _netBlockState[target] = null; }
     netBlockRender(target);
   });
+};
+
+// 교시 자동연동 체크박스 — 규칙이 아니라 서버 스케줄러의 on/off 플래그만 바꾼다.
+// 켜면 다음 분부터 스케줄러가 교시 여부에 맞춰 상태를 맞춘다(즉시 반영 아님).
+window.netBlockAutoChanged = async function(target, checked) {
+  const chk = document.getElementById('netblock-auto-' + target);
+  try {
+    const j = await _netBlockCall(target, { auto: checked });
+    _netBlockAuto[target] = j.auto;
+    _netBlockState[target] = j.blocked;
+    if (window.showToast) showToast(checked ? '🕒 교시 자동연동을 켰어요 — 1분 안에 현재 교시에 맞춰집니다' : '교시 자동연동을 껐어요 — 이제 버튼으로 직접 켜고 끄세요');
+  } catch (e) {
+    console.error('[카카오톡 차단] 자동연동 변경 실패:', e);
+    alert('변경 실패: ' + e.message);
+    if (chk) chk.checked = !checked;   // 실패하면 화면을 원래대로
+    return;
+  }
+  netBlockRender(target);
 };
 
 window.netBlockToggle = async function(target) {
