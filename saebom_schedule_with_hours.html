@@ -361,21 +361,12 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .fp-room{display:grid;gap:6px;width:fit-content;transition:none;}
 
 /* 배치도 영역 레이아웃 */
-.fp-area{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:10px}
-.fp-area-label{font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:8px;display:flex;align-items:center;gap:5px}
 .fp-grid{display:grid;gap:5px}
-
-/* 좌석 카드 */
-.fp-status-in{color:#6C5DD3}
-.fp-status-out{color:#9CA3AF}
-.fp-status-empty{color:var(--color-text-tertiary)}
-.fp-in-dot{width:6px;height:6px;border-radius:50%;background:#6C5DD3;flex-shrink:0;animation:fp-pulse 2s infinite}
 
 /* 위치수정 버튼 */
 .fp-edit-btn{padding:5px 12px;border:0.5px solid var(--color-border-secondary);background:var(--color-background-primary);color:var(--color-text-secondary);border-radius:var(--border-radius-md);font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:5px;transition:all 0.15s}
 .fp-edit-btn:hover{background:var(--color-background-secondary)}
 .fp-edit-btn.active{background:#EEF2FF;color:#6C5DD3;border-color:#8F82E4}
-.fp-drag-over{outline:2px solid #6C5DD3!important;outline-offset:-2px;background:rgba(108,93,211,0.08)!important;}
 /* ── 학생카드 드래그&드롭 좌석변경 ── */
 .fp-side-card-drag{cursor:pointer;transition:box-shadow 0.12s,transform 0.12s;user-select:none}
 .fp-side-card-drag.dragging-card{opacity:0.5;transform:scale(0.96)}
@@ -388,7 +379,6 @@ body.director-device .tab-btn.director-only{display:inline-block}
 /* 위치수정 모드: 좌석을 absolute로 자유 배치 */
 .fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
 
-@keyframes fp-pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes ctxIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
 .admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
@@ -521,7 +511,7 @@ body{letter-spacing:-0.012em;
 .checkin-shortcut-btn.active{background:#fff!important;color:#4A3FA8!important}
 
 /* ── 카드/패널 공통 : 헤어라인 + 부드러운 그림자 + 부드러운 라운딩 ── */
-.card,.chart-area,.range-bar,.checkin-wrap,.checkin-today-wrap,.fp-area,.hours-table,.schedule-table{
+.card,.chart-area,.range-bar,.checkin-wrap,.checkin-today-wrap,.hours-table,.schedule-table{
   border-color:var(--color-border-tertiary)!important;box-shadow:var(--shadow-sm);
 }
 .card,.chart-area,.range-bar,.checkin-wrap,.checkin-today-wrap{transition:box-shadow .3s var(--ease-out),transform .3s var(--ease-out)}
