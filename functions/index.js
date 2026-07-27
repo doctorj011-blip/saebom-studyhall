@@ -1260,6 +1260,82 @@ exports.plannerBatchCollect = onSchedule(
   }
 );
 
+// ══════════════════════════════════════
+// 📓🩹 플래너 제출 자동 대조 — 사진은 올라갔는데 제출 기록이 없는 건 복원
+// ══════════════════════════════════════
+// 학생앱은 ①Storage에 사진 업로드 → ②planners 문서 저장 순으로 낸다. ②는 Firestore
+// SDK 특성상 네트워크가 끊기면 '실패'가 아니라 '대기'로 멈춘다 — 그래서 앱의
+// try/catch·재시도가 아예 발동하지 않고 조용히 유실된다. 학생 화면(달력)에는 사진이
+// 보이는데 관리앱·상점 집계에는 미제출로 남는다. 실제 4건 발생했고(7/21 우지효,
+// 7/24 김리원, 7/26 권세나·신유담) 전부 사람이 눈치채고 수동 복원했다.
+// → 서버가 매일 두 번 Storage와 문서를 대조해 누락분을 자동으로 메운다.
+//
+//  · 실행 02:05 / 12:05 = 검사 배치(02:10·12:10) 5분 전 → 복원된 제출이 그 배치에 바로 실린다
+//  · submittedAt = Storage 파일의 실제 업로드 시각이라 정시/지각 판정이 정확하다
+//  · create()만 쓴다 — 이미 있는 기록은 절대 건드리지 않는다(사람 수정분 보호)
+const PLANNER_BUCKET = 'saebom-studyhall.firebasestorage.app';   // 클라이언트 firebaseConfig.storageBucket과 같아야 함
+const PL_DUE_HOUR = 2;   // 정시 마감 = 학습일 다음날 02:00 KST (학생앱 PL_DUE_HOUR와 같은 값)
+
+// 학습일 ds의 정시 마감 시각(epoch ms)
+function plannerDueMs(ds) {
+  return Date.parse(`${ds}T0${PL_DUE_HOUR}:00:00+09:00`) + 24 * 3600 * 1000;
+}
+
+async function runPlannerReconcile(label) {
+  const ds = kstYesterday();
+  const bucket = admin.storage().bucket(PLANNER_BUCKET);
+
+  const [psnap, ssnap] = await Promise.all([
+    db.collection('planners').where('date', '==', ds).get(),
+    db.collection('students').get()
+  ]);
+  const have = new Set(psnap.docs.map(d => String((d.data() || {}).seat)));
+
+  const restored = [];
+  for (const sdoc of ssnap.docs) {
+    const s = sdoc.data() || {};
+    if (!s.name) continue;                                       // name 없는 문서 = _meta_* 설정 문서
+    const seat = String(s.seat || sdoc.id).replace(/[^0-9]/g, '');
+    if (!seat || have.has(seat)) continue;
+
+    const file = bucket.file(`planners/${seat}/${ds}.jpg`);
+    const [exists] = await file.exists();
+    if (!exists) continue;                                       // 사진도 없으면 진짜 미제출
+
+    try {
+      const [meta] = await file.getMetadata();
+      let token = (meta.metadata || {}).firebaseStorageDownloadTokens;
+      if (!token) {                                              // 토큰 없이 올라온 파일이면 발급해 URL을 만들 수 있게
+        token = randomUUID();
+        await file.setMetadata({ metadata: { firebaseStorageDownloadTokens: token } });
+      }
+      const url = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}`
+                + `/o/${encodeURIComponent(file.name)}?alt=media&token=${String(token).split(',')[0]}`;
+      const ts = meta.timeCreated;                               // 사진이 실제로 올라온 시각 = 제출 시각
+      const status = Date.parse(ts) < plannerDueMs(ds) ? 'ontime' : 'late';
+
+      await db.collection('planners').doc(`${seat}_${ds}`).create({
+        seat, date: ds, url, name: s.name,
+        submittedAt: ts, status, updatedAt: ts,
+        restoredBy: 'reconcile'                                  // 학생앱이 쓴 기록과 구분 — 재발 추적용
+      });
+      restored.push({ seat, name: s.name, status, submittedAt: ts });
+    } catch (e) {
+      if (e.code === 6) continue;                                // ALREADY_EXISTS — 그 사이 학생앱 저장이 도착함
+      logger.warn('plannerReconcile 복원 실패', { seat, ds, message: e.message });
+    }
+  }
+
+  // 복원이 있었다는 건 앱에서 유실이 또 일어났다는 뜻 → 로그 레벨을 올려 눈에 띄게
+  if (restored.length) logger.warn('plannerReconcile 누락 제출 복원', { ds, label, count: restored.length, restored });
+  else logger.info('plannerReconcile 이상 없음', { ds, label, submitted: have.size });
+}
+
+exports.plannerReconcile = onSchedule(
+  { schedule: '5 2,12 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', timeoutSeconds: 300, maxInstances: 1 },
+  async () => { try { await runPlannerReconcile('daily'); } catch (e) { logger.error('plannerReconcile', { message: e.message }); } }
+);
+
 
 // ══════════════════════════════════════════════════════════════════════════
 //  Cloudflare Zero Trust — Gateway DNS 로그 조회 프록시
