@@ -7087,6 +7087,8 @@ function buildFloorplan() {
     .fp-badge-away-long { background:#DC2626; color:#fff; }
     .fp-badge-out { background:#9CA3AF; color:#fff; }
     .fp-badge-absent { background:#F3F4F6; color:#9CA3AF; }
+    /* 🧍 스탠드 책상 이동 — 칸 배경은 보라로 물들이고(standStyle) 배지로 신청/지정을 구분 */
+    .fp-badge-stand { background:#7C3AED; color:#fff; }
     /* 퇴실 사유 한 줄 — 칸이 좁으므로 넘치면 …로 자르고 전체 문구는 칸 title(마우스 올림)로 본다 */
     .fp-reason { font-size:8.5px; color:#6B7280; line-height:1.2; margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
     .fp-reason-warn { color:#B91C1C; font-weight:700; }
@@ -7195,6 +7197,15 @@ function buildFloorplan() {
             ? `<span class="fp-badge" style="background:#7C3AED;color:#fff">ST-R ${studyRoomNum}</span>`
             : '';
 
+          // 🧍 스탠드 책상 — 자리를 비우고 서서 공부하는 중. 현재 교시 동안만 표시된다.
+          // 학생이 신청해 조교가 승인한 경우(신청)와 조교가 직접 세워놓은 경우(지정)를 배지 글자로 구분한다.
+          // 자리에 사람이 없는 이유를 알아야 하므로, 입실/외출 테두리 색은 살리고 배경만 보라로 물들인다.
+          const sdInfo = (student && window._sdApprovedNames) ? window._sdApprovedNames().get(student.name) : null;
+          const standBadge = sdInfo
+            ? `<span class="fp-badge fp-badge-stand">🧍스탠드 ${sdInfo.by === 'ta' ? '지정' : '신청'}</span>`
+            : '';
+          const standStyle = sdInfo ? ';background:#EDE9FE' : '';
+
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
           const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
@@ -7208,11 +7219,12 @@ function buildFloorplan() {
 
           // 좁은 칸에서 사유가 잘리므로 전체 문구는 칸 title로도 남긴다
           const titleParts = [];
+          if (sdInfo) titleParts.push(`🧍 스탠드 책상 이동 중 (${sdInfo.by === 'ta' ? '조교 지정' : '학생 신청·승인'}) — ${sdInfo.period}교시까지`);
           if (outReason) titleParts.push(`${badgeText} · ${outReason.text}`);
           if (memoG) titleParts.push(`📌 ${memoLvG.label} — ${memoG.body}${memoG.updatedAt ? ` (${memoG.updatedAt}${memoG.author ? ' ' + memoG.author : ''})` : ''}`);
           const reasonTitle = titleParts.length ? ` title="${titleParts.join('\n').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}${memoStyle}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}${standStyle}${memoStyle}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -7220,6 +7232,7 @@ function buildFloorplan() {
             <div class="fp-name">${student ? student.name : '<span style="color:#D1D5DB">공석</span>'}</div>
             <div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap">
               ${badgeText ? `<span class="fp-badge ${badgeCls}">${badgeText}</span>` : ''}
+              ${standBadge}
               ${memoBadge}
               ${studyroomBadge}
               ${ddayStr}
@@ -7634,6 +7647,12 @@ function buildFpSidePanel() {
       badgeBg = '#9CA3AF'; cardBg = '#F9FAFB'; cardBorder = '#E5E7EB';
     }
 
+    // 🧍 스탠드 책상 이동 중이면 카드에도 표시 (배치도 좌석 칸과 같은 기준·같은 교시 유효)
+    const sideStand = window._sdApprovedNames ? window._sdApprovedNames().get(s.name) : null;
+    const standChip = sideStand
+      ? `<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:#7C3AED;color:#fff">🧍스탠드 ${sideStand.by === 'ta' ? '지정' : '신청'}</span>`
+      : '';
+
     // 특별관리 메모 — 카드에서 바로 보이도록 한 줄 요약(전체는 클릭·툴팁)
     const memo = fpMemoOf(s.name);
     const memoLv = memo ? fpMemoLevel(memo.level) : null;
@@ -7664,6 +7683,7 @@ function buildFpSidePanel() {
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px">
         <div style="display:flex;align-items:center;gap:4px">
           <span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px;background:${badgeBg};color:#fff">${badgeText}</span>
+          ${standChip}
         </div>
         <span style="font-size:11px;color:#6B7280;margin-right:15px">${s.seat}번</span>
       </div>
@@ -10972,16 +10992,20 @@ function _sdEligible() {
   return (typeof window.isAdminDevice === 'function') ? window.isAdminDevice() : false;
 }
 
-// 배치도 배지용 — 이 교시에 스탠드 책상 이동이 승인된 학생 이름 집합.
+// 배치도 배지용 — 이 교시에 스탠드 책상으로 이동한 학생 Map(이름 → {by, id}).
+//   by: 'student' = 학생이 신청해 조교가 승인 / 'ta' = 조교가 직접 세워놓음
+// Map이라 기존 호출부의 .has(name)은 그대로 동작한다.
 // 쉬는 시간(curP=null)에는 방금 교시 승인분을 그대로 보여준다(다음 교시 시작 때 sweep이 지우면 사라짐).
 window._sdApprovedNames = function() {
   const today = _sdToday();
   const curP = _sdCurPeriod();
-  const s = new Set();
+  const m = new Map();
   Object.values(_standDeskReqs).forEach(r => {
-    if (r.status === 'approved' && (!today || r.date === today) && (curP === null || r.period === curP)) s.add(r.name);
+    if (r.status === 'approved' && (!today || r.date === today) && (curP === null || r.period === curP)) {
+      m.set(r.name, { by: r.by === 'ta' ? 'ta' : 'student', id: r.id, period: r.period });
+    }
   });
-  return s;
+  return m;
 };
 
 // 승인/만료로 배지 상태가 바뀌면 배치도를 다시 그린다 (classic 스크립트의 buildFloorplan 경유)
@@ -11078,6 +11102,52 @@ window.rejectStandDesk = async function(id) {
   if (_standDeskCurId === id) _standDeskCurId = null;
   if (window.showAdminToast) showAdminToast('❌ 스탠드 책상 이동 거절');
   _standDeskPump();
+};
+
+// ── 조교가 직접 세워놓는 경우 (배치도 좌석 우클릭) ──
+// 학생 신청이 없어도 조교가 바로 '승인됨' 문서를 만들어 배치도에 표시한다.
+// 문서 형식은 학생 신청분과 같고 by:'ta' 로만 구분한다 — 만료(교시 넘어가면 삭제)도 같은 sweep이 처리한다.
+// 문서 id를 ta_{날짜}_{교시}_{이름}으로 고정해 같은 교시에 두 번 눌러도 중복 문서가 생기지 않게 한다.
+function _sdTaDocId(name, day, period) {
+  return `ta_${day}_${period}_${String(name).replace(/\//g, '_')}`;
+}
+
+window.taSendToStandDesk = async function(name, seat) {
+  const today = _sdToday();
+  const curP = _sdCurPeriod();
+  if (curP === null) {
+    alert('지금은 교시 중이 아닙니다.\n스탠드 책상 표시는 교시 중에만 배치도에 남습니다(현재 교시까지 유지).');
+    return;
+  }
+  try {
+    await setDoc(doc(db, STANDDESK_COL, _sdTaDocId(name, today, curP)), {
+      name, seat: String(seat || ''),
+      period: curP, periodLabel: `${curP}교시`,
+      date: today, status: 'approved', by: 'ta',
+      createdAt: serverTimestamp(), decidedAt: serverTimestamp(), decidedBy: 'ta'
+    });
+  } catch(e) { alert('스탠드 책상 지정 실패: ' + e.message); return; }
+  if (window.showAdminToast) showAdminToast(`🧍 ${name} 스탠드 책상 (${curP}교시)`);
+};
+
+// 자리 복귀 — 오늘 이 학생의 유효한 스탠드 책상 문서를 모두 지운다(학생 신청분·조교 지정분 모두).
+window.taReturnFromStandDesk = async function(name) {
+  const today = _sdToday();
+  const curP = _sdCurPeriod();
+  const targets = Object.values(_standDeskReqs).filter(r =>
+    r.name === name && r.status === 'approved' &&
+    (!today || r.date === today) && (curP === null || r.period === curP));
+  if (!targets.length) return;
+  for (const r of targets) {
+    try { await deleteDoc(doc(db, STANDDESK_COL, r.id)); }
+    catch(e) { alert('자리 복귀 처리 실패: ' + e.message); return; }
+  }
+  if (window.showAdminToast) showAdminToast(`🪑 ${name} 자리로 복귀`);
+};
+
+// 배치도 우클릭 메뉴가 '보내기/복귀' 중 무엇을 띄울지 판단할 때 쓴다.
+window.isAtStandDesk = function(name) {
+  try { return !!(window._sdApprovedNames && window._sdApprovedNames().has(name)); } catch(e) { return false; }
 };
 
 // 주의 환기용 짧은 알림음(브라우저 자동재생 정책상 조교가 기기를 한 번이라도 만졌으면 울린다)
@@ -15041,6 +15111,9 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   if (!student) return;
   const isIn = todayRecords.some(r => r.studentName === student.name && !r.outTime);
   const _hasMemo = !!(window._fpMemos && window._fpMemos[student.name]);
+  // 🧍 스탠드 책상 — 이미 서 있으면 '자리 복귀', 아니면 '보내기'를 띄운다.
+  const _atStand = !!(window.isAtStandDesk && window.isAtStandDesk(student.name));
+  const _nameArg = String(student.name).replace(/'/g, "\\'");
 
   const menu = document.createElement('div');
   menu.id = 'fp-ctx-menu';
@@ -15060,6 +15133,17 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='${_hasMemo ? '#FEF2F2' : ''}'">
       📌 특별관리 메모${_hasMemo ? ' 수정' : ''}
     </div>
+    ${_atStand ? `
+    <div onclick="taReturnFromStandDesk('${_nameArg}');document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#4338A8;font-weight:700;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0;background:#EDE9FE"
+      onmouseover="this.style.background='#DDD6FE'" onmouseout="this.style.background='#EDE9FE'">
+      🪑 자리로 복귀
+    </div>` : `
+    <div onclick="taSendToStandDesk('${_nameArg}',${seatNum});document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#6D28D9;font-weight:700;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#F5F3FF'" onmouseout="this.style.background=''">
+      🧍 스탠드 책상으로 보내기
+    </div>`}
     <div onclick="openScheduleModal(${STUDENTS.indexOf(student)});document.getElementById('fp-ctx-menu')?.remove()"
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#1F2937;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
       onmouseover="this.style.background='#F9FAFB'" onmouseout="this.style.background=''">
