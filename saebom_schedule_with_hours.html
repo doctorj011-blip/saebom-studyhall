@@ -1002,6 +1002,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-away"></span>외출 중</span>
       <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-out"></span>퇴실</span>
       <span class="fp-leg-item"><span class="fp-leg-dot fp-leg-empty"></span>공석</span>
+      <span class="fp-leg-item" style="color:#B91C1C;font-weight:700">📌 특별관리 (좌석 우클릭으로 메모)</span>
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <span style="font-size:11px;color:var(--color-text-tertiary);display:none" id="fp-drag-hint"></span>
@@ -1015,6 +1016,14 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 
     <!-- 입실 현황 사이드패널 : 배치도와 같은 높이로 정렬, 카드가 잘리지 않게 내부 스크롤 -->
     <div id="fp-side-panel" style="position:absolute;top:0;bottom:0;right:0;width:240px;display:flex;flex-direction:column;gap:8px">
+      <!-- 특별관리 메모 : 오늘 신경 써야 하는 학생을 배치도 옆에 붙여 둔다 -->
+      <div id="fp-memo-box" style="flex-shrink:0;border:1.5px solid #FCA5A5;background:#FFF8F8;border-radius:10px;padding:7px 8px;display:flex;flex-direction:column;gap:6px;max-height:40%">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+          <span style="font-size:12px;font-weight:800;color:#B91C1C">📌 특별관리 <span id="fp-memo-count" style="font-size:11px;font-weight:600;color:#9CA3AF"></span></span>
+          <button onclick="openFpMemoPicker()" style="padding:2px 8px;background:#DC2626;color:#fff;border:none;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer">＋ 추가</button>
+        </div>
+        <div id="fp-memo-list" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:5px"></div>
+      </div>
       <div style="font-size:12px;font-weight:700;color:#1E1B4B;padding:4px 2px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
         <span>📋 입실 현황</span>
         <span id="fp-side-count" style="font-size:11px;color:#888"></span>
@@ -7189,10 +7198,21 @@ function buildFloorplan() {
           const editAttr = fpEditMode ? `onclick="fpSlotClick('${key}',${seatNum})"` : (student ? `onclick="fpSeatClick(${seatNum})"` : `onclick="openAddStudentModal(${seatNum})"`);
           const ctxAttr = student && !fpEditMode ? `oncontextmenu="fpSeatContextMenu(event,${seatNum},'${key}')"` : '';
 
-          // 좁은 칸에서 사유가 잘리므로 전체 문구는 칸 title로도 남긴다
-          const reasonTitle = outReason ? ` title="${badgeText} · ${outReason.text}"` : '';
+          // 특별관리 메모 — 자리 자체가 눈에 띄어야 지나치지 않는다.
+          // 칸이 좁으니 표시는 📌 배지 + 테두리 강조만 하고, 내용은 마우스를 올려 보거나
+          // 사이드패널 목록·좌석 클릭으로 본다(키오스크 화면에 내용이 그대로 뜨는 것도 막는다).
+          const memoG = student ? fpMemoOf(student.name) : null;
+          const memoLvG = memoG ? fpMemoLevel(memoG.level) : null;
+          const memoBadge = memoG ? `<span class="fp-badge" style="background:${memoLvG.color};color:#fff">📌${memoLvG.label}</span>` : '';
+          const memoStyle = memoG ? `;box-shadow:0 0 0 2px ${memoLvG.color} inset` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
+          // 좁은 칸에서 사유가 잘리므로 전체 문구는 칸 title로도 남긴다
+          const titleParts = [];
+          if (outReason) titleParts.push(`${badgeText} · ${outReason.text}`);
+          if (memoG) titleParts.push(`📌 ${memoLvG.label} — ${memoG.body}${memoG.updatedAt ? ` (${memoG.updatedAt}${memoG.author ? ' ' + memoG.author : ''})` : ''}`);
+          const reasonTitle = titleParts.length ? ` title="${titleParts.join('\n').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}"` : '';
+
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7C3AED':''}${memoStyle}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
             <div style="display:flex;justify-content:space-between;align-items:center">
               <span class="fp-num">${seatNum}번</span>
               ${genderIcon}
@@ -7200,6 +7220,7 @@ function buildFloorplan() {
             <div class="fp-name">${student ? student.name : '<span style="color:#D1D5DB">공석</span>'}</div>
             <div style="display:flex;align-items:center;gap:3px;flex-wrap:wrap">
               ${badgeText ? `<span class="fp-badge ${badgeCls}">${badgeText}</span>` : ''}
+              ${memoBadge}
               ${studyroomBadge}
               ${ddayStr}
             </div>
@@ -7296,8 +7317,278 @@ function showFpSaveToast() {
   setTimeout(() => toast.remove(), 2200);
 }
 
+// ══════════════════════════════════════════════════════════════
+// ── 특별관리 메모 (배치도) ──
+// 신경 써서 봐야 하는 학생을 조교가 적어 두고, 배치도에서 바로 눈에 띄게 한다.
+// 컬렉션 student_memos/{학생이름} = { name, body, level, updatedAt, author }
+//   · 문서 ID를 이름으로 잡은 이유: 자리는 옮겨도 사람은 그대로다(좌석번호로 잡으면
+//     자리이동 한 번에 메모가 엉뚱한 학생에게 붙는다). 이 앱의 기록(입퇴실·상벌점)도
+//     전부 이름을 기준으로 이어 붙이므로 같은 규칙을 따른다.
+//   · students 문서에 필드로 넣지 않은 이유: 학생앱·학부모앱이 students 컬렉션을
+//     통째로 읽어 간다. 특별관리 내용이 학생 기기로 내려가면 안 된다.
+// ══════════════════════════════════════════════════════════════
+const FP_MEMO_LEVELS = {
+  high: { label:'집중관리', icon:'🔴', color:'#DC2626', bg:'#FEF2F2', border:'#FCA5A5' },
+  mid:  { label:'주의',     icon:'🟡', color:'#B45309', bg:'#FFFBEB', border:'#FCD34D' },
+  low:  { label:'참고',     icon:'🔵', color:'#1D4ED8', bg:'#EFF6FF', border:'#93C5FD' },
+};
+const FP_MEMO_ORDER = ['high','mid','low'];
+window._fpMemos = {};   // 이름 → { body, level, updatedAt, author }
+
+function fpMemoOf(name) { return (window._fpMemos && window._fpMemos[name]) || null; }
+function fpMemoLevel(lv) { return FP_MEMO_LEVELS[lv] || FP_MEMO_LEVELS.mid; }
+const _fpmEsc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// 메모 첫 줄만 — 좁은 칸·툴팁용 요약
+function fpMemoLine(body, max = 40) {
+  const one = String(body || '').replace(/\s+/g, ' ').trim();
+  return one.length > max ? one.slice(0, max) + '…' : one;
+}
+
+// student_memos 실시간 구독 — 다른 기기(조교석·원장 폰)에서 적은 것도 바로 뜬다
+let _fpMemoSubscribed = false;
+async function initFpMemos() {
+  if (_fpMemoSubscribed) return;
+  _fpMemoSubscribed = true;
+  const db = await window.waitDb();
+  if (!db) { console.warn('[특별관리 메모] Firestore 연결 실패 — 구독 보류'); _fpMemoSubscribed = false; return; }
+  const { collection, onSnapshot } = window._fs;
+  onSnapshot(collection(db, 'student_memos'), snap => {
+    const next = {};
+    snap.forEach(d => {
+      const v = d.data() || {};
+      if (!v.body) return;                     // 내용이 비면 메모가 아니다
+      next[v.name || d.id] = {
+        body: v.body,
+        level: FP_MEMO_LEVELS[v.level] ? v.level : 'mid',
+        updatedAt: v.updatedAt || '',
+        author: v.author || ''
+      };
+    });
+    window._fpMemos = next;
+    if (document.getElementById('fp-room')) buildFloorplan();  // 좌석 배지 + 사이드 목록 동시 갱신
+  }, err => console.error('[특별관리 메모] 구독 실패:', err));
+}
+window.initFpMemos = initFpMemos;
+
+// ── 사이드패널의 특별관리 목록 ──
+function renderFpMemoPanel() {
+  const listEl = document.getElementById('fp-memo-list');
+  const countEl = document.getElementById('fp-memo-count');
+  if (!listEl) return;
+
+  const memos = Object.entries(window._fpMemos || {})
+    .map(([name, m]) => {
+      const st = STUDENTS.find(s => s.name === name);
+      return { name, ...m, seat: st ? st.seat : null };
+    })
+    .sort((a, b) => {
+      const d = FP_MEMO_ORDER.indexOf(a.level) - FP_MEMO_ORDER.indexOf(b.level);
+      return d !== 0 ? d : a.name.localeCompare(b.name, 'ko');
+    });
+
+  if (countEl) countEl.textContent = memos.length ? `${memos.length}명` : '';
+
+  if (!memos.length) {
+    listEl.innerHTML = `<div style="font-size:10.5px;color:#B0B0B0;text-align:center;padding:8px 4px;line-height:1.5">
+      아직 없습니다<br>좌석 우클릭 → 📌 특별관리 메모</div>`;
+    return;
+  }
+
+  listEl.innerHTML = memos.map(m => {
+    const lv = fpMemoLevel(m.level);
+    const isIn = todayRecords.some(r => r.studentName === m.name && !r.outTime);
+    // 배석이 없으면(퇴원·배석해제) 메모만 남은 상태 — 지울 수 있게 눈에 보여 준다
+    const seatTag = m.seat
+      ? `<span style="font-size:10px;color:#6B7280">${m.seat}번</span>`
+      : `<span style="font-size:10px;color:#DC2626;font-weight:700">배석 없음</span>`;
+    return `<div onclick="openFpMemoModal('${_fpmEsc(m.name).replace(/'/g,"\\'")}')"
+      style="background:${lv.bg};border:1px solid ${lv.border};border-left:4px solid ${lv.color};border-radius:8px;padding:5px 7px;cursor:pointer;line-height:1.35">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:4px">
+        <span style="font-size:12px;font-weight:800;color:#1F2937">${lv.icon} ${_fpmEsc(m.name)}
+          ${isIn ? '<span style="font-size:9px;color:#16A34A;font-weight:700">●입실</span>' : ''}</span>
+        ${seatTag}
+      </div>
+      <div style="font-size:10.5px;color:${lv.color};margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_fpmEsc(fpMemoLine(m.body, 30))}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── 메모 작성·수정 모달 ──
+// 저장해도 창은 열어 둔다(연달아 고치는 일이 많다). 닫기는 '닫기'/X 로만.
+window.openFpMemoModal = function(name) {
+  document.getElementById('fp-ctx-menu')?.remove();
+  document.getElementById('fp-popup-overlay')?.remove();
+  document.getElementById('fp-memo-picker')?.remove();
+  document.getElementById('fp-memo-overlay')?.remove();
+
+  const st = STUDENTS.find(s => s.name === name);
+  const cur = fpMemoOf(name);
+  const level = cur ? cur.level : 'mid';
+  let lastAuthor = '';
+  try { lastAuthor = localStorage.getItem(HO_AUTHOR_KEY) || ''; } catch(e) {}
+
+  const overlay = document.createElement('div');
+  overlay.id = 'fp-memo-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px';
+
+  const levelBtns = FP_MEMO_ORDER.map(k => {
+    const lv = FP_MEMO_LEVELS[k];
+    const on = k === level;
+    return `<button type="button" data-level="${k}" onclick="fpMemoPickLevel('${k}')"
+      style="flex:1;padding:8px 4px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;
+      border:2px solid ${on ? lv.color : '#E5E7EB'};background:${on ? lv.bg : '#fff'};color:${on ? lv.color : '#9CA3AF'}">
+      ${lv.icon} ${lv.label}</button>`;
+  }).join('');
+
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:#fff;border-radius:16px;padding:18px 20px;box-shadow:0 8px 40px rgba(0,0,0,0.3);width:min(420px,100%);max-height:90vh;overflow-y:auto';
+  popup.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <div>
+        <div style="font-size:15px;font-weight:800;color:#1F2937">📌 특별관리 메모</div>
+        <div style="font-size:11.5px;color:#6B7280;margin-top:2px">${_fpmEsc(name)}${st && st.seat ? ` · ${st.seat}번` : ' · 배석 없음'}</div>
+      </div>
+      <button onclick="document.getElementById('fp-memo-overlay')?.remove()"
+        style="width:28px;height:28px;border:none;background:#F3F4F6;border-radius:8px;font-size:15px;color:#6B7280;cursor:pointer">✕</button>
+    </div>
+    <div id="fp-memo-levels" style="display:flex;gap:6px;margin-bottom:10px">${levelBtns}</div>
+    <textarea id="fp-memo-body" rows="5" maxlength="1000" placeholder="예) 밤 10시 이후 집중력 급락 — 9교시에 한 번 확인&#10;예) 학부모 요청: 휴대폰 맡기고 시작"
+      style="width:100%;box-sizing:border-box;padding:10px;border:1.5px solid #E5E7EB;border-radius:10px;font-size:13px;line-height:1.6;resize:vertical;font-family:inherit">${_fpmEsc(cur ? cur.body : '')}</textarea>
+    <div style="display:flex;align-items:center;gap:6px;margin:10px 0 4px">
+      <span style="font-size:11.5px;color:#6B7280;flex-shrink:0">작성자</span>
+      <input id="fp-memo-author" value="${_fpmEsc(cur ? (cur.author || lastAuthor) : lastAuthor)}" maxlength="20" placeholder="이름"
+        style="flex:1;min-width:0;padding:6px 9px;border:1.5px solid #E5E7EB;border-radius:8px;font-size:12.5px">
+    </div>
+    <div id="fp-memo-meta" style="font-size:10.5px;color:#9CA3AF;min-height:14px;margin-bottom:10px">
+      ${cur && cur.updatedAt ? `마지막 수정 ${_fpmEsc(cur.updatedAt)}${cur.author ? ' · ' + _fpmEsc(cur.author) : ''}` : ''}
+    </div>
+    <button id="fp-memo-save" onclick="saveFpMemo('${_fpmEsc(name).replace(/'/g,"\\'")}')"
+      style="width:100%;padding:11px;background:#DC2626;color:#fff;border:none;border-radius:9px;font-size:13.5px;font-weight:800;cursor:pointer;margin-bottom:8px">저장</button>
+    ${cur ? `<button onclick="deleteFpMemo('${_fpmEsc(name).replace(/'/g,"\\'")}')"
+      style="width:100%;padding:10px;background:#fff;color:#B91C1C;border:1.5px solid #FCA5A5;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🗑 메모 삭제 (관리 종료)</button>` : ''}
+    <button onclick="document.getElementById('fp-memo-overlay')?.remove()"
+      style="width:100%;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:9px;font-size:13px;cursor:pointer">닫기</button>
+  `;
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+  overlay._level = level;
+  setTimeout(() => document.getElementById('fp-memo-body')?.focus(), 30);
+};
+
+window.fpMemoPickLevel = function(k) {
+  const ov = document.getElementById('fp-memo-overlay');
+  if (!ov) return;
+  ov._level = k;
+  ov.querySelectorAll('#fp-memo-levels button').forEach(b => {
+    const lv = FP_MEMO_LEVELS[b.dataset.level];
+    const on = b.dataset.level === k;
+    b.style.border = `2px solid ${on ? lv.color : '#E5E7EB'}`;
+    b.style.background = on ? lv.bg : '#fff';
+    b.style.color = on ? lv.color : '#9CA3AF';
+  });
+};
+
+window.saveFpMemo = async function(name) {
+  const ov = document.getElementById('fp-memo-overlay');
+  if (!ov) return;
+  const body = (document.getElementById('fp-memo-body')?.value || '').trim();
+  const author = (document.getElementById('fp-memo-author')?.value || '').trim();
+  if (!body) { showAdminToast('⚠️ 메모 내용을 입력하세요'); return; }
+
+  const btn = document.getElementById('fp-memo-save');
+  if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('Firestore 연결 실패');
+    const { doc, setDoc } = window._fs;
+    const now = new Date();
+    const stamp = `${now.getMonth()+1}/${now.getDate()} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    await setDoc(doc(db, 'student_memos', name), {
+      name, body, level: ov._level || 'mid', author, updatedAt: stamp
+    });
+    if (author) { try { localStorage.setItem(HO_AUTHOR_KEY, author); } catch(e) {} }
+    // 구독 스냅샷이 곧 덮어쓰지만, 저장 즉시 화면에 반영되도록 로컬도 갱신한다
+    window._fpMemos[name] = { body, level: ov._level || 'mid', author, updatedAt: stamp };
+    const meta = document.getElementById('fp-memo-meta');
+    if (meta) meta.textContent = `마지막 수정 ${stamp}${author ? ' · ' + author : ''}`;
+    if (document.getElementById('fp-room')) buildFloorplan();
+    showAdminToast(`📌 ${name} 특별관리 메모를 저장했습니다`);
+  } catch(e) {
+    console.error('[특별관리 메모] 저장 실패:', e);
+    showAdminToast('❌ 저장 실패 — 다시 시도하세요');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '저장'; }
+  }
+};
+
+window.deleteFpMemo = async function(name) {
+  if (!confirm(`${name} 특별관리 메모를 삭제할까요?\n(더 이상 집중관리가 필요 없을 때만)`)) return;
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('Firestore 연결 실패');
+    const { doc, deleteDoc } = window._fs;
+    await deleteDoc(doc(db, 'student_memos', name));
+    delete window._fpMemos[name];
+    document.getElementById('fp-memo-overlay')?.remove();
+    if (document.getElementById('fp-room')) buildFloorplan();
+    showAdminToast(`🗑 ${name} 특별관리 메모를 삭제했습니다`);
+  } catch(e) {
+    console.error('[특별관리 메모] 삭제 실패:', e);
+    showAdminToast('❌ 삭제 실패 — 다시 시도하세요');
+  }
+};
+
+// ── ＋추가: 학생 고르기 ──
+window.openFpMemoPicker = function() {
+  document.getElementById('fp-memo-picker')?.remove();
+  document.getElementById('fp-memo-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'fp-memo-picker';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;display:flex;align-items:center;justify-content:center;padding:16px';
+  const popup = document.createElement('div');
+  popup.style.cssText = 'background:#fff;border-radius:16px;padding:16px 18px;box-shadow:0 8px 40px rgba(0,0,0,0.3);width:min(360px,100%);max-height:80vh;display:flex;flex-direction:column;gap:10px';
+  popup.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:14.5px;font-weight:800;color:#1F2937">📌 어떤 학생인가요?</div>
+      <button onclick="document.getElementById('fp-memo-picker')?.remove()"
+        style="width:28px;height:28px;border:none;background:#F3F4F6;border-radius:8px;font-size:15px;color:#6B7280;cursor:pointer">✕</button>
+    </div>
+    <input id="fp-memo-search" placeholder="이름 또는 좌석번호" oninput="renderFpMemoPickerList(this.value)"
+      style="width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid #E5E7EB;border-radius:9px;font-size:13px">
+    <div id="fp-memo-picker-list" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+  `;
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (!popup.contains(e.target)) overlay.remove(); });
+  renderFpMemoPickerList('');
+  setTimeout(() => document.getElementById('fp-memo-search')?.focus(), 30);
+};
+
+window.renderFpMemoPickerList = function(filter) {
+  const el = document.getElementById('fp-memo-picker-list');
+  if (!el) return;
+  const f = String(filter || '').trim();
+  const list = STUDENTS
+    .filter(s => s.name && s.seat && !window.isAdminSeat(s.seat))
+    .filter(s => !f || s.name.includes(f) || String(s.seat).startsWith(f))
+    .sort((a, b) => parseInt(a.seat) - parseInt(b.seat));
+  if (!list.length) { el.innerHTML = '<div style="font-size:12px;color:#9CA3AF;text-align:center;padding:12px">검색 결과가 없습니다</div>'; return; }
+  el.innerHTML = list.map(s => {
+    const m = fpMemoOf(s.name);
+    const lv = m ? fpMemoLevel(m.level) : null;
+    return `<div onclick="openFpMemoModal('${_fpmEsc(s.name).replace(/'/g,"\\'")}')"
+      style="display:flex;align-items:center;justify-content:space-between;gap:6px;padding:8px 10px;border:1px solid ${lv ? lv.border : '#E5E7EB'};background:${lv ? lv.bg : '#fff'};border-radius:8px;cursor:pointer">
+      <span style="font-size:13px;font-weight:700;color:#1F2937">${lv ? lv.icon + ' ' : ''}${_fpmEsc(s.name)}</span>
+      <span style="font-size:11px;color:#6B7280">${s.seat}번${m ? ' · 메모 있음' : ''}</span>
+    </div>`;
+  }).join('');
+};
+
 // ── 배치도 사이드패널 ──
 function buildFpSidePanel() {
+  renderFpMemoPanel();   // 📌 특별관리 목록(패널 맨 위)
   const listEl = document.getElementById('fp-side-list');
   const countEl = document.getElementById('fp-side-count');
   if (!listEl) return;
@@ -7343,6 +7634,13 @@ function buildFpSidePanel() {
       badgeBg = '#9CA3AF'; cardBg = '#F9FAFB'; cardBorder = '#E5E7EB';
     }
 
+    // 특별관리 메모 — 카드에서 바로 보이도록 한 줄 요약(전체는 클릭·툴팁)
+    const memo = fpMemoOf(s.name);
+    const memoLv = memo ? fpMemoLevel(memo.level) : null;
+    const memoLine = memo
+      ? `<div title="${_fpmEsc(memo.body)}" style="margin-top:3px;font-size:10px;font-weight:700;color:${memoLv.color};background:${memoLv.bg};border:1px solid ${memoLv.border};border-radius:5px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📌 ${_fpmEsc(fpMemoLine(memo.body, 22))}</div>`
+      : '';
+
     // 만료일 D-day
     let expiryStr = '';
     if (s.expiry) {
@@ -7374,6 +7672,7 @@ function buildFpSidePanel() {
         ${genderIcon}
         ${isIn && rec ? `<span style="font-size:10px;color:#6C5DD3;margin-left:2px">⏱ ${rec.inTime}</span>` : ''}
       </div>
+      ${memoLine}
       ${expiryStr ? `<div style="margin-top:1px">${expiryStr}</div>` : ''}
     </div>`;
   }).join('');
@@ -7635,6 +7934,16 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
   const checkoutBtn = isIn
     ? `<button onclick="adminForceCheckout('${name}');document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:10px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">퇴실 처리</button>`
     : '';
+  // 특별관리 메모 — 있으면 상태 바로 아래에 내용을 펼쳐 준다(자리를 클릭한 이유가 대개 이것)
+  const fpmMemo = fpMemoOf(name);
+  const fpmLv = fpmMemo ? fpMemoLevel(fpmMemo.level) : null;
+  const memoBox = fpmMemo
+    ? `<div style="background:${fpmLv.bg};border:1px solid ${fpmLv.border};border-left:4px solid ${fpmLv.color};border-radius:9px;padding:8px 10px;margin-bottom:10px">
+        <div style="font-size:11px;font-weight:800;color:${fpmLv.color};margin-bottom:3px">📌 ${fpmLv.icon} ${fpmLv.label}${fpmMemo.updatedAt ? ` <span style="font-weight:600;color:#9CA3AF">· ${_fpmEsc(fpmMemo.updatedAt)}${fpmMemo.author ? ' ' + _fpmEsc(fpmMemo.author) : ''}</span>` : ''}</div>
+        <div style="font-size:12.5px;color:#1F2937;line-height:1.6;white-space:pre-wrap;word-break:break-word">${_fpmEsc(fpmMemo.body)}</div>
+      </div>`
+    : '';
+  const memoBtn = `<button onclick="openFpMemoModal('${String(name).replace(/'/g,"\\'")}')" style="width:100%;padding:10px;background:#fff;color:#B91C1C;border:1.5px solid #FCA5A5;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">📌 특별관리 메모 ${fpmMemo ? '수정' : '남기기'}</button>`;
   // 정보 수정 버튼 — 관리석·학생 모두 팝업에서 바로 상세 수정 모달을 열 수 있게
   const editBtn = `<button onclick="fpEditFromPopup('${name}')" style="width:100%;padding:10px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">✏️ 정보 수정</button>`;
   // 입·퇴실 기록 — 외출 복귀·퇴실을 안 눌러 시간이 빠진 경우 여기서 바로 수동 보정
@@ -7661,6 +7970,8 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
       <div style="font-size:12px;color:#374151">학부모: <b>${parent}</b></div>
     </div>
     <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#EEF2FF':'#F3F4F6'};border-radius:8px">${status}</div>
+    ${memoBox}
+    ${memoBtn}
     ${editBtn}
     ${sessBtn}
     ${scoreBtns}
@@ -9439,6 +9750,7 @@ window.initApp = function(){
   buildCheckinTodayList();
   buildFloorplan();
   initFpDrag();
+  initFpMemos();   // 특별관리 메모 실시간 구독 (한 번만 붙는다)
   // 새로고침 후 탭 복원 (키오스크 모드는 입실·퇴실 화면 고정이므로 제외)
   try {
     if (window._kioskAuto) return;
@@ -14728,6 +15040,7 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
   const isIn = todayRecords.some(r => r.studentName === student.name && !r.outTime);
+  const _hasMemo = !!(window._fpMemos && window._fpMemos[student.name]);
 
   const menu = document.createElement('div');
   menu.id = 'fp-ctx-menu';
@@ -14741,6 +15054,11 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
     <div onclick="fpUnassignSeat(${seatNum})" style="padding:10px 14px;font-size:13px;cursor:pointer;color:#C62828;display:flex;align-items:center;gap:8px"
       onmouseover="this.style.background='#FFF0F0'" onmouseout="this.style.background=''">
       🪑 배석 해제
+    </div>
+    <div onclick="openFpMemoModal('${String(student.name).replace(/'/g,"\\'")}')"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#B91C1C;font-weight:700;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0;background:${_hasMemo ? '#FEF2F2' : ''}"
+      onmouseover="this.style.background='#FEF2F2'" onmouseout="this.style.background='${_hasMemo ? '#FEF2F2' : ''}'">
+      📌 특별관리 메모${_hasMemo ? ' 수정' : ''}
     </div>
     <div onclick="openScheduleModal(${STUDENTS.indexOf(student)});document.getElementById('fp-ctx-menu')?.remove()"
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#1F2937;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"

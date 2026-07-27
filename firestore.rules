@@ -24,6 +24,8 @@ rules_version = '2';
 //                 문서 하나를 1분마다 REST로 갱신, 관리앱 대시보드가 읽음)
 //   - 2026-07-27  shinmungo_reports 추가 — 신문고(학생 기명 신고, delete 금지)
 //                 + settings 화이트리스트에 shinmungo_auth(원장 열람 비밀번호)
+//   - 2026-07-27  student_memos 추가 — 배치도 특별관리 메모(문서 ID = 학생 이름).
+//                 학생앱이 읽는 students 문서와 분리해 둔 것이라 그대로 유지할 것
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -166,6 +168,20 @@ service cloud.firestore {
     match /net_daily/{date} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // 특별관리 메모(관리앱 배치도): 문서 ID = 학생 이름. 조교가 신경 써야 할 학생을 적어 둔다.
+    // students 문서에 필드로 넣지 않은 이유 — 학생앱·학부모앱이 students 를 통째로 읽어 가므로
+    // 그 내용이 학생 기기로 그대로 내려간다. 별도 컬렉션이면 그 앱들이 아예 읽지 않는다.
+    // 관리가 끝나면 지우는 게 정상이라 delete 는 연다(벌점처럼 남길 기록이 아니다).
+    match /student_memos/{name} {
+      allow read, delete: if true;
+      allow create, update: if request.resource.data.name is string
+        && request.resource.data.name.size() <= 30
+        && request.resource.data.body is string
+        && request.resource.data.body.size() <= 1000
+        && request.resource.data.level in ['high', 'mid', 'low']
+        && request.resource.data.updatedAt is string;
     }
 
     // 공지사항: list 문서 하나만 쓰기 허용
