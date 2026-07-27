@@ -113,9 +113,15 @@
   .card { background: var(--card); border-radius: var(--radius-lg); padding: 18px; margin-bottom: 14px; box-shadow: var(--shadow-card); border: 1px solid var(--border); }
   .card-title { font-size: 13.5px; font-weight: 700; color: var(--brand-dark); margin-bottom: 14px; display: flex; align-items: center; gap: 7px; }
 
-  /* 상태 히어로 카드 */
-  .status-hero { text-align: center; padding: 18px 0 6px; }
-  .status-icon-ring { width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 12px; font-size: 26px; transition: background 0.2s, color 0.2s; }
+  /* 상태 히어로 카드 — 자녀가 지금 면학관에 있는지 한 줄로 (모든 탭 위에 항상 표시) */
+  .status-hero { display: flex; align-items: center; gap: 12px; }
+  .status-icon-ring { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; transition: background 0.2s, color 0.2s; }
+  .status-main { flex: 1; min-width: 0; }
+  .status-title { font-size: 15px; font-weight: 800; letter-spacing: -0.3px; }
+  .status-sub { font-size: 11.5px; color: var(--text-soft); margin-top: 3px; line-height: 1.45; }
+  .status-side { text-align: right; flex-shrink: 0; }
+  .status-side-v { font-size: 15px; font-weight: 800; color: var(--brand); white-space: nowrap; }
+  .status-side-l { font-size: 10px; color: var(--text-soft); margin-top: 2px; }
   .stat-card { text-align: center; padding: 14px 10px; background: var(--brand-50); border-radius: var(--radius-md); }
   .stat-label { font-size: 11px; color: var(--text-soft); margin-bottom: 4px; font-weight: 600; }
   .stat-value { font-size: 23px; font-weight: 800; color: var(--brand); }
@@ -128,6 +134,10 @@
   .record-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .record-row:last-child { border-bottom: none; }
   .record-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-light); flex-shrink: 0; }
+  .record-time { flex: 1; min-width: 0; letter-spacing: -0.2px; }
+  .record-away { font-size: 11px; color: #E8590C; margin-top: 2px; }
+  .record-min { font-size: 12.5px; font-weight: 700; color: var(--brand-dark); white-space: nowrap; }
+  .record-empty { font-size: 12.5px; color: var(--text-soft); padding: 4px 0 2px; }
 
   /* 스케줄 표 */
   .sched-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 11px; border-radius: var(--radius-sm); overflow: hidden; border: 1px solid var(--border); }
@@ -504,6 +514,8 @@ body{
   </div>
 
   <div class="app-content">
+    <!-- 지금 입실해 있는지 — 탭과 무관하게 앱을 열자마자 보이도록 탭 바깥에 둔다 -->
+    <div id="live-status"></div>
     <!-- SEE EYES 보호자(법정대리인) 동의 요청 배너 -->
     <div id="see-consent-req" style="display:none;margin-bottom:14px"></div>
     <!-- 현황 탭 -->
@@ -515,6 +527,7 @@ body{
     </div>
 
     <div id="tab-status" style="display:none">
+      <div id="today-record"></div>
       <div id="mystats-content"></div>
       <!-- 📈 학습 분석 — 공부시간 기록 아래에 이어서(별도 탭 없이 스크롤로 도달) -->
       <div id="pa-root"></div>
@@ -752,6 +765,7 @@ function enterApp() {
   document.getElementById('hdr-avatar').textContent = currentStudent.name[0];
   document.getElementById('hdr-name').textContent = currentStudent.name;
   document.getElementById('hdr-sub').textContent = (currentStudent.seat || '-') + '번 · 새봄 면학관';
+  renderLiveStatus();   // 세션 구독이 붙기 전에도 '불러오는 중' 카드를 먼저 띄운다
   loadAllData();
   if (window.seeReqStart) window.seeReqStart();
 }
@@ -761,6 +775,9 @@ function doLogout() {
   if (_scheduleUnsub) { _scheduleUnsub(); _scheduleUnsub = null; }
   if (window.seeReqStop) window.seeReqStop();
   _changedSchedule = null;
+  stopLiveTick();
+  _sessDocs = []; TODAY_SESS = []; OPEN_SESS = null; _sessLoadFailed = false;
+  const _live = document.getElementById('live-status'); if (_live) _live.innerHTML = '';
   ACTUAL_MIN = null; ACTUAL_IN = null;
   paReset();                       // 다른 자녀로 로그인해도 앞 학생 분석이 남지 않게
   currentStudent = null;
@@ -1013,21 +1030,18 @@ async function startStatusRealtime() {
     _statusUnsub = window._onSnapshot(
       window._query(window._collection(window._db, 'attendance_sessions'), ..._conds),
       snap => {
-        const map = {}, inMap = {}; let bestSession = 0;
-        const nowTs = Date.now();
+        // 문서 원본을 들고 있다가 1분마다 다시 집계한다 — 재실 중에는 문서가 바뀌지 않아
+        // onSnapshot 이 오지 않는데도 '지금까지 공부한 시간'은 계속 흘러야 하기 때문.
+        const docs = [];
         snap.forEach(d => {
           const s = d.data();
           if (!s || !s.inDate || typeof s.inTs !== 'number') return;
-          const k = _normDkey(s.inDate);          // '2026-07-09' → '2026-7-9' (기존 키 형식 유지)
-          // 그날 첫 입실 시각(자정 기준 분) — 학습분석의 '등원 시각 변화'가 쓴다
-          const _iAt = new Date(s.inTs), _iMin = _iAt.getHours() * 60 + _iAt.getMinutes();
-          if (inMap[k] == null || _iMin < inMap[k]) inMap[k] = _iMin;
-          const min = _sessionDocMin(s, nowTs);
-          if (min <= 0) return;
-          map[k] = (map[k] || 0) + min;
-          if (min > bestSession) bestSession = min;
+          docs.push(s);
         });
-        ACTUAL_MIN = map; ACTUAL_IN = inMap; actualBestSession = bestSession;
+        _sessDocs = docs;
+        _sessLoadFailed = false;   // (색인 폴백 재구독이 성공했을 수도 있다)
+        _recomputeSessAggregates();
+        startLiveTick();
         buildMyStats();
         try { buildEvents(); } catch(e){} // 실제 공부시간 반영되면 이벤트 달성률도 갱신
         try { paOnData(); } catch(e){}    // 학습분석이 이미 그려져 있으면 새 기록 반영
@@ -1036,6 +1050,7 @@ async function startStatusRealtime() {
         // onSnapshot 의 오류(예: Firestore 보안규칙이 attendance_sessions 읽기를 막는 경우)는
         // 여기 비동기 에러 콜백으로 온다. 조용히 실패하지 않도록 로그를 남기고 스케줄 기준 추정치로 폴백한다.
         console.error('[학습현황] attendance_sessions 실시간 구독 실패:', err && err.code, err && err.message, err);
+        _sessLoadFailed = true;   // 상단 상태 카드가 '재실 아님'으로 오해되지 않게 실패를 그대로 알린다
         if (err && err.code === 'failed-precondition' && !startStatusRealtime._noMonthFilter) {
           // monthKey 결합 쿼리가 색인 문제로 거부된 경우 — 기존 전체 구독으로 1회 재시도(기능 우선)
           startStatusRealtime._noMonthFilter = true;
@@ -1078,6 +1093,13 @@ let ACTUAL_MIN = null;
 // 날짜별 그날 첫 입실 시각(자정 기준 분). { '2026-7-3': 1080 } — 학습분석 '등원 시각' 전용
 let ACTUAL_IN = null;
 let actualBestSession = 0;
+// 구독으로 받은 세션 문서 원본(최근 3개월). 열린 세션의 '지금까지'는 시간이 흐르면 값이 달라지므로
+// 스냅샷 때 한 번 계산하고 버리는 대신 원본을 들고 있다가 1분마다 다시 계산한다.
+let _sessDocs = [];
+let TODAY_SESS = [];      // 오늘 입실한 세션 + 아직 안 닫힌 세션 (입실 시각 오름차순)
+let OPEN_SESS = null;     // 지금 열려 있는 세션(status:'open') — 없으면 퇴실 상태
+let _sessLoadFailed = false;
+let _liveTick = null;
 
 function _dkey(d) { return d.getFullYear() + '-' + (d.getMonth()+1) + '-' + d.getDate(); }
 function _normDkey(s) { const m = String(s).match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/); return m ? `${+m[1]}-${+m[2]}-${+m[3]}` : String(s).trim(); }
@@ -1109,6 +1131,168 @@ function _dateMinutes(d) {
 function _fmtHM(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}<small>H</small> ${String(min%60).padStart(2,'0')}<small>M</small>`; }
 function _fmtHMtext(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}H ${String(min%60).padStart(2,'0')}M`; }
 function _fmtKor(min) { min = Math.max(0, Math.round(min)); return `${Math.floor(min/60)}시간 ${String(min%60).padStart(2,'0')}분`; }
+function _fmtDur(min) { min = Math.max(0, Math.round(min)); return min < 60 ? `${min}분` : `${Math.floor(min/60)}시간 ${min%60}분`; }
+function _clockTs(ts) { const d = new Date(ts); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+
+// ══════════════════════════════════════════
+//  지금 입실해 있는지 (실시간 상태)
+// ══════════════════════════════════════════
+// 세션 문서(attendance_sessions) 하나가 입실~퇴실 한 번이고, status:'open' 이면 아직 안에 있다는 뜻.
+// awayStartTs 가 있으면 외출 중(그 시간은 공부시간에서 빠진다).
+
+// 세션 문서 원본에서 화면이 쓰는 집계값을 모두 다시 만든다(스냅샷 때·1분 틱마다 호출).
+function _recomputeSessAggregates() {
+  const map = {}, inMap = {}; let bestSession = 0;
+  const nowTs = Date.now();
+  const todayKey = _dkey(new Date());
+  const today = [];
+  _sessDocs.forEach(s => {
+    const k = _normDkey(s.inDate);          // '2026-07-09' → '2026-7-9' (기존 키 형식 유지)
+    // 그날 첫 입실 시각(자정 기준 분) — 학습분석의 '등원 시각 변화'가 쓴다
+    const _iAt = new Date(s.inTs), _iMin = _iAt.getHours() * 60 + _iAt.getMinutes();
+    if (inMap[k] == null || _iMin < inMap[k]) inMap[k] = _iMin;
+    // 자정을 넘겨 아직 안 닫힌 세션은 입실일이 어제라도 '지금 상태'이므로 오늘 목록에 포함한다
+    if (k === todayKey || s.status === 'open') today.push(s);
+    const min = _sessionDocMin(s, nowTs);
+    if (min <= 0) return;
+    map[k] = (map[k] || 0) + min;
+    if (min > bestSession) bestSession = min;
+  });
+  ACTUAL_MIN = map; ACTUAL_IN = inMap; actualBestSession = bestSession;
+  today.sort((a, b) => a.inTs - b.inTs);
+  TODAY_SESS = today;
+  OPEN_SESS = today.find(s => s.status === 'open') || null;
+}
+
+// 세션의 외출 시간(분) — 외출 중이면 지금까지 나가 있는 시간까지 더해서 본다
+function _sessAwayMin(s, nowTs) {
+  let away = s.awayMs || 0;
+  if (s.awayStartTs) away += Math.max(0, Math.min(nowTs, _sessCapTs(s.inTs)) - s.awayStartTs);
+  return Math.round(away / 60000);
+}
+// 입실일이 오늘이 아닌 세션(자정 넘긴 밤 세션)은 날짜를 붙여 준다
+function _sessDayLabel(s) {
+  const k = _normDkey(s.inDate), today = _dkey(new Date());
+  if (k === today) return '';
+  const y = new Date(); y.setDate(y.getDate() - 1);
+  if (k === _dkey(y)) return '어제 ';
+  const p = k.split('-');
+  return `${p[1]}/${p[2]} `;
+}
+
+function renderLiveStatus() {
+  const el = document.getElementById('live-status');
+  if (!el) return;
+  if (!currentStudent) { el.innerHTML = ''; return; }
+  const nowTs = Date.now();
+  const todayKey = _dkey(new Date());
+  const todayMin = TODAY_SESS
+    .filter(s => _normDkey(s.inDate) === todayKey)
+    .reduce((a, s) => a + _sessionDocMin(s, nowTs), 0);
+  // 어젯밤 입실해서 아직 안 나간 경우엔 '오늘 공부'가 0이라 대신 이번 재실 시간을 보여준다
+  const crossOpen = !!(OPEN_SESS && _normDkey(OPEN_SESS.inDate) !== todayKey);
+  const sideMin = crossOpen ? _sessionDocMin(OPEN_SESS, nowTs) : todayMin;
+  const sideLbl = crossOpen ? '지금까지' : '오늘 공부';
+
+  let ring = '#F3F4F6', color = '#6B7280', icon = 'ti-clock', title = '', sub = '', side = true;
+
+  if (_sessLoadFailed) {
+    icon = 'ti-alert-circle'; title = '입실 정보를 불러오지 못했어요';
+    sub = '잠시 후 앱을 다시 열어 주세요'; side = false;
+  } else if (!ACTUAL_MIN) {
+    title = '입실 정보 불러오는 중...'; sub = '잠시만 기다려 주세요'; side = false;
+  } else if (OPEN_SESS && OPEN_SESS.awayStartTs) {
+    ring = '#FFF4E6'; color = '#E8590C'; icon = 'ti-door-exit';
+    title = '잠시 외출 중이에요';
+    sub = `${_clockTs(OPEN_SESS.awayStartTs)} 나감 · ${_fmtDur((nowTs - OPEN_SESS.awayStartTs) / 60000)}째`
+        + ` · ${_sessDayLabel(OPEN_SESS)}${_clockTs(OPEN_SESS.inTs)} 입실`;
+  } else if (OPEN_SESS) {
+    ring = '#DCFCE7'; color = '#166534'; icon = 'ti-user-check';
+    title = '면학관에 있어요';
+    sub = `${_sessDayLabel(OPEN_SESS)}${_clockTs(OPEN_SESS.inTs)} 입실 · ${_fmtDur((nowTs - OPEN_SESS.inTs) / 60000)}째`;
+  } else if (TODAY_SESS.length) {
+    const last = TODAY_SESS[TODAY_SESS.length - 1];
+    icon = 'ti-home-check'; title = '퇴실했어요';
+    sub = `${last.outTs ? _clockTs(last.outTs) + ' 퇴실' : '퇴실 기록 확인 중'}`
+        + (TODAY_SESS.length > 1 ? ` · 오늘 ${TODAY_SESS.length}번 입실` : '');
+  } else {
+    icon = 'ti-clock'; color = '#9CA3AF'; title = '아직 입실 전이에요';
+    sub = '오늘 입실 기록이 없습니다'; side = false;
+  }
+
+  el.innerHTML = `
+    <div class="card">
+      <div class="status-hero">
+        <div class="status-icon-ring" style="background:${ring};color:${color}"><i class="ti ${icon}"></i></div>
+        <div class="status-main">
+          <div class="status-title" style="color:${color}">${title}</div>
+          <div class="status-sub">${sub}</div>
+        </div>
+        ${side ? `<div class="status-side">
+          <div class="status-side-v">${_fmtKor(sideMin)}</div>
+          <div class="status-side-l">${sideLbl}</div>
+        </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// 학습현황 탭 맨 위 — 오늘 몇 시에 들어오고 나갔는지
+function renderTodayRecord() {
+  const el = document.getElementById('today-record');
+  if (!el || !currentStudent) return;
+  const nowTs = Date.now();
+  let body;
+  if (!ACTUAL_MIN) {
+    body = `<div class="record-empty">기록을 불러오는 중입니다...</div>`;
+  } else if (!TODAY_SESS.length) {
+    body = `<div class="record-empty">오늘은 아직 입실 기록이 없습니다.</div>`;
+  } else {
+    body = TODAY_SESS.map(s => {
+      const open = s.status === 'open';
+      const awayMin = _sessAwayMin(s, nowTs);
+      const dot = open ? (s.awayStartTs ? '#F59E0B' : '#22C55E') : '#C7C7CC';
+      const out = open ? '지금' : (s.outTs ? `${_clockTs(s.outTs)} 퇴실` : '퇴실 기록 없음');
+      const right = open
+        ? (s.awayStartTs ? '외출 중' : `${_fmtDur(_sessionDocMin(s, nowTs))}째`)
+        : _fmtDur(_sessionDocMin(s, nowTs));
+      const note = [];
+      if (awayMin > 0) note.push(`외출 ${_fmtDur(awayMin)} 제외`);
+      if (s.closedBy === 'stale-checkin' || s.closedBy === 'auto-cap') note.push('퇴실 기록이 없어 자동 마감됨');
+      return `<div class="record-row">
+        <span class="record-dot" style="background:${dot}"></span>
+        <span class="record-time">${_sessDayLabel(s)}${_clockTs(s.inTs)} 입실 → ${out}
+          ${note.length ? `<div class="record-away">${note.join(' · ')}</div>` : ''}</span>
+        <span class="record-min">${right}</span>
+      </div>`;
+    }).join('');
+  }
+  el.innerHTML = `
+    <div class="card">
+      <div class="card-title"><i class="ti ti-clock-hour-4"></i>오늘 입·퇴실 기록</div>
+      ${body}
+    </div>`;
+}
+
+// 재실 중에는 세션 문서가 바뀌지 않아 onSnapshot 이 오지 않는다 → 1분마다 직접 다시 계산해서
+// '몇 분째', '오늘 공부 시간'이 멈춰 보이지 않게 한다. (읽기 비용 없음 — 이미 받은 문서만 다시 계산)
+function startLiveTick() {
+  if (_liveTick) return;
+  _liveTick = setInterval(() => {
+    if (!currentStudent || !OPEN_SESS) return;
+    _recomputeSessAggregates();
+    renderLiveStatus();
+    if (currentTab === 'status') buildMyStats();
+  }, 60000);
+}
+function stopLiveTick() { if (_liveTick) { clearInterval(_liveTick); _liveTick = null; } }
+
+// 휴대폰에서 앱을 접어 뒀다가 다시 열면 1분 타이머가 밀려 있을 수 있다 → 돌아오는 즉시 다시 계산
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible' || !currentStudent || !_sessDocs.length) return;
+  _recomputeSessAggregates();
+  renderLiveStatus();
+  if (currentTab === 'status') buildMyStats();
+});
 
 // 스케줄 기준 출석 여부 (일요일 휴관)
 function _attendedOn(d) {
@@ -1132,6 +1316,8 @@ function _streakDays() { // 매월 1일부터 집계
 function setStatsView(v) { statsView = v; buildMyStats(); }
 
 function buildMyStats() {
+  renderLiveStatus();      // 상단 실시간 상태(탭 바깥)와 오늘 입·퇴실 기록도 같은 데이터로 함께 갱신
+  renderTodayRecord();
   const el = document.getElementById('mystats-content');
   if (!el || !currentStudent) return;
   const s = currentStudent;
