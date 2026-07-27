@@ -136,6 +136,9 @@
   .record-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand-light); flex-shrink: 0; }
   .record-time { flex: 1; min-width: 0; letter-spacing: -0.2px; }
   .record-away { font-size: 11px; color: #E8590C; margin-top: 2px; }
+  .away-toggle { display: inline-block; margin-top: 3px; padding: 0; background: none; border: 0; font-family: inherit; font-size: 11px; color: #E8590C; text-decoration: underline dotted; cursor: pointer; }
+  .away-detail { margin-top: 5px; font-size: 11px; color: var(--text2); line-height: 1.65; background: rgba(232,89,12,0.06); border-radius: 8px; padding: 7px 9px; }
+  .away-open { color: #B91C1C; font-weight: 700; }
   .record-min { font-size: 12.5px; font-weight: 700; color: var(--brand-dark); white-space: nowrap; }
   .record-empty { font-size: 12.5px; color: var(--text-soft); padding: 4px 0 2px; }
 
@@ -777,6 +780,8 @@ function doLogout() {
   _changedSchedule = null;
   stopLiveTick();
   _sessDocs = []; TODAY_SESS = []; OPEN_SESS = null; _sessLoadFailed = false;
+  _awayOpen.clear(); _awayLogCache = {};
+  Object.keys(_awaySegs).forEach(k => delete _awaySegs[k]);   // 다른 자녀로 로그인해도 앞 학생 외출이 남지 않게
   const _live = document.getElementById('live-status'); if (_live) _live.innerHTML = '';
   ACTUAL_MIN = null; ACTUAL_IN = null;
   paReset();                       // 다른 자녀로 로그인해도 앞 학생 분석이 남지 않게
@@ -1236,6 +1241,88 @@ function renderLiveStatus() {
     </div>`;
 }
 
+// ── 외출 구간 펼쳐보기 (누를 때만 조회) ──
+// 세션 문서에는 외출 '합계'(awayMs)만 남아서 몇 시에 몇 번 나갔는지는 감사기록 checkin_logs 를 봐야 한다.
+// 항상 읽으면 학부모앱 읽기 건수가 크게 늘어나므로, 눌렀을 때 그 세션의 입실일 하루치만 읽고 캐시한다.
+// (관리자앱 sessAwayDetail 과 같은 방식 — 복귀 기록이 없는 외출은 빨갛게 표시)
+const _awayOpen = new Set();   // 펼쳐 둔 세션 — 1분 틱으로 다시 그려도 접히지 않게 기억한다
+const _awaySegs = {};          // 세션키 → { sig, segs:[{from,to}], error }
+const _awayLoading = new Set();
+let _awayLogCache = {};        // '2026-7-23' → 그날 checkin_logs
+
+function _sessKey(s) { return s.sid || (s.seat + '_' + s.inTs); }
+// 외출 상태가 바뀌면(새로 나가거나 돌아오면) 캐시를 버려야 하므로 서명을 같이 들고 있는다
+function _awaySig(s) { return `${s.awayMs || 0}|${s.awayStartTs || 0}`; }
+
+function toggleAwayDetail(key) {
+  if (_awayOpen.has(key)) _awayOpen.delete(key); else _awayOpen.add(key);
+  renderTodayRecord();
+}
+
+async function loadAwayDetail(s) {
+  const key = _sessKey(s), sig = _awaySig(s);
+  if (_awayLoading.has(key)) return;
+  _awayLoading.add(key);
+  try {
+    if (!window._db || !window._getDocs) throw new Error('연결 대기 중');
+    // checkin_logs 의 date 는 무패딩 레거시 키('2026-7-23')
+    const legacy = _normDkey(s.inDate);
+    const prev = _awaySegs[key];
+    if (prev && prev.sig !== sig) delete _awayLogCache[legacy];  // 외출/복귀가 새로 생겼으면 다시 읽는다
+    let logs = _awayLogCache[legacy];
+    if (!logs) {
+      const col = window._collection(window._db, 'checkin_logs');
+      let snap;
+      try {
+        snap = await window._getDocs(window._query(col,
+          window._where('date', '==', legacy),
+          window._where('studentName', '==', currentStudent.name)));
+      } catch (e) {
+        // 두 조건 결합이 색인 문제로 거부되면 하루치를 받아 이름은 앱에서 거른다(관리자앱과 동일)
+        console.warn('[외출내역] 결합 조회 실패 — 날짜 조회로 폴백:', e && e.code);
+        snap = await window._getDocs(window._query(col, window._where('date', '==', legacy)));
+      }
+      logs = snap.docs.map(x => x.data());
+      _awayLogCache[legacy] = logs;
+    }
+    // 외출/복귀만(away:true) 이 세션 구간 안에서 골라 out → in 으로 짝짓는다. 짝 없는 out = 복귀 미입력
+    const end = s.outTs || Date.now();
+    const evs = logs
+      .filter(l => l && l.studentName === currentStudent.name && l.away === true
+                   && typeof l.ts === 'number' && l.ts >= s.inTs && l.ts <= end + 60000)
+      .sort((a, b) => a.ts - b.ts);
+    const segs = [];
+    let openOut = null;
+    evs.forEach(e => {
+      if (e.type === 'out') { if (openOut) segs.push({ from: openOut, to: null }); openOut = e.ts; }
+      else if (e.type === 'in' && openOut) { segs.push({ from: openOut, to: e.ts }); openOut = null; }
+    });
+    if (openOut) segs.push({ from: openOut, to: null });
+    _awaySegs[key] = { sig, segs };
+  } catch (e) {
+    console.error('외출 내역 조회 실패:', e);
+    _awaySegs[key] = { sig, segs: [], error: '외출 시각을 불러오지 못했습니다. 잠시 후 다시 눌러 주세요.' };
+  } finally {
+    _awayLoading.delete(key);
+    renderTodayRecord();
+  }
+}
+
+function _awayDetailHtml(s, nowTs) {
+  const key = _sessKey(s), cache = _awaySegs[key];
+  if (!cache || cache.sig !== _awaySig(s)) { loadAwayDetail(s); return '외출 시각 불러오는 중...'; }
+  if (cache.error) return `<span class="away-open">${cache.error}</span>`;
+  if (!cache.segs.length) return '기록에 남은 외출 구간이 없습니다 — 키오스크에서 외출을 누르지 않고 나갔다면 시각이 남지 않습니다.';
+  const end = s.outTs || nowTs;
+  return cache.segs.map((g, i) => {
+    if (g.to == null) {
+      const mins = Math.max(0, Math.round((end - g.from) / 60000));
+      return `<div>${i+1}. ${_clockTs(g.from)} 외출 → <span class="away-open">복귀 기록 없음</span> · ${_fmtDur(mins)} 제외</div>`;
+    }
+    return `<div>${i+1}. ${_clockTs(g.from)} 외출 → ${_clockTs(g.to)} 복귀 · ${_fmtDur((g.to - g.from) / 60000)}</div>`;
+  }).join('');
+}
+
 // 학습현황 탭 맨 위 — 오늘 몇 시에 들어오고 나갔는지
 function renderTodayRecord() {
   const el = document.getElementById('today-record');
@@ -1255,13 +1342,17 @@ function renderTodayRecord() {
       const right = open
         ? (s.awayStartTs ? '외출 중' : `${_fmtDur(_sessionDocMin(s, nowTs))}째`)
         : _fmtDur(_sessionDocMin(s, nowTs));
-      const note = [];
-      if (awayMin > 0) note.push(`외출 ${_fmtDur(awayMin)} 제외`);
-      if (s.closedBy === 'stale-checkin' || s.closedBy === 'auto-cap') note.push('퇴실 기록이 없어 자동 마감됨');
+      const key = _sessKey(s), opened = _awayOpen.has(key);
+      const away = awayMin > 0
+        ? `<button class="away-toggle" onclick="toggleAwayDetail('${key}')">외출 ${_fmtDur(awayMin)} 제외 ${opened ? '▴' : '▾'}</button>`
+        : '';
+      const auto = (s.closedBy === 'stale-checkin' || s.closedBy === 'auto-cap')
+        ? `<div class="record-away">퇴실 기록이 없어 자동 마감됨</div>` : '';
       return `<div class="record-row">
         <span class="record-dot" style="background:${dot}"></span>
         <span class="record-time">${_sessDayLabel(s)}${_clockTs(s.inTs)} 입실 → ${out}
-          ${note.length ? `<div class="record-away">${note.join(' · ')}</div>` : ''}</span>
+          ${auto}${away ? `<div>${away}</div>` : ''}
+          ${awayMin > 0 && opened ? `<div class="away-detail">${_awayDetailHtml(s, nowTs)}</div>` : ''}</span>
         <span class="record-min">${right}</span>
       </div>`;
     }).join('');
