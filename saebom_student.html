@@ -6439,5 +6439,49 @@ function paRender() {
   if(img.complete) cleanButterfly(); else img.addEventListener('load',cleanButterfly,{once:true});
 })();
 </script>
+
+<script>
+/* ── 'PC 버전 보기' 감지 안내 배너 ──────────────────────────────────────
+   증상: 폰에서 앱 전체가 데스크톱처럼 아주 작게 보임.
+   원인: 브라우저의 'PC 버전 보기(데스크톱 사이트)'가 켜지면 viewport 메타가
+   무시되고 레이아웃 폭이 1,000px 안팎으로 잡힌다. 이 모드는 페이지에서
+   끌 수 없으므로, 감지해서 해제 방법을 안내하는 것이 최선이다.
+   판별: 터치 기기 + 세로로 긴 화면(높이/폭 1.5 이상)인데 레이아웃 폭이
+   700px 이상 — 정상 모드의 폰은 360~480px이고, 태블릿·PC 모니터는 세로
+   비율이 이만큼 길지 않아 오탐이 없다.
+   글자 크기는 vw 단위 — 이 상황에서는 px 글자도 같이 축소되어 보이기 때문. */
+(function(){
+  var banner=null;
+  function dismissed(){ try{ return sessionStorage.getItem('pcModeNoticeClosed')==='1'; }catch(e){ return false; } }
+  function isDesktopModePhone(){
+    var w=window.innerWidth,h=window.innerHeight;
+    var touch=('ontouchstart' in window)||navigator.maxTouchPoints>0;
+    return touch && w>=700 && h/w>=1.5;
+  }
+  function check(){
+    var need=isDesktopModePhone() && !dismissed();
+    if(need && !banner){
+      banner=document.createElement('div');
+      banner.id='pc-mode-notice';
+      banner.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#1C1A2E;color:#fff;padding:2.6vw 3.4vw;box-shadow:0 4px 18px rgba(0,0,0,0.35);font-family:inherit';
+      banner.innerHTML=
+        '<div style="font-size:3vw;font-weight:800;margin-bottom:1vw">📱 화면이 너무 작게 보이나요?</div>'+
+        '<div style="font-size:2.4vw;line-height:1.65;color:#D8D6EE">브라우저의 <b>\'PC 버전 보기(데스크톱 사이트)\'</b>가 켜져 있어요.<br>'+
+        '브라우저 메뉴(⋮ 또는 ≡)에서 <b>데스크톱 사이트</b> 체크를 해제하면 정상 크기로 돌아옵니다.</div>'+
+        '<button style="margin-top:1.8vw;padding:1.4vw 3.2vw;border:none;border-radius:1.6vw;background:rgba(255,255,255,0.16);color:#fff;font-size:2.2vw;font-weight:700;cursor:pointer">닫기</button>';
+      banner.querySelector('button').onclick=function(){
+        try{ sessionStorage.setItem('pcModeNoticeClosed','1'); }catch(e){}
+        banner.remove(); banner=null;
+      };
+      document.body.appendChild(banner);
+      try{ if(window.saTrack) saTrack('pc_mode_notice_shown'); }catch(e){}
+    } else if(!need && banner){
+      banner.remove(); banner=null;
+    }
+  }
+  check();
+  window.addEventListener('resize',check);
+})();
+</script>
 </body>
 </html>
