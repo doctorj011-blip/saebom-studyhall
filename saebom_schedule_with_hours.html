@@ -5381,23 +5381,37 @@ window.toggleStickyCollapse = function(){
   renderStickyMemos();
 };
 
-// 추가 폼 — 패널 안 인라인, 한 번에 하나만
+// 추가 폼 — 패널 안 인라인, 한 번에 하나만.
+// ★＋는 폼을 '열기만' 한다 — 이미 열려 있으면 입력칸 포커스만 주고 절대 닫지 않는다.
+//   (초기 버전에서 ＋가 토글이라, 내용을 적고 ＋를 '추가' 버튼인 줄 알고 눌렀다가
+//    쓰던 메모가 통째로 사라지는 실사고가 있었음. 닫기는 오직 취소 버튼으로만.)
 window.openStickyAdd = function(){
   const box=document.getElementById('fp-sticky-form');
   if(!box) return;
-  if(box.style.display!=='none'){ box.style.display='none'; box.innerHTML=''; return; }
+  if(box.style.display!=='none'){ document.getElementById('fp-sticky-input')?.focus(); return; }
   box.style.display='';
   box.innerHTML = `<div style="background:#FFFBEB;border:1.5px dashed #FCD34D;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px">
-    <textarea id="fp-sticky-input" rows="3" placeholder="메모 내용" style="width:100%;box-sizing:border-box;border:1px solid #FDE68A;border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;resize:none;outline:none;background:#fff"></textarea>
+    <textarea id="fp-sticky-input" rows="3" placeholder="메모 내용 (Ctrl+Enter로 저장)" style="width:100%;box-sizing:border-box;border:1px solid #FDE68A;border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;resize:none;outline:none;background:#fff"></textarea>
     <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#B91C1C;font-weight:700;cursor:pointer">
       <input type="checkbox" id="fp-sticky-imp" style="accent-color:#DC2626">📌 중요 (접어도 항상 표시)
     </label>
     <div style="display:flex;gap:6px">
-      <button onclick="openStickyAdd()" style="flex:1;padding:6px;background:#fff;color:#92400E;border:1px solid #FDE68A;border-radius:8px;font-size:11.5px;font-weight:600;cursor:pointer">취소</button>
-      <button onclick="saveStickyMemo()" style="flex:2;padding:6px;background:#D97706;color:#fff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">붙이기</button>
+      <button onclick="closeStickyAdd()" style="flex:1;padding:6px;background:#fff;color:#92400E;border:1px solid #FDE68A;border-radius:8px;font-size:11.5px;font-weight:600;cursor:pointer">취소</button>
+      <button onclick="saveStickyMemo()" style="flex:2;padding:6px;background:#D97706;color:#fff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">💾 저장</button>
     </div>
   </div>`;
-  setTimeout(()=>document.getElementById('fp-sticky-input')?.focus(),50);
+  const inp=document.getElementById('fp-sticky-input');
+  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) saveStickyMemo(); });
+  setTimeout(()=>inp?.focus(),50);
+};
+
+// 취소로만 닫는다. 쓰다 만 내용이 있으면 버릴지 물어본다.
+window.closeStickyAdd = function(){
+  const box=document.getElementById('fp-sticky-form');
+  if(!box) return;
+  const draft=(document.getElementById('fp-sticky-input')?.value||'').trim();
+  if(draft && !confirm('작성 중인 메모가 있습니다. 저장하지 않고 버릴까요?')) return;
+  box.style.display='none'; box.innerHTML='';
 };
 
 window.saveStickyMemo = function(){
