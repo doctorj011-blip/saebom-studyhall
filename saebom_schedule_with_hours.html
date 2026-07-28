@@ -384,6 +384,7 @@ body.director-device .tab-btn.director-only{display:inline-block}
    좁은 화면(여백이 사라지는 폭): 배치도 위에 일반 블록으로 흐르게 해 좌석 그리드를 가리지 않는다. */
 #fp-sticky-panel{position:absolute;top:0;right:268px;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:5}
 .fp-sticky-head{display:flex;align-items:center;justify-content:space-between;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:6px 8px;flex-shrink:0}
+#fp-sticky-form{flex-shrink:0}  /* 입력 종이가 자란 만큼 유지 — 자리가 모자라면 아래 목록이 스크롤 */
 #fp-sticky-list{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding-bottom:4px}
 .fp-sticky-note{position:relative;border-radius:2px 10px 10px 10px;padding:8px 10px 7px;font-size:12px;line-height:1.5;color:#44381B;background:#FEF9C3;border:1px solid #FDE047;box-shadow:0 2px 6px rgba(120,90,0,0.10);word-break:break-word;white-space:pre-wrap}
 .fp-sticky-note.imp{background:#FEE2E2;border-color:#FCA5A5;color:#5F1A1A;box-shadow:0 2px 8px rgba(180,30,30,0.14)}
@@ -5391,7 +5392,7 @@ window.openStickyAdd = function(){
   if(box.style.display!=='none'){ document.getElementById('fp-sticky-input')?.focus(); return; }
   box.style.display='';
   box.innerHTML = `<div style="background:#FFFBEB;border:1.5px dashed #FCD34D;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px">
-    <textarea id="fp-sticky-input" rows="3" placeholder="메모 내용 (Ctrl+Enter로 저장)" style="width:100%;box-sizing:border-box;border:1px solid #FDE68A;border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;resize:none;outline:none;background:#fff"></textarea>
+    <textarea id="fp-sticky-input" rows="3" placeholder="메모 내용 (Ctrl+Enter로 저장)" style="width:100%;box-sizing:border-box;border:1px solid #FDE68A;border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;resize:none;outline:none;background:#fff;overflow-y:hidden;max-height:45vh"></textarea>
     <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#B91C1C;font-weight:700;cursor:pointer">
       <input type="checkbox" id="fp-sticky-imp" style="accent-color:#DC2626">📌 중요 (접어도 항상 표시)
     </label>
@@ -5401,7 +5402,14 @@ window.openStickyAdd = function(){
     </div>
   </div>`;
   const inp=document.getElementById('fp-sticky-input');
-  if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) saveStickyMemo(); });
+  if(inp){
+    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) saveStickyMemo(); });
+    // 종이(입력칸)가 내용 길이만큼 자라게 — 45vh(max-height)를 넘으면 그때부터 내부 스크롤
+    const grow=()=>{ inp.style.height='auto'; inp.style.height=inp.scrollHeight+'px';
+                     inp.style.overflowY = (inp.scrollHeight>inp.clientHeight+2)?'auto':'hidden'; };
+    inp.addEventListener('input', grow);
+    grow();
+  }
   setTimeout(()=>inp?.focus(),50);
 };
 
