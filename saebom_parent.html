@@ -720,6 +720,31 @@ const DUMMY_RECORDS = [
   { studentName:'이우영', date: new Date().toISOString().slice(0,10), inTime:'14:30', outTime:null },
 ];
 
+// ── 자녀 이름 기억 (이 기기에만 저장) ──
+// 학부모가 앱을 열 때마다 자녀 이름을 다시 치지 않도록 마지막으로 로그인한 이름을 남긴다.
+// 전화번호 뒷 4자리는 일부러 저장하지 않는다 — 기기를 잃어버리거나 남이 열었을 때
+// 이름만으로는 못 들어가도록 확인 절차 하나는 남겨 두는 것.
+const PARENT_NAME_KEY = 'saebom_parent_name';
+
+function rememberParentName(name) {
+  try { localStorage.setItem(PARENT_NAME_KEY, name); } catch(e) {}
+}
+
+// 로그인 화면에 기억해 둔 이름을 채운다. 칸은 그대로 열려 있으니
+// 다른 자녀로 들어갈 때는 지우고 새로 쓰면 된다.
+function fillRememberedName(focusPhone) {
+  const el = document.getElementById('login-name');
+  if (!el) return;
+  let saved = '';
+  try { saved = localStorage.getItem(PARENT_NAME_KEY) || ''; } catch(e) {}
+  el.value = saved;
+  // 이름이 채워져 있으면 뒷 4자리만 누르면 되도록 번호칸으로 넘겨 준다
+  if (saved && focusPhone) {
+    const p = document.getElementById('login-phone');
+    if (p) { try { p.focus(); } catch(e) {} }
+  }
+}
+
 // ── 전화번호 입력 (숫자 입력창) ──
 // 숫자만 남기고 4자리로 제한, 4자리가 채워지면 자동 로그인 시도
 function onPhoneInput() {
@@ -745,6 +770,7 @@ async function doLogin() {
     if (found) {
       currentStudent = found;
       try { sessionStorage.setItem('saebom_parent', JSON.stringify(found)); } catch(e) {}
+      rememberParentName(found.name);   // 입력값이 아니라 실제 등록된 이름을 기억한다
       // 통계 — 학생·보호자를 특정할 수 있는 값은 넣지 않는다.
       if (window.saTrack) saTrack('login_success', { app_name: '학부모앱' });
       enterApp();
@@ -789,8 +815,10 @@ function doLogout() {
   try { sessionStorage.removeItem('saebom_parent'); } catch(e) {}
   document.getElementById('app-screen').classList.remove('visible');
   document.getElementById('login-screen').style.display = 'flex';
-  document.getElementById('login-name').value = '';
   document.getElementById('login-phone').value = '';
+  // 자녀 이름은 지우지 않고 다시 채워 둔다(다른 자녀로 바꿀 때만 지우고 새로 입력).
+  // 로그아웃 직후엔 이름칸을 볼 수 있게 번호칸으로 넘기지 않는다.
+  fillRememberedName(false);
 }
 
 // ── 데이터 로드 ──
@@ -2583,9 +2611,11 @@ document.addEventListener('visibilitychange', function() {
       }
     } else {
       document.getElementById('login-screen').style.display = 'flex';
+      fillRememberedName(true);
     }
   } catch(e) {
     document.getElementById('login-screen').style.display = 'flex';
+    fillRememberedName(true);
   }
 })();
 </script>
