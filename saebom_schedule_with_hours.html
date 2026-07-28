@@ -4252,6 +4252,8 @@ window.sessEditDelete = async function(){
 //  (1) 늦은 변경 1점: 학생앱이 기록 (교시 시작 5시간 전 마감 이후의 출석 취소)
 //  (2) 무단결석 2점: 관리자앱 assessNoShowPenalties가 기록 (type:'noshow', points:2 —
 //      스케줄 변경 없이 출석 예정 교시에 입실 기록이 전혀 없는 경우)
+//  (3) 지각 1점: 같은 판정에서 기록 (type:'late', points:1 — 출석은 했지만 교시 시작 5분을
+//      넘겨 입실한 경우. 중간입실 신고 교시는 제외)
 // 여기서는 전체/학생별 조회와 교시별 취소·복구를 제공한다.
 let _penaltyModalFilter = null; // 열려 있는 모달의 학생 필터(seatKey) — 취소/복구 후 재렌더용
 // 취소된 벌점은 3앱 모두 숨긴다(학생·학부모앱은 렌더에서 제외). 관리앱만 이 스위치로 다시 볼 수 있고,
@@ -4298,7 +4300,7 @@ window.showPenaltyModal = async function(filterSeatKey) {
   overlay.innerHTML = `
     <div style="background:#fff;border-radius:16px;width:min(94vw,520px);max-height:82vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:0.5px solid #eee;background:#FEF0F0">
-        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 벌점 현황 <span style="font-size:12px;font-weight:500;color:#B05555">늦은 변경 1점 · 무단결석 2점 · 수기 최대 2점</span></div>
+        <div style="font-size:15px;font-weight:700;color:#8B1A1A">⚠️ 벌점 현황 <span style="font-size:12px;font-weight:500;color:#B05555">늦은 변경·지각 1점 · 무단결석 2점 · 수기 최대 2점</span></div>
         <button onclick="document.getElementById('penalty-modal-overlay').remove()"
           style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
       </div>
@@ -4358,6 +4360,7 @@ async function _renderPenaltyList(filterSeatKey) {
           const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
           if (p.canceled && !_showCanceledPenalties) return; // 취소된 벌점은 기본으로 숨김
           const isNoShow = p.type === 'noshow';
+          const isLate = p.type === 'late';
           const isManual = p.type === 'manual';
           const isAutoReason = p.type === 'weekly_short'; // 교시 없는 자동 벌점(사유 기반)
           if (!p.canceled) { total += pts; if (window._inMeritCycle(doc.date, cyc)) monthTotal += pts; }
@@ -4371,8 +4374,10 @@ async function _renderPenaltyList(filterSeatKey) {
             meta = isManual ? '· ✍️ 수기 부과' : '· 🤖 자동 판정';
           } else {
             when = `<b>${pn}교시</b> `;
-            label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)` : `${p.to==='absent'?'불참':(p.to==='early'?'중간퇴실':'해제')} 변경`;
-            meta = isNoShow ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
+            label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)`
+                  : isLate ? `<b style="color:#9A5B00">지각</b> (${fmt(p.inAt ? new Date(p.inAt) : null)} 입실${p.lateMin ? ` · ${p.lateMin}분 늦음` : ''})`
+                  : `${p.to==='absent'?'불참':(p.to==='early'?'중간퇴실':'해제')} 변경`;
+            meta = (isNoShow || isLate) ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
           }
           rows.push(`
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid #F3F4F6;${p.canceled?'opacity:0.5':''}">
@@ -11251,7 +11256,7 @@ window.renderStudyroomBoard = renderStudyroomBoard;
 
 // ── 오늘 벌점 현황판 (대시보드) ──
 // 한 카드에 모으는 것: (1)오늘 날짜 벌점 — 늦은 변경 1점, 학생앱이 저장 시점에 실시간 기록,
-// (2)무단결석 2점 — 오늘분은 교시 종료 직후 assessNoShowIntraday가 바로 올리고, 어제분은
+// (2)무단결석 2점·지각 1점 — 오늘분은 교시 종료 직후 assessNoShowIntraday가 바로 올리고, 어제분은
 //    오늘 새벽 assessNoShowPenalties가 확정한 잔여분(밤새 앱이 꺼져 있었던 교시 등)이 올라온다.
 // (어제 늦은 변경은 어제 이미 이 카드에 떴으므로 다시 올리지 않는다.)
 // date 단일 필드 'in' 쿼리라 복합 색인이 필요 없다.
@@ -11367,13 +11372,15 @@ function renderPenaltyBoard() {
     Object.keys(d.periods || {}).sort((a, b) => a - b).forEach(pn => {
       const p = d.periods[pn];
       const isNoShow = p.type === 'noshow';
-      if (!isToday && !isNoShow) return;
+      const isLate = p.type === 'late';
+      // 어제 것은 자동 판정분(무단결석·지각)만 올린다 — 어제 늦은 변경은 어제 이미 떴다.
+      if (!isToday && !(isNoShow || isLate)) return;
       const sk = String(d.seatKey || d.seat || '?');
       const st = (byStudent[sk] = byStudent[sk] || { name: d.name || '?', seatKey: sk, pts: 0, items: [] });
       const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
       if (p.canceled) return; // 취소된 벌점은 현황판에서 숨김 (복구는 벌점 모달의 '취소된 항목 보기')
       st.pts += pts; totalPts += pts;
-      st.items.push({ docId: d.id, pn, pts, isNoShow, isManual: p.type === 'manual', isWeekly: p.type === 'weekly_short', isToday, reason: p.reason || '', to: p.to });
+      st.items.push({ docId: d.id, pn, pts, isNoShow, isLate, lateMin: p.lateMin, isManual: p.type === 'manual', isWeekly: p.type === 'weekly_short', isToday, reason: p.reason || '', to: p.to });
     });
   });
 
@@ -11397,7 +11404,9 @@ function renderPenaltyBoard() {
           ? `🤖 ${it.reason || '주간 목표순공 미달'}`
           : it.isNoShow
             ? `${it.isToday ? '' : '어제 '}${it.pn}교시 무단결석`
-            : `${it.pn}교시 ${it.to === 'absent' ? '불참' : (it.to === 'early' ? '중간퇴실' : '해제')} 변경${it.reason ? ` · ${it.reason}` : ''}`;
+            : it.isLate
+              ? `${it.isToday ? '' : '어제 '}${it.pn}교시 지각${it.lateMin ? ` ${it.lateMin}분` : ''}`
+              : `${it.pn}교시 ${it.to === 'absent' ? '불참' : (it.to === 'early' ? '중간퇴실' : '해제')} 변경${it.reason ? ` · ${it.reason}` : ''}`;
       return `<button onclick="window.penaltyBoardToggle('${it.docId}','${it.pn}')"
         title="클릭하면 이 벌점을 취소합니다"
         style="background:${bg};color:${fg};border:1px solid transparent;border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer">${label} <b>${it.pts}점</b></button>`;
@@ -12419,9 +12428,10 @@ async function _commitOneReservation(_db, res) {
 // 수동 적용/테스트용 노출 (2시 리셋 자동 호출과 별개로 관리자가 즉시 커밋 가능)
 window.commitPendingSeatsIfDue = commitPendingSeatsIfDue;
 
-// ── 무단결석 벌점 판정 (교시당 2점) ──
+// ── 무단결석(교시당 2점) · 지각(교시당 1점) 벌점 판정 ──
 // 규칙: 그날 유효 스케줄(고정 base + 당일변경 daily_reports)에서 출석 예정(o/△)이던 교시에
-//       입실 세션(attendance_sessions)이 전혀 겹치지 않으면 교시당 2점.
+//       입실 세션(attendance_sessions)이 전혀 겹치지 않으면 교시당 2점,
+//       겹치기는 하지만 교시 시작 유예(LATE_GRACE_MIN)를 넘겨 들어왔으면 교시당 1점(지각).
 //       스케줄을 x로 바꿔 둔 교시(늦은 변경 벌점 1점 대상 포함)는 '통보한 것'이므로 제외된다.
 // 판정 시점: 그 날짜 D의 11교시(익일 01:00)가 끝난 D+1 02:00 이후. 앱 시작 시 + 새벽 2시
 //            리셋 때 지난 3일치를 소급 판정한다(키오스크가 꺼져 있던 날 보완).
@@ -12447,6 +12457,18 @@ const NOSHOW_PERIOD_TIMES = {
 // 그래서 중간입실 신고 교시에 한해 교시 종료 후 이 시간 안에 입실하면 출석으로 인정한다.
 // 정시 참여(o) 교시에는 적용하지 않는다 — 늦게 온 것과 처음부터 짧게 신고한 것은 다르다.
 const NOSHOW_MID_ENTRY_GRACE_MIN = 20;
+
+// ── 지각 벌점 (교시당 1점) ──
+// 규칙: 출석 예정 교시에 오기는 왔지만 교시 시작 후 LATE_GRACE_MIN 을 넘겨 처음 들어온 경우.
+//   · 이미 재실 중이면(이전 교시부터 이어 앉아 있으면) 입실 시각이 교시 시작보다 앞이라 지각이 아니다.
+//   · 외출 후 복귀가 늦은 경우는 새 세션의 입실 시각으로 판정되므로 지각이 된다.
+//   · 중간입실(△) 신고 교시는 늦게 온다고 미리 알린 것이므로 제외한다(무단결석 유예와 같은 취지).
+//   · 아예 안 온 교시는 지각이 아니라 무단결석 2점 — 둘은 배타이고 한 교시에 하나만 붙는다.
+// 판정 시점·멱등성은 무단결석과 완전히 동일하다(같은 루프에서 같이 계산해 같은 문서에 병합).
+const LATE_POINTS = 1;
+const LATE_GRACE_MIN = 5;
+// 지각 판정 시작일 — 이 날짜(포함)부터 부과한다. 그 이전 날짜는 규정에 없던 기간이라 소급하지 않는다.
+const LATE_FROM = '2026-07-28';
 
 async function _noshowDoneMap() {
   try {
@@ -12578,7 +12600,7 @@ async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
       const name = st.name || bd.name;
       if (window.isTestStudent && window.isTestStudent(name)) return; // 테스트 계정 — 무단결석 벌점 없음
       const sessions = sessByName[name] || [];
-      const missed = [];
+      const missed = [], late = [];
       parsed.periods.forEach(pn => { // periods = o + △(중간입실) + ▽(중간퇴실) 모두 '출석 예정'
         if (onlyPeriods && !onlyPeriods.has(pn)) return; // 당일 부분판정 — 끝난 교시만
         // 방학 평일 오전(1~6교시) 무단결석 판정은 2026-07-22부터 적용(사용자 확정).
@@ -12588,12 +12610,23 @@ async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
         const w = NOSHOW_PERIOD_TIMES[pn];
         if (!w) return;
         // 중간입실(△) 신고 교시는 교시 종료 후 유예까지 인정 — 위 NOSHOW_MID_ENTRY_GRACE_MIN 참고
-        const grace = (parsed.partials && parsed.partials.has(pn)) ? NOSHOW_MID_ENTRY_GRACE_MIN : 0;
+        const isPartial = !!(parsed.partials && parsed.partials.has(pn));
+        const grace = isPartial ? NOSHOW_MID_ENTRY_GRACE_MIN : 0;
         const ps = d0 + w[0] * 60000, pe = d0 + (w[1] + grace) * 60000;
-        const came = sessions.some(iv => iv[0] < pe && iv[1] > ps); // 일부라도 겹치면 출석
-        if (!came) missed.push(pn);
+        const hit = sessions.filter(iv => iv[0] < pe && iv[1] > ps); // 일부라도 겹치면 출석
+        if (!hit.length) { missed.push(pn); return; }
+        // 지각 — 교시 시작 유예를 넘겨 처음 들어온 경우. 겹치는 세션 중 가장 이른 입실 시각으로 본다
+        // (교시 시작 전부터 재실 중이면 그 값이 ps보다 작아 자동으로 지각이 아니게 된다).
+        if (dIso >= LATE_FROM && !isPartial) {
+          const firstIn = Math.min(...hit.map(iv => iv[0]));
+          if (firstIn > ps + LATE_GRACE_MIN * 60000) {
+            // 실제 입실 시각과 늦은 분을 함께 남긴다 — changedAt은 '판정한 시각'이라
+            // 학생·학부모에게 근거를 보여줄 수 없다(새벽 2시로 찍힌다).
+            late.push({ pn, inAt: firstIn, lateMin: Math.round((firstIn - ps) / 60000) });
+          }
+        }
       });
-      if (missed.length) writes.push(_writeNoShowPenalty(dIso, dayName, seatKey, bd.seat || st.seat, name, missed));
+      if (missed.length || late.length) writes.push(_writeAttendPenalty(dIso, dayName, seatKey, bd.seat || st.seat, name, missed, late));
     });
     await Promise.all(writes);
     if (onlyPeriods) {
@@ -12611,8 +12644,8 @@ async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
 }
 
 // penalties/{날짜}_{좌석} 문서에 교시별 병합 — 기존 늦은변경(1점) 기록과 같은 형식을 공유하며
-// type:'noshow', points:2 로 구분한다. 관리자가 취소(canceled)한 교시는 재판정에도 보존된다.
-async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
+// type:'noshow'(2점) · type:'late'(1점)로 구분한다. 관리자가 취소(canceled)한 교시는 재판정에도 보존된다.
+async function _writeAttendPenalty(dIso, dayName, seatKey, seat, name, missed, late) {
   const ref = doc(db, 'penalties', `${dIso}_${seatKey}`);
   let prevData = {};
   try {
@@ -12631,6 +12664,18 @@ async function _writeNoShowPenalty(dIso, dayName, seatKey, seat, name, missed) {
       type: 'noshow', points: NOSHOW_POINTS,
       from: 'attend', to: 'noshow', reason: '',
       changedAt: at, canceled: !!(prev && prev.canceled)
+    };
+  });
+  (late || []).forEach(it => {
+    const k = String(it.pn);
+    // 이미 무엇이든 기록된 교시는 건드리지 않는다 — 무단결석(2점)·늦은변경(1점)이 지각보다 무겁거나
+    // 같은 사안이고, 이미 부과된 지각을 재판정에서 다시 쓰면 관리자의 취소가 풀린다.
+    if (periods[k]) return;
+    periods[k] = {
+      type: 'late', points: LATE_POINTS,
+      from: 'attend', to: 'late', reason: '',
+      inAt: it.inAt, lateMin: it.lateMin,   // 실제 입실 시각 · 늦은 분 (표시·이의제기 근거)
+      changedAt: at, canceled: false
     };
   });
   await setDoc(ref, {
