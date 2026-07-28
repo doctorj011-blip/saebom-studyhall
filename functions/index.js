@@ -1255,6 +1255,80 @@ exports.plannerBatchNoon = onSchedule(
   async () => { try { await runPlannerBatchSubmit('noon'); } catch (e) { logger.error('plannerBatchNoon', { message: e.message }); } }
 );
 
+// ══════════════════════════════════════
+// 📓🚨 검사 누락 감시 — 예약 배치가 통째로 실패해도 스스로 메운다
+// ══════════════════════════════════════
+// 2026-07-29에 밤 배치가 OOM으로 죽어 하루치 37명 검사가 전부 날아갔는데, 아무도 몰랐다.
+// 원장이 다음 날 특정 학생 코멘트가 없는 걸 보고서야 발견했다. OOM 자체는 막았지만
+// (조각 접수), '조용히 실패하는 구조'가 남아 있으면 다른 원인으로 같은 일이 반복된다.
+// 그래서 마감이 다 지난 뒤 한 번 더 대조해서 ①메우고 ②상태를 밖에서 보이게 남긴다.
+//
+//  · 13:10 / 16:10 KST — 지각 마감(12:00)과 낮 배치(12:10)가 끝난 뒤라 그날 제출은 확정
+//  · 'running'에 3시간 넘게 멈춘 리뷰는 풀어 준다 — 안 풀면 재접수 대상에서 영구 제외된다
+//    (runPlannerBatchSubmit이 running을 건너뛰므로)
+//  · 결과는 settings/planner_ai_health 에 남긴다. settings는 규칙상 read 개방이라
+//    관리앱이 규칙 수정 없이 바로 읽을 수 있다(rules 배포는 수동이라 피하고 싶은 작업).
+const PLANNER_STUCK_MS = 3 * 3600 * 1000;
+
+async function runPlannerAiWatchdog(label) {
+  const ds = kstYesterday();
+  const healthRef = db.collection('settings').doc('planner_ai_health');
+
+  const [psnap, rsnap] = await Promise.all([
+    db.collection('planners').where('date', '==', ds).get(),
+    db.collection('planner_ai_reviews').where('date', '==', ds).get()
+  ]);
+
+  const status = {};   // 좌석 → 검사 상태
+  const startedAt = {};
+  rsnap.forEach(d => { const v = d.data() || {}; if (v.seat) { status[String(v.seat)] = v.status || null; startedAt[String(v.seat)] = v.startedAt || null; } });
+
+  // ① 멈춘 'running' 해제 — 접수는 됐는데 결과가 끝내 안 온 건
+  let unstuck = 0;
+  for (const seat of Object.keys(status)) {
+    if (status[seat] !== 'running') continue;
+    const t = Date.parse(startedAt[seat] || '');
+    if (!t || Date.now() - t < PLANNER_STUCK_MS) continue;
+    await db.collection('planner_ai_reviews').doc(`${seat}_${ds}`).set(
+      { status: 'error', error: '검사가 시간 안에 끝나지 않았습니다 — 다시 접수합니다', doneAt: new Date().toISOString() },
+      { merge: true });
+    status[seat] = 'error';
+    unstuck++;
+  }
+
+  // ② 제출했는데 done이 아닌 학생 세기
+  const seats = [];
+  psnap.forEach(d => { const v = d.data() || {}; if (v.seat && v.url) seats.push(String(v.seat)); });
+  const missing = seats.filter(s => status[s] !== 'done');
+
+  // ③ 먼저 기록한다 — 아래 재접수가 또 죽더라도 "몇 건이 비었는지"는 남아야 한다
+  const base = {
+    date: ds, checkedAt: new Date().toISOString(), label,
+    submitted: seats.length, done: seats.length - missing.length,
+    missing: missing.length, missingSeats: missing.slice(0, 60), unstuck
+  };
+  await healthRef.set(base);
+
+  if (!missing.length) {
+    logger.info('plannerAiWatchdog 이상 없음', { ds, label, submitted: seats.length });
+    return;
+  }
+
+  logger.warn('plannerAiWatchdog 검사 누락 — 재접수', { ds, label, missing: missing.length, unstuck, seats: missing });
+  try {
+    await runPlannerBatchSubmit(`watchdog-${label}`);
+    await healthRef.set({ ...base, resubmittedAt: new Date().toISOString() });
+  } catch (e) {
+    await healthRef.set({ ...base, resubmitError: e.message });
+    logger.error('plannerAiWatchdog 재접수 실패', { ds, label, message: e.message });
+  }
+}
+
+exports.plannerAiWatchdog = onSchedule(
+  { schedule: '10 13,16 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '2GiB', maxInstances: 1 },
+  async () => { try { await runPlannerAiWatchdog('watchdog'); } catch (e) { logger.error('plannerAiWatchdog', { message: e.message }); } }
+);
+
 // 수거 — pending 배치가 있을 때만 API를 조회하므로 평상시 비용은 Firestore 읽기 1회뿐
 exports.plannerBatchCollect = onSchedule(
   { schedule: 'every 10 minutes', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, maxInstances: 1 },
