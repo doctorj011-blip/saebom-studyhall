@@ -379,6 +379,26 @@ body.director-device .tab-btn.director-only{display:inline-block}
 /* 위치수정 모드: 좌석을 absolute로 자유 배치 */
 .fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
 
+/* ── 조교 스티키 메모 (배치도 여백의 포스트잇) ──
+   넓은 화면: 입실현황 패널(240px+14px) 왼쪽 여백에 absolute로 붙는다.
+   좁은 화면(여백이 사라지는 폭): 배치도 위에 일반 블록으로 흐르게 해 좌석 그리드를 가리지 않는다. */
+#fp-sticky-panel{position:absolute;top:0;right:268px;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:5}
+.fp-sticky-head{display:flex;align-items:center;justify-content:space-between;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:6px 8px;flex-shrink:0}
+#fp-sticky-list{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding-bottom:4px}
+.fp-sticky-note{position:relative;border-radius:2px 10px 10px 10px;padding:8px 10px 7px;font-size:12px;line-height:1.5;color:#44381B;background:#FEF9C3;border:1px solid #FDE047;box-shadow:0 2px 6px rgba(120,90,0,0.10);word-break:break-word;white-space:pre-wrap}
+.fp-sticky-note.imp{background:#FEE2E2;border-color:#FCA5A5;color:#5F1A1A;box-shadow:0 2px 8px rgba(180,30,30,0.14)}
+.fp-sticky-note .st-meta{display:flex;align-items:center;justify-content:space-between;margin-top:5px;font-size:10px;color:#A18F5C}
+.fp-sticky-note.imp .st-meta{color:#C08484}
+.fp-sticky-note .st-btns{display:flex;gap:6px}
+.fp-sticky-note .st-btns button{background:none;border:none;cursor:pointer;font-size:11px;padding:0;line-height:1;opacity:0.65}
+.fp-sticky-note .st-btns button:hover{opacity:1}
+.fp-sticky-imp-tag{display:inline-block;background:#DC2626;color:#fff;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 5px;margin-right:4px;vertical-align:1px}
+.fp-sticky-collapsed-note{font-size:10.5px;color:#B8A576;text-align:center;padding:2px 0}
+@media (max-width:1500px){
+  #fp-sticky-panel{position:static;width:auto;max-height:none;margin-bottom:10px}
+  #fp-sticky-list{max-height:200px}
+}
+
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes ctxIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
 .admin-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a1a;color:#fff;padding:12px 22px;border-radius:24px;font-size:13px;font-weight:500;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;white-space:nowrap}
@@ -973,6 +993,20 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   </div>
 
   <div style="position:relative">
+    <!-- 조교 스티키 메모 : 배치도 오른쪽 여백(좌석 그리드와 입실현황 패널 사이)에 붙는 포스트잇.
+         접기를 해도 '중요' 메모는 항상 보인다. 기기 간 공유(students/_meta_sticky_memos). -->
+    <div id="fp-sticky-panel">
+      <div class="fp-sticky-head">
+        <span style="font-size:12px;font-weight:800;color:#92400E">🗒️ 조교 메모 <span id="fp-sticky-count" style="font-size:11px;font-weight:600;color:#B8A576"></span></span>
+        <span style="display:flex;gap:4px">
+          <button onclick="openStickyAdd()" title="메모 추가" style="padding:2px 8px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer">＋</button>
+          <button id="fp-sticky-collapse-btn" onclick="toggleStickyCollapse()" title="일반 메모 접기/펼치기" style="padding:2px 8px;background:#FDE68A;color:#92400E;border:none;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer">접기</button>
+        </span>
+      </div>
+      <div id="fp-sticky-form" style="display:none"></div>
+      <div id="fp-sticky-list"></div>
+    </div>
+
     <div class="fp-drag-wrap" id="fp-drag-wrap" style="margin-right:254px;min-width:0">
       <div class="fp-room" id="fp-room" style="position:relative"></div>
     </div>
@@ -5302,6 +5336,109 @@ window._applyRemoteScheduleClasses = function(arr){
     try{ buildScheduleTable(currentDay); }catch(e){}
   }
 };
+
+// ══ 조교 스티키 메모 (배치도 여백 포스트잇) ═══════════════════════
+// 메모 = {id, text, imp(중요 여부), ts(작성 ms)}. 배열 전체를 students/_meta_sticky_memos
+// 한 문서로 공유한다(반 블록과 동일 패턴 — 저장은 모듈의 _syncStickyMemos, 수신은
+// _applyRemoteStickyMemos). 접기 상태는 기기별(localStorage)이고, ★'중요' 메모는
+// 접어도 항상 보인다 — 조교가 반드시 봐야 하는 메모가 접기에 묻히지 않게.
+window.STICKY_MEMOS = [];
+const STICKY_COLLAPSE_KEY = 'saebom_fp_sticky_collapsed';
+function _stickyCollapsed(){ try{ return localStorage.getItem(STICKY_COLLAPSE_KEY)==='1'; }catch(e){ return false; } }
+const _stickyEsc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function _stickyWhen(ts){
+  if(!ts) return '';
+  const d=new Date(ts);
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function renderStickyMemos(){
+  const list=document.getElementById('fp-sticky-list');
+  const cnt=document.getElementById('fp-sticky-count');
+  const colBtn=document.getElementById('fp-sticky-collapse-btn');
+  if(!list) return;
+  const memos=[...window.STICKY_MEMOS].sort((a,b)=>(b.imp?1:0)-(a.imp?1:0) || (b.ts||0)-(a.ts||0));
+  const collapsed=_stickyCollapsed();
+  const normals=memos.filter(m=>!m.imp);
+  if(cnt) cnt.textContent = memos.length ? `${memos.length}` : '';
+  if(colBtn) colBtn.textContent = collapsed ? `펼치기${normals.length?` (${normals.length})`:''}` : '접기';
+  const shown = collapsed ? memos.filter(m=>m.imp) : memos;
+  let html = shown.map(m=>`<div class="fp-sticky-note${m.imp?' imp':''}">
+      ${m.imp?'<span class="fp-sticky-imp-tag">중요</span>':''}${_stickyEsc(m.text)}
+      <div class="st-meta"><span>${_stickyWhen(m.ts)}</span>
+        <span class="st-btns">
+          <button onclick="toggleStickyImp('${m.id}')" title="${m.imp?'중요 해제':'중요로 표시'}">${m.imp?'📌':'📍'}</button>
+          <button onclick="deleteStickyMemo('${m.id}')" title="삭제">✕</button>
+        </span></div>
+    </div>`).join('');
+  if(collapsed && normals.length) html += `<div class="fp-sticky-collapsed-note">일반 메모 ${normals.length}개 접힘</div>`;
+  if(!memos.length && !collapsed) html = '<div class="fp-sticky-collapsed-note">메모 없음 — ＋로 추가</div>';
+  list.innerHTML = html;
+}
+
+window.toggleStickyCollapse = function(){
+  try{ localStorage.setItem(STICKY_COLLAPSE_KEY, _stickyCollapsed()?'0':'1'); }catch(e){}
+  renderStickyMemos();
+};
+
+// 추가 폼 — 패널 안 인라인, 한 번에 하나만
+window.openStickyAdd = function(){
+  const box=document.getElementById('fp-sticky-form');
+  if(!box) return;
+  if(box.style.display!=='none'){ box.style.display='none'; box.innerHTML=''; return; }
+  box.style.display='';
+  box.innerHTML = `<div style="background:#FFFBEB;border:1.5px dashed #FCD34D;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px">
+    <textarea id="fp-sticky-input" rows="3" placeholder="메모 내용" style="width:100%;box-sizing:border-box;border:1px solid #FDE68A;border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;resize:none;outline:none;background:#fff"></textarea>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#B91C1C;font-weight:700;cursor:pointer">
+      <input type="checkbox" id="fp-sticky-imp" style="accent-color:#DC2626">📌 중요 (접어도 항상 표시)
+    </label>
+    <div style="display:flex;gap:6px">
+      <button onclick="openStickyAdd()" style="flex:1;padding:6px;background:#fff;color:#92400E;border:1px solid #FDE68A;border-radius:8px;font-size:11.5px;font-weight:600;cursor:pointer">취소</button>
+      <button onclick="saveStickyMemo()" style="flex:2;padding:6px;background:#D97706;color:#fff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">붙이기</button>
+    </div>
+  </div>`;
+  setTimeout(()=>document.getElementById('fp-sticky-input')?.focus(),50);
+};
+
+window.saveStickyMemo = function(){
+  const inp=document.getElementById('fp-sticky-input');
+  const text=(inp?.value||'').trim();
+  if(!text){ showAdminToast('⚠️ 메모 내용을 입력하세요'); return; }
+  const imp=!!document.getElementById('fp-sticky-imp')?.checked;
+  window.STICKY_MEMOS.push({ id:'m'+Date.now()+Math.random().toString(36).slice(2,6), text, imp, ts:Date.now() });
+  const box=document.getElementById('fp-sticky-form');
+  if(box){ box.style.display='none'; box.innerHTML=''; }
+  _persistStickyMemos(); renderStickyMemos();
+};
+
+window.deleteStickyMemo = function(id){
+  const m=window.STICKY_MEMOS.find(x=>x.id===id);
+  if(!m) return;
+  if(!confirm(`이 메모를 삭제할까요?\n\n"${m.text.slice(0,60)}${m.text.length>60?'…':''}"`)) return;
+  window.STICKY_MEMOS = window.STICKY_MEMOS.filter(x=>x.id!==id);
+  _persistStickyMemos(); renderStickyMemos();
+};
+
+window.toggleStickyImp = function(id){
+  const m=window.STICKY_MEMOS.find(x=>x.id===id);
+  if(!m) return;
+  m.imp=!m.imp;
+  _persistStickyMemos(); renderStickyMemos();
+};
+
+function _persistStickyMemos(){
+  try{ if(window._syncStickyMemos) window._syncStickyMemos(window.STICKY_MEMOS); }
+  catch(e){ console.error('스티키 메모 저장 실패:',e); }
+}
+
+// 다른 기기(또는 시작 시 Firebase)에서 받은 메모 반영 — 모듈 스크립트가 호출
+window._applyRemoteStickyMemos = function(arr){
+  if(!Array.isArray(arr)) return;
+  window.STICKY_MEMOS = arr;
+  renderStickyMemos();
+};
+window.renderStickyMemos = renderStickyMemos;
+renderStickyMemos();   // Firestore 로드 전 빈 패널 골격(접기 버튼 라벨 포함) 표시
 
 function buildDayTabs(){
   document.getElementById('day-tabs').innerHTML=DAYS.map(d=>
@@ -10395,6 +10532,12 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
+      if (change.doc.id === '_meta_sticky_memos') {
+        if (change.type !== 'removed' && window._applyRemoteStickyMemos) {
+          window._applyRemoteStickyMemos(change.doc.data().memos || []);
+        }
+        return;
+      }
       // 그 외 메타 문서(새벽 리셋 잠금 등)는 학생이 아니므로 무시
       if (change.doc.id.startsWith('_meta_')) return;
       // 첫 스냅샷의 added는 getDocs가 이미 로드했으므로 무시.
@@ -10677,6 +10820,24 @@ window._syncScheduleClasses = async function(classesArr) {
     const snap = await getDoc(doc(db, 'students', '_meta_schedule_classes'));
     if (snap.exists() && window._applyRemoteScheduleClasses) window._applyRemoteScheduleClasses(snap.data().classes || []);
   } catch(e) { console.error('반(수업 블록) 로드 실패:', e); }
+})();
+
+// ── 조교 스티키 메모 기기 간 동기화 (students/_meta_sticky_memos) ──
+// classic 스크립트(renderStickyMemos 쪽)에서 추가/삭제/중요토글 시 이 함수를 호출한다.
+window._syncStickyMemos = async function(memosArr) {
+  try {
+    await setDoc(doc(db, 'students', '_meta_sticky_memos'),
+      { name: '', memos: Array.isArray(memosArr) ? memosArr : [], updatedAt: Date.now() }, { merge: true });
+  } catch(e) { console.error('스티키 메모 동기화 실패:', e); }
+};
+
+// 시작 시 저장된 메모 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
+(async function _loadStickyMemosOnce() {
+  try {
+    const snap = await getDoc(doc(db, 'students', '_meta_sticky_memos'));
+    if (snap.exists() && window._applyRemoteStickyMemos) window._applyRemoteStickyMemos(snap.data().memos || []);
+    else if (window.renderStickyMemos) window.renderStickyMemos();
+  } catch(e) { console.error('스티키 메모 로드 실패:', e); }
 })();
 
 // ── 방학 시간표(settings/vacation_mode) 실시간 구독 ──
