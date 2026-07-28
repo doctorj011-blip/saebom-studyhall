@@ -122,6 +122,25 @@
   .status-side { text-align: right; flex-shrink: 0; }
   .status-side-v { font-size: 15px; font-weight: 800; color: var(--brand); white-space: nowrap; }
   .status-side-l { font-size: 10px; color: var(--text-soft); margin-top: 2px; }
+
+  /* ── 홈 타일 메뉴 (학생앱 퀵카드와 같은 구조) ── */
+  /* 학부모는 며칠에 한 번 열기 때문에 라벨만으로는 어느 메뉴에 뭐가 있는지 기억하지 못한다.
+     아이콘 + 한 줄 설명이 붙은 큰 타일이 하단 탭 아이콘보다 훨씬 잘 읽힌다. */
+  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .home-tile { position: relative; overflow: hidden; text-align: left; font-family: inherit;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card); padding: 15px 14px 13px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 4px; transition: transform 0.14s ease; }
+  .home-tile:active { transform: scale(0.96); }
+  .home-tile-ico { font-size: 24px; line-height: 1; }
+  .home-tile-t { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; }
+  .home-tile-s { font-size: 11px; color: var(--text-soft); line-height: 1.4; }
+  .home-tile-bg { position: absolute; right: -8px; bottom: -12px; font-size: 56px; opacity: 0.06;
+    pointer-events: none; user-select: none; }
+  .home-tile-badge { position: absolute; top: 10px; right: 10px; border-radius: 20px;
+    font-size: 10px; font-weight: 800; padding: 2px 7px; background: #FEE2E2; color: #B91C1C; }
+  .home-tile-badge.soft { background: #FEF3C7; color: #92400E; }
+  @media (min-width: 520px) { .home-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; } }
   .stat-card { text-align: center; padding: 14px 10px; background: var(--brand-50); border-radius: var(--radius-md); }
   .stat-label { font-size: 11px; color: var(--text-soft); margin-bottom: 4px; font-weight: 600; }
   .stat-value { font-size: 23px; font-weight: 800; color: var(--brand); }
@@ -517,13 +536,19 @@ body{
   </div>
 
   <div class="app-content">
-    <!-- 지금 입실해 있는지 — 탭과 무관하게 앱을 열자마자 보이도록 탭 바깥에 둔다 -->
-    <div id="live-status"></div>
     <!-- SEE EYES 보호자(법정대리인) 동의 요청 배너 -->
     <div id="see-consent-req" style="display:none;margin-bottom:14px"></div>
+
+    <!-- 홈 탭 — 앱을 열면 처음 보이는 화면 -->
+    <div id="tab-home">
+      <!-- 지금 입실해 있는지: 학부모가 앱을 여는 가장 큰 이유라 홈 맨 위에 둔다 -->
+      <div id="live-status"></div>
+      <div class="home-grid" id="home-tiles"></div>
+    </div>
+
     <!-- 현황 탭 -->
     <!-- 공지 탭 -->
-    <div id="tab-notice">
+    <div id="tab-notice" style="display:none">
       <!-- 식사시간 외출 알림 수신 조사 — 미응답이면 눈에 띄게, 응답 후엔 접힌 한 줄로 -->
       <div id="meal-away-optin"></div>
       <div id="notice-list"></div>
@@ -597,12 +622,12 @@ body{
   </div>
 
   <div class="app-tabs">
-    <button class="app-tab active" onclick="showTab('notice',this)"><i class="ti ti-bell"></i>공지</button>
-    <button class="app-tab" onclick="showTab('status',this)"><i class="ti ti-chart-bar"></i>학습현황</button>
-    <button class="app-tab" onclick="showTab('events',this)"><i class="ti ti-trophy"></i>이벤트</button>
-    <button class="app-tab" onclick="showTab('schedule',this)"><i class="ti ti-calendar-event"></i>스케줄</button>
-    <button class="app-tab" onclick="showTab('score',this)"><i class="ti ti-scale"></i>상벌점</button>
-    <button class="app-tab" onclick="showTab('planner',this)"><i class="ti ti-notebook"></i>플래너</button>
+    <!-- 자주 여는 4개만 탭에 남기고 전체 메뉴는 홈 타일에 둔다(이벤트·플래너는 타일로 진입). -->
+    <button class="app-tab active" data-tab="home" onclick="openSection('home')"><i class="ti ti-home"></i>홈</button>
+    <button class="app-tab" data-tab="notice" onclick="openSection('notice')"><i class="ti ti-bell"></i>공지</button>
+    <button class="app-tab" data-tab="status" onclick="openSection('status')"><i class="ti ti-chart-bar"></i>학습현황</button>
+    <button class="app-tab" data-tab="schedule" onclick="openSection('schedule')"><i class="ti ti-calendar-event"></i>스케줄</button>
+    <button class="app-tab" data-tab="score" onclick="openSection('score')"><i class="ti ti-scale"></i>상벌점</button>
   </div>
 </div>
 
@@ -664,7 +689,7 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
 const MONTHS = _recentMonths(6);
 
 let currentStudent = null;
-let currentTab = 'notice';
+let currentTab = 'home';
 let _statusUnsub = null;
 
 // KST(한국) 기준 오늘 날짜 반환 (UTC+9)
@@ -672,22 +697,49 @@ function getTodayKST() {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+const PARENT_TABS = ['home','notice','status','events','schedule','score','planner'];
+
 function showTab(id, btn) {
   if (window.saTrack) saTrack('tab_view', { app_name: '학부모앱', tab_name: id });
+  if (id === 'home') renderHomeTiles();
   if (id === 'planner') loadParentPlanner();
   if (id === 'notice') loadNotices();
   if (id === 'status') { buildMyStats(); paInit(); }
   if (id === 'events') buildEvents();
   // 상벌점 탭: 열 때마다 다시 읽는다(선생님이 방금 준 상점·벌점도 바로 보이게)
   if (id === 'score') { loadParentMerits(); loadParentPenalties(); }
-  ['notice','status','events','schedule','score','planner'].forEach(t => {
-    document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
+  PARENT_TABS.forEach(t => {
+    const el = document.getElementById('tab-'+t);
+    if (el) el.style.display = t===id ? 'block' : 'none';
   });
+  // 홈 타일로 연 화면(이벤트·플래너)은 하단 탭에 대응 버튼이 없다 → 그때는 아무것도 활성화하지 않는다
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
+  const navBtn = btn || document.querySelector(`.app-tab[data-tab="${id}"]`);
+  if (navBtn && navBtn.classList) navBtn.classList.add('active');
   currentTab = id;
+  window.scrollTo(0, 0);
   try { sessionStorage.setItem('saebom_parent_tab', id); } catch(e) {}
 }
+
+// 화면 열기 — 홈 위에 한 칸만 얹어 둔다. 그래야 안드로이드 뒤로가기가 앱을 닫지 않고 홈으로 온다.
+// 화면끼리 이동할 때는 replaceState 라서 뒤로가기를 여러 번 눌러야 하는 일도 없다(항상 한 번 = 홈).
+let _navPushed = false;
+function openSection(id) {
+  if (id === 'home') {
+    if (_navPushed) { history.back(); return; }   // popstate 가 홈으로 돌려놓는다
+    showTab('home');
+    return;
+  }
+  try {
+    if (_navPushed) history.replaceState({ parentTab: id }, '');
+    else { history.pushState({ parentTab: id }, ''); _navPushed = true; }
+  } catch(e) {}
+  showTab(id);
+}
+window.addEventListener('popstate', () => {
+  _navPushed = false;
+  if (currentStudent && currentTab !== 'home') showTab('home');
+});
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -795,6 +847,7 @@ function enterApp() {
   document.getElementById('hdr-name').textContent = currentStudent.name;
   document.getElementById('hdr-sub').textContent = (currentStudent.seat || '-') + '번 · 새봄 면학관';
   renderLiveStatus();   // 세션 구독이 붙기 전에도 '불러오는 중' 카드를 먼저 띄운다
+  showTab('home');      // 로그아웃 전에 열려 있던 화면이 남지 않게 항상 홈에서 시작
   loadAllData();
   if (window.seeReqStart) window.seeReqStart();
 }
@@ -808,6 +861,9 @@ function doLogout() {
   _sessDocs = []; TODAY_SESS = []; OPEN_SESS = null; _sessLoadFailed = false;
   _awayOpen.clear(); _awayLogCache = {};
   Object.keys(_awaySegs).forEach(k => delete _awaySegs[k]);   // 다른 자녀로 로그인해도 앞 학생 외출이 남지 않게
+  HOME_SCORE_NEW = null; _homeScoreParts.merit = null; _homeScoreParts.pen = null;
+  const _tiles = document.getElementById('home-tiles'); if (_tiles) _tiles.innerHTML = '';
+  currentTab = 'home';
   const _live = document.getElementById('live-status'); if (_live) _live.innerHTML = '';
   ACTUAL_MIN = null; ACTUAL_IN = null;
   paReset();                       // 다른 자녀로 로그인해도 앞 학생 분석이 남지 않게
@@ -873,6 +929,7 @@ async function loadAllData() {
 function renderMealAwayOptIn() {
   const el = document.getElementById('meal-away-optin');
   if (!el || !currentStudent) return;
+  renderHomeTiles();   // 홈 공지 타일의 '설정' 배지는 이 응답 여부를 따라간다
   const v = (typeof currentStudent.mealAwaySms === 'boolean') ? currentStudent.mealAwaySms : null;
   if (v === null) {
     el.innerHTML = `
@@ -952,6 +1009,7 @@ async function loadParentPenalties() {
       });
     });
     window._pCycPen = monthTotal; renderParentOffsetNote();
+    _homeScoreNew('pen', rows.filter(r => _within7d(r.date)).length);
     if (!rows.length) { el.innerHTML = ''; renderParentScoreEmpty(); return; }
     const list = rows.slice(0, 15).map(r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
@@ -1007,6 +1065,7 @@ async function loadParentMerits() {
       rows.push({ date: doc.date, day: doc.day, pts: pts, reason: doc.reason });
     });
     window._pCycMerit = monthTotal; renderParentOffsetNote();
+    _homeScoreNew('merit', rows.filter(r => _within7d(r.date)).length);
     if (!rows.length) { el.innerHTML = ''; renderParentScoreEmpty(); return; }
     const list = rows.slice(0, 15).map(r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(5,150,105,0.14)">
@@ -1270,6 +1329,58 @@ function renderLiveStatus() {
     </div>`;
 }
 
+// ══════════════════════════════════════════
+//  홈 타일 메뉴
+// ══════════════════════════════════════════
+// 최근 7일 안에 받은 상·벌점 건수 — 홈 상벌점 타일 배지. 상벌점 조회가 채운다(null=아직 모름).
+let HOME_SCORE_NEW = null;
+const _homeScoreParts = { merit: null, pen: null };
+function _homeScoreNew(kind, n) {
+  _homeScoreParts[kind] = n;
+  const m = _homeScoreParts.merit, p = _homeScoreParts.pen;
+  HOME_SCORE_NEW = (m == null && p == null) ? null : ((m || 0) + (p || 0)) || null;
+  renderHomeTiles();
+}
+function _within7d(dateStr) {
+  const m = String(dateStr || '').match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
+  if (!m) return false;
+  const d = new Date(+m[1], +m[2] - 1, +m[3]);
+  return (Date.now() - d.getTime()) <= 7 * 86400000 && d.getTime() <= Date.now() + 86400000;
+}
+
+function renderHomeTiles() {
+  const el = document.getElementById('home-tiles');
+  if (!el || !currentStudent) return;
+  const nowTs = Date.now();
+  const todayKey = _dkey(new Date());
+  const todayMin = TODAY_SESS
+    .filter(s => _normDkey(s.inDate) === todayKey)
+    .reduce((a, s) => a + _sessionDocMin(s, nowTs), 0);
+
+  // 알림 수신 조사에 아직 응답하지 않았으면 공지 타일로 유도한다(그 카드가 공지 탭 맨 위에 있다)
+  const needsOptIn = currentStudent.mealAwaySms == null;
+
+  const tile = (id, ico, title, sub, badge) => `
+    <button class="home-tile" onclick="openSection('${id}')">
+      ${badge ? `<span class="home-tile-badge ${badge.soft ? 'soft' : ''}">${badge.text}</span>` : ''}
+      <span class="home-tile-ico">${ico}</span>
+      <span class="home-tile-t">${title}</span>
+      <span class="home-tile-s">${sub}</span>
+      <span class="home-tile-bg" aria-hidden="true">${ico}</span>
+    </button>`;
+
+  el.innerHTML =
+    tile('notice', '📢', '공지사항', '면학관 안내 사항',
+         needsOptIn ? { text: '설정', soft: true } : null) +
+    tile('status', '📊', '학습현황',
+         ACTUAL_MIN ? `오늘 ${_fmtDur(todayMin)} 공부` : '입·퇴실 기록 · 공부시간') +
+    tile('score', '⚖️', '상점 · 벌점', '이번 주기 내역 · 상쇄',
+         HOME_SCORE_NEW ? { text: `+${HOME_SCORE_NEW}` } : null) +
+    tile('schedule', '📅', '스케줄', '주간 시간표 · 변경 내역') +
+    tile('planner', '📓', '플래너', '검사 결과 · 선생님 코멘트') +
+    tile('events', '🎉', '이벤트', '끝.끝.아 · 퀘스트 달성률');
+}
+
 // ── 외출 구간 펼쳐보기 (누를 때만 조회) ──
 // 세션 문서에는 외출 '합계'(awayMs)만 남아서 몇 시에 몇 번 나갔는지는 감사기록 checkin_logs 를 봐야 한다.
 // 항상 읽으면 학부모앱 읽기 건수가 크게 늘어나므로, 눌렀을 때 그 세션의 입실일 하루치만 읽고 캐시한다.
@@ -1436,8 +1547,9 @@ function _streakDays() { // 매월 1일부터 집계
 function setStatsView(v) { statsView = v; buildMyStats(); }
 
 function buildMyStats() {
-  renderLiveStatus();      // 상단 실시간 상태(탭 바깥)와 오늘 입·퇴실 기록도 같은 데이터로 함께 갱신
+  renderLiveStatus();      // 홈 상단 실시간 상태·오늘 입·퇴실 기록·홈 타일도 같은 데이터로 함께 갱신
   renderTodayRecord();
+  renderHomeTiles();
   const el = document.getElementById('mystats-content');
   if (!el || !currentStudent) return;
   const s = currentStudent;
@@ -2605,10 +2717,10 @@ document.addEventListener('visibilitychange', function() {
     if (saved) {
       currentStudent = JSON.parse(saved);
       enterApp();
+      // 마지막에 보던 화면으로 복귀 — openSection 으로 열어야 뒤로가기가 홈으로 온다
       const tab = sessionStorage.getItem('saebom_parent_tab');
-      if (tab && tab !== 'notice') {
-        const btn = document.querySelector(`.app-tab[onclick*="${tab}"]`);
-        if (btn) setTimeout(() => showTab(tab, btn), 300);
+      if (tab && tab !== 'home' && PARENT_TABS.includes(tab)) {
+        setTimeout(() => openSection(tab), 300);
       }
     } else {
       document.getElementById('login-screen').style.display = 'flex';
