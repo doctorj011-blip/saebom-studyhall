@@ -564,6 +564,12 @@ exports.acOnCommand = onDocumentCreated(
 // ══════════════════════════════════════════════════════════════
 const Anthropic = require('@anthropic-ai/sdk');
 const sharp = require('sharp');            // 플래너 사진 축소용(API 10MB 상한 대응)
+// sharp(libvips)는 기본으로 디코드 결과를 캐시하고 CPU 수만큼 스레드를 띄운다. 플래너 사진은
+// 한 장이 4000x3000(=원본 픽셀만 36MB)이라 그 캐시가 그대로 RSS로 쌓여 컨테이너가 죽는다
+// (2026-07-29 02:11 plannerBatchNight OOM). 사진을 한 장씩 순차 처리하는 용도라 캐시는 이득이
+// 없으니 끈다. 이 두 줄은 지우지 말 것.
+sharp.cache(false);
+sharp.concurrency(1);
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
 const PLANNER_AI_MODEL = 'claude-opus-4-8';
@@ -1066,19 +1072,31 @@ async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, 
   // 사람이 교정한 수치(statsFixed)는 재검사가 와도 지우지 않는다 — 교정은 사진을 직접
   // 본 사람의 확정값이라, 새 판독이 그걸 덮으면 학습분석이 도로 틀어진다.
   // (문서 전체를 교체(set)하는 방식은 유지하되 이 필드만 이월한다)
-  let keep = {};
+  let keep = {}, prevComment = '';
   try {
     const prev = await reviewRef.get();
     if (prev.exists) {
       const p = prev.data() || {};
       if (p.statsFixed) keep = { statsFixed: p.statsFixed, statsFixedAt: p.statsFixedAt || null };
+      prevComment = p.comment || '';
     }
   } catch (e) { logger.warn('statsFixed 이월 실패 — 새 결과만 기록', { seat, date: dateStr, message: e.message }); }
+
+  // 스키마가 comment를 required로 걸어도 모델이 빈 문자열을 내는 일이 실제로 있다
+  // (2026-07-29 확인: 실산출 253건 중 5건, 전부 실시간 경로). 이걸 그대로 쓰면 문서를 통째
+  // 교체(set)하는 구조라 **직전에 잘 나온 코멘트가 빈 값으로 지워진다** — 재검사를 눌렀다가
+  // 코멘트만 사라지는 게 이 경로다(백도윤 7/27 실사례). 새 코멘트가 비면 이전 것을 남긴다.
+  let comment = (out.comment || '').trim();
+  if (!comment) {
+    comment = prevComment;
+    logger.warn('코멘트가 비어서 나옴', { seat, date: dateStr, 이전코멘트유지: !!prevComment, output: msg.usage.output_tokens });
+  }
+
   await reviewRef.set({
     ...keep,
     seat, date: dateStr, name: name || null,
     status: 'done',
-    quality: out.quality, summary: out.summary, comment: out.comment,
+    quality: out.quality, summary: out.summary, comment,
     stats: reconcilePlannerStats(out.stats, { seat, date: dateStr }) || null,
     model,
     // cacheRead 가 0 이면 캐싱이 안 먹고 있는 것(프롬프트가 바뀌었거나 캐시가 식은 뒤 온 요청)
@@ -1172,43 +1190,68 @@ async function runPlannerBatchSubmit(label) {
   }
   if (!targets.length) { logger.info('plannerBatch 접수 — 새 대상 없음', { ds, label }); return; }
 
-  // 사진 전처리는 메모리를 아끼려 한 명씩 순차 처리(실시간 검사의 OOM 사고 교훈)
-  const requests = [], names = {};
-  for (const v of targets) {
-    try {
-      const content = await buildPlannerAiUserContent(v.seat, ds, v.name, v.url);
-      const cid = `${v.seat}_${ds}`;
-      requests.push({ custom_id: cid, params: plannerAiRequestParams(model, sysPrompt, content) });
-      names[cid] = v.name || null;
-    } catch (e) {
-      logger.warn('plannerBatch 대상 준비 실패 — 건너뜀', { seat: v.seat, ds, message: e.message });
-    }
-  }
-  if (!requests.length) return;
-
+  // ★한 번에 몇 명씩 묶어 보내는가 = 이 함수의 메모리 상한이다.
+  // 사진 한 장을 준비하면 base64 문자열이 요청 배열에 그대로 남는데(플래너 1건당 확대본까지
+  // 3장, 1~2MB), 전원을 한 배치에 담으면 그 배열 + 그걸 직렬화한 요청 본문이 동시에 메모리에
+  // 올라간다. 2026-07-29 02:11 실제로 37명분에서 1034MiB로 OOM이 나 그날 검사가 통째로 날아갔다
+  // (43명이던 전날은 아슬아슬하게 통과 — 한계선에서 돌고 있었던 것).
+  // → 조각으로 나눠 "준비 → 전송 → 배열 비우기"를 반복한다. 학생 수가 늘어도 상한이 안 오른다.
+  // 수거(plannerBatchCollect)는 원래 pending 배치를 여러 건 처리하므로 그대로 동작한다.
+  const CHUNK = 10;
   const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
-  const batch = await client.messages.batches.create({ requests });
+  let submitted = 0, skipped = 0;
+  const batchIds = [];
 
-  await db.collection('planner_ai_batches').doc(batch.id).set({
-    status: 'pending', date: ds, label, model, count: requests.length, names,
-    createdAt: new Date().toISOString()
-  });
-  // 관리앱에 '검사 중' 표시
-  await Promise.all(requests.map(r => {
-    const cut = r.custom_id.lastIndexOf('_');
-    return db.collection('planner_ai_reviews').doc(r.custom_id).set(
-      { seat: r.custom_id.slice(0, cut), date: ds, name: names[r.custom_id], status: 'running', startedAt: new Date().toISOString() },
-      { merge: true });
-  }));
-  logger.info('plannerBatch 접수 완료', { ds, label, batchId: batch.id, count: requests.length });
+  for (let i = 0; i < targets.length; i += CHUNK) {
+    let requests = [], names = {};
+    for (const v of targets.slice(i, i + CHUNK)) {
+      try {
+        const content = await buildPlannerAiUserContent(v.seat, ds, v.name, v.url);
+        const cid = `${v.seat}_${ds}`;
+        requests.push({ custom_id: cid, params: plannerAiRequestParams(model, sysPrompt, content) });
+        names[cid] = v.name || null;
+      } catch (e) {
+        skipped++;
+        logger.warn('plannerBatch 대상 준비 실패 — 건너뜀', { seat: v.seat, ds, message: e.message });
+      }
+    }
+    if (!requests.length) continue;
+
+    try {
+      const batch = await client.messages.batches.create({ requests });
+      await db.collection('planner_ai_batches').doc(batch.id).set({
+        status: 'pending', date: ds, label, model, count: requests.length, names,
+        createdAt: new Date().toISOString()
+      });
+      // 관리앱에 '검사 중' 표시
+      await Promise.all(requests.map(r => {
+        const cut = r.custom_id.lastIndexOf('_');
+        return db.collection('planner_ai_reviews').doc(r.custom_id).set(
+          { seat: r.custom_id.slice(0, cut), date: ds, name: names[r.custom_id], status: 'running', startedAt: new Date().toISOString() },
+          { merge: true });
+      }));
+      submitted += requests.length;
+      batchIds.push(batch.id);
+    } catch (e) {
+      // 한 조각이 실패해도 나머지는 보낸다 — 전원이 통째로 날아가는 게 제일 나쁘다
+      skipped += requests.length;
+      logger.error('plannerBatch 조각 전송 실패', { ds, label, from: i, count: requests.length, message: e.message });
+    }
+    requests = null; names = null;   // 다음 조각을 준비하기 전에 사진 데이터를 놓아준다
+  }
+
+  if (!submitted) { logger.error('plannerBatch 접수 실패 — 보낸 건이 없음', { ds, label, skipped }); return; }
+  logger.info('plannerBatch 접수 완료', { ds, label, count: submitted, skipped, batches: batchIds.length, batchIds });
 }
 
+// memory 2GiB — 조각내기(CHUNK)로 상한은 잡았지만, 사진 한 장 디코드가 수십 MB라 여유가
+// 필요하다. 1GiB에서 OOM으로 하루치 검사가 통째로 날아간 적이 있다(2026-07-29).
 exports.plannerBatchNight = onSchedule(
-  { schedule: '10 2 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '1GiB', maxInstances: 1 },
+  { schedule: '10 2 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '2GiB', maxInstances: 1 },
   async () => { try { await runPlannerBatchSubmit('night'); } catch (e) { logger.error('plannerBatchNight', { message: e.message }); } }
 );
 exports.plannerBatchNoon = onSchedule(
-  { schedule: '10 12 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '1GiB', maxInstances: 1 },
+  { schedule: '10 12 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 540, memory: '2GiB', maxInstances: 1 },
   async () => { try { await runPlannerBatchSubmit('noon'); } catch (e) { logger.error('plannerBatchNoon', { message: e.message }); } }
 );
 
@@ -1216,7 +1259,8 @@ exports.plannerBatchNoon = onSchedule(
 exports.plannerBatchCollect = onSchedule(
   { schedule: 'every 10 minutes', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, maxInstances: 1 },
   async () => {
-    const pend = await db.collection('planner_ai_batches').where('status', '==', 'pending').limit(5).get();
+    // 접수가 조각으로 나뉘므로(CHUNK=10) 하루치가 여러 건이다 — 한 번에 다 수거되게 넉넉히
+    const pend = await db.collection('planner_ai_batches').where('status', '==', 'pending').limit(20).get();
     if (pend.empty) return;
     const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
     for (const bdoc of pend.docs) {
