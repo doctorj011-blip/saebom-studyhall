@@ -126,16 +126,35 @@
   /* ── 홈 타일 메뉴 (학생앱 퀵카드와 같은 구조) ── */
   /* 학부모는 며칠에 한 번 열기 때문에 라벨만으로는 어느 메뉴에 뭐가 있는지 기억하지 못한다.
      아이콘 + 한 줄 설명이 붙은 큰 타일이 하단 탭 아이콘보다 훨씬 잘 읽힌다. */
-  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .home-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+  /* 학생앱 퀵카드와 같은 톤 — 파스텔 그라데이션 + 흰 아이콘 칩 + 순차 등장 */
   .home-tile { position: relative; overflow: hidden; text-align: left; font-family: inherit;
-    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-card); padding: 15px 14px 13px; cursor: pointer;
-    display: flex; flex-direction: column; gap: 4px; transition: transform 0.14s ease; }
-  .home-tile:active { transform: scale(0.96); }
-  .home-tile-ico { font-size: 24px; line-height: 1; }
-  .home-tile-t { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.2px; }
-  .home-tile-s { font-size: 11px; color: var(--text-soft); line-height: 1.4; }
-  .home-tile-bg { position: absolute; right: -8px; bottom: -12px; font-size: 56px; opacity: 0.06;
+    min-height: 134px; border: 1px solid rgba(255,255,255,.72); border-radius: 20px;
+    box-shadow: 0 14px 26px rgba(28,28,30,.09), inset 0 1px 0 rgba(255,255,255,.82);
+    padding: 14px 14px 13px; cursor: pointer; display: flex; flex-direction: column; gap: 5px;
+    transition: transform .32s cubic-bezier(.2,.8,.2,1), box-shadow .32s ease, filter .32s ease; }
+  .home-tile:nth-child(1) { background: linear-gradient(145deg,#EAF4FF,#D3E9FF) }
+  .home-tile:nth-child(2) { background: linear-gradient(145deg,#FFF1F4,#FFDDE6) }
+  .home-tile:nth-child(3) { background: linear-gradient(145deg,#EFFFF6,#D7F9E3) }
+  .home-tile:nth-child(4) { background: linear-gradient(145deg,#F0EEFF,#E0DCFF) }
+  .home-tile:nth-child(5) { background: linear-gradient(145deg,#FFF7E7,#FFEBBF) }
+  .home-tile:nth-child(6) { background: linear-gradient(145deg,#EAFBFF,#CCF3FA) }
+  /* 등장 애니메이션은 홈에 들어올 때 한 번만. 타일은 1분마다 다시 그려지므로(오늘 공부시간이
+     흐른다) 여기에 그냥 걸어 두면 보고 있는 중에 카드가 계속 다시 튀어오른다. */
+  .home-tile.arrive { animation: cardArrival .6s cubic-bezier(.2,.82,.25,1) both; }
+  .home-tile.arrive:nth-child(2) { animation-delay:.05s }
+  .home-tile.arrive:nth-child(3) { animation-delay:.10s }
+  .home-tile.arrive:nth-child(4) { animation-delay:.15s }
+  .home-tile.arrive:nth-child(5) { animation-delay:.20s }
+  .home-tile.arrive:nth-child(6) { animation-delay:.25s }
+  .home-tile:hover { transform: translateY(-5px) scale(1.012); box-shadow: 0 22px 38px rgba(28,28,30,.16); filter: saturate(1.12); }
+  .home-tile:active { transform: scale(.955); box-shadow: 0 5px 12px rgba(28,28,30,.10); }
+  .home-tile-ico { width: 44px; height: 44px; border-radius: 16px; background: rgba(255,255,255,.72);
+    border: 1px solid rgba(255,255,255,.90); box-shadow: 0 7px 15px rgba(28,28,30,.10), inset 0 1px 0 #fff;
+    display: flex; align-items: center; justify-content: center; font-size: 23px; line-height: 1; }
+  .home-tile-t { font-size: 14.5px; font-weight: 800; color: #2A2A30; letter-spacing: -0.3px; margin-top: 2px; }
+  .home-tile-s { font-size: 11px; color: #5F5F6B; line-height: 1.4; }
+  .home-tile-bg { position: absolute; right: -10px; bottom: -14px; font-size: 58px; opacity: 0.10;
     pointer-events: none; user-select: none; }
   .home-tile-badge { position: absolute; top: 10px; right: 10px; border-radius: 20px;
     font-size: 10px; font-weight: 800; padding: 2px 7px; background: #FEE2E2; color: #B91C1C; }
@@ -492,6 +511,18 @@ body{
 @keyframes riseIn{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
 @keyframes headerDrop{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:translateY(0)}}
 @keyframes butterflyHover{0%,100%{transform:translate3d(0,1px,0) rotate(-8deg)}50%{transform:translate3d(2px,-4px,0) rotate(-3deg)}}
+@keyframes cardArrival{from{opacity:0;transform:translateY(20px) scale(.94)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* 화면 전환 — 탭·타일로 화면을 바꿀 때마다 내용이 아래에서 올라온다(학생앱과 같은 결) */
+.tab-view{animation:riseIn .34s cubic-bezier(.2,.8,.2,1) both}
+/* 상단 뒤로가기 — 홈이 아닌 화면에서만 아바타 자리에 나타난다 */
+.hdr-back{width:38px;height:38px;flex:0 0 auto;border-radius:50%;cursor:pointer;
+  display:none;align-items:center;justify-content:center;font-size:19px;
+  background:var(--surface);border:1px solid var(--border);color:var(--text2);
+  transition:transform .18s cubic-bezier(.2,.8,.2,1),background .18s ease}
+.hdr-back.on{display:flex;animation:headerDrop .3s cubic-bezier(.2,.8,.2,1) both}
+.hdr-back:active{transform:scale(.88);background:var(--border)}
+.hdr-title-swap{animation:fadeIn .3s ease both}
 @media (prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
 </style>
 </head>
@@ -526,6 +557,8 @@ body{
 <div id="app-screen">
   <div class="app-header">
     <div class="hdr-top">
+      <!-- 홈에서는 아바타, 다른 화면에서는 뒤로가기가 같은 자리에 온다(레이아웃이 튀지 않게) -->
+      <button class="hdr-back" id="hdr-back" onclick="openSection('home')" aria-label="홈으로"><i class="ti ti-arrow-left"></i></button>
       <div class="hdr-avatar" id="hdr-avatar">👤</div>
       <div class="hdr-info">
         <div class="hdr-name" id="hdr-name"></div>
@@ -701,7 +734,7 @@ const PARENT_TABS = ['home','notice','status','events','schedule','score','plann
 
 function showTab(id, btn) {
   if (window.saTrack) saTrack('tab_view', { app_name: '학부모앱', tab_name: id });
-  if (id === 'home') renderHomeTiles();
+  if (id === 'home') { _homeArrive = true; _homeTilesHtml = ''; renderHomeTiles(); }  // 홈에 들어올 때마다 카드가 순서대로 올라온다
   if (id === 'planner') loadParentPlanner();
   if (id === 'notice') loadNotices();
   if (id === 'status') { buildMyStats(); paInit(); }
@@ -710,8 +743,12 @@ function showTab(id, btn) {
   if (id === 'score') { loadParentMerits(); loadParentPenalties(); }
   PARENT_TABS.forEach(t => {
     const el = document.getElementById('tab-'+t);
-    if (el) el.style.display = t===id ? 'block' : 'none';
+    if (!el) return;
+    el.style.display = t===id ? 'block' : 'none';
+    // 화면 전환 애니메이션 재시작 — 클래스만 다시 붙이면 브라우저가 이미 끝난 것으로 보고 넘어간다
+    if (t === id) { el.classList.remove('tab-view'); void el.offsetWidth; el.classList.add('tab-view'); }
   });
+  renderHeaderFor(id);
   // 홈 타일로 연 화면(이벤트·플래너)은 하단 탭에 대응 버튼이 없다 → 그때는 아무것도 활성화하지 않는다
   document.querySelectorAll('.app-tab').forEach(b => b.classList.remove('active'));
   const navBtn = btn || document.querySelector(`.app-tab[data-tab="${id}"]`);
@@ -719,6 +756,27 @@ function showTab(id, btn) {
   currentTab = id;
   window.scrollTo(0, 0);
   try { sessionStorage.setItem('saebom_parent_tab', id); } catch(e) {}
+}
+
+// 상단 헤더 — 홈이면 자녀 이름, 다른 화면이면 뒤로가기 + 화면 이름
+const SECTION_NAMES = {
+  notice: '공지사항', status: '학습현황', score: '상점 · 벌점',
+  schedule: '스케줄', planner: '플래너', events: '이벤트'
+};
+function renderHeaderFor(id) {
+  const back = document.getElementById('hdr-back');
+  const avatar = document.getElementById('hdr-avatar');
+  const name = document.getElementById('hdr-name');
+  const sub = document.getElementById('hdr-sub');
+  if (!back || !avatar || !name || !sub || !currentStudent) return;
+  const isHome = (id === 'home');
+  back.classList.toggle('on', !isHome);
+  avatar.style.display = isHome ? '' : 'none';
+  name.textContent = isHome ? currentStudent.name : (SECTION_NAMES[id] || id);
+  sub.textContent = isHome
+    ? (currentStudent.seat || '-') + '번 · 새봄 면학관'
+    : currentStudent.name + ' · ' + (currentStudent.seat || '-') + '번';
+  [name, sub].forEach(el => { el.classList.remove('hdr-title-swap'); void el.offsetWidth; el.classList.add('hdr-title-swap'); });
 }
 
 // 화면 열기 — 홈 위에 한 칸만 얹어 둔다. 그래야 안드로이드 뒤로가기가 앱을 닫지 않고 홈으로 온다.
@@ -863,6 +921,7 @@ function doLogout() {
   Object.keys(_awaySegs).forEach(k => delete _awaySegs[k]);   // 다른 자녀로 로그인해도 앞 학생 외출이 남지 않게
   HOME_SCORE_NEW = null; _homeScoreParts.merit = null; _homeScoreParts.pen = null;
   const _tiles = document.getElementById('home-tiles'); if (_tiles) _tiles.innerHTML = '';
+  _homeTilesHtml = ''; _homeArrive = true;
   currentTab = 'home';
   const _live = document.getElementById('live-status'); if (_live) _live.innerHTML = '';
   ACTUAL_MIN = null; ACTUAL_IN = null;
@@ -1348,6 +1407,11 @@ function _within7d(dateStr) {
   return (Date.now() - d.getTime()) <= 7 * 86400000 && d.getTime() <= Date.now() + 86400000;
 }
 
+// 홈에 막 들어왔을 때 한 번만 카드가 순서대로 올라오게 하는 플래그
+let _homeArrive = true;
+let _homeArriveT = null;
+let _homeTilesHtml = '';
+
 function renderHomeTiles() {
   const el = document.getElementById('home-tiles');
   if (!el || !currentStudent) return;
@@ -1369,7 +1433,7 @@ function renderHomeTiles() {
       <span class="home-tile-bg" aria-hidden="true">${ico}</span>
     </button>`;
 
-  el.innerHTML =
+  const html =
     tile('notice', '📢', '공지사항', '면학관 안내 사항',
          needsOptIn ? { text: '설정', soft: true } : null) +
     tile('status', '📊', '학습현황',
@@ -1379,6 +1443,17 @@ function renderHomeTiles() {
     tile('schedule', '📅', '스케줄', '주간 시간표 · 변경 내역') +
     tile('planner', '📓', '플래너', '검사 결과 · 선생님 코멘트') +
     tile('events', '🎉', '이벤트', '끝.끝.아 · 퀘스트 달성률');
+  if (html === _homeTilesHtml) return;   // 바뀐 게 없으면 다시 그리지 않는다(누르는 중에 DOM이 갈리지 않게)
+  _homeTilesHtml = html;
+  el.innerHTML = html;
+  // 홈에 들어온 직후(≈0.8초) 안에 다시 그려지는 경우까지는 등장 애니를 유지한다.
+  // 홈 진입 직후 알림 설정·상벌점 조회가 끝나면서 한 번 더 그려지는데, 그때 애니가 잘리면
+  // 카드가 반쯤 올라오다 멈춘 것처럼 보인다.
+  if (_homeArrive) {
+    [...el.children].forEach(c => c.classList.add('arrive'));
+    clearTimeout(_homeArriveT);
+    _homeArriveT = setTimeout(() => { _homeArrive = false; }, 800);
+  }
 }
 
 // ── 외출 구간 펼쳐보기 (누를 때만 조회) ──
