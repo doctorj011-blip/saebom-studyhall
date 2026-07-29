@@ -875,12 +875,28 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div id="alert-list"></div>
   </div>
   <div class="dashboard-grid">
-    <div class="card" id="present-board-section">
-      <div class="card-title" style="justify-content:space-between">
-        <span onclick="togglePresentBoard()" style="cursor:pointer;user-select:none" title="입실 현황 접기/펼치기"><i id="present-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</span>
-        <span id="present-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+    <!-- 1열: 현재 입실 현황 + 그 바로 아래 태블릿 보관함을 세로로 묶는다(2열 묶음과 동일 패턴) -->
+    <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
+      <div class="card" id="present-board-section">
+        <div class="card-title" style="justify-content:space-between">
+          <span onclick="togglePresentBoard()" style="cursor:pointer;user-select:none" title="입실 현황 접기/펼치기"><i id="present-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> <i class="ti ti-users" style="font-size:14px" aria-hidden="true"></i> 현재 입실 현황</span>
+          <span id="present-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+        </div>
+        <div id="present-board-body"><div id="present-list"></div></div>
       </div>
-      <div id="present-board-body"><div id="present-list"></div></div>
+      <!-- 태블릿 보관함 — 학부모 동의(tabletConsent) 학생만 대상. 신청 대기→지급→수거 관리.
+           하단 동의 현황 줄을 누르면 동의/거절/미응답 명단 팝업. 접기 지원(tablet-board, 기본 펼침) -->
+      <div class="card" id="tablet-mgmt-section" style="display:none">
+        <div class="card-title" style="justify-content:space-between">
+          <span onclick="toggleTabletBoard()" style="cursor:pointer;user-select:none" title="태블릿 보관함 접기/펼치기"><i id="tablet-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546C4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> 📱 태블릿 보관함</span>
+          <span id="tablet-mgmt-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+        </div>
+        <div id="tablet-board-body">
+          <div id="tablet-mgmt-list"></div>
+          <div id="tablet-consent-status" onclick="showTabletConsentList()"
+            style="margin-top:8px;padding:7px 10px;background:#F8FAFF;border:1px dashed #C7D2FE;border-radius:8px;font-size:11.5px;color:#4A3FA8;cursor:pointer" title="누르면 동의/거절/미응답 명단이 열립니다"></div>
+        </div>
+      </div>
     </div>
     <!-- 2열: 교시별 출석 현황 + 그 바로 아래 스터디룸 신청 현황을 세로로 묶는다(왼쪽 입실현황 높이와 무관하게 붙게) -->
     <div style="display:flex;flex-direction:column;gap:12px;min-width:0">
@@ -953,18 +969,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="studyroom-overflow-list"></div>
     </div>
-    <!-- 태블릿 보관함 — 학부모 동의(tabletConsent) 학생만 대상. 신청 대기→지급→수거 관리.
-         하단 동의 현황 줄을 누르면 동의/거절/미응답 명단 팝업(원장이 동의 접수를 확인하는 곳) -->
-    <div class="card" id="tablet-mgmt-section" style="display:none">
-      <div class="card-title" style="justify-content:space-between">
-        <span>📱 태블릿 보관함</span>
-        <span id="tablet-mgmt-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
-      </div>
-      <div id="tablet-mgmt-list"></div>
-      <div id="tablet-consent-status" onclick="showTabletConsentList()"
-        style="margin-top:8px;padding:7px 10px;background:#F8FAFF;border:1px dashed #C7D2FE;border-radius:8px;font-size:11.5px;color:#4A3FA8;cursor:pointer" title="누르면 동의/거절/미응답 명단이 열립니다"></div>
-    </div>
-
     <!-- 스터디룸 신청 알림 -->
     <div class="card" id="studyroom-req-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -11702,7 +11706,7 @@ function _boardSetCollapsed(id, collapsed) {
 // 벌점·스케줄변동은 접힘, 입실현황·교시별출석은 펼침)
 function restoreBoardCollapse() {
   const st = _boardCollapseState();
-  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board', 'seatcam-board', 'studyroom-board'].forEach(id => {
+  ['penalty-board', 'schedvar-board', 'awaymiss-board', 'present-board', 'period-board', 'seatcam-board', 'studyroom-board', 'tablet-board'].forEach(id => {
     if (st[id] != null) _boardApplyCollapse(id, !!st[id]);
   });
 }
@@ -11737,6 +11741,12 @@ window.toggleStudyroomBoard = function() {
   const body = document.getElementById('studyroom-board-body');
   if (!body) return;
   _boardSetCollapsed('studyroom-board', body.style.display !== 'none');
+};
+// 태블릿 보관함 접기/펼치기 (기본값=펼침, 마지막 상태 기억)
+window.toggleTabletBoard = function() {
+  const body = document.getElementById('tablet-board-body');
+  if (!body) return;
+  _boardSetCollapsed('tablet-board', body.style.display !== 'none');
 };
 
 function _penIsoDate(ts) {
