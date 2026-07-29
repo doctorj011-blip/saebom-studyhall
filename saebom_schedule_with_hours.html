@@ -11305,7 +11305,10 @@ window.renderTabletMgmt = function(){
   const nOut=rows.filter(r=>r.st==='out').length;
   if(sum) sum.textContent=`신청 ${nReq} · 사용 중 ${nOut} · 보관 ${rows.length-nReq-nOut}`;
   list.innerHTML=rows.map(({s,k,e,st,overdue})=>{
-    let bg='#F9FAFB', bd='#E5E7EB', badge='<span style="font-size:10.5px;font-weight:700;color:#6B7280">📦 보관 중</span>', btns='';
+    // 보관 중: 학생이 기기가 없어(폰 수거·탭 보관) 앱 신청이 불가한 경우가 기본 동선 —
+    // 학생이 조교에게 말로 요청하면 여기서 종료 시각만 정해 바로 지급한다.
+    let bg='#F9FAFB', bd='#E5E7EB', badge='<span style="font-size:10.5px;font-weight:700;color:#6B7280">📦 보관 중</span>',
+        btns=`<button onclick="tabletDirectIssue('${k}')" style="padding:6px 12px;background:#fff;color:#2D7A4F;border:1px solid #A7D9BC;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">📤 바로 지급</button>`;
     if(st==='requested'){
       bg='#FFF7ED'; bd='#FDBA74';
       badge=`<span style="font-size:10.5px;font-weight:800;color:#EA580C">⏳ 신청 ${e.start}~${e.end}</span>`;
@@ -11347,6 +11350,45 @@ window.tabletReject = async function(k){
 window.tabletReturn = async function(k){
   try{ await _tabletWrite(k,{status:'stored', returnedAt:Date.now()}); if(window.showAdminToast) showAdminToast('📥 태블릿 수거 완료'); }
   catch(e){ alert('수거 처리 실패: '+e.message); }
+};
+
+// 바로 지급 — 학생이 조교에게 '말로' 신청하는 기본 동선용(폰은 수거함, 탭은 보관 중이라
+// 학생 손에 기기가 없어 앱 신청이 불가한 상황). 종료 시각만 정하면 즉시 지급 처리된다.
+// 학생앱 상태 카드도 같은 문서를 보므로 '사용 중 ~HH:MM'으로 그대로 따라온다.
+window.tabletDirectIssue = function(k){
+  const s=(window.STUDENTS||[]).find(x=>String(x.seat).replace(/[^0-9]/g,'')===k);
+  document.getElementById('tablet-issue-pop')?.remove();   // 작은 입력 팝업은 한 번에 하나만
+  const d=new Date(Date.now()+60*60000);
+  const defEnd=`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const ov=document.createElement('div');
+  ov.id='tablet-issue-pop';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9998;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML=`<div style="background:#fff;border-radius:14px;padding:18px 20px;width:min(92vw,320px);box-shadow:0 8px 40px rgba(0,0,0,0.2)">
+    <div style="font-size:14px;font-weight:800;color:#1E1B4B;margin-bottom:4px">📤 태블릿 바로 지급</div>
+    <div style="font-size:12px;color:#4A3FA8;margin-bottom:12px">${s?s.name:''} <span style="color:#888">${s?s.seat+'번':''}</span> · 지금부터 사용</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px">
+      <input type="time" id="tablet-issue-end" value="${defEnd}" style="flex:1;border:1.5px solid #C7D2FE;border-radius:8px;padding:8px;font-size:14px;font-family:inherit">
+      <span style="font-size:13px;color:#6B7280">까지</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="document.getElementById('tablet-issue-pop').remove()" style="flex:1;padding:9px;background:#F3F4F6;color:#374151;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer">취소</button>
+      <button onclick="tabletDirectIssueGo('${k}')" style="flex:2;padding:9px;background:#2D7A4F;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer">지급</button>
+    </div>
+  </div>`;
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+  setTimeout(()=>document.getElementById('tablet-issue-end')?.focus(),50);
+};
+window.tabletDirectIssueGo = async function(k){
+  const end=document.getElementById('tablet-issue-end')?.value;
+  const now=_tabletNowHM();
+  if(!end){ alert('종료 시각을 선택하세요.'); return; }
+  if(end<=now){ alert('종료 시각이 지금보다 늦어야 합니다.'); return; }
+  document.getElementById('tablet-issue-pop')?.remove();
+  try{
+    await _tabletWrite(k,{status:'out', start:now, end, requestedAt:null, issuedAt:Date.now(), returnedAt:null});
+    if(window.showAdminToast) showAdminToast(`📤 태블릿 지급 (~${end}) — 시간이 끝나면 수거하세요`);
+  } catch(e){ alert('지급 처리 실패: '+e.message); }
 };
 
 // 원격 반영 + 새 신청 알림(키오스크 제외). students onSnapshot의 _meta_tablet 핸들러가 호출.
