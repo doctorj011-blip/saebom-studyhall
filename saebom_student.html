@@ -5093,12 +5093,18 @@ let _tabletPrevStatus = null; // 거절 감지용(requested → stored로 지급
 
 function _tabletSeatKey(){ return String(currentStudent?.seat||'').replace(/[^0-9]/g,''); }
 
-// 동의 학생이면 홈 카드 표시 + 상태 실시간 구독 (refreshStudentData에서 호출)
+// 홈 카드 상태 갱신 (refreshStudentData에서 호출).
+// 희망자에 한해 운영하는 제도라 카드는 모두에게 보여 존재를 알리되,
+// 미동의 학생은 '🔒 학부모 동의 필요' 잠금 상태 — 누르면 동의 경로 안내가 뜬다.
 function updateTabletCard() {
   const card = document.getElementById('home-tablet-card');
   if (!card) return;
   const on = currentStudent?.tabletConsent === true;
-  card.style.display = on ? '' : 'none';
+  card.style.display = '';
+  if (!on) {
+    const sub = document.getElementById('home-tablet-sub');
+    if (sub) sub.textContent = '🔒 학부모 동의 후 이용 가능';
+  }
   if (on && !_tabletUnsub) _tabletListen();
   if (!on && _tabletUnsub) { try{_tabletUnsub();}catch(e){} _tabletUnsub=null; }
 }
@@ -5134,8 +5140,32 @@ function _tabletNowHM(offMin){
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
 }
 
+// 미동의 학생용 안내 — 제도 소개 + 동의 경로. 희망자가 학부모께 동의를 요청하게 유도한다.
+function showTabletConsentInfo(){
+  document.getElementById('tablet-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'tablet-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML = `<div style="background:var(--card);border-radius:var(--r-lg);padding:22px 20px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)">
+    <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px">📱 태블릿 보관 관리란?</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px">
+      태블릿을 면학관에 보관해 두고, <b>사용 시간을 신청하면 그 시간에만</b> 받아서 쓰는 제도예요.
+      학습용 사용은 그대로 하면서 불필요한 사용을 줄여 줍니다.
+    </div>
+    <div style="font-size:12.5px;color:#B45309;background:var(--amber-pale,#FEF3C7);border-radius:var(--r-md);padding:10px 12px;line-height:1.6;margin-bottom:14px">
+      🔒 <b>희망자만 참여</b>하는 제도라 <b>학부모님 동의</b>가 먼저 필요해요.<br>
+      참여하고 싶다면 학부모님께 말씀드려 <b>학부모앱 → 공지 탭 → '태블릿 보관 관리'</b>에서
+      동의해 달라고 부탁해 주세요. 동의가 완료되면 이 카드가 바로 열립니다.
+    </div>
+    <button onclick="document.getElementById('tablet-overlay').remove()"
+      style="width:100%;padding:11px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">확인</button>
+  </div>`;
+  ov.addEventListener('click', e => { if (e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
+
 window.openTabletOverlay = function(){
-  if (currentStudent?.tabletConsent !== true) { showToast('학부모님 동의 후 이용할 수 있어요.'); return; }
+  if (currentStudent?.tabletConsent !== true) { showTabletConsentInfo(); return; }
   document.getElementById('tablet-overlay')?.remove();
   const ov = document.createElement('div');
   ov.id = 'tablet-overlay';
