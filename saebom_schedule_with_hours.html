@@ -953,13 +953,16 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="studyroom-overflow-list"></div>
     </div>
-    <!-- 태블릿 보관함 — 학부모 동의(tabletConsent) 학생만 대상. 신청 대기→지급→수거 관리 -->
+    <!-- 태블릿 보관함 — 학부모 동의(tabletConsent) 학생만 대상. 신청 대기→지급→수거 관리.
+         하단 동의 현황 줄을 누르면 동의/거절/미응답 명단 팝업(원장이 동의 접수를 확인하는 곳) -->
     <div class="card" id="tablet-mgmt-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
         <span>📱 태블릿 보관함</span>
         <span id="tablet-mgmt-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
       </div>
       <div id="tablet-mgmt-list"></div>
+      <div id="tablet-consent-status" onclick="showTabletConsentList()"
+        style="margin-top:8px;padding:7px 10px;background:#F8FAFF;border:1px dashed #C7D2FE;border-radius:8px;font-size:11.5px;color:#4A3FA8;cursor:pointer" title="누르면 동의/거절/미응답 명단이 열립니다"></div>
     </div>
 
     <!-- 스터디룸 신청 알림 -->
@@ -11285,9 +11288,20 @@ window.renderTabletMgmt = function(){
   const list=document.getElementById('tablet-mgmt-list');
   const sum=document.getElementById('tablet-mgmt-summary');
   if(!sec||!list) return;
-  const students=(window.STUDENTS||[]).filter(s=>s.tabletConsent===true);
-  if(!students.length){ sec.style.display='none'; return; }
+  // 동의 현황 집계 — 실학생만(조교·관리자·테스트 계정 제외). 카드는 항상 표시해
+  // 원장이 '누가 동의했는지'를 여기서 확인한다(동의 0명이어도 현황 줄은 보인다).
+  const all=(window.STUDENTS||[]).filter(s=>s.name && !window.isNonStudent?.(s.name));
+  const students=all.filter(s=>s.tabletConsent===true);
+  const declined=all.filter(s=>s.tabletConsent===false);
+  const noResp=all.filter(s=>typeof s.tabletConsent!=='boolean');
   sec.style.display='block';
+  const stEl=document.getElementById('tablet-consent-status');
+  if(stEl) stEl.innerHTML=`🙋 학부모 동의 현황 — <b style="color:#1E7A46">동의 ${students.length}</b> · <b style="color:#C62828">거절 ${declined.length}</b> · 미응답 ${noResp.length} <span style="color:#8F82E4;font-weight:700">명단 보기 ›</span>`;
+  if(!students.length){
+    if(sum) sum.textContent='';
+    list.innerHTML='<div style="text-align:center;padding:14px;color:#9CA3AF;font-size:12px">아직 동의한 가정이 없습니다 — 학부모앱 공지 탭에서 동의하면 그 학생이 여기에 나타납니다</div>';
+    return;
+  }
   const today=_tabletToday(), nowHM=_tabletNowHM();
   const rows=students.map(s=>{
     const k=String(s.seat).replace(/[^0-9]/g,'');
@@ -11379,6 +11393,37 @@ window.tabletDirectIssue = function(k){
   document.body.appendChild(ov);
   setTimeout(()=>document.getElementById('tablet-issue-end')?.focus(),50);
 };
+// 동의/거절/미응답 명단 팝업 — 원장이 동의 접수 현황을 확인하고 미응답 가정에 안내할 때 사용
+window.showTabletConsentList = function(){
+  document.getElementById('tablet-consent-pop')?.remove();
+  const all=(window.STUDENTS||[]).filter(s=>s.name && !window.isNonStudent?.(s.name))
+    .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
+  const grp=(t)=>all.filter(s=> t==='yes' ? s.tabletConsent===true : t==='no' ? s.tabletConsent===false : typeof s.tabletConsent!=='boolean');
+  const chip=(s,c,bg)=>`<span style="display:inline-block;font-size:11.5px;font-weight:600;color:${c};background:${bg};border-radius:14px;padding:3px 9px;margin:2px">${s.name} <span style="opacity:0.6">${String(s.seat).replace('번','')}</span></span>`;
+  const section=(title,color,arr,c,bg)=>`
+    <div style="margin-bottom:12px">
+      <div style="font-size:12px;font-weight:800;color:${color};margin-bottom:5px">${title} · ${arr.length}명</div>
+      <div>${arr.length?arr.map(s=>chip(s,c,bg)).join(''):'<span style="font-size:11.5px;color:#9CA3AF">없음</span>'}</div>
+    </div>`;
+  const ov=document.createElement('div');
+  ov.id='tablet-consent-pop';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9998;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML=`<div style="background:#fff;border-radius:16px;width:min(94vw,440px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:0.5px solid #eee;background:#EEF2FF">
+      <div style="font-size:14px;font-weight:700;color:#1E1B4B">📱 태블릿 보관 관리 — 학부모 동의 현황</div>
+      <button onclick="document.getElementById('tablet-consent-pop').remove()" style="background:rgba(0,0,0,0.08);border:none;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer">✕</button>
+    </div>
+    <div style="overflow-y:auto;padding:14px 18px">
+      ${section('✅ 동의 (참여 중)','#1E7A46',grp('yes'),'#1E7A46','#E8F5E9')}
+      ${section('❌ 거절 (참여 안 함)','#C62828',grp('no'),'#C62828','#FDECEC')}
+      ${section('⏳ 미응답','#6B7280',grp('none'),'#4B5563','#F3F4F6')}
+      <div style="font-size:11px;color:#9CA3AF;line-height:1.5">동의는 학부모앱 → 공지 탭 → '태블릿 보관 관리 (선택)' 카드에서 학부모가 직접 응답합니다.<br>미응답 가정에는 안내 문자·알림을 보내 응답을 요청하세요.</div>
+    </div>
+  </div>`;
+  ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+};
+
 window.tabletDirectIssueGo = async function(k){
   const end=document.getElementById('tablet-issue-end')?.value;
   const now=_tabletNowHM();
