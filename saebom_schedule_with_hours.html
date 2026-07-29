@@ -12178,7 +12178,9 @@ function renderSchedVarBoard() {
     const by = rpt ? rpt.by : (cd.changedBy || '');
     rows.push({ seatKey, name, seat, base: bd[today], cur: cd[today], delta, at, by });
   });
-  rows.sort((a, b) => (parseInt(a.seatKey) || 999) - (parseInt(b.seatKey) || 999));
+  // 최신 변경이 위로 — 신청 시각(at) 내림차순. 시각을 모르는 행(at=0)은 자연히 맨 아래로,
+  // 같은 시각(주로 둘 다 0)은 좌석번호순으로 안정 정렬.
+  rows.sort((a, b) => (b.at - a.at) || ((parseInt(a.seatKey) || 999) - (parseInt(b.seatKey) || 999)));
 
   if (summary) summary.textContent = rows.length ? `${rows.length}명 변동` : '';
   if (!rows.length) {
