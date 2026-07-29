@@ -5170,7 +5170,11 @@ function renderTabletOverlay(){
   }
   // stored — 신청 폼
   card.innerHTML = head + `
-    <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:12px">사용할 시간을 정해 신청하면, 조교 선생님이 태블릿을 내어 드려요.</div>
+    <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:8px">사용할 시간을 정해 신청하면, 조교 선생님이 태블릿을 내어 드려요.</div>
+    <div style="font-size:11.5px;color:#B45309;background:var(--amber-pale,#FEF3C7);border-radius:var(--r-md);padding:8px 10px;line-height:1.55;margin-bottom:12px">
+      ⚠️ 앱 신청은 <b>태블릿을 제출하기 전</b>(등원 전·휴대폰 제출 전)에만 할 수 있어요.<br>
+      이미 제출했다면 <b>조교 선생님께 직접 말씀</b>해 주세요 — 바로 내어 드립니다.
+    </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
       <input type="time" id="tablet-start" value="${_tabletNowHM(0)}" style="flex:1;border:1.5px solid var(--border);border-radius:var(--r-md);padding:9px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text)">
       <span style="font-size:13px;color:var(--text3)">부터</span>
