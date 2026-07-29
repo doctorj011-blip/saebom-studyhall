@@ -28,6 +28,8 @@ rules_version = '2';
 //                 학생앱이 읽는 students 문서와 분리해 둔 것이라 그대로 유지할 것
 //   - 2026-07-29  otp_codes 명시 차단 — 새 모바일 앱 OTP 로그인(appauth codebase)의
 //                 서버 전용 컬렉션. 캐치올로도 막히지만 사고 방지용으로 명시
+//   - 2026-07-29  push_tokens 추가 — 새 모바일 앱 푸시 토큰. 웹앱이 안 쓰는 컬렉션이라
+//                 이 저장소에서 유일하게 로그인을 요구한다(본인 uid 것만 쓰기/삭제)
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -293,6 +295,27 @@ service cloud.firestore {
     // 캐치올로도 막히지만, 나중에 누가 이 컬렉션을 열려다 사고 나지 않도록 명시해 둔다.
     match /otp_codes/{phone} {
       allow read, write: if false;
+    }
+
+    // 푸시 알림 토큰(새 모바일 앱 전용).
+    //
+    // 이 저장소의 다른 컬렉션과 달리 **처음부터 로그인을 요구한다.** 웹앱 3개는 이
+    // 컬렉션을 쓰지 않으므로 조여도 깨질 것이 없기 때문이다. (schedules·penalties 처럼
+    // 웹앱과 공유하는 컬렉션은 웹앱이 미인증이라 지금은 조일 수 없다.)
+    //
+    // 읽기를 아무에게도 열지 않는 이유 — 토큰 목록이 곧 "누가 이 앱을 쓰는가" 명부이고,
+    // 토큰을 알면 그 기기로 알림을 보낼 수 있다. 발송은 서버(Admin SDK)가 규칙을
+    // 우회해서 하므로 클라이언트 읽기는 필요 없다.
+    match /push_tokens/{token} {
+      allow read: if false;
+      // 자기 계정(uid)의 토큰만 등록·갱신할 수 있다 — 남의 기기에 알림을 꽂지 못하도록.
+      allow create, update: if request.auth != null
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasAll(['token', 'uid', 'role', 'name', 'seatKey'])
+        && request.resource.data.role in ['student', 'parent'];
+      // 로그아웃 시 자기 토큰만 지운다.
+      allow delete: if request.auth != null
+        && resource.data.uid == request.auth.uid;
     }
 
     // 그 외 모든 컬렉션은 읽기·쓰기 전부 차단
