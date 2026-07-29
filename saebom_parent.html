@@ -584,6 +584,8 @@ body{
     <div id="tab-notice" style="display:none">
       <!-- 식사시간 외출 알림 수신 조사 — 미응답이면 눈에 띄게, 응답 후엔 접힌 한 줄로 -->
       <div id="meal-away-optin"></div>
+      <!-- 태블릿 보관 관리 동의 (선택) — 동의한 학생만 면학관이 태블릿을 보관·시간제 지급 -->
+      <div id="tablet-consent-box"></div>
       <div id="notice-list"></div>
     </div>
 
@@ -951,6 +953,9 @@ async function refreshParentData() {
       const prevOptIn = currentStudent.mealAwaySms;
       currentStudent.mealAwaySms = (typeof d.mealAwaySms === 'boolean') ? d.mealAwaySms : null;
       if (currentStudent.mealAwaySms !== prevOptIn) renderMealAwayOptIn();
+      const prevTablet = currentStudent.tabletConsent;
+      currentStudent.tabletConsent = (typeof d.tabletConsent === 'boolean') ? d.tabletConsent : null;
+      if (currentStudent.tabletConsent !== prevTablet) renderTabletConsent();
       try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
     }
   } catch(e) { console.error('학부모 데이터 갱신 실패:', e); }
@@ -975,6 +980,7 @@ async function loadAllData() {
   startVacationModeRealtime();  // 방학/학기 교시 구성
   loadNotices();
   renderMealAwayOptIn();        // 식사 외출 알림 수신 조사(캐시값으로 먼저 그림)
+  renderTabletConsent();        // 태블릿 보관 관리 동의(캐시값으로 먼저 그림)
   refreshParentData();          // 최신 hours·수신설정 재조회 (캐시 갱신)
   loadParentPenalties();        // 스케줄 변경 벌점 내역
   loadParentMerits();           // 상점 내역
@@ -1036,6 +1042,65 @@ window.setMealAwayOptIn = async function(want) {
     renderMealAwayOptIn();
     try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e2) {}
     alert('설정 저장에 실패했습니다. 통신 상태를 확인하고 다시 시도해 주세요.');
+  }
+};
+
+// ── 태블릿 보관 관리 동의 (students.tabletConsent) ──
+// 학생 태블릿을 면학관이 보관하고, 학생이 사용시간을 신청하면 그 시간에만 내어주는 제도.
+// 학습용으로 태블릿을 쓰는 학생이 많아(특히 고3) 강제가 아니라 '동의하신 가정만' 참여한다.
+// true=동의 / false=비동의 / 필드없음=미응답. 동의한 학생에게만 학생앱에 신청 카드가 열린다.
+function renderTabletConsent() {
+  const el = document.getElementById('tablet-consent-box');
+  if (!el || !currentStudent) return;
+  const v = (typeof currentStudent.tabletConsent === 'boolean') ? currentStudent.tabletConsent : null;
+  if (v === null) {
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-title" style="margin-bottom:8px"><i class="ti ti-device-tablet"></i> 태블릿 보관 관리 (선택)</div>
+        <div style="font-size:12.5px;color:#4B5563;line-height:1.65;margin-bottom:14px">
+          자녀의 태블릿을 <b>면학관이 보관</b>하다가, 자녀가 <b>사용 시간(몇 시~몇 시)을 신청하면 그 시간에만</b> 내어주고
+          시간이 끝나면 다시 보관하는 관리 제도입니다. 학습용 사용은 지키면서 불필요한 사용을 줄여 줍니다.
+          <br><span style="color:#8A7020">동의하신 가정의 자녀만 참여하며, 언제든 이 화면에서 바꾸실 수 있습니다.</span>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="setTabletConsent(true)" style="flex:1;padding:13px;background:linear-gradient(135deg,var(--brand-light),var(--brand));color:#fff;border:none;border-radius:12px;font-size:13.5px;font-weight:700;cursor:pointer">동의합니다</button>
+          <button onclick="setTabletConsent(false)" style="flex:1;padding:13px;background:#fff;color:#6B7280;border:1.5px solid var(--border);border-radius:12px;font-size:13.5px;font-weight:700;cursor:pointer">참여하지 않습니다</button>
+        </div>
+      </div>`;
+    return;
+  }
+  el.innerHTML = `
+    <div class="card" style="padding:13px 15px;display:flex;align-items:center;gap:10px">
+      <i class="ti ti-device-tablet" style="font-size:17px;color:${v ? 'var(--brand)' : '#9CA3AF'}"></i>
+      <div style="flex:1;font-size:12.5px;color:#4B5563;line-height:1.5">
+        태블릿 보관 관리 <b style="color:${v ? 'var(--brand-dark)' : '#6B7280'}">${v ? '동의함 (참여 중)' : '참여 안 함'}</b>
+      </div>
+      <button onclick="setTabletConsent(${!v})" style="padding:8px 14px;background:var(--brand-50);color:var(--brand-dark);border:1.5px solid var(--brand-light);border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap">${v ? '철회하기' : '동의하기'}</button>
+    </div>`;
+}
+
+// 저장은 mealAwaySms와 동일 — ★반드시 merge 로 이 필드만 쓴다(통째 setDoc 금지).
+window.setTabletConsent = async function(want) {
+  if (!currentStudent) return;
+  if (want && !confirm('자녀의 태블릿을 면학관이 보관·관리하는 것에 동의하시겠습니까?\n(자녀는 사용 시간을 신청해 그 시간에만 사용하게 됩니다)')) return;
+  if (!want && (typeof currentStudent.tabletConsent === 'boolean') && currentStudent.tabletConsent
+      && !confirm('태블릿 보관 관리 동의를 철회하시겠습니까?\n(자녀가 더 이상 보관 관리 대상에 포함되지 않습니다)')) return;
+  const seat = String(currentStudent.seat || '').replace('번','');
+  const prev = currentStudent.tabletConsent;
+  currentStudent.tabletConsent = !!want;
+  renderTabletConsent();
+  try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
+  if (!seat || !window._db || !window._setDoc || !window._doc) return;
+  try {
+    await window._setDoc(window._doc(window._db, 'students', seat),
+      { tabletConsent: !!want, tabletConsentAt: Date.now() }, { merge: true });
+    if (window.saTrack) saTrack('tablet_consent', { app_name: '학부모앱', tab_name: want ? 'on' : 'off' });
+  } catch(e) {
+    console.error('태블릿 동의 저장 실패:', e);
+    currentStudent.tabletConsent = prev;
+    renderTabletConsent();
+    try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e2) {}
+    alert('저장에 실패했습니다. 통신 상태를 확인하고 다시 시도해 주세요.');
   }
 };
 

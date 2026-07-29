@@ -1292,6 +1292,12 @@ body{
         <div class="quick-card-sub">교시 중 조교 승인 후 이동</div>
         <div class="quick-card-bg">🚶</div>
       </div>
+      <div class="quick-card" id="home-tablet-card" style="display:none" onclick="openTabletOverlay()">
+        <div class="quick-card-icon">📱</div>
+        <div class="quick-card-title">태블릿 사용</div>
+        <div class="quick-card-sub" id="home-tablet-sub">사용 시간 신청 · 반납</div>
+        <div class="quick-card-bg">📱</div>
+      </div>
       <div class="quick-card" onclick="openSection('score','#6C5DD3')">
         <div class="quick-card-icon">⚖️</div>
         <div class="quick-card-title">상점 · 벌점</div>
@@ -2806,6 +2812,9 @@ async function refreshStudentData() {
       // 옛 세션 캐시엔 gender가 없다 — 여기서 채운다.
       const g = snap.data().gender === 'm' ? 'm' : 'f';
       currentStudent.gender = g;
+      // 태블릿 보관 관리 동의(학부모앱에서 설정) — 동의 학생만 홈에 태블릿 카드가 열린다
+      currentStudent.tabletConsent = snap.data().tabletConsent === true;
+      try { updateTabletCard(); } catch(e) {}
       try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
       buildMyStats();
       // 잔소리 팝업이 성별을 모른 채 떠 있었다면 지금 알아낸 성별로 다시 그린다.
@@ -5068,6 +5077,152 @@ function restoreStandDeskWait() {
   _standDeskListen();
   showStandDeskOverlay('pending');
 }
+
+// ══════════════════════════════════════════════════════════════
+// 📱 태블릿 보관 관리 — 학부모 동의(students.tabletConsent=true) 학생만.
+// 태블릿은 면학관이 보관하고, 학생이 '몇 시~몇 시' 사용을 신청하면 조교가 그 시간에
+// 내어주고 시간이 끝나면 다시 보관한다. 상태는 students/_meta_tablet 문서 하나를
+// 3앱이 공유(entries.{좌석숫자} = {name, seat, status, date, start, end, ...}).
+//   status: 'stored'(보관) → 'requested'(신청됨) → 'out'(사용 중) → 'stored'
+// 지급/수거/거절은 관리앱(조교)이, 신청/신청취소는 여기서 쓴다.
+// ══════════════════════════════════════════════════════════════
+const TABLET_META_DOC = '_meta_tablet';
+let _tabletUnsub = null;
+let _tabletEntry = null;      // 내 좌석의 현재 entry (실시간)
+let _tabletPrevStatus = null; // 거절 감지용(requested → stored로 지급 없이 돌아오면 거절)
+
+function _tabletSeatKey(){ return String(currentStudent?.seat||'').replace(/[^0-9]/g,''); }
+
+// 동의 학생이면 홈 카드 표시 + 상태 실시간 구독 (refreshStudentData에서 호출)
+function updateTabletCard() {
+  const card = document.getElementById('home-tablet-card');
+  if (!card) return;
+  const on = currentStudent?.tabletConsent === true;
+  card.style.display = on ? '' : 'none';
+  if (on && !_tabletUnsub) _tabletListen();
+  if (!on && _tabletUnsub) { try{_tabletUnsub();}catch(e){} _tabletUnsub=null; }
+}
+
+function _tabletListen() {
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  _tabletUnsub = window._fsOnSnapshot(window._fsDoc(db, 'students', TABLET_META_DOC), snap => {
+    const entries = snap.exists() ? (snap.data().entries || {}) : {};
+    const e = entries[_tabletSeatKey()] || null;
+    const today = studyroomDayKey();
+    // 다른 날짜의 잔재는 '보관 중'으로 취급
+    _tabletEntry = (e && e.date === today) ? e : null;
+    const st = _tabletEntry?.status || 'stored';
+    // 홈 카드 부제로 현재 상태 표시
+    const sub = document.getElementById('home-tablet-sub');
+    if (sub) sub.textContent =
+      st==='requested' ? `⏳ 신청됨 ${_tabletEntry.start}~${_tabletEntry.end}` :
+      st==='out'       ? `✅ 사용 중 ~${_tabletEntry.end}` : '사용 시간 신청 · 반납';
+    // 지급 없이 requested→stored 로 돌아왔으면 거절/취소된 것 (내가 취소한 경우는 플래그로 구분)
+    if (_tabletPrevStatus==='requested' && st==='stored' && !_tabletEntry?.issuedAt && !window._tabletSelfCancel) {
+      showToast('📱 태블릿 사용 신청이 승인되지 않았어요. 조교 선생님께 문의해 주세요.');
+    }
+    window._tabletSelfCancel = false;
+    _tabletPrevStatus = st;
+    // 오버레이가 떠 있으면 갱신
+    if (document.getElementById('tablet-overlay')) renderTabletOverlay();
+  });
+}
+
+function _tabletNowHM(offMin){
+  const d = new Date(Date.now() + (offMin||0)*60000);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+window.openTabletOverlay = function(){
+  if (currentStudent?.tabletConsent !== true) { showToast('학부모님 동의 후 이용할 수 있어요.'); return; }
+  document.getElementById('tablet-overlay')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'tablet-overlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:18px';
+  ov.innerHTML = '<div id="tablet-overlay-card" style="background:var(--card);border-radius:var(--r-lg);padding:22px 20px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)"></div>';
+  ov.addEventListener('click', e => { if (e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+  renderTabletOverlay();
+};
+
+function renderTabletOverlay(){
+  const card = document.getElementById('tablet-overlay-card');
+  if (!card) return;
+  const st = _tabletEntry?.status || 'stored';
+  const head = '<div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:4px">📱 태블릿 사용</div>';
+  if (st === 'requested') {
+    card.innerHTML = head + `
+      <div style="font-size:13px;color:var(--amber);font-weight:700;margin-bottom:10px">⏳ 신청됨 · ${_tabletEntry.start} ~ ${_tabletEntry.end}</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">조교 선생님께 가서 태블릿을 받아 가세요.<br>사용 시간이 끝나면 꼭 반납해 주세요.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="cancelTabletReq()" style="flex:1;padding:11px;background:var(--surface);color:var(--red);border:1px solid var(--red-border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">신청 취소</button>
+        <button onclick="document.getElementById('tablet-overlay').remove()" style="flex:1;padding:11px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">닫기</button>
+      </div>`;
+    return;
+  }
+  if (st === 'out') {
+    card.innerHTML = head + `
+      <div style="font-size:13px;color:#1AB5A3;font-weight:700;margin-bottom:10px">✅ 사용 중 · ${_tabletEntry.end}까지</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:14px">시간이 끝나면 <b>조교 선생님께 태블릿을 반납</b>해 주세요.</div>
+      <button onclick="document.getElementById('tablet-overlay').remove()" style="width:100%;padding:11px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">확인</button>`;
+    return;
+  }
+  // stored — 신청 폼
+  card.innerHTML = head + `
+    <div style="font-size:12.5px;color:var(--text2);line-height:1.6;margin-bottom:12px">사용할 시간을 정해 신청하면, 조교 선생님이 태블릿을 내어 드려요.</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <input type="time" id="tablet-start" value="${_tabletNowHM(0)}" style="flex:1;border:1.5px solid var(--border);border-radius:var(--r-md);padding:9px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <span style="font-size:13px;color:var(--text3)">부터</span>
+      <input type="time" id="tablet-end" value="${_tabletNowHM(60)}" style="flex:1;border:1.5px solid var(--border);border-radius:var(--r-md);padding:9px;font-size:14px;font-family:inherit;background:var(--surface);color:var(--text)">
+      <span style="font-size:13px;color:var(--text3)">까지</span>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button onclick="document.getElementById('tablet-overlay').remove()" style="flex:1;padding:11px;background:var(--surface);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-md);font-size:13px;font-weight:600;cursor:pointer">닫기</button>
+      <button onclick="submitTabletReq()" style="flex:2;padding:11px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">사용 신청</button>
+    </div>`;
+}
+
+window.submitTabletReq = async function(){
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  const start = document.getElementById('tablet-start')?.value;
+  const end = document.getElementById('tablet-end')?.value;
+  if (!start || !end) { alert('시작·종료 시간을 모두 선택해 주세요.'); return; }
+  if (end <= start) { alert('종료 시간이 시작 시간보다 늦어야 해요.'); return; }
+  const k = _tabletSeatKey();
+  try {
+    await window._fsSetDoc(window._fsDoc(db, 'students', TABLET_META_DOC), {
+      name: '', updatedAt: Date.now(),
+      entries: { [k]: {
+        name: currentStudent.name, seat: currentStudent.seat,
+        status: 'requested', date: studyroomDayKey(), start, end,
+        requestedAt: Date.now(), issuedAt: null, returnedAt: null
+      } }
+    }, { merge: true });
+    showToast(`📱 ${start}~${end} 사용 신청 완료 — 조교 선생님께 받아 가세요`);
+  } catch(e) { alert('신청 실패: ' + e.message); }
+};
+
+window.cancelTabletReq = async function(){
+  const db = window._db;
+  if (!db || !currentStudent) return;
+  if (_tabletEntry?.status !== 'requested') return;
+  if (!confirm('태블릿 사용 신청을 취소할까요?')) return;
+  window._tabletSelfCancel = true;
+  const k = _tabletSeatKey();
+  try {
+    await window._fsSetDoc(window._fsDoc(db, 'students', TABLET_META_DOC), {
+      name: '', updatedAt: Date.now(),
+      entries: { [k]: {
+        name: currentStudent.name, seat: currentStudent.seat,
+        status: 'stored', date: studyroomDayKey(), start: null, end: null,
+        requestedAt: null, issuedAt: null, returnedAt: null
+      } }
+    }, { merge: true });
+    showToast('신청을 취소했어요.');
+  } catch(e) { window._tabletSelfCancel = false; alert('취소 실패: ' + e.message); }
+};
 
 // ── 대기 모드 후 재연결 처리 ──
 document.addEventListener('visibilitychange', function() {

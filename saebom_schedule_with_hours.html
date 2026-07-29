@@ -953,6 +953,15 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       </div>
       <div id="studyroom-overflow-list"></div>
     </div>
+    <!-- 태블릿 보관함 — 학부모 동의(tabletConsent) 학생만 대상. 신청 대기→지급→수거 관리 -->
+    <div class="card" id="tablet-mgmt-section" style="display:none">
+      <div class="card-title" style="justify-content:space-between">
+        <span>📱 태블릿 보관함</span>
+        <span id="tablet-mgmt-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+      </div>
+      <div id="tablet-mgmt-list"></div>
+    </div>
+
     <!-- 스터디룸 신청 알림 -->
     <div class="card" id="studyroom-req-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -7873,6 +7882,15 @@ function _studentDocData(student, ns) {
     hours: student.hours||{}, fee: student.fee||0, feeMemo: student.feeMemo||'',
     // 좌석 교환·이동으로 문서를 덮어쓸 때도 학부모가 고른 알림 수신 희망은 따라가야 한다
     ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
+    ...(typeof student.tabletConsent === 'boolean' ? { tabletConsent: student.tabletConsent } : {}),
+    // ★saveStudentToFirebase와 같은 보존 목록 — 여기 빠지면 좌석 교환 순간 그 필드가 사라진다.
+    //   (2026-07-29까지 weeklyGoalH·grade·loginPin 등이 실제로 빠져 있었음 — 좌석 교환 시 유실 버그)
+    weeklyGoalH: Number(student.weeklyGoalH) || 0,
+    ...(typeof student.weeklyGoalReq === 'number' ? { weeklyGoalReq: student.weeklyGoalReq } : {}),
+    ...(student.loginPin    ? { loginPin:    String(student.loginPin) } : {}),
+    ...(student.withdrawAt  ? { withdrawAt:  String(student.withdrawAt) } : {}),
+    ...(student.nextStudent ? { nextStudent: student.nextStudent } : {}),
+    ...(student.grade       ? { grade:       String(student.grade) } : {}),
     updatedAt: window._fsServerTimestamp()
   };
 }
@@ -10261,6 +10279,8 @@ async function saveStudentToFirebase(student) {
     // 식사 외출 알림 수신 희망(학부모가 학부모앱에서 고른 값) — 관리자 저장으로 지워지면 안 된다.
     // 미응답(null/undefined)은 필드를 아예 쓰지 않아 '아직 안 골랐음'을 유지한다.
     ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
+    // 태블릿 보관 관리 동의(학부모앱) — 같은 이유로 보존
+    ...(typeof student.tabletConsent === 'boolean' ? { tabletConsent: student.tabletConsent } : {}),
     updatedAt: serverTimestamp()
   });
 }
@@ -10497,7 +10517,9 @@ async function loadStudentsFromFirebase() {
           grade: v.grade || '',   // 학년 — 학습분석의 또래 교재 추천 기준
           // 식사 외출 알림 수신 희망 — 학부모앱에서 학부모가 직접 고른다.
           // null = 아직 응답 안 함(= 발송 안 함). true/false 만 응답으로 본다.
-          mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null)
+          mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
+          // 태블릿 보관 관리 동의(학부모앱) — true인 학생만 태블릿 보관함 카드에 표시
+          tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null)
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -10560,6 +10582,12 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
+      if (change.doc.id === '_meta_tablet') {
+        if (change.type !== 'removed' && window._applyRemoteTabletEntries) {
+          window._applyRemoteTabletEntries(change.doc.data().entries || {});
+        }
+        return;
+      }
       // 그 외 메타 문서(새벽 리셋 잠금 등)는 학생이 아니므로 무시
       if (change.doc.id.startsWith('_meta_')) return;
       // 첫 스냅샷의 added는 getDocs가 이미 로드했으므로 무시.
@@ -10596,7 +10624,9 @@ async function loadStudentsFromFirebase() {
         grade: v.grade || '',   // 학년 — 학습분석의 또래 교재 추천 기준
         // 식사 외출 알림 수신 희망(학부모앱에서 학부모가 고른 값). null = 미응답 = 발송 안 함.
         // ★학부모앱이 이 필드를 쓰면 이 스냅샷으로 키오스크에 즉시 반영된다.
-        mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null)
+        mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
+        // 태블릿 보관 관리 동의 — 학부모가 토글하면 이 스냅샷으로 보관함 카드에 즉시 반영
+        tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null)
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영.
       // ★ 원본은 세션 문서의 awayStartTs 다(= _awayStartTs 에 이름이 있으면 세션 기준 외출).
@@ -11236,6 +11266,112 @@ onSnapshot(collection(db, STANDDESK_COL), (snapshot) => {
 // 키오스크 모드 진입/해제 시 즉시 재판정(진입하면 승인창 숨김, 해제하면 대기 요청 표시).
 // classic 스크립트의 enterKioskMode/exitKioskMode/fullscreenchange가 호출한다.
 window._sdRecheck = () => { try { _standDeskPump(); } catch(e) {} };
+
+// ══════════════════════════════════════════════════════════════
+// 📱 태블릿 보관함 — 학부모 동의(students.tabletConsent=true) 학생의 태블릿을 보관하고,
+// 학생이 신청한 시간(start~end)에만 지급했다가 수거한다. 대시보드 카드에서 관리.
+// 상태 공유 = students/_meta_tablet 문서(entries.{좌석숫자}), 학생앱과 동일 구조.
+//   requested(신청 대기, [지급]/[거절]) → out(사용 중, [수거] — 종료시각 지나면 빨간 연체 표시)
+// 실물을 주고받는 행위가 곧 승인이므로 별도 승인 팝업은 없다. 새 신청은 알림음+토스트.
+// ══════════════════════════════════════════════════════════════
+let _tabletEntries = {};
+
+function _tabletNowHM(){ const d=new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+function _tabletToday(){ return window.studyroomDayKey ? window.studyroomDayKey() : null; }
+
+// 카드 렌더 — 동의 학생 각각의 상태 행(신청 대기→사용 중(연체 우선)→보관 중 순)
+window.renderTabletMgmt = function(){
+  const sec=document.getElementById('tablet-mgmt-section');
+  const list=document.getElementById('tablet-mgmt-list');
+  const sum=document.getElementById('tablet-mgmt-summary');
+  if(!sec||!list) return;
+  const students=(window.STUDENTS||[]).filter(s=>s.tabletConsent===true);
+  if(!students.length){ sec.style.display='none'; return; }
+  sec.style.display='block';
+  const today=_tabletToday(), nowHM=_tabletNowHM();
+  const rows=students.map(s=>{
+    const k=String(s.seat).replace(/[^0-9]/g,'');
+    let e=_tabletEntries[k];
+    if(e && e.date!==today) e=null;               // 지난 날짜 잔재는 보관 중으로
+    const st=e?.status||'stored';
+    const overdue=(st==='out' && e.end && nowHM>e.end);
+    return {s,k,e,st,overdue};
+  }).sort((a,b)=>{
+    const rank=x=>x.st==='requested'?0 : x.st==='out'?(x.overdue?1:2) : 3;
+    return rank(a)-rank(b) || (a.st==='requested' ? (a.e?.requestedAt||0)-(b.e?.requestedAt||0)
+                                                  : parseInt(a.s.seat)-parseInt(b.s.seat));
+  });
+  const nReq=rows.filter(r=>r.st==='requested').length;
+  const nOut=rows.filter(r=>r.st==='out').length;
+  if(sum) sum.textContent=`신청 ${nReq} · 사용 중 ${nOut} · 보관 ${rows.length-nReq-nOut}`;
+  list.innerHTML=rows.map(({s,k,e,st,overdue})=>{
+    let bg='#F9FAFB', bd='#E5E7EB', badge='<span style="font-size:10.5px;font-weight:700;color:#6B7280">📦 보관 중</span>', btns='';
+    if(st==='requested'){
+      bg='#FFF7ED'; bd='#FDBA74';
+      badge=`<span style="font-size:10.5px;font-weight:800;color:#EA580C">⏳ 신청 ${e.start}~${e.end}</span>`;
+      btns=`<button onclick="tabletIssue('${k}')" style="padding:6px 12px;background:#2D7A4F;color:#fff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">📤 지급</button>
+            <button onclick="tabletReject('${k}')" style="padding:6px 10px;background:#fff;color:#C62828;border:1px solid #C62828;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">거절</button>`;
+    } else if(st==='out'){
+      bg=overdue?'#FEE2E2':'#EFF6FF'; bd=overdue?'#EF4444':'#93C5FD';
+      badge=`<span style="font-size:10.5px;font-weight:800;color:${overdue?'#DC2626':'#2563EB'}">${overdue?'⚠️ 반납 지연':'📱 사용 중'} ~${e.end}</span>`;
+      btns=`<button onclick="tabletReturn('${k}')" style="padding:6px 12px;background:${overdue?'#DC2626':'#2563EB'};color:#fff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">📥 수거 완료</button>`;
+    }
+    return `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1.5px solid ${bd};border-radius:10px;padding:8px 12px;margin-bottom:6px">
+      <div style="font-size:12.5px;font-weight:700;min-width:90px">${s.name} <span style="color:#888;font-weight:400">${s.seat}번</span></div>
+      <div style="flex:1">${badge}</div>
+      <div style="display:flex;gap:6px">${btns}</div>
+    </div>`;
+  }).join('');
+};
+
+// 상태 전환 쓰기 — entry 전체를 명시해 이전 사이클 잔재 필드가 남지 않게 한다(merge는 필드 보존이므로)
+async function _tabletWrite(k, patch){
+  const s=(window.STUDENTS||[]).find(x=>String(x.seat).replace(/[^0-9]/g,'')===k);
+  const prev=_tabletEntries[k]||{};
+  const entry={ name:s?.name||prev.name||'', seat:s?.seat||prev.seat||k,
+    status:'stored', date:_tabletToday(), start:prev.start||null, end:prev.end||null,
+    requestedAt:prev.requestedAt||null, issuedAt:prev.issuedAt||null, returnedAt:prev.returnedAt||null,
+    ...patch };
+  await setDoc(doc(db,'students','_meta_tablet'), { name:'', updatedAt:Date.now(), entries:{ [k]: entry } }, { merge:true });
+}
+window.tabletIssue = async function(k){
+  try{ await _tabletWrite(k,{status:'out', issuedAt:Date.now()}); if(window.showAdminToast) showAdminToast('📤 태블릿 지급 — 시간이 끝나면 수거하세요'); }
+  catch(e){ alert('지급 처리 실패: '+e.message); }
+};
+window.tabletReject = async function(k){
+  const e=_tabletEntries[k];
+  if(!confirm(`${e?.name||''} 학생의 태블릿 사용 신청(${e?.start}~${e?.end})을 거절할까요?`)) return;
+  try{ await _tabletWrite(k,{status:'stored', start:null, end:null, requestedAt:null, issuedAt:null}); if(window.showAdminToast) showAdminToast('❌ 신청 거절됨'); }
+  catch(e2){ alert('거절 처리 실패: '+e2.message); }
+};
+window.tabletReturn = async function(k){
+  try{ await _tabletWrite(k,{status:'stored', returnedAt:Date.now()}); if(window.showAdminToast) showAdminToast('📥 태블릿 수거 완료'); }
+  catch(e){ alert('수거 처리 실패: '+e.message); }
+};
+
+// 원격 반영 + 새 신청 알림(키오스크 제외). students onSnapshot의 _meta_tablet 핸들러가 호출.
+window._applyRemoteTabletEntries = function(entries){
+  const prev=_tabletEntries;
+  _tabletEntries=entries||{};
+  Object.keys(_tabletEntries).forEach(k=>{
+    const now=_tabletEntries[k], old=prev[k];
+    if(now.status==='requested' && old?.status!=='requested' && now.date===_tabletToday() && _sdEligible()){
+      if(window.showAdminToast) showAdminToast(`📱 ${now.name} 태블릿 사용 신청 (${now.start}~${now.end})`);
+      _sdBeep();
+    }
+  });
+  window.renderTabletMgmt();
+};
+
+// 시작 시 1회 로드 + 연체 표시 갱신용 주기 렌더
+(async function _loadTabletOnce(){
+  try{
+    const snap=await getDoc(doc(db,'students','_meta_tablet'));
+    _tabletEntries = snap.exists() ? (snap.data().entries||{}) : {};
+  } catch(e){ console.error('태블릿 보관함 로드 실패:', e); }
+  window.renderTabletMgmt();
+})();
+setInterval(()=>{ try{ window.renderTabletMgmt(); }catch(e){} }, 60000);
 
 function renderStudyroomAlerts() {
   const section = document.getElementById('studyroom-req-section');
