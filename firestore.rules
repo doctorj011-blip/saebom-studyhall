@@ -26,6 +26,8 @@ rules_version = '2';
 //                 + settings 화이트리스트에 shinmungo_auth(원장 열람 비밀번호)
 //   - 2026-07-27  student_memos 추가 — 배치도 특별관리 메모(문서 ID = 학생 이름).
 //                 학생앱이 읽는 students 문서와 분리해 둔 것이라 그대로 유지할 것
+//   - 2026-07-29  otp_codes 명시 차단 — 새 모바일 앱 OTP 로그인(appauth codebase)의
+//                 서버 전용 컬렉션. 캐치올로도 막히지만 사고 방지용으로 명시
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -283,6 +285,14 @@ service cloud.firestore {
     match /pay_months/{docId} {
       allow read, write: if request.auth != null
         && request.auth.token.email == 'doctorj011@gmail.com';
+    }
+
+    // OTP 로그인(새 모바일 앱, functions codebase "appauth"): otp_codes/{전화번호} 에
+    // 코드 해시 + 일치 학생(좌석키·이름) 목록이 담긴다. 클라이언트가 읽으면 OTP 가
+    // 무력화되고 명부가 새어나가므로 서버(Admin SDK) 전용이다.
+    // 캐치올로도 막히지만, 나중에 누가 이 컬렉션을 열려다 사고 나지 않도록 명시해 둔다.
+    match /otp_codes/{phone} {
+      allow read, write: if false;
     }
 
     // 그 외 모든 컬렉션은 읽기·쓰기 전부 차단
