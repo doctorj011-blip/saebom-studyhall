@@ -395,8 +395,13 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .fp-sticky-note .st-btns button:hover{opacity:1}
 .fp-sticky-imp-tag{display:inline-block;background:#DC2626;color:#fff;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 5px;margin-right:4px;vertical-align:1px}
 .fp-sticky-collapsed-note{font-size:10.5px;color:#B8A576;text-align:center;padding:2px 0}
+/* 여백 부족 시 폴백: 배치도 위 일반 블록으로. ★margin-right:254px로 입실현황 패널(240px+여백,
+   absolute 오버레이) 폭을 비켜간다 — 없으면 패널이 입실현황 카드를 덮어 클릭을 막는다(실사고).
+   .fp-sticky-inline 클래스는 JS(_fpStickyReflow)가 실측 겹침 판정으로 붙인다(중간 폭 화면 대응). */
+#fp-sticky-panel.fp-sticky-inline{position:static;width:auto;max-height:none;margin:0 254px 10px 0}
+#fp-sticky-panel.fp-sticky-inline #fp-sticky-list{max-height:200px}
 @media (max-width:1500px){
-  #fp-sticky-panel{position:static;width:auto;max-height:none;margin-bottom:10px}
+  #fp-sticky-panel{position:static;width:auto;max-height:none;margin:0 254px 10px 0}
   #fp-sticky-list{max-height:200px}
 }
 
@@ -5477,6 +5482,40 @@ window._applyRemoteStickyMemos = function(arr){
 };
 window.renderStickyMemos = renderStickyMemos;
 renderStickyMemos();   // Firestore 로드 전 빈 패널 골격(접기 버튼 라벨 포함) 표시
+
+// ── 스티키 패널 위치 자동 전환 ──
+// absolute 배치(right:268, width:232)가 좌석 그리드나 입실현황 패널과 겹치는 폭이면
+// .fp-sticky-inline(배치도 위 일반 블록)으로 전환한다. 1800px 고정 실측만 믿었다가
+// 중간 폭 화면에서 패널이 입실현황 카드를 덮어 클릭을 막은 실사고(변아인 건)의 재발 방지.
+// ★클래스를 토글해 가며 측정하면 ResizeObserver와 무한 루프가 된다 — absolute일 때의
+//   가로 좌표는 컨테이너 기준으로 결정적이므로(오른쪽 끝-268-232) 계산만으로 판정한다.
+function _fpStickyReflow(){
+  const p=document.getElementById('fp-sticky-panel');
+  const wrap=document.getElementById('fp-drag-wrap');
+  const room=document.getElementById('fp-room');
+  const cont=wrap?wrap.parentElement:null;
+  if(!p||!room||!cont) return;
+  const cr=cont.getBoundingClientRect();
+  if(!cr.width) return;                          // 배치도 탭이 숨김 상태면 판단 보류
+  const pLeft=cr.right-268-232, pRight=cr.right-268;   // absolute일 때 패널의 가로 범위
+  const rr=room.getBoundingClientRect();
+  const side=document.getElementById('fp-side-panel');
+  const sr=side?side.getBoundingClientRect():null;
+  const clash=(rr.width && pLeft < rr.right+8) || (sr && sr.width && pRight > sr.left-8);
+  p.classList.toggle('fp-sticky-inline', clash);
+}
+window._fpStickyReflow=_fpStickyReflow;
+window.addEventListener('resize', ()=>{ try{_fpStickyReflow();}catch(e){} });
+// resize/RO가 안 울리는 환경(창 이동·줌 등) 대비 보험 — 판정은 멱등이라 반복 호출 무해
+setInterval(()=>{ try{_fpStickyReflow();}catch(e){} }, 30000);
+try{
+  // 좌석 그리드 크기 변화(배치도 렌더·탭 표시·좌석 편집)와 컨테이너 폭 변화를 모두 감지
+  const _fpRo=new ResizeObserver(()=>{ try{_fpStickyReflow();}catch(e){} });
+  const _w=document.getElementById('fp-drag-wrap');
+  if(_w&&_w.parentElement) _fpRo.observe(_w.parentElement);
+  const _r=document.getElementById('fp-room');
+  if(_r) _fpRo.observe(_r);
+}catch(e){}
 
 function buildDayTabs(){
   document.getElementById('day-tabs').innerHTML=DAYS.map(d=>
