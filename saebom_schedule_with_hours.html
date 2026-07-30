@@ -397,11 +397,13 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .fp-sticky-collapsed-note{font-size:10.5px;color:#B8A576;text-align:center;padding:2px 0}
 /* 여백 부족 시 폴백: 배치도 위 일반 블록으로. ★margin-right:254px로 입실현황 패널(240px+여백,
    absolute 오버레이) 폭을 비켜간다 — 없으면 패널이 입실현황 카드를 덮어 클릭을 막는다(실사고).
+   ★width는 absolute일 때와 같은 232px로 고정 — width:auto로 두면 포스트잇이 화면폭만큼
+   커져 "메모가 갑자기 커졌다"가 된다(2026-07-30 실사용 지적). 위치만 옮기고 크기는 그대로.
    .fp-sticky-inline 클래스는 JS(_fpStickyReflow)가 실측 겹침 판정으로 붙인다(중간 폭 화면 대응). */
-#fp-sticky-panel.fp-sticky-inline{position:static;width:auto;max-height:none;margin:0 254px 10px 0}
+#fp-sticky-panel.fp-sticky-inline{position:static;width:232px;max-height:none;margin:0 254px 10px 0}
 #fp-sticky-panel.fp-sticky-inline #fp-sticky-list{max-height:200px}
 @media (max-width:1500px){
-  #fp-sticky-panel{position:static;width:auto;max-height:none;margin:0 254px 10px 0}
+  #fp-sticky-panel{position:static;width:232px;max-height:none;margin:0 254px 10px 0}
   #fp-sticky-list{max-height:200px}
 }
 
