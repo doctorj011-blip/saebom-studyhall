@@ -38,6 +38,9 @@ rules_version = '2';
 //                 (saebom-geometry.web.app). 규칙이 빠진 채 앱만 배포돼 캐치올에
 //                 전부 막혀 있던 것을 수정. alg_ 와 같은 구조 + 반(sec) 구분:
 //                 담당 선생님(geo_teachers/{이메일}의 sec)은 자기 요일 반만 조회
+//   - 2026-07-30  zai_notes·zai_roster 추가 — 중2-2 자이스토리 여름특강 오답노트
+//                 (saebom-xistory22.web.app). 같은 사고(규칙 누락 403) 수정.
+//                 반 구분 없이 alg_ 와 완전히 동일한 원장 단독 구조
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -251,6 +254,23 @@ service cloud.firestore {
     match /geo_teachers/{email} {
       allow get: if request.auth != null && request.auth.token.email == email;
       allow list, write: if false;
+    }
+
+    // 중2-2 자이스토리 여름특강 오답노트(saebom-xistory22.web.app):
+    // 반 구분 없이 alg_notes·alg_roster 와 완전히 동일한 구조(원장만 전체 조회).
+    match /zai_notes/{h} {
+      allow get: if h.matches('^[0-9a-f]{24}$');
+      allow list: if algTeacher();          // 반 전체 조회는 원장만
+      allow delete: if false;
+      allow create, update: if h.matches('^[0-9a-f]{24}$')
+        && request.resource.data.keys().hasOnly(['v', 'exams', 'updatedAt'])
+        && request.resource.data.exams is map
+        && request.resource.data.exams.size() <= 30
+        && request.resource.data.updatedAt is string;
+    }
+    match /zai_roster/{h} {
+      allow read: if algTeacher();
+      allow write: if false;
     }
 
     // 특별관리 메모(관리앱 배치도): 문서 ID = 학생 이름. 조교가 신경 써야 할 학생을 적어 둔다.
