@@ -22,6 +22,10 @@ rules_version = '2';
 //                 (학생앱 요청/취소, 관리앱 조교석 승인/거절)
 //   - 2026-07-25  seat_presence 추가 — CCTV 좌석 재석 감지(새봄재석감지 엔진이 current
 //                 문서 하나를 1분마다 REST로 갱신, 관리앱 대시보드가 읽음)
+//   - 2026-07-25  alg_notes 추가 — 대수(응용) 특강 오답노트의 틀린 문항 번호.
+//                 문서 ID(로그인 해시)를 아는 사람만 열도록 get 만 열고 list 는 차단
+//   - 2026-07-26  alg_notes 의 list 를 원장 계정에만 개방(관리자 모드) + alg_roster 추가
+//                 (해시→이름 대조표, 원장만 읽기)
 //   - 2026-07-27  shinmungo_reports 추가 — 신문고(학생 기명 신고, delete 금지)
 //                 + settings 화이트리스트에 shinmungo_auth(원장 열람 비밀번호)
 //   - 2026-07-27  student_memos 추가 — 배치도 특별관리 메모(문서 ID = 학생 이름).
@@ -30,6 +34,10 @@ rules_version = '2';
 //                 서버 전용 컬렉션. 캐치올로도 막히지만 사고 방지용으로 명시
 //   - 2026-07-29  push_tokens 추가 — 새 모바일 앱 푸시 토큰. 웹앱이 안 쓰는 컬렉션이라
 //                 이 저장소에서 유일하게 로그인을 요구한다(본인 uid 것만 쓰기/삭제)
+//   - 2026-07-30  geo_notes·geo_roster·geo_teachers 추가 — 고2 기하 오답노트
+//                 (saebom-geometry.web.app). 규칙이 빠진 채 앱만 배포돼 캐치올에
+//                 전부 막혀 있던 것을 수정. alg_ 와 같은 구조 + 반(sec) 구분:
+//                 담당 선생님(geo_teachers/{이메일}의 sec)은 자기 요일 반만 조회
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -172,6 +180,77 @@ service cloud.firestore {
     match /net_daily/{date} {
       allow read: if true;
       allow write: if false;
+    }
+
+    // 대수(응용) 특강 오답노트(saebom-algebra.web.app): 학생이 틀린 교재 문항 "번호"만 보관한다.
+    // 문서 ID = 그 앱의 로그인 해시 PBKDF2(이름+전화뒷4자리) 24자리 — 즉 ID 자체가 열쇠다.
+    // 그래서 get 은 열되 list 는 반드시 막아야 한다(열면 ID를 몰라도 전부 훑어진다).
+    // 이름·전화번호는 저장하지 않는다(해시→이름 대조표는 로컬 tools/roster.txt 에만 있다).
+    // 지우기는 막는다 — 실수나 장난으로 한 학기 기록이 날아가는 편이 훨씬 나쁘다.
+    // 관리자 모드는 원장 계정으로 로그인했을 때만. 학생 앱은 로그인이 없으므로
+    // 이 조건은 학생 쪽에서는 절대 참이 되지 않는다.
+    // ⚠️ email_verified 는 보지 않는다 — 이 프로젝트의 계정은 전부 원장이 직접 만든
+    //    password 계정이라 셋 다 emailVerified=false 다. 조건에 넣으면 아무도 못 들어온다.
+    //    이미 있는 이메일로는 새 계정을 만들 수 없으니 이메일 일치만으로 충분하다.
+    function algTeacher() {
+      return request.auth != null
+        && request.auth.token.email == 'doctorj011@gmail.com';
+    }
+    match /alg_notes/{h} {
+      allow get: if h.matches('^[0-9a-f]{24}$');
+      allow list: if algTeacher();          // 반 전체 조회는 원장만
+      allow delete: if false;
+      allow create, update: if h.matches('^[0-9a-f]{24}$')
+        && request.resource.data.keys().hasOnly(['v', 'exams', 'updatedAt'])
+        && request.resource.data.exams is map
+        && request.resource.data.exams.size() <= 30
+        && request.resource.data.updatedAt is string;
+    }
+    // 해시 → 이름 대조표. 서버에 이름을 두는 유일한 곳이라 원장만 읽는다.
+    // 쓰기는 tools/make_roster.mjs 가 관리자 토큰으로 하므로(규칙 우회) 전부 막는다.
+    match /alg_roster/{h} {
+      allow read: if algTeacher();
+      allow write: if false;
+    }
+
+    // 고2 기하 오답노트(saebom-geometry.web.app): alg_notes 와 같은 구조 + 반(sec) 구분.
+    // 학생 문서에 sec(수업 요일 반)가 함께 저장되고, 담당 선생님은 geo_teachers/{이메일}
+    // 문서의 sec 와 같은 반만 걸러서 조회할 수 있다(앱도 sec 필터를 붙여 묻는다).
+    // 원장은 geo_teachers 문서 없이 이메일만으로 전부 본다 — alg_ 와 같은 이유로
+    // email_verified 는 보지 않는다(전부 원장이 만든 password 계정).
+    function geoDirector() {
+      return request.auth != null
+        && request.auth.token.email == 'doctorj011@gmail.com';
+    }
+    function geoTeacherSec() {
+      return get(/databases/$(database)/documents/geo_teachers/$(request.auth.token.email)).data.sec;
+    }
+    match /geo_notes/{h} {
+      allow get: if h.matches('^[0-9a-f]{24}$') || geoDirector();
+      allow list: if geoDirector()
+        || (request.auth != null && resource.data.sec == geoTeacherSec());
+      allow delete: if false;
+      allow create, update: if h.matches('^[0-9a-f]{24}$')
+        && request.resource.data.keys().hasOnly(['v', 'sec', 'exams', 'updatedAt'])
+        && request.resource.data.sec is string
+        && request.resource.data.sec.size() <= 8
+        && request.resource.data.exams is map
+        && request.resource.data.exams.size() <= 30
+        && request.resource.data.updatedAt is string;
+    }
+    // 해시 → 이름·반 대조표(name·grade·sec). 원장은 전부, 담당 선생님은 자기 반만.
+    // 쓰기는 명단 도구가 관리자 토큰으로 하므로(규칙 우회) 전부 막는다.
+    match /geo_roster/{h} {
+      allow get, list: if geoDirector()
+        || (request.auth != null && resource.data.sec == geoTeacherSec());
+      allow write: if false;
+    }
+    // 선생님 명단(문서 ID = 로그인 이메일, sec = 담당 요일 반). 앱이 로그인 직후
+    // 자기 문서 하나를 읽어 담당 반을 알아낸다 — 본인 것만 열고 목록은 막는다.
+    // 등록·수정은 Firebase 콘솔에서만.
+    match /geo_teachers/{email} {
+      allow get: if request.auth != null && request.auth.token.email == email;
+      allow list, write: if false;
     }
 
     // 특별관리 메모(관리앱 배치도): 문서 ID = 학생 이름. 조교가 신경 써야 할 학생을 적어 둔다.
