@@ -14907,13 +14907,23 @@ let SOLAPI_SENDER = (function() {
 })();
 
 // 솔라피 설정을 Firestore에도 저장/복원 — localStorage가 유지 안 되는 환경(임베드/개인정보보호) 대비
+//
+// ── 보안 수리 2단계 (2026-07-30) ──
+// settings/solapi 는 규칙상 아직 전세계 읽기라 API 키·시크릿이 무인증 REST 로 노출된다.
+// 그래서 **관리자 기기는 서버 중개(appauth:getSolapiConfig)로 먼저** 받아 가게 바꿨다.
+// 문서 직접 읽기는 폴백으로 남겨 둔다 — 조교 기기·키오스크에서 서버 경로가 확인되기
+// 전에 규칙을 잠그면 미입실 알림·알림톡이 통째로 멈추기 때문이다(단계적 수리).
+// 다음 단계에서 규칙을 read:false 로 잠그면서 이 폴백을 지우고 솔라피 키를 교체한다.
+const SOLAPI_CFG_FN =
+  'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/getSolapiConfig';
+// ⚠️ 관리자 기기 토큰 키 — 다른 스크립트 블록의 ADMIN_TOKEN_KEY 와 반드시 같아야 한다
+//    (module/classic 스코프가 갈려 상수를 공유할 수 없다).
+const SOLAPI_ADMIN_TOKEN_KEY = 'saebom_admin_token';
+
 window.loadSolapiConfigFromCloud = async function() {
-  try {
-    const db = await window.waitDb();
-    if (!db) return;
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'solapi'));
-    if (!snap.exists()) return;
-    const d = snap.data() || {};
+  // 받은 값을 적용하는 부분은 두 경로가 공유한다.
+  const apply = (d) => {
+    if (!d) return false;
     if (d.apiKey)    { SOLAPI_API_KEY    = d.apiKey;    localStorage.setItem('solapi_api_key', d.apiKey); }
     if (d.apiSecret) { SOLAPI_API_SECRET = d.apiSecret; localStorage.setItem('solapi_api_secret', d.apiSecret); }
     if (d.sender)    { SOLAPI_SENDER     = d.sender;    localStorage.setItem('solapi_sender', d.sender); }
@@ -14921,6 +14931,40 @@ window.loadSolapiConfigFromCloud = async function() {
     const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
     set('cfg-key', SOLAPI_API_KEY);   set('cfg-secret', SOLAPI_API_SECRET);   set('cfg-sender', SOLAPI_SENDER);
     set('sp-key', SOLAPI_API_KEY);    set('sp-secret', SOLAPI_API_SECRET);    set('sp-sender', SOLAPI_SENDER);
+    return !!(d.apiKey && d.apiSecret && d.sender);
+  };
+
+  // ① 서버 중개 — 관리자 기기로 등록된 경우에만(토큰이 있어야 한다).
+  const token = localStorage.getItem(SOLAPI_ADMIN_TOKEN_KEY);
+  if (token) {
+    try {
+      // ★ 반드시 시간 제한을 건다. 응답이 영영 안 오면 아래 폴백까지 못 가서,
+      //   localStorage 가 빈 기기(신규·시크릿창)는 키를 아예 못 받는다.
+      const res = await fetch(SOLAPI_CFG_FN, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: { token } }),
+        signal: AbortSignal.timeout(8000)
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (apply(json && json.result)) { console.log('[솔라피] 설정 로드 source=function'); return; }
+      } else {
+        console.warn('[솔라피] 서버 중개 실패 — 문서 직접 읽기로 폴백:', res.status);
+      }
+    } catch (e) {
+      console.warn('[솔라피] 서버 중개 오류 — 문서 직접 읽기로 폴백:', e && e.message);
+    }
+  }
+
+  // ② 폴백: 기존 경로(문서 직접 읽기). 3단계에서 규칙을 잠그면서 함께 제거한다.
+  try {
+    const db = await window.waitDb();
+    if (!db) return;
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'solapi'));
+    if (!snap.exists()) return;
+    apply(snap.data() || {});
+    console.log('[솔라피] 설정 로드 source=firestore(폴백)');
   } catch(e) {}
 };
 
