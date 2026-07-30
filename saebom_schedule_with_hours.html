@@ -6608,7 +6608,38 @@ const KAKAO_TPL_ABSENT  = 'KA01TP260709121315474MwHiN8I4BEU';
 const KAKAO_TPL_AWAY      = 'KA01TP260725145354585bvL3saZ7GMT';
 const KAKAO_TPL_AWAY_BACK = 'KA01TP260725145519212fisofCKOjSU';
 
+// ── 서버 발송 전환 스위치 (2026-07-30) ──
+// settings/alimtalk_server.enabled 가 true 면 입퇴실 알림톡을 Cloud Function
+// (appauth pushOnCheckin/pushOnCheckout)이 보내므로 여기서는 보내지 않는다.
+// 서버로 옮기는 이유: 키오스크가 솔라피 키를 들고 있지 않아도 되게 하려는 것
+// (settings/solapi 보안 수리 3단계의 선행 조건). 겸사겸사 키오스크가 꺼져 있어도
+// 알림이 나간다.
+//
+// ★ 이 값 하나를 서버와 클라이언트가 같이 본다 → 이중 발송도, 미발송도 없다.
+//   문제가 생기면 이 문서를 false 로 되돌리면 즉시 원래대로 돌아온다.
+// ★ 마지막 값을 localStorage 에 캐시해 두는 이유: 구독이 도착하기 전(페이지 로드
+//   직후)에 입실이 찍히면 판정을 못 해 이중 발송이 날 수 있다. 지난 값으로 메운다.
+let ALIMTALK_BY_SERVER = localStorage.getItem('saebom_alimtalk_server') === '1';
+(async function subscribeAlimtalkServerFlag() {
+  try {
+    const db = await window.waitDb();
+    if (!db) return;
+    // onSnapshot 은 window._fs 에서 꺼내 쓴다(_fsOnSnapshot 전역은 없다).
+    const { onSnapshot } = window._fs;
+    onSnapshot(window._fsDoc(db, 'settings', 'alimtalk_server'), snap => {
+      ALIMTALK_BY_SERVER = snap.exists() ? !!(snap.data() || {}).enabled : false;
+      localStorage.setItem('saebom_alimtalk_server', ALIMTALK_BY_SERVER ? '1' : '0');
+      console.log(`[알림톡] 입퇴실 발송 주체 = ${ALIMTALK_BY_SERVER ? '서버' : '이 기기'}`);
+    });
+  } catch(e) {}
+})();
+
 async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
+  // 서버가 보내는 중이면 여기서는 손대지 않는다(이중 발송 방지).
+  if (ALIMTALK_BY_SERVER) {
+    console.log(`[알림톡] 서버 발송 모드 — 이 기기에서는 생략 (${student.name})`);
+    return;
+  }
   // 테스트 계정은 입퇴실 알림톡을 보내지 않는다
   if (window.isTestStudent(student.name)) return;
   const parentPhone = (student.parent || '').replace(/-/g, '');
