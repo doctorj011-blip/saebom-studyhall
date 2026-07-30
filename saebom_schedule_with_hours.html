@@ -380,9 +380,11 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
 
 /* ── 조교 스티키 메모 (배치도 여백의 포스트잇) ──
-   넓은 화면: 입실현황 패널(240px+14px) 왼쪽 여백에 absolute로 붙는다.
-   좁은 화면(여백이 사라지는 폭): 배치도 위에 일반 블록으로 흐르게 해 좌석 그리드를 가리지 않는다. */
-#fp-sticky-panel{position:absolute;top:0;right:268px;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:5}
+   입실현황 패널(240px+14px) 왼쪽에 absolute로 붙는다. 여백이 모자라면 좌석(관리석) 위에
+   그대로 겹쳐 뜬다 — 아래로 흘려보내면 배치도 전체가 밀려 내려가 불편하다(사용자 요청).
+   ★z-index는 좌석 드롭 하이라이트(z-index:10)보다 위여야 메모가 좌석에 묻히지 않는다.
+   진짜 좁은 화면(<820px)에서만 .fp-sticky-inline 폴백으로 배치도 위 블록이 된다. */
+#fp-sticky-panel{position:absolute;top:0;right:268px;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:30}
 .fp-sticky-head{display:flex;align-items:center;justify-content:space-between;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:6px 8px;flex-shrink:0}
 #fp-sticky-form{flex-shrink:0}  /* 입력 종이가 자란 만큼 유지 — 자리가 모자라면 아래 목록이 스크롤 */
 #fp-sticky-list{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding-bottom:4px}
@@ -395,14 +397,14 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .fp-sticky-note .st-btns button:hover{opacity:1}
 .fp-sticky-imp-tag{display:inline-block;background:#DC2626;color:#fff;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 5px;margin-right:4px;vertical-align:1px}
 .fp-sticky-collapsed-note{font-size:10.5px;color:#B8A576;text-align:center;padding:2px 0}
-/* 여백 부족 시 폴백: 배치도 위 일반 블록으로. ★margin-right:254px로 입실현황 패널(240px+여백,
+/* 좁은 화면(<820px) 전용 폴백: 배치도 위 일반 블록으로. ★margin-right:254px로 입실현황 패널(240px+여백,
    absolute 오버레이) 폭을 비켜간다 — 없으면 패널이 입실현황 카드를 덮어 클릭을 막는다(실사고).
    ★width는 absolute일 때와 같은 232px로 고정 — width:auto로 두면 포스트잇이 화면폭만큼
    커져 "메모가 갑자기 커졌다"가 된다(2026-07-30 실사용 지적). 위치만 옮기고 크기는 그대로.
    .fp-sticky-inline 클래스는 JS(_fpStickyReflow)가 실측 겹침 판정으로 붙인다(중간 폭 화면 대응). */
 #fp-sticky-panel.fp-sticky-inline{position:static;width:232px;max-height:none;margin:0 254px 10px 0}
 #fp-sticky-panel.fp-sticky-inline #fp-sticky-list{max-height:200px}
-@media (max-width:1500px){
+@media (max-width:820px){
   #fp-sticky-panel{position:static;width:232px;max-height:none;margin:0 254px 10px 0}
   #fp-sticky-list{max-height:200px}
 }
@@ -5486,11 +5488,11 @@ window.renderStickyMemos = renderStickyMemos;
 renderStickyMemos();   // Firestore 로드 전 빈 패널 골격(접기 버튼 라벨 포함) 표시
 
 // ── 스티키 패널 위치 자동 전환 ──
-// absolute 배치(right:268, width:232)가 좌석 그리드나 입실현황 패널과 겹치는 폭이면
-// .fp-sticky-inline(배치도 위 일반 블록)으로 전환한다. 1800px 고정 실측만 믿었다가
-// 중간 폭 화면에서 패널이 입실현황 카드를 덮어 클릭을 막은 실사고(변아인 건)의 재발 방지.
-// ★클래스를 토글해 가며 측정하면 ResizeObserver와 무한 루프가 된다 — absolute일 때의
-//   가로 좌표는 컨테이너 기준으로 결정적이므로(오른쪽 끝-268-232) 계산만으로 판정한다.
+// 원칙(2026-07-30 사용자 요청): 펼쳤을 때 패널은 관리석 위에 그냥 겹쳐 뜬다. 예전엔 좌석과
+// 겹치면 배치도 위 블록으로 내려보냈는데, 그러면 배치도 전체가 아래로 밀려 쓰기 불편했다.
+// 좌석 겹침은 허용, 입실현황 패널(right:0, 240px)만 right:268 여백으로 비켜 간다.
+// .fp-sticky-inline(아래로 흐르는 블록)은 패널 놓을 폭조차 없는 좁은 화면 전용 폴백.
+// ★클래스를 토글해 가며 측정하면 ResizeObserver와 무한 루프가 된다 — 컨테이너 폭만 보고 판정한다.
 function _fpStickyReflow(){
   const p=document.getElementById('fp-sticky-panel');
   const wrap=document.getElementById('fp-drag-wrap');
@@ -5499,12 +5501,9 @@ function _fpStickyReflow(){
   if(!p||!room||!cont) return;
   const cr=cont.getBoundingClientRect();
   if(!cr.width) return;                          // 배치도 탭이 숨김 상태면 판단 보류
-  const pLeft=cr.right-268-232, pRight=cr.right-268;   // absolute일 때 패널의 가로 범위
-  const rr=room.getBoundingClientRect();
-  const side=document.getElementById('fp-side-panel');
-  const sr=side?side.getBoundingClientRect():null;
-  const clash=(rr.width && pLeft < rr.right+8) || (sr && sr.width && pRight > sr.left-8);
-  p.classList.toggle('fp-sticky-inline', clash);
+  // 좌석(관리석)과 겹치는 건 이제 정상 동작이므로 판정에서 뺐다. 아래로 흘리는 건
+  // 패널을 겹쳐 놓을 자리조차 없는 폭에서만 — 그때는 좌석 그리드가 통째로 가려진다.
+  p.classList.toggle('fp-sticky-inline', cr.width < 820);
 }
 window._fpStickyReflow=_fpStickyReflow;
 window.addEventListener('resize', ()=>{ try{_fpStickyReflow();}catch(e){} });
