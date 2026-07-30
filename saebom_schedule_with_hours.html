@@ -379,12 +379,13 @@ body.director-device .tab-btn.director-only{display:inline-block}
 /* 위치수정 모드: 좌석을 absolute로 자유 배치 */
 .fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
 
-/* ── 조교 스티키 메모 (배치도 여백의 포스트잇) ──
-   입실현황 패널(240px+14px) 왼쪽에 absolute로 붙는다. 여백이 모자라면 좌석(관리석) 위에
-   그대로 겹쳐 뜬다 — 아래로 흘려보내면 배치도 전체가 밀려 내려가 불편하다(사용자 요청).
+/* ── 조교 스티키 메모 (배치도 왼쪽 관리석 위의 포스트잇) ──
+   배치도 왼쪽 끝(관리석 자리)에 absolute로 겹쳐 뜬다 — 조교가 앉는 자리 옆이라 눈에 잡히고,
+   아래로 흘려보내면 배치도·입실현황이 통째로 밀려 내려가 불편하다(2026-07-30 사용자 요청).
    ★z-index는 좌석 드롭 하이라이트(z-index:10)보다 위여야 메모가 좌석에 묻히지 않는다.
+   ★오른쪽 입실현황 패널(right:0, 240px)과는 컨테이너가 472px보다 넓으면 절대 안 겹친다.
    진짜 좁은 화면(<820px)에서만 .fp-sticky-inline 폴백으로 배치도 위 블록이 된다. */
-#fp-sticky-panel{position:absolute;top:0;right:268px;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:30}
+#fp-sticky-panel{position:absolute;top:0;left:0;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:30}
 .fp-sticky-head{display:flex;align-items:center;justify-content:space-between;background:#FEF3C7;border:1.5px solid #FCD34D;border-radius:10px;padding:6px 8px;flex-shrink:0}
 #fp-sticky-form{flex-shrink:0}  /* 입력 종이가 자란 만큼 유지 — 자리가 모자라면 아래 목록이 스크롤 */
 #fp-sticky-list{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding-bottom:4px}
@@ -5493,7 +5494,8 @@ renderStickyMemos();   // Firestore 로드 전 빈 패널 골격(접기 버튼 �
 // ── 스티키 패널 위치 자동 전환 ──
 // 원칙(2026-07-30 사용자 요청): 펼쳤을 때 패널은 관리석 위에 그냥 겹쳐 뜬다. 예전엔 좌석과
 // 겹치면 배치도 위 블록으로 내려보냈는데, 그러면 배치도 전체가 아래로 밀려 쓰기 불편했다.
-// 좌석 겹침은 허용, 입실현황 패널(right:0, 240px)만 right:268 여백으로 비켜 간다.
+// 패널은 배치도 왼쪽 끝(left:0, 관리석 자리)에 붙어 있어 오른쪽 입실현황 패널과는 애초에
+// 만나지 않는다(컨테이너 472px 이상이면). 좌석 겹침은 허용.
 // .fp-sticky-inline(아래로 흐르는 블록)은 패널 놓을 폭조차 없는 좁은 화면 전용 폴백.
 // ★클래스를 토글해 가며 측정하면 ResizeObserver와 무한 루프가 된다 — 컨테이너 폭만 보고 판정한다.
 function _fpStickyReflow(){
