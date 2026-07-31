@@ -564,6 +564,7 @@ exports.acOnCommand = onDocumentCreated(
 // ══════════════════════════════════════════════════════════════
 const Anthropic = require('@anthropic-ai/sdk');
 const sharp = require('sharp');            // 플래너 사진 축소용(API 10MB 상한 대응)
+const jpegjs = require('jpeg-js');         // sharp가 못 여는 잘린 JPEG 복원용(순수 JS 디코더)
 // sharp(libvips)는 기본으로 디코드 결과를 캐시하고 CPU 수만큼 스레드를 띄운다. 플래너 사진은
 // 한 장이 4000x3000(=원본 픽셀만 36MB)이라 그 캐시가 그대로 RSS로 쌓여 컨테이너가 죽는다
 // (2026-07-29 02:11 plannerBatchNight OOM). 사진을 한 장씩 순차 처리하는 용도라 캐시는 이득이
@@ -998,6 +999,27 @@ function plannerAiRequestParams(model, sysPrompt, content) {
   };
 }
 
+// sharp(libvips)가 failOn:'none'으로도 못 여는 잘린 JPEG를 순수 JS 디코더로 복원한다.
+// 폰 카메라 JPEG는 재시작(RST) 마커 구간이라, 업로드가 중간에 끊기면 libvips는 어느
+// 지점에서 잘라도 디코드를 거부한다(2026-07-30 좌석 28 실파일로 확인 — PIL·jpeg-js는 성공).
+// 마지막 RST 마커에서 잘라 EOI를 붙이면 jpeg-js 관용 모드가 디코드된 부분까지 살린다
+// (못 받은 아랫부분만 회색으로 남고 나머지는 온전 — 같은 실파일에서 3000x4000 전체 복원).
+async function salvageTruncatedJpeg(buf) {
+  if (buf.length < 4 || buf[0] !== 0xff || buf[1] !== 0xd8) throw new Error('JPEG가 아님');
+  let i = buf.length - 2;
+  while (i > 2 && !(buf[i] === 0xff && buf[i + 1] >= 0xd0 && buf[i + 1] <= 0xd7)) i--;
+  if (i <= 2) throw new Error('복원 지점(RST 마커)이 없음');
+  const cut = Buffer.concat([buf.subarray(0, i), Buffer.from([0xff, 0xd9])]);
+  const raw = jpegjs.decode(cut, { tolerantDecoding: true, useTArray: true, maxMemoryUsageInMB: 1024, maxResolutionInMP: 100 });
+  // jpeg-js는 EXIF 방향 태그를 무시한다 — 헤더는 잘린 파일에서도 온전하므로 sharp로 읽어 반영
+  let orientation = 1;
+  try { orientation = (await sharp(buf).metadata()).orientation || 1; } catch (_) { /* 태그 없으면 그대로 */ }
+  const angle = { 3: 180, 6: 90, 8: 270 }[orientation] || 0;
+  return sharp(Buffer.from(raw.data.buffer, raw.data.byteOffset, raw.data.length),
+      { raw: { width: raw.width, height: raw.height, channels: 4 } })
+    .rotate(angle).jpeg({ quality: 92 }).toBuffer();
+}
+
 // 사진 다운로드 → 전처리(축소·확대본) → 메시지 content 조립
 async function buildPlannerAiUserContent(seat, dateStr, name, url) {
   const res = await fetch(url);
@@ -1012,10 +1034,16 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
   const tiles = [];   // 계획표·메모 확대본(전체 사진 뒤에 함께 보낸다)
   try {
     // failOn:'none' — 업로드가 중간에 끊겨 잘린 JPEG도 디코드된 부분까지 살려서 진행한다.
-    // 엄격 디코드는 여기서 throw해 catch로 빠지고, 손상 원본이 그대로 API로 가면 API가
-    // 디코드하지 못해 배치 검사가 영구 실패한다(2026-07-30 좌석 28,
-    // "VipsJpeg: Premature end of input file").
-    const norm = await sharp(buf, { failOn: 'none' }).rotate().toBuffer();   // EXIF 반영한 고해상 원본
+    // 손상 원본이 그대로 API로 가면 API가 디코드하지 못해 배치 검사가 영구 실패한다
+    // (2026-07-30 좌석 28, "VipsJpeg: Premature end of input file").
+    // 그래도 못 열면(재시작 마커 JPEG의 절단은 libvips가 아예 거부) jpeg-js로 복원한다.
+    let norm;   // EXIF 반영한 고해상 원본
+    try {
+      norm = await sharp(buf, { failOn: 'none' }).rotate().toBuffer();
+    } catch (e1) {
+      norm = await salvageTruncatedJpeg(buf);
+      logger.warn('사진 손상 — jpeg-js로 복원해 진행', { seat, date: dateStr, message: e1.message });
+    }
     const meta = await sharp(norm).metadata();
     const W = meta.width || 0, H = meta.height || 0;
 
