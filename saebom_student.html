@@ -3416,7 +3416,33 @@ function wkFinishEarlyTime(day, pNum, el) {
 }
 
 // ── 저장 ──
+// ── 날짜 넘김 감지 ──
+// todayDay는 로그인 시점에 한 번 계산된다. 폰 브라우저가 탭을 밤새 살려두면 날짜가 바뀌어도
+// '오늘 일정'이 어제 요일을 가리켜, 수정이 어제 칸에 저장된다(2026-07-31 실사례).
+// 요일이 바뀌었으면 오늘 기준으로 화면·데이터를 다시 불러온다. 반환값: 바뀌었는지 여부.
+function _recheckTodayDay() {
+  if (!currentStudent || !todayDay) return false;
+  const nowDay = DAY_NAMES[new Date().getDay()];
+  if (nowDay === todayDay) return false;
+  todayDay = nowDay;
+  currentDayTab = todayDay === '일' ? '월' : todayDay;
+  // 어제 요일을 향해 있던 미저장 수정은 버린다 — 저장하면 어제 칸에 들어가므로 유지가 더 위험
+  isDirty = false;
+  document.getElementById('save-fab').classList.remove('show');
+  initDraft();
+  buildDayTabs();
+  buildDailyPeriods();
+  buildWeeklyTable();
+  if (window._firebaseReady) loadStudentScheduleFromFirebase(); // 오늘 기준 원본 복구 + 재렌더
+  return true;
+}
+
 async function saveSchedule() {
+  // 날짜가 바뀐 채(밤새 열린 탭) 저장하면 어제 칸에 기록된다 — 저장 중단하고 오늘 기준으로 재로드
+  if (_recheckTodayDay()) {
+    showToast('📅 날짜가 바뀌어 오늘 일정을 새로 불러왔습니다 — 확인 후 다시 저장해 주세요');
+    return;
+  }
   // 마감(교시 시작 5시간 전) 이후의 출석 취소 → 벌점 경고 후 진행
   const latePenalties = computeLatePenalties();
   // 불참 → 참여 복귀 교시: 이미 기록된 늦은 변경 벌점을 취소한다 (저장 후 처리)
@@ -5262,6 +5288,8 @@ window.cancelTabletReq = async function(){
 document.addEventListener('visibilitychange', function() {
   if (document.hidden) return;
   if (!currentStudent) return;
+  // 밤새 열려 있던 탭이면 '오늘'이 어제 요일로 굳어 있다 — 오늘 기준으로 재로드
+  if (_recheckTodayDay()) showToast('📅 날짜가 바뀌어 오늘 일정을 새로 불러왔습니다');
   refreshStudentData();
   // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
