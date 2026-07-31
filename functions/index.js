@@ -1011,7 +1011,11 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
   //    반영해 두지 않으면 오히려 눕거나 뒤집힌 사진이 모델에 전달된다.
   const tiles = [];   // 계획표·메모 확대본(전체 사진 뒤에 함께 보낸다)
   try {
-    const norm = await sharp(buf).rotate().toBuffer();          // EXIF 반영한 고해상 원본
+    // failOn:'none' — 업로드가 중간에 끊겨 잘린 JPEG도 디코드된 부분까지 살려서 진행한다.
+    // 엄격 디코드는 여기서 throw해 catch로 빠지고, 손상 원본이 그대로 API로 가면 API가
+    // 디코드하지 못해 배치 검사가 영구 실패한다(2026-07-30 좌석 28,
+    // "VipsJpeg: Premature end of input file").
+    const norm = await sharp(buf, { failOn: 'none' }).rotate().toBuffer();   // EXIF 반영한 고해상 원본
     const meta = await sharp(norm).metadata();
     const W = meta.width || 0, H = meta.height || 0;
 
@@ -1020,7 +1024,7 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
     // 가로 해상도가 1176px밖에 안 남아 작은 손글씨(교재명·문항번호)가 뭉갠다.
     // 가로세로 비가 1에 가까운 조각으로 자르면 같은 1568px 안에 글자가 2배 크게 담긴다.
     if (W > 1600 && H > 1600 && H > W) {
-      const cut = async (x0, y0, x1, y1) => sharp(norm)
+      const cut = async (x0, y0, x1, y1) => sharp(norm, { failOn: 'none' })
         .extract({
           left: Math.round(W * x0), top: Math.round(H * y0),
           width: Math.round(W * (x1 - x0)), height: Math.round(H * (y1 - y0))
@@ -1036,12 +1040,13 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
     // 타임테이블은 확대본이 따로 없어(확대본 2장은 왼쪽 계획표·메모 전용, 그것도 세로 사진일 때만)
     // 이 전체 사진 한 장으로 칸을 세야 한다. 1568px로 줄이면 표가 작아져 30분/60분 칸 구분이
     // 뭉개지고, 같은 플래너를 재검사할 때마다 총량이 100분씩 달라지는 원인이 됐다(2026-07-24).
-    if (W > 2576 || H > 2576 || buf.length > 4 * 1024 * 1024) {
-      buf = await sharp(norm)
-        .resize({ width: 2576, height: 2576, fit: 'inside', withoutEnlargement: true })
-        .jpeg({ quality: 88 }).toBuffer();
-      mediaType = 'image/jpeg';
-    }
+    // 크기와 무관하게 항상 이 재인코딩본을 보낸다 — 예전엔 2576px·4MB 이하면 원본을
+    // 그대로 보냈는데, 그 구멍으로 '작은' 손상 파일이 재인코딩 없이 나가면 위의 관용
+    // 디코드가 무의미해진다(withoutEnlargement라 작은 사진 해상도는 그대로다).
+    buf = await sharp(norm, { failOn: 'none' })
+      .resize({ width: 2576, height: 2576, fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 88 }).toBuffer();
+    mediaType = 'image/jpeg';
   } catch (e) {
     logger.warn('사진 전처리 실패 — 원본으로 진행', { seat, date: dateStr, message: e.message });
   }
