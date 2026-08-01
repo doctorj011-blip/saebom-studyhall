@@ -4444,7 +4444,7 @@ async function _renderPenaltyList(filterSeatKey) {
           } else {
             when = `<b>${pn}교시</b> `;
             label = isNoShow ? `<b style="color:#8B1A1A">무단결석</b> (변경 없이 미입실)`
-                  : isLate ? `<b style="color:#9A5B00">지각</b> (${fmt(p.inAt ? new Date(p.inAt) : null)} 입실${p.lateMin ? ` · ${p.lateMin}분 늦음` : ''})`
+                  : isLate ? `<b style="color:#9A5B00">지각</b> (${fmt(p.inAt ? new Date(p.inAt) : null)} ${p.byAway ? '외출 복귀' : '입실'}${p.lateMin ? ` · ${p.lateMin}분 늦음` : ''})`
                   : `${p.to==='absent'?'불참':(p.to==='early'?'중간퇴실':'해제')} 변경`;
             meta = (isNoShow || isLate) ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
           }
@@ -6371,28 +6371,13 @@ window.checkinConfirm = function() {
   const donePanel = document.getElementById('checkin-done-panel');
   donePanel.style.display = 'block';
 
-  // 입실 시 교시 외 시간이면 스터디룸 배정
+  // 입실 시 교시 중이면 스터디룸 배정 (외출 복귀도 같은 규칙 — checkinAwayReturn 참고)
   let assignedRoom = null;
   let isDuringPeriod = false;
-  if (!isCheckout && !window.isAdminSeat(student.seat)) {
-    const curPeriod = getCurrentPeriod();
-    // 평일은 7교시(18:00) 이후에만, 토요일은 예약제라 1~11교시 전 시간 스터디룸 안내 적용
-    const now = new Date();
-    let curMin = now.getHours() * 60 + now.getMinutes();
-    if (now.getHours() < 3) curMin += 1440; // 자정 넘김(11교시)도 전날 밤으로 취급
-    const is7thOrLater = curMin >= 18 * 60; // 18:00 이후
-    // 운영일 기준(새벽 3시 경계) 요일 — getCurrentPeriod의 effDay와 동일. 토요일이면 종일 예약제
-    const effDay = now.getHours() < 3 ? (now.getDay() + 6) % 7 : now.getDay();
-    // 방학에는 평일도 오전 1교시부터 운영하므로 토요일과 같이 종일 배정 대상
-    const isAllDay = effDay === 6 || VACATION_MODE;
-
-    if (curPeriod && (isAllDay || is7thOrLater)) {
-      // 교시 중 입실 — 스터디룸 배정 (단독 사용 룸 제외, 본인 단독 룸 우선)
-      // 평일은 18:00 이후만, 토요일은 오전 1교시부터 배정
-      isDuringPeriod = true;
-      assignedRoom = autoAssignStudyroom(student, curPeriod);
-    }
-    // 평일 6시 이전이거나 쉬는 시간이면 스터디룸 배정 없음
+  if (!isCheckout) {
+    const sr = studyroomForEntry(student);
+    assignedRoom = sr.room;
+    isDuringPeriod = sr.duringPeriod;
   }
 
   let doneMsg = isCheckout ? `퇴실 완료 · ${student.seat}` : `입실 완료 · ${student.seat}`;
@@ -6513,6 +6498,15 @@ window.checkinAwayReturn = function() {
     _showAwayDone(student, '✅',
       mealName ? `복귀 완료 · 어서 오세요 (학부모님께 ${mealName} 복귀 알림 발송)`
                : '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
+    // 교시 중 복귀 = 늦게 들어오는 것이므로 신규 입실과 똑같이 스터디룸으로 보낸다(예외 없음).
+    // 쉬는 시간에 복귀했으면 배정 없이 바로 좌석으로 간다.
+    const sr = studyroomForEntry(student);
+    if (sr.room && sr.duringPeriod) {
+      document.getElementById('done-icon').textContent = '📚';
+      document.getElementById('done-msg').textContent =
+        `스터디룸 ${sr.room}번에서 공부를 하다가 쉬는 시간에 좌석으로 이동해 주세요`;
+      showStudyroomFullscreen(sr.room, maskName(student.name));
+    }
     if (mealName) sendAwaySMS(student, true, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, true, timeStr);
     // 세션 문서에 외출 구간(awayMs) 정산 — 사용시간 제외의 원본
@@ -6523,7 +6517,8 @@ window.checkinAwayReturn = function() {
     // 🚪 자동문 열기
     if (window.requestDoorOpen) window.requestDoorOpen(3);
     else if (window.doorOpenTimed) window.doorOpenTimed(3);
-    setTimeout(() => { checkinReset(); }, 2200);
+    // 스터디룸 안내가 떴으면 입실 때와 같이 오래 보여준다(2.2초는 읽기 전에 사라진다)
+    setTimeout(() => { checkinReset(); }, (sr.room && sr.duringPeriod) ? 9000 : 2200);
   } catch(e) {
     console.error('복귀 처리 오류:', e);
     showAdminToast('⚠️ 복귀 처리 중 오류: ' + (e && e.message ? e.message : e));
@@ -6837,6 +6832,28 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
     });
 
   } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
+}
+
+// ── 교시 중에 들어오면 스터디룸으로 보낼지 판정 (신규 입실·외출 복귀 공용) ──
+// 평일은 7교시(18:00) 이후, 토요일·방학은 예약제라 1교시부터 적용. 쉬는 시간이면 대상 아님.
+// 외출 복귀도 예외 없이 같은 규칙을 쓴다 — 교시 중에 문을 열고 열람실로 들어가는 것은
+// 늦게 처음 온 것과 방해가 똑같기 때문 (2026-08-01 원장 지시).
+// 반환: { room, duringPeriod } — 대상이 아니면 { room:null, duringPeriod:false }
+function studyroomForEntry(student) {
+  const none = { room: null, duringPeriod: false };
+  if (window.isAdminSeat && window.isAdminSeat(student.seat)) return none;
+  const curPeriod = getCurrentPeriod();
+  if (!curPeriod) return none;              // 쉬는 시간 — 그냥 좌석으로
+  const now = new Date();
+  let curMin = now.getHours() * 60 + now.getMinutes();
+  if (now.getHours() < 3) curMin += 1440;   // 자정 넘김(11교시)도 전날 밤으로 취급
+  // 운영일 기준(새벽 3시 경계) 요일 — getCurrentPeriod의 effDay와 동일. 토요일이면 종일 예약제
+  const effDay = now.getHours() < 3 ? (now.getDay() + 6) % 7 : now.getDay();
+  // 방학에는 평일도 오전 1교시부터 운영하므로 토요일과 같이 종일 배정 대상
+  const isAllDay = effDay === 6 || VACATION_MODE;
+  if (!isAllDay && curMin < 18 * 60) return none;   // 평일 18시 이전은 배정 없음
+  // 교시 중 — 스터디룸 배정 (단독 사용 룸 제외, 본인 단독 룸 우선)
+  return { room: autoAssignStudyroom(student, curPeriod), duringPeriod: true };
 }
 
 // ── 18시 이후 교시 중 입실 시 스터디룸 자동배정 (키오스크·관리자 강제입실 공용) ──
@@ -12958,7 +12975,11 @@ const NOSHOW_MID_ENTRY_GRACE_MIN = 20;
 // ── 지각 벌점 (교시당 1점) ──
 // 규칙: 출석 예정 교시에 오기는 왔지만 교시 시작 후 LATE_GRACE_MIN 을 넘겨 처음 들어온 경우.
 //   · 이미 재실 중이면(이전 교시부터 이어 앉아 있으면) 입실 시각이 교시 시작보다 앞이라 지각이 아니다.
-//   · 외출 후 복귀가 늦은 경우는 새 세션의 입실 시각으로 판정되므로 지각이 된다.
+//   · 외출 후 복귀가 늦은 경우도 지각이다 — 외출은 세션을 닫지 않으므로(awayMs만 적립) 세션만 보면
+//     계속 재실로 잡힌다. 그래서 checkin_logs의 외출 구간을 빼고 '자리에 있던' 시각으로 판정한다
+//     (_awayIntervalsByName/_firstPresentTs, 2026-08-01 원장 지시로 예외 없이 부과).
+//   · 다만 그 교시 내내 외출 중이었으면(복귀가 다음 교시 이후) 그 교시는 지각이 아니라 판정 제외 —
+//     무단결석(2점)은 종전대로 세션 기준이라 외출로 2점이 새로 붙는 일은 없다.
 //   · 중간입실(△) 신고 교시는 늦게 온다고 미리 알린 것이므로 제외한다(무단결석 유예와 같은 취지).
 //   · 아예 안 온 교시는 지각이 아니라 무단결석 2점 — 둘은 배타이고 한 교시에 하나만 붙는다.
 // 판정 시점·멱등성은 무단결석과 완전히 동일하다(같은 루프에서 같이 계산해 같은 문서에 병합).
@@ -13043,6 +13064,66 @@ window.assessNoShowIntraday = async function() {
   else _intradayNoShowNextTs = now + 30 * 60000; // 아직 세션 0건(휴관 등) — 30분 뒤 재시도
 };
 
+// ── 그날 외출 구간 (학생별 [[나간시각, 복귀시각], ...]) ──
+// 외출은 세션을 닫지 않으므로(awayMs만 적립) 세션만 보면 식사하러 나갔다 늦게 온 학생도
+// 계속 '재실'로 잡힌다. 개별 외출/복귀 시각은 checkin_logs 의 away:true 이벤트에만 남아 있어
+// 여기서 out→in 으로 짝지어 복원한다(사용시간 모달 sessAwayDetail과 같은 방식).
+//  · checkin_logs.date 는 무패딩 레거시 키('2026-7-23'), 11교시가 자정을 넘으므로 다음날치도 읽는다.
+//  · 복귀를 안 누른 외출(짝 없는 out)은 판정 마감(익일 02:00)까지 외출로 본다 — 그 뒤 교시는
+//    재실 조각이 0이 되어 지각이 아니라 판정 대상에서 빠진다(무단결석으로 올리지는 않는다).
+async function _awayIntervalsByName(dIso, d0) {
+  const toLegacy = iso => { const [y, m, dd] = iso.split('-').map(Number); return `${y}-${m}-${dd}`; };
+  const nextIso = SH.sessIsoDate(d0 + 24 * 3600 * 1000);
+  const endTs = d0 + 26 * 3600 * 1000; // 익일 02:00 — 11교시(01:00) 종료 이후
+  const byName = {};
+  try {
+    const snap = await getDocs(query(collection(db, 'checkin_logs'),
+      where('date', 'in', [toLegacy(dIso), toLegacy(nextIso)])));
+    const evs = {};
+    snap.forEach(x => {
+      const l = x.data();
+      if (l.away !== true || !l.studentName || typeof l.ts !== 'number') return;
+      (evs[l.studentName] = evs[l.studentName] || []).push(l);
+    });
+    Object.keys(evs).forEach(name => {
+      const list = evs[name].sort((a, b) => a.ts - b.ts);
+      const out = [];
+      let open = null;
+      list.forEach(e => {
+        if (e.type === 'out') {
+          if (open !== null) out.push([open, e.ts]); // 복귀 없이 또 외출 — 끊지 않고 이어 붙인다
+          open = e.ts;
+        } else if (e.type === 'in' && open !== null) {
+          out.push([open, e.ts]); open = null;
+        }
+      });
+      if (open !== null) out.push([open, endTs]);
+      byName[name] = out;
+    });
+  } catch(e) {
+    // 조회 실패 시 외출 없음으로 진행 — 판정이 종전(외출 미반영)과 같아질 뿐 오판정은 아니다
+    console.warn('[지각] 외출 구간 조회 실패 — 외출 미반영으로 진행:', e);
+  }
+  return byName;
+}
+
+// 세션 구간에서 외출 구간을 빼고, [ps,pe) 와 겹치는 재실 조각 중 가장 이른 시작 시각을 돌려준다.
+// null = 그 교시 내내 자리에 없었음(외출 중) → 지각이 아니라 판정 제외.
+function _firstPresentTs(sessions, aways, ps, pe) {
+  let pieces = sessions.map(iv => [iv[0], iv[1]]);
+  (aways || []).forEach(a => {
+    const next = [];
+    pieces.forEach(p => {
+      if (a[1] <= p[0] || a[0] >= p[1]) { next.push(p); return; } // 안 겹침
+      if (a[0] > p[0]) next.push([p[0], a[0]]);   // 나가기 전 조각
+      if (a[1] < p[1]) next.push([a[1], p[1]]);   // 복귀 후 조각
+    });
+    pieces = next;
+  });
+  const hit = pieces.filter(p => p[0] < pe && p[1] > ps);
+  return hit.length ? Math.min.apply(null, hit.map(p => p[0])) : null;
+}
+
 // onlyPeriods: Set(교시) — 주면 그 교시만 판정하고 '그날 완료' 표시는 남기지 않는다(당일 부분판정).
 // null이면 종전대로 그날 전체를 확정 판정한다. 반환값은 판정이 실제로 수행됐는지 여부.
 async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
@@ -13066,6 +13147,9 @@ async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
       await _markNoshowDone(dIso, { skipped: '세션 없음', at: Date.now(), by: DOOR_DEVICE_ID });
       return true;
     }
+
+    // 1-b) 그날 외출 구간 — 지각 판정에서 '자리에 없던 시간'으로 뺀다(무단결석 판정은 종전대로 세션 기준)
+    const awayByName = await _awayIntervalsByName(dIso, d0);
 
     // 2) 그날 유효 스케줄 = 고정 시간표(base)에 그날의 당일변경(daily_reports)을 덮어쓴 값
     const [baseSnap, rptSnap] = await Promise.all([
@@ -13112,14 +13196,17 @@ async function _assessNoShowForDate(dIso, d0, dayName, onlyPeriods) {
         const ps = d0 + w[0] * 60000, pe = d0 + (w[1] + grace) * 60000;
         const hit = sessions.filter(iv => iv[0] < pe && iv[1] > ps); // 일부라도 겹치면 출석
         if (!hit.length) { missed.push(pn); return; }
-        // 지각 — 교시 시작 유예를 넘겨 처음 들어온 경우. 겹치는 세션 중 가장 이른 입실 시각으로 본다
-        // (교시 시작 전부터 재실 중이면 그 값이 ps보다 작아 자동으로 지각이 아니게 된다).
+        // 지각 — 교시 시작 유예를 넘겨 처음 '자리에 있게 된' 경우. 외출 중이던 구간은 재실로 치지
+        // 않으므로 식사 등으로 나갔다 늦게 복귀한 것도 예외 없이 지각이다(2026-08-01 원장 지시).
+        // 교시 시작 전부터 앉아 있었으면 조각 시작이 ps보다 앞이라 자동으로 지각이 아니게 된다.
         if (dIso >= LATE_FROM && !isPartial) {
-          const firstIn = Math.min(...hit.map(iv => iv[0]));
-          if (firstIn > ps + LATE_GRACE_MIN * 60000) {
+          const firstIn = _firstPresentTs(hit, awayByName[name], ps, pe);
+          if (firstIn !== null && firstIn > ps + LATE_GRACE_MIN * 60000) {
             // 실제 입실 시각과 늦은 분을 함께 남긴다 — changedAt은 '판정한 시각'이라
             // 학생·학부모에게 근거를 보여줄 수 없다(새벽 2시로 찍힌다).
-            late.push({ pn, inAt: firstIn, lateMin: Math.round((firstIn - ps) / 60000) });
+            // byAway: 처음 온 게 아니라 외출에서 늦게 복귀한 경우 — 표시 문구를 '복귀'로 바꾼다.
+            const byAway = (awayByName[name] || []).some(a => a[1] === firstIn);
+            late.push({ pn, inAt: firstIn, lateMin: Math.round((firstIn - ps) / 60000), byAway });
           }
         }
       });
@@ -13172,6 +13259,7 @@ async function _writeAttendPenalty(dIso, dayName, seatKey, seat, name, missed, l
       type: 'late', points: LATE_POINTS,
       from: 'attend', to: 'late', reason: '',
       inAt: it.inAt, lateMin: it.lateMin,   // 실제 입실 시각 · 늦은 분 (표시·이의제기 근거)
+      ...(it.byAway ? { byAway: true } : {}),  // 외출에서 늦게 복귀한 지각
       changedAt: at, canceled: false
     };
   });
