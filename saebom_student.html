@@ -2198,13 +2198,16 @@ function smRenderMyReports() {
 function renderWeeklyGoalCard() {
   const el = document.getElementById('weekly-goal-card');
   if (!el || !currentStudent) return;
-  const g = Number(currentStudent.weeklyGoalH) || 0;
-  // 챌린지 주간(관리자앱 WEEKLY_CHALLENGES와 짝): 그 주만 안내 문구·상점을 다르게 표시
-  const _d = new Date();
-  const _iso = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
-  const isChalWeek = _iso >= '2026-07-27' && _iso <= '2026-08-02';
+  // 챌린지 주간(관리자앱 WEEKLY_CHALLENGES와 짝, 키 = 그 주 월요일 ISO): 그 주만 목표·상점·문구를 오버라이드.
+  // 판정이 이 고정값으로 도므로 표시도 DB weeklyGoalH가 아닌 여기 값을 우선한다.
+  const CHAL_WEEKS = { '2026-08-03': { goalH: 65, points: 15 } };
+  const _d = new Date(); _d.setHours(0,0,0,0);
+  _d.setDate(_d.getDate() - ((_d.getDay()+6)%7)); // 그 주 월요일
+  const _monIso = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
+  const chal = CHAL_WEEKS[_monIso];
+  const g = chal ? chal.goalH : (Number(currentStudent.weeklyGoalH) || 0);
   const sub = g
-    ? (isChalWeek ? `주 ${g}시간 · 🔥 챌린지 주간! 달성하면 상점 10점 (일요일 순공도 포함)` : `주 ${g}시간 · 달성하면 상점 2점 (미달 벌점 없음)`)
+    ? (chal ? `주 ${g}시간 · 🔥 챌린지 주간! 달성하면 상점 ${chal.points}점 (일요일 순공도 포함)` : `주 ${g}시간 · 달성하면 상점 2점 (미달 벌점 없음)`)
     : '관리자가 설정한 목표가 여기에 표시됩니다';
   el.innerHTML = `
     <div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
