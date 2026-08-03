@@ -133,6 +133,9 @@ async function acConfig() {
     srTemp: c.srTemp || { '1': 26, '2': 25, '3': 24 },         // 인원수별 냉방온도(과용량 소형실 기준)
     srFan: c.srFan || { '1': 'LOW', '2': 'LOW', '3': 'MID' },  // 인원수별 풍량
     noShowGraceMin: c.noShowGraceMin != null ? c.noShowGraceMin : 15, // 교시 시작 후 이 시간까진 예약수 유지(도착 지연 배려), 이후 실입실자 수
+    // 스터디룸 자동제어 스위치. false면 스터디룸 에어컨은 자동화가 일절 손대지 않고 수동 제어만 따른다
+    //   (예약 기반 냉방·예냉·브리지·자동 OFF·마감 전체 OFF 모두 해제. 진행 중이던 건조만 마무리).
+    srAuto: c.srAuto !== false,
     zones: c.zones || {},   // deviceId -> { name, type:'hall'|'studyroom', room? }
   };
 }
@@ -380,8 +383,10 @@ async function acEvaluate(reason) {
 
     // 자동 꺼짐 or 수동 보류 중이면 자동 전환은 건너뛰고 상태만 기록.
     //   단, 예약된 건조(dryUntil)는 보류 중이어도 반드시 마무리한다 — 아니면 송풍이 계속 돈다.
+    //   srAuto:false면 스터디룸도 같은 경로 — 예약 인원(count)은 대시보드용으로 계속 기록하되 제어는 안 한다.
     const held = zs.manualUntil && zs.manualUntil > nowMs;
-    if (cfg.auto === false || held) {
+    const srOff = isSr && !cfg.srAuto;
+    if (cfg.auto === false || held || srOff) {
       if (zs.on === true && zs.dryUntil && nowMs >= zs.dryUntil) {
         try {
           await acSetPower(cfg, deviceId, false);
