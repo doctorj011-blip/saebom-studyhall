@@ -176,16 +176,20 @@ function runVerify(dir) {
   return bad ? 1 : 0;
 }
 
+// ⚠️ process.exit() 를 쓰지 않는다. Windows 에서 fetch 소켓이 열린 채로 강제 종료하면
+//    libuv 가 assertion 으로 죽어(UV_HANDLE_CLOSING) 종료코드가 127로 뭉개진다.
+//    "백업이 불완전하다"를 종료코드로 알리는 게 목적이므로 exitCode 만 세팅하고 자연 종료시킨다.
 (async () => {
   const argv = process.argv.slice(2);
   const vi = argv.indexOf('--verify');
   if (vi !== -1) {
     const dir = argv[vi + 1];
-    if (!dir) { console.error('사용법: node scripts/export-firestore.js --verify <백업폴더>'); process.exit(2); }
-    process.exit(runVerify(path.resolve(dir)));
+    if (!dir) { console.error('사용법: node scripts/export-firestore.js --verify <백업폴더>'); return 2; }
+    return runVerify(path.resolve(dir));
   }
   const oi = argv.indexOf('--out');
   // 기본 저장 위치는 저장소 밖 — 이 저장소는 public 이라 운영 데이터가 들어오면 안 된다
   const outRoot = oi !== -1 && argv[oi + 1] ? path.resolve(argv[oi + 1]) : path.resolve(REPO, '..', 'saebom-backup');
-  process.exit(await runExport(outRoot));
-})().catch(e => { console.error(e); process.exit(1); });
+  return runExport(outRoot);
+})().then(code => { process.exitCode = code || 0; })
+    .catch(e => { console.error(e); process.exitCode = 1; });
