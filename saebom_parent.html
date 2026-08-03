@@ -719,6 +719,9 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._noticeDateLabel=(d)=>{const s=String(d||'').replace(/\D/g,'');return s.length<8?String(d||''):s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.';};
   window._noticeSortKey=(n)=>{const s=String((n&&n.date)||'').replace(/\D/g,'');return s.length>=8?Number(s.slice(0,8)):((n&&n.id)?Number(String(n.id).slice(0,8)):0);};
   window._sortNoticesDesc=(items)=>[...(items||[])].sort((a,b)=>(window._noticeSortKey(b)-window._noticeSortKey(a))||((b.id||0)-(a.id||0)));
+  window._normStudentName=(n)=>String(n==null?'':n).trim().replace(/\s+/g,'').replace(/\(\d+\)$/,'');
+  window._sameStudentName=(a,b)=>{const x=window._normStudentName(a),y=window._normStudentName(b);if(!x||!y)return false;if(x===y)return true;const lo=x.length<y.length?x:y,hi=x.length<y.length?y:x;return hi.indexOf(lo)===0&&/^[A-Za-z0-9]$/.test(hi.slice(lo.length));};
+  window._onlyMine=(docs,student)=>{const me=student&&(student.name||student);return (docs||[]).filter(d=>window._sameStudentName(d&&(d.name||d.studentName),me));};
 }
 
 const MONTHS = _recentMonths(6);
@@ -1116,8 +1119,11 @@ async function loadParentPenalties() {
     const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
     const snap = await window._getDocs(window._query(
       window._collection(window._db, 'penalties'), window._where('seatKey', '==', seatKey)));
-    const docs = [];
+    let docs = [];
     snap.forEach(d => docs.push(d.data()));
+    // 좌석은 교환·재배정되므로 seatKey만으로는 이전 좌석 주인의 벌점이 섞여 온다
+    // (학부모에게 남의 자녀 기록이 보이는 경로라 특히 중요) → 이름으로 재확인
+    docs = window._onlyMine(docs, currentStudent);
     docs.sort((a, b) => a.date < b.date ? 1 : -1);
 
     const cyc = window._meritCycle();
@@ -1173,8 +1179,10 @@ async function loadParentMerits() {
     const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
     const snap = await window._getDocs(window._query(
       window._collection(window._db, 'merits'), window._where('seatKey', '==', seatKey)));
-    const docs = [];
+    let docs = [];
     snap.forEach(d => docs.push(d.data()));
+    // 벌점과 같은 이유 — 이전 좌석 주인의 상점이 딸려오지 않도록 이름으로 재확인
+    docs = window._onlyMine(docs, currentStudent);
     docs.sort((a, b) => a.date < b.date ? 1 : -1);
 
     const cyc = window._meritCycle();
@@ -1912,7 +1920,8 @@ async function paInit() {
       const snap = await window._getDocs(window._query(
         window._collection(window._db, 'planner_ai_reviews'), window._where('seat', '==', seatKey)));
       // 선생님이 수치를 교정(statsFixed)했으면 그 값을 쓴다 — 분석은 교정본이 기준
-      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
+      // seat 조회라 이전 좌석 주인의 검사 결과가 섞일 수 있어 이름으로 한 번 더 거른다
+      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date && window._sameStudentName(v.name || v.studentName, currentStudent.name)) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
     }
   } catch(e) {
     // 검사 결과를 못 읽어도 순공 기반 분석은 보여줄 수 있으므로 빈 배열로 계속 진행한다

@@ -1710,6 +1710,9 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._noticeDateLabel=(d)=>{const s=String(d||'').replace(/\D/g,'');return s.length<8?String(d||''):s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.';};
   window._noticeSortKey=(n)=>{const s=String((n&&n.date)||'').replace(/\D/g,'');return s.length>=8?Number(s.slice(0,8)):((n&&n.id)?Number(String(n.id).slice(0,8)):0);};
   window._sortNoticesDesc=(items)=>[...(items||[])].sort((a,b)=>(window._noticeSortKey(b)-window._noticeSortKey(a))||((b.id||0)-(a.id||0)));
+  window._normStudentName=(n)=>String(n==null?'':n).trim().replace(/\s+/g,'').replace(/\(\d+\)$/,'');
+  window._sameStudentName=(a,b)=>{const x=window._normStudentName(a),y=window._normStudentName(b);if(!x||!y)return false;if(x===y)return true;const lo=x.length<y.length?x:y,hi=x.length<y.length?y:x;return hi.indexOf(lo)===0&&/^[A-Za-z0-9]$/.test(hi.slice(lo.length));};
+  window._onlyMine=(docs,student)=>{const me=student&&(student.name||student);return (docs||[]).filter(d=>window._sameStudentName(d&&(d.name||d.studentName),me));};
 }
 
 // ── 교시 데이터 ──
@@ -2017,7 +2020,8 @@ async function loadMyPenalties() {
     const docs = [];
     snap.forEach(d => docs.push(d.data()));
     docs.sort((a,b) => a.date < b.date ? 1 : -1);
-    _penaltyDocs = docs;
+    // 좌석은 교환·재배정되므로 seatKey만으로는 이전 좌석 주인의 벌점이 섞여 온다 → 이름으로 재확인
+    _penaltyDocs = window._onlyMine(docs, currentStudent);
     renderPenaltyCard();
   } catch(e) { console.warn('벌점 조회 실패:', e); }
 }
@@ -2231,7 +2235,8 @@ async function loadMyMerits() {
     const docs = [];
     snap.forEach(d => docs.push(d.data()));
     docs.sort((a,b) => a.date < b.date ? 1 : -1);
-    _meritDocs = docs;
+    // 벌점과 같은 이유 — 좌석 교환 시 이전 주인의 상점이 딸려오지 않도록 이름으로 재확인
+    _meritDocs = window._onlyMine(docs, currentStudent);
     renderMeritCard();
   } catch(e) { console.warn('상점 조회 실패:', e); }
 }
@@ -5525,9 +5530,39 @@ async function loadPlannerMonthData() {
     filtered.forEach((item, i) => {
       if (urls[i]) plannerUploadedDates[item.name.replace(/\.jpg$/i,'')] = urls[i];
     });
+    // Storage 경로가 좌석 기준이라 좌석을 물려받으면 이전 주인의 플래너 사진까지 달력에 뜬다
+    // (2026-08-04 실측: 좌석 36·37에서 실제 발생). planners 메타의 이름으로 남의 것을 걷어낸다.
+    // ★메타가 '없는' 날짜는 지우지 않는다 — 사진은 올라갔는데 메타 저장만 실패한 사례가 실재하고
+    //   (위 savePlannerMeta 주석의 7/21·7/24·7/26 건), 그걸 지우면 본인 사진이 사라진다.
+    await _plDropOthersPhotos();
   } catch(e) {
     // Storage 미설정 또는 빈 달 - 달력은 계속 렌더링
     console.warn('[Planner] Storage 로드 실패 (정상 - 사진 없음):', e.message || e);
+  }
+}
+
+// 이 좌석의 planners 메타 중 '내 것이 아님이 확인된' 날짜를 달력에서 제거한다.
+// 같은 판정을 상세보기(코멘트)에서도 써야 하므로 결과를 _plNotMineDates 에 남겨 둔다.
+let _plNotMineDates = new Set();
+async function _plDropOthersPhotos() {
+  _plNotMineDates = new Set();
+  if (!currentStudent) return;
+  try {
+    const { collection, query, where, getDocs } = window._fs;
+    const db = window._db || window._fs.getFirestore();
+    const seat = _plSeatKey();
+    const snap = await getDocs(query(collection(db, 'planners'), where('seat', '==', seat)));
+    snap.forEach(d => {
+      const v = d.data();
+      if (!v || !v.date || !(v.name || v.studentName)) return;   // 이름 없는 기록은 판단 보류
+      if (!window._sameStudentName(v.name || v.studentName, currentStudent.name)) {
+        _plNotMineDates.add(v.date);
+        delete plannerUploadedDates[v.date];
+      }
+    });
+  } catch(e) {
+    // 못 읽으면 걸러내지 못할 뿐 달력은 그대로 뜬다(기존 동작)
+    console.warn('[Planner] 소유자 확인 실패 — 필터 생략:', e && e.message);
   }
 }
 
@@ -5606,6 +5641,8 @@ async function plannerLoadComments(dateStr) {
   const area = document.getElementById('planner-comments-area');
   const list = document.getElementById('planner-comments-list');
   if (!area || !list || !currentStudent) return;
+  // 코멘트도 좌석 기준 키라 이전 좌석 주인이 받은 선생님 코멘트가 딸려온다 → 그 날짜는 숨긴다
+  if (_plNotMineDates.has(dateStr)) { area.style.display = 'none'; list.innerHTML = ''; return; }
   try {
     const seat = _plSeatKey();   // 관리앱이 코멘트를 저장하는 키와 같은 규칙
     const docId = seat + '_' + dateStr;
@@ -5847,7 +5884,8 @@ async function paInit() {
       const { collection, query, where, getDocs } = window._fs;
       const snap = await getDocs(query(collection(window._db, 'planner_ai_reviews'), where('seat', '==', seatKey)));
       // 선생님이 수치를 교정(statsFixed)했으면 그 값을 쓴다 — 분석은 교정본이 기준
-      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
+      // seat 조회라 이전 좌석 주인의 검사 결과가 섞일 수 있어 이름으로 한 번 더 거른다
+      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date && window._sameStudentName(v.name || v.studentName, currentStudent.name)) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
     }
   } catch(e) {
     // 검사 결과를 못 읽어도 순공 기반 분석은 보여줄 수 있으므로 빈 배열로 계속 진행한다

@@ -103,3 +103,35 @@ window._phoneMid4 = function(phone) {
   const d = String(phone || '').replace(/\D/g, '');
   return d.length === 11 ? d.slice(3, 7) : '';
 };
+
+// ── 좌석 기준 기록의 소유자 판별 (3앱 공통) ──
+// penalties·merits·planners·planner_ai_reviews·daily_reports 는 문서키·조회키가 모두 '좌석번호'다.
+// 그런데 좌석은 교환·재배정되고, 좌석 교환은 students/schedules/schedule_base 세 개만 옮긴다.
+// 그래서 좌석만으로 조회하면 그 자리에 앉았던 이전 학생의 기록이 지금 주인에게 딸려온다.
+//   2026-08-04 운영 데이터 실측: daily_reports 34건 · planners 3건이 실제로 뒤섞여 있었다
+//   (좌석 13·27·36·37·40). 상벌점이 0건인 건 실운영이 7/20 시작이라 아직 안 겹쳤을 뿐이다.
+// → 좌석으로 긁어온 기록은 반드시 이름으로 한 번 더 거른다.
+//
+// 이름은 표기 편차가 있어 단순 문자열 비교를 하면 본인 기록을 잘못 숨긴다. 흡수해야 하는 두 가지:
+//   - 뒤에 붙은 전화 4자리 : "박지윤(9557)" 과 "박지윤"  → 같은 사람
+//   - 동명이인 구분자 1글자 : "박지윤" 과 "박지윤A"      → 같은 사람(구 기록이 접미사 전 이름)
+// 위 규칙을 운영 데이터 1,827건에 대조해 오염 37건만 걸러지고 동명이인 12건은 통과함을 확인했다.
+window._normStudentName = function(n) {
+  return String(n == null ? '' : n).trim().replace(/\s+/g, '').replace(/\(\d+\)$/, '');
+};
+window._sameStudentName = function(a, b) {
+  const x = window._normStudentName(a), y = window._normStudentName(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const lo = x.length < y.length ? x : y, hi = x.length < y.length ? y : x;
+  return hi.indexOf(lo) === 0 && /^[A-Za-z0-9]$/.test(hi.slice(lo.length));
+};
+// 좌석으로 긁어온 문서 배열에서 '이 학생 것'만 남긴다.
+// student 는 학생 객체({name}) 또는 이름 문자열. 이름 필드가 없는 기록은 주인을 확정할 수 없어
+// 보수적으로 제외한다(2026-08-04 기준 해당 컬렉션 1,827건 중 0건이라 실제 손실은 없다).
+window._onlyMine = function(docs, student) {
+  const me = student && (student.name || student);
+  return (docs || []).filter(function(d) {
+    return window._sameStudentName(d && (d.name || d.studentName), me);
+  });
+};
