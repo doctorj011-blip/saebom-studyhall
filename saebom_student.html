@@ -1940,6 +1940,8 @@ async function recordPenalties(list) {
       name: currentStudent.name,
       seat: currentStudent.seat,
       seatKey: seatKey,
+      // 조회 기준이 uid 다 — 빼먹으면 방금 기록한 벌점이 내 화면·학부모 화면에서 안 보인다
+      ...(currentStudent.uid ? { uid: currentStudent.uid } : {}),
       date: dateStr,
       day: todayDay,
       periods: periods,
@@ -2001,6 +2003,8 @@ async function clearReturnedPenalties(periodsList) {
       name: currentStudent.name,
       seat: currentStudent.seat,
       seatKey: seatKey,
+      // 문서를 통째로 다시 쓰는 경로 — uid 를 옮겨 적지 않으면 남은 벌점이 조회에서 사라진다
+      ...((data.uid || currentStudent.uid) ? { uid: data.uid || currentStudent.uid } : {}),
       date: dateStr,
       day: todayDay,
       periods: periods,

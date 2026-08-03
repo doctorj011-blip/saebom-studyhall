@@ -4369,6 +4369,22 @@ function _nameForSeatKey(sk){
 // 블록 안으로 옮기는 순간 조용히 ReferenceError 가 난다.
 window._studentBySeatKey = _studentBySeatKey;
 
+// 상벌점 기록에 박아 둘 불변 학생ID(uid). 좌석·이름과 달리 바뀌지 않으므로 조회의 기준이 된다.
+// ★이게 빠진 채 저장되면 uid 로 조회하는 학생앱·학부모앱 상벌점 카드가 그 기록을 아예 못 본다
+//   — 오류 하나 없이 "상점을 줬는데 학생 화면에 안 보인다"가 된다(2026-08-04 실측 4건).
+// 좌석이 이미 다른 학생에게 넘어갔을 수 있으므로, 이름이 어긋나면 좌석 uid 를 쓰지 않고
+// 현재 명부에서 이름으로 다시 찾는다(동명이인이면 가리지 못하므로 빈 값 — 추측하지 않는다).
+function _uidForSeat(seatKey, name) {
+  const s = _studentBySeatKey(seatKey);
+  if (s && s.uid && (!name || !s.name || window._sameStudentName(s.name, name))) return String(s.uid);
+  if (name) {
+    const hit = (window.STUDENTS || []).filter(x => x && x.uid && window._sameStudentName(x.name, name));
+    if (hit.length === 1) return String(hit[0].uid);
+  }
+  return '';
+}
+window._uidForSeat = _uidForSeat;   // 아래 module 블록(자동판정)에서도 쓴다
+
 window.showPenaltyModal = async function(filterSeatKey) {
   _penaltyModalFilter = filterSeatKey || null;
   const old = document.getElementById('penalty-modal-overlay');
@@ -4565,7 +4581,8 @@ window.addManualPenalty = async function(seatKey, name){
     const data = snap.exists() ? snap.data() : {};
     const periods = { ...(data.periods || {}) };
     periods[String(Date.now())] = { points: pts, type: 'manual', reason, canceled: false, createdAt: new Date().toISOString(), by: 'admin' };
-    await setDoc(ref, { name: name || data.name || '', seatKey: sk, date: dateISO, day: data.day || dayName, periods });
+    const _uid = data.uid || _uidForSeat(sk, name || data.name);
+    await setDoc(ref, { name: name || data.name || '', seatKey: sk, date: dateISO, day: data.day || dayName, periods, ...(_uid ? { uid: _uid } : {}) });
     _penaltyDocsTs = 0; // 사용시간 탭 배지 캐시 무효화
     if (rEl) rEl.value = ''; if (pEl) pEl.value = '1';
     const presetEl = document.getElementById('penalty-preset'); if (presetEl) presetEl.value = '';
@@ -4643,6 +4660,9 @@ window.resetPenalties = async function(filterSeatKey) {
           name: t.data.name || '',
           seatKey: String(t.data.seatKey || ''),
           date: t.data.date || '',
+          // 문서를 필드 화이트리스트로 다시 쓰는 경로다 — uid 를 옮겨 적지 않으면
+          // 초기화한 순간 그 학생의 벌점 문서가 uid 조회에서 사라진다
+          ...(t.data.uid ? { uid: t.data.uid } : {}),
           ...(t.data.seat ? { seat: t.data.seat } : {}),
           ...(t.data.day ? { day: t.data.day } : {}),
           periods: {},
@@ -4745,7 +4765,8 @@ window.addMerit = async function(seatKey, name){
     const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
     const ref = doc(collection(db, 'merits')); // 자동 ID
-    await setDoc(ref, { name, seatKey: String(seatKey), date: dateISO, day: dayName, points: pts, reason, canceled: false, createdAt: serverTimestamp(), createdBy: 'admin' });
+    const _uid = _uidForSeat(seatKey, name);
+    await setDoc(ref, { name, seatKey: String(seatKey), date: dateISO, day: dayName, points: pts, reason, canceled: false, createdAt: serverTimestamp(), createdBy: 'admin', ...(_uid ? { uid: _uid } : {}) });
     _meritDocsTs = 0; // 캐시 무효화
     if (reasonEl) reasonEl.value = '';
     if (ptsEl) ptsEl.value = '1';
@@ -4976,7 +4997,8 @@ async function _smGrantMeritCore(id, r) {
   const now = new Date();
   const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
   const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
-  await setDoc(doc(collection(db, 'merits')), { name: r.reporterName, seatKey: String(r.reporterSeatKey), date: dateISO, day: dayName, points: 1, reason: '학습 분위기 기여', canceled: false, createdAt: serverTimestamp(), createdBy: 'shinmungo' });
+  const _ruid = _uidForSeat(r.reporterSeatKey, r.reporterName);
+  await setDoc(doc(collection(db, 'merits')), { name: r.reporterName, seatKey: String(r.reporterSeatKey), date: dateISO, day: dayName, points: 1, reason: '학습 분위기 기여', canceled: false, createdAt: serverTimestamp(), createdBy: 'shinmungo', ...(_ruid ? { uid: _ruid } : {}) });
   await setDoc(doc(db, 'shinmungo_reports', id), { meritGiven: true }, { merge: true });
   _meritDocsTs = 0;
   try { applyMeritBadges(); } catch(e){}
@@ -13408,9 +13430,11 @@ async function _writeAttendPenalty(dIso, dayName, seatKey, seat, name, missed, l
       changedAt: at, canceled: false
     };
   });
+  const _uid = prevData.uid || (window._uidForSeat ? window._uidForSeat(seatKey, name) : '');
   await setDoc(ref, {
     name: name, seat: seat, seatKey: seatKey,
     date: dIso, day: dayName, periods: periods,
+    ...(_uid ? { uid: _uid } : {}),
     updatedAt: serverTimestamp()
   });
 }
@@ -13559,14 +13583,25 @@ async function _assessWeekGoals(monDate, weekIso){
   } catch(e){ console.error('주간 목표 판정 실패:', weekIso, e); } // 완료표시 안 남김 → 다음 시작 때 재시도(멱등)
 }
 
+// 자동 상점 문서에 넣을 uid — 학생 객체에 있으면 그걸, 없으면 좌석+이름으로 찾는다.
+// 이미 쓰여 있던 값을 우선해 재판정(멱등 재기록)에서 uid 가 바뀌지 않게 한다.
+// 이게 빠지면 상점은 만들어지는데 학생앱·학부모앱(uid 조회)에서 안 보인다.
+// (window._uidForSeat 는 클래식 블록 함수라 항상 있지만, 없더라도 자동판정 전체가
+//  TypeError 로 멈추면 안 되므로 유무를 확인하고 부른다 — 상점은 uid 없이라도 남는 게 낫다)
+const _meritUid = (st, seatKey, prev) =>
+  (prev && prev.uid) || (st && st.uid) ||
+  (window._uidForSeat ? window._uidForSeat(seatKey, st && st.name) : '') || '';
+
 // 달성 상점 → merits/{고정ID} (멱등). 취소상태 보존. 챌린지 주간이면 상점·문구 오버라이드.
 async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actualMin, chal){
   const ref = doc(db, 'merits', `auto_wk_${weekIso}_${seatKey}`);
   let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
+  const uid = _meritUid(st, seatKey, prev);
   await setDoc(ref, {
     name: st.name, seatKey, date: satIso, day: _WEEKLY_DN[new Date(satIso + 'T00:00:00').getDay()],
     points: (chal && chal.points) || WEEKLY_MERIT_POINTS, type: 'auto',
     reason: `${(chal && chal.label) || '주간 목표순공 달성'} (${(actualMin/60).toFixed(1)}/${(adjGoalMin/60).toFixed(1)}h)`,
+    ...(uid ? { uid } : {}),
     canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
@@ -13575,10 +13610,12 @@ async function _writeWeeklyMerit(st, seatKey, weekIso, satIso, adjGoalMin, actua
 async function _writePlannerWeeklyMerit(st, seatKey, weekIso, satIso, sub, att){
   const ref = doc(db, 'merits', `auto_plwk_${weekIso}_${seatKey}`);
   let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
+  const uid = _meritUid(st, seatKey, prev);
   await setDoc(ref, {
     name: st.name, seatKey, date: satIso, day: _WEEKLY_DN[new Date(satIso + 'T00:00:00').getDay()],
     points: PLANNER_WEEKLY_POINTS, type: 'auto',
     reason: `플래너 성실 (${sub}/${att}일 제출)`,
+    ...(uid ? { uid } : {}),
     canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
@@ -13722,10 +13759,12 @@ window.assessPlannerExcellence = async function(){
       let prev = {}; try { const s = await getDoc(ref); if (s.exists()) prev = s.data(); } catch(e){}
       if (prev.type === 'auto' && prev.points === pts) continue; // 변화 없으면 재기록 생략
       const dISO = prev.date || todayIso;
+      const uid = _meritUid(st || { name }, seatNum, prev);
       await setDoc(ref, {
         name, seatKey: seatNum, date: dISO,
         day: _WEEKLY_DN[new Date(dISO + 'T00:00:00').getDay()],
         points: pts, type: 'auto', reason: `플래너 우수 ${cnt}회`,
+        ...(uid ? { uid } : {}),
         canceled: !!prev.canceled, createdAt: new Date().toISOString()
       });
     }
@@ -13792,9 +13831,11 @@ async function _assessCycleMerits(cyc){
 async function _writeCycleMerit(s, seatKey, cyc, kind, points, reason){
   const ref = doc(db, 'merits', `auto_${kind}_${cyc.id}_${seatKey}`);
   let prev = {}; try { const x = await getDoc(ref); if (x.exists()) prev = x.data(); } catch(e){}
+  const uid = _meritUid(s, seatKey, prev);
   await setDoc(ref, {
     name: s.name, seatKey, date: cyc.end, day: _WEEKLY_DN[new Date(cyc.end + 'T00:00:00').getDay()],
-    points, type: 'auto', reason, canceled: !!prev.canceled, createdAt: new Date().toISOString()
+    points, type: 'auto', reason, ...(uid ? { uid } : {}),
+    canceled: !!prev.canceled, createdAt: new Date().toISOString()
   });
 }
 
@@ -16643,7 +16684,8 @@ window.apcGiveMerit = async function() {
     const [y, m, d] = _apcDate.split('-').map(Number);
     const dayName = ['일','월','화','수','목','금','토'][new Date(y, m-1, d).getDay()];
     const ref = doc(collection(db, 'merits'));
-    await setDoc(ref, { name: s.name, seatKey: seatNum, date: _apcDate, day: dayName, points: pts, reason: reason ? `플래너 · ${reason}` : '플래너 상점', canceled: false, createdAt: serverTimestamp(), createdBy: 'admin' });
+    const uid = s.uid || (window._uidForSeat ? window._uidForSeat(seatNum, s.name) : '');
+    await setDoc(ref, { name: s.name, seatKey: seatNum, date: _apcDate, day: dayName, points: pts, reason: reason ? `플래너 · ${reason}` : '플래너 상점', canceled: false, createdAt: serverTimestamp(), createdBy: 'admin', ...(uid ? { uid } : {}) });
     _meritDocsTs = 0;
     try { applyMeritBadges(); } catch(e){}
     showAdminToast(`🎁 ${s.name} +${pts}점 부여했습니다`);
