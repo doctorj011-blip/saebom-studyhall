@@ -3821,16 +3821,21 @@ async function loadActualStudyData(force) {
     // 일간·주간·퀘스트·이벤트 집계에 충분하고, 월간/연간/총누적은 students.hours로 계산.
     // (일일·주간·연속 '최고 기록'만 최근 3개월 범위 기준이 된다)
     const m0 = _curYm(), m1 = _prevYm(m0), m2 = _prevYm(m1);
+    // 학생 기준은 이름이 아니라 불변 학생ID(uid) — 개명·동명이인 정리로 이름이 바뀌면
+    // 옛 이름으로 쌓인 공부시간이 통째로 끊긴다(uid 는 이력 전체에 백필돼 있다).
+    // uid 가 없을 때만(구 세션 캐시 등) 예전처럼 이름으로 내려간다.
+    // uid/이름 + monthKey 는 둘 다 동등 조건이라 복합 색인이 필요 없다(2026-08-04 실측).
+    const _me = (currentStudent && currentStudent.uid)
+      ? where('uid','==', currentStudent.uid)
+      : where('studentName','==', currentStudent.name);
     let snap;
     try {
       snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
-        where('studentName','==', currentStudent.name),
-        where('monthKey','in', [m2, m1, m0])));
+        _me, where('monthKey','in', [m2, m1, m0])));
     } catch(qe) {
-      // monthKey 색인 문제 등으로 결합 쿼리가 막히면 기존 전체 조회로 폴백(기능 우선)
+      // 결합 쿼리가 어떤 이유로든 막히면 기존 전체 조회로 폴백(기능 우선)
       console.warn('[학습현황] 최근 3개월 쿼리 실패 — 전체 조회로 폴백:', qe && qe.code, qe);
-      snap = await getDocs(query(collection(window._db, 'attendance_sessions'),
-        where('studentName','==', currentStudent.name)));
+      snap = await getDocs(query(collection(window._db, 'attendance_sessions'), _me));
     }
     const map = {}, inMap = {}; let bestSession = 0;
     const nowTs = Date.now();

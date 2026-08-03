@@ -4291,8 +4291,12 @@ window.sessEditSave = async function(){
     const db = await window.waitDb();
     if (!db) throw new Error('DB 연결 실패');
     const { doc, setDoc, updateDoc, serverTimestamp } = window._fs;
+    // 수기로 만든 기록에도 uid 를 박는다 — 없으면 학생앱·학부모앱 학습현황(uid 조회)에서 빠진다.
+    const _seStu = (window.STUDENTS || []).find(s => s.name === ctx.name)
+                || (window._studentBySeatKey && window._studentBySeatKey(ctx.seat)) || null;
+    const _seUid = (_seStu && _seStu.uid) ? String(_seStu.uid) : '';
     const payload = {
-      studentName: ctx.name, seat: ctx.seat,
+      studentName: ctx.name, seat: ctx.seat, ...(_seUid ? { uid: _seUid } : {}),
       inTs: c.inTs, outTs: c.outTs, awayMs: c.awayMs, awayStartTs: null,
       durationMin: c.durationMin,
       inDate: sessIsoDate(c.inTs), monthKey: sessMonthKey(c.inTs),
@@ -6855,10 +6859,18 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
     //   - away 이벤트 자체는 검사 없이 저장(잠깐 나갔다 오는 것은 중복 위험이 낮음)
     //   - 진짜 입퇴실 저장 시엔 away 이벤트를 '마지막 이벤트' 판정에서 무시
     //     (외출 out 직후 진짜 퇴실 out을 out-out 중복으로 오인해 막는 것을 방지)
+    // 이 학생의 불변 학생ID(uid) — 기록에도 남기고, 아래 중복검사도 이걸로 조회한다.
+    // 좌석은 교환되고 이름은 개명되지만 uid 는 그대로라, 이 값이 있어야 과거 기록과 이어진다.
+    const logUid = (student && student.uid)
+      || ((window._studentBySeatKey && window._studentBySeatKey(student.seat) || {}).uid)
+      || '';
+
     if (!awayFlag) try {
       // 오늘 날짜로 한정해 조회 — 전체 이력을 매번 읽지 않도록
+      // (uid + date 는 둘 다 동등 조건이라 복합 색인 없이 단일 필드 색인 병합으로 처리된다 — 2026-08-04 실측)
       const snap = await getDocs(query(collection(db, 'checkin_logs'),
-        where('studentName','==', student.name), where('date','==', today)));
+        logUid ? where('uid','==', logUid) : where('studentName','==', student.name),
+        where('date','==', today)));
       let last = null;
       snap.forEach(d => {
         const x = d.data();
@@ -6879,6 +6891,7 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
 
     await setDoc(doc(db, 'checkin_logs', logId), {
       studentName: student.name,
+      ...(logUid ? { uid: logUid } : {}),
       seat: student.seat,
       type: isCheckout ? 'out' : 'in',
       time: timeStr,
@@ -8855,8 +8868,8 @@ function saveSchedule(commitBase) {
     if (Array.isArray(todayRecords)) {
       todayRecords.forEach(r => { if (r.studentName === oldName) r.studentName = newName; });
     }
-    // 세션 문서(이번 달)와 열린 포인터의 studentName 이관 — 월 누적 재계산이 이름 기준이므로 필수
-    waitSessionApi().then(api => api.renameInSessions(oldName, newName)).catch(console.error);
+    // 세션 문서와 열린 포인터의 studentName 이관 — uid 를 넘기면 전 기간 기록의 이름이 함께 바뀐다
+    waitSessionApi().then(api => api.renameInSessions(oldName, newName, s.uid || '')).catch(console.error);
     s.name = newName;
   }
 
@@ -10106,6 +10119,16 @@ const SESS_PTR_COL = 'current_sessions';
 const SH = window._sessHelpers; // sessIsoDate/sessMonthKey/sessCapTs/sessDurationMin/...
 const _sessCleanSeat = s => String(s == null ? '' : s).replace('번','').trim();
 
+// 세션 문서에 박아 둘 불변 학생ID(uid). 좌석·이름과 달리 바뀌지 않으므로 조회의 기준이 된다.
+// ★이게 빠진 채 저장되면 uid로 조회하는 쪽(학생앱·학부모앱 학습현황, 월 누적 재계산)이
+//   그 세션을 아예 못 본다 — 오류 하나 없이 공부시간만 조용히 사라진다.
+// STUDENTS 객체에 uid 가 없으면(구 캐시 등) 좌석으로 현재 명부에서 한 번 더 찾는다.
+function _sessUid(student){
+  if (student && student.uid) return String(student.uid);
+  const s = window._studentBySeatKey ? window._studentBySeatKey(_sessCleanSeat(student && student.seat)) : null;
+  return (s && s.uid) ? String(s.uid) : '';
+}
+
 // 열린 세션의 외출 정산: 마감 시점(endTs) 기준으로 awayMs 확정 (상한 이후 외출은 0 처리)
 function _sessFoldAway(sess, endTs){
   let away = sess.awayMs || 0;
@@ -10120,7 +10143,7 @@ function _sessPtrRef(name){ return doc(db, SESS_PTR_COL, String(name)); }
 // 이미 오늘 열린 세션이 있으면 거부. 전날 미퇴실 세션이 남아 있으면
 // 같은 트랜잭션 안에서 01:00 상한으로 마감하고 새 세션을 연다("새로 입실"이 원자적).
 async function sessionCheckin(student){
-  const seat = _sessCleanSeat(student.seat), name = student.name;
+  const seat = _sessCleanSeat(student.seat), name = student.name, uid = _sessUid(student);
   const exec = async () => runTransaction(db, async tx => {
     const now = Date.now();
     const ptrRef = _sessPtrRef(name);
@@ -10147,12 +10170,12 @@ async function sessionCheckin(student){
     }
     const sid = seat + '_' + now;
     tx.set(doc(db, SESS_COL, sid), {
-      sid, seat, studentName: name,
+      sid, seat, studentName: name, ...(uid ? { uid } : {}),
       inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
       inDate: SH.sessIsoDate(now), monthKey: SH.sessMonthKey(now),
       status:'open', closedBy: null, createdAt: serverTimestamp(), updatedAt: now
     });
-    tx.set(ptrRef, { sessionId: sid, seat, studentName: name, inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now });
+    tx.set(ptrRef, { sessionId: sid, seat, studentName: name, ...(uid ? { uid } : {}), inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now });
     return { ok:true, sid, inTs: now, staleClosed };
   });
   let res;
@@ -10174,17 +10197,18 @@ async function sessionCheckin(student){
   return res || { ok:false, reason:'error' };
 }
 async function _sessionCheckinFallback(student){
-  const seat = _sessCleanSeat(student.seat), name = student.name, now = Date.now();
+  const seat = _sessCleanSeat(student.seat), name = student.name, now = Date.now(), uid = _sessUid(student);
   let ptr = null;
   try { const s = await getDoc(_sessPtrRef(name)); if (s.exists()) ptr = s.data(); } catch(e){}
   if (ptr && SH.sessIsoDate(ptr.inTs) >= SH.sessIsoDate(now)) return { ok:false, reason:'already-open', inTs: ptr.inTs };
   const sid = seat + '_' + now;
   setDoc(doc(db, SESS_COL, sid), {
-    sid, seat, studentName: name, inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
+    sid, seat, studentName: name, ...(uid ? { uid } : {}),
+    inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
     inDate: SH.sessIsoDate(now), monthKey: SH.sessMonthKey(now), status:'open', closedBy: null,
     createdAt: serverTimestamp(), updatedAt: now
   }).catch(console.error);
-  setDoc(_sessPtrRef(name), { sessionId: sid, seat, studentName: name, inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now }).catch(console.error);
+  setDoc(_sessPtrRef(name), { sessionId: sid, seat, studentName: name, ...(uid ? { uid } : {}), inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now }).catch(console.error);
   return { ok:true, sid, inTs: now, fallback:true };
 }
 
@@ -10293,17 +10317,14 @@ async function recomputeMonthHours(student, monthKey){
   // 그때마다 지난 기록이 끊겨 공부시간이 사라졌다(그래서 이름 변경 시 수동 이관이 필요했다).
   // uid 가 없는 학생(구 세션·신규)만 이름으로 내려간다.
   //
-  // ★uid 경로는 monthKey 를 where 에 넣지 않는다. 이 프로젝트는 색인을 저장소로 관리하지 않고
-  //   (firestore.indexes.json 없음) 콘솔에서 그때그때 만들어 왔다. uid+monthKey 복합 색인은
-  //   아직 없으므로 그대로 두면 배포 즉시 공부시간 재계산이 통째로 실패한다.
-  //   한 학생의 전체 세션은 수십 건이라 월 필터는 클라이언트에서 해도 부담이 없다.
-  //   (이름 경로는 studentName+monthKey 색인이 이미 있으므로 그대로 둔다)
+  // uid + monthKey 는 둘 다 '같음(==)' 조건이라 복합 색인이 필요 없다. Firestore 가 두 단일
+  // 필드 색인을 병합(zigzag merge join)해서 처리한다 — 이 프로젝트에 복합 색인이 하나도 없는데도
+  // studentName+date·studentName+monthKey 조회가 계속 돌아온 이유가 이것이다(2026-08-04 실측 확인).
   const _rcStu = (window._studentBySeatKey ? window._studentBySeatKey(seat) : null) || {};
   const _rcUid = student.uid || _rcStu.uid;
-  const snap = _rcUid
-    ? await getDocs(query(collection(db, SESS_COL), where('uid','==', _rcUid)))
-    : await getDocs(query(collection(db, SESS_COL),
-        where('studentName','==', name), where('monthKey','==', monthKey)));
+  const snap = await getDocs(query(collection(db, SESS_COL),
+    _rcUid ? where('uid','==', _rcUid) : where('studentName','==', name),
+    where('monthKey','==', monthKey)));
   // 오프라인 캐시 결과는 불완전할 수 있음 → 과소집계 값을 쓰지 않도록 보류
   // (다음 퇴실·재계산 버튼·자동마감 어디서든 온라인 상태에서 다시 맞춰진다)
   if (snap.metadata && snap.metadata.fromCache) {
@@ -10313,7 +10334,7 @@ async function recomputeMonthHours(student, monthKey){
   let totalMin = 0;
   snap.forEach(d => {
     const v = d.data();
-    if (_rcUid && v.monthKey !== monthKey) return;   // uid 조회는 전 기간이 오므로 여기서 월을 가른다
+    if (v.monthKey !== monthKey) return;   // 쿼리로 이미 걸러지지만, 값이 어긋난 문서를 섞지 않도록 한 번 더
     if (v.status === 'closed' && typeof v.durationMin === 'number') totalMin += v.durationMin;
   });
   const hrs = Math.round(totalMin / 60 * 10) / 10;
@@ -10365,12 +10386,18 @@ async function autoCloseStaleSessions(){
   } catch(e){ console.warn('[세션] 자동 마감 스캔 실패:', e); }
 }
 
-// ── 이름 변경 시 세션/포인터의 studentName 이관 (이번 달 + 열린 포인터) ──
-async function renameInSessions(oldName, newName){
+// ── 이름 변경 시 세션/포인터의 studentName 이관 ──
+// uid 를 아는 학생은 전 기간 세션을 한 번에 고친다(uid 단일 조건이라 색인 문제도 없다).
+// 집계·조회는 이미 uid 기준이라 이 이관이 없어도 시간이 사라지지는 않지만,
+// 화면·현황판이 studentName 으로 이름을 표시하므로 옛 이름이 남으면 사람이 헷갈린다.
+// uid 를 모를 때만 예전처럼 이번 달치만 이름으로 찾아 고친다.
+async function renameInSessions(oldName, newName, uid){
   try {
     const mk = SH.sessMonthKey(Date.now());
-    const snap = await getDocs(query(collection(db, SESS_COL),
-      where('studentName','==', oldName), where('monthKey','==', mk)));
+    const snap = uid
+      ? await getDocs(query(collection(db, SESS_COL), where('uid','==', uid)))
+      : await getDocs(query(collection(db, SESS_COL),
+          where('studentName','==', oldName), where('monthKey','==', mk)));
     for (const d of snap.docs) await updateDoc(d.ref, { studentName: newName });
     const ptrSnap = await getDoc(_sessPtrRef(oldName));
     if (ptrSnap.exists()) {

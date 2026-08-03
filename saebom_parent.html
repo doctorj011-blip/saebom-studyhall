@@ -952,6 +952,12 @@ async function refreshParentData() {
     const snap = await window._getDoc(window._doc(window._db, 'students', seat));
     if (snap.exists()) {
       const d = snap.data();
+      // uid 도입(2026-08-04) 전에 로그인한 캐시엔 uid 가 없다 — 여기서 채우면 재로그인 없이
+      // 이름 조회에서 uid 조회로 올라온다. 좌석이 다른 학생에게 넘어갔을 수 있으므로
+      // 이름이 같을 때만 받는다(엉뚱한 자녀의 uid 를 물지 않도록).
+      if (d.uid && !currentStudent.uid && window._sameStudentName(d.name, currentStudent.name)) {
+        currentStudent.uid = d.uid;
+      }
       currentStudent.hours = _normalizeHours(d.hours);
       // 알림 수신 설정도 서버값으로 맞춘다 — 다른 기기에서 바꿨거나 좌석 이동으로 달라졌을 수 있다
       const prevOptIn = currentStudent.mealAwaySms;
@@ -1260,8 +1266,12 @@ async function startStatusRealtime() {
     // (구 checkin_logs 짝짓기 방식은 자정 넘긴 밤샘 세션이 어느 날에도 안 잡히는 버그로 폐기)
     // 읽기 비용 절감: 전 기간이 아니라 최근 3개월 세션만 구독한다(일간·주간·이벤트 집계에 충분).
     // (색인 문제로 결합 쿼리가 거부되면 아래 오류 콜백에서 1회 전체 구독으로 폴백)
+    // 자녀 기준은 이름이 아니라 불변 학생ID(uid) — 좌석이 바뀌어도, 이름을 고쳐도 기록이 안 끊긴다.
+    // uid 가 없을 때만(uid 도입 전 로그인 캐시) 예전처럼 이름으로 내려간다.
     const _m0 = _curYm(), _m1 = _prevYm(_m0), _m2 = _prevYm(_m1);
-    const _conds = [window._where('studentName','==', currentStudent.name)];
+    const _conds = [ (currentStudent && currentStudent.uid)
+      ? window._where('uid','==', currentStudent.uid)
+      : window._where('studentName','==', currentStudent.name) ];
     if (!startStatusRealtime._noMonthFilter) _conds.push(window._where('monthKey','in', [_m2, _m1, _m0]));
     _statusUnsub = window._onSnapshot(
       window._query(window._collection(window._db, 'attendance_sessions'), ..._conds),
@@ -1573,11 +1583,15 @@ async function loadAwayDetail(s) {
       const col = window._collection(window._db, 'checkin_logs');
       let snap;
       try {
+        // 자녀 지목은 불변 학생ID(uid)로 — 좌석을 물려받거나 이름이 바뀌어도 남의 기록이 섞이지 않는다.
+        // uid + date 는 둘 다 동등 조건이라 복합 색인이 필요 없다(2026-08-04 실측).
         snap = await window._getDocs(window._query(col,
           window._where('date', '==', legacy),
-          window._where('studentName', '==', currentStudent.name)));
+          (currentStudent && currentStudent.uid)
+            ? window._where('uid', '==', currentStudent.uid)
+            : window._where('studentName', '==', currentStudent.name)));
       } catch (e) {
-        // 두 조건 결합이 색인 문제로 거부되면 하루치를 받아 이름은 앱에서 거른다(관리자앱과 동일)
+        // 결합 조회가 어떤 이유로든 거부되면 하루치를 받아 앱에서 거른다(관리자앱과 동일)
         console.warn('[외출내역] 결합 조회 실패 — 날짜 조회로 폴백:', e && e.code);
         snap = await window._getDocs(window._query(col, window._where('date', '==', legacy)));
       }
@@ -1585,9 +1599,14 @@ async function loadAwayDetail(s) {
       _awayLogCache[legacy] = logs;
     }
     // 외출/복귀만(away:true) 이 세션 구간 안에서 골라 out → in 으로 짝짓는다. 짝 없는 out = 복귀 미입력
+    // (캐시에 하루치 전체가 들어 있을 수 있으므로 여기서 한 번 더 자녀 것만 고른다 —
+    //  uid 가 양쪽에 있으면 uid 로, 없으면 예전처럼 이름으로 판단한다)
     const end = s.outTs || Date.now();
+    const _isMine = l => (currentStudent && currentStudent.uid && l.uid)
+      ? l.uid === currentStudent.uid
+      : l.studentName === currentStudent.name;
     const evs = logs
-      .filter(l => l && l.studentName === currentStudent.name && l.away === true
+      .filter(l => l && _isMine(l) && l.away === true
                    && typeof l.ts === 'number' && l.ts >= s.inTs && l.ts <= end + 60000)
       .sort((a, b) => a.ts - b.ts);
     const segs = [];

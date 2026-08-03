@@ -195,14 +195,44 @@ Storage: planners/{uid}/{날짜}.jpg
 > **의도적으로 좌석/이름을 유지한 것**
 > - `planner_ai_reviews`(3앱) — 규칙상 uid 를 못 넣는다. 좌석 조회 + 이름 검증(`708a7b5`) 유지.
 > - 학생앱 플래너 달력 — Storage 경로가 좌석 기준이라 조회 자체는 좌석이어야 한다(4·5단계에서 정리).
-> - `attendance_sessions`·`checkin_logs` 의 나머지 학생별 조회(학생앱 2곳·학부모앱 2곳·관리앱 2곳)
->   — 좌석 혼입과 무관한 경로이고, uid 로 바꾸면 **복합 색인이 필요**하다. 아래 참조.
 >
-> 🔴 **색인 제약** — 이 프로젝트는 색인을 저장소로 관리하지 않는다(`firestore.indexes.json` 없음).
-> 콘솔에서 그때그때 만들어 온 탓에, 새 2필드 쿼리는 색인이 없어 **배포 즉시 실패**한다.
-> 그래서 `recomputeMonthHours` 는 `uid` 단일 조건으로 조회하고 월 필터를 클라이언트에서 한다
-> (한 학생의 전체 세션은 수십 건이라 부담 없음 — 실측 52건).
-> 남은 이름 기반 조회들을 uid 로 옮기려면 복합 색인을 먼저 만들어야 한다.
+> ~~🔴 색인 제약 — 남은 이름 기반 조회를 uid 로 옮기려면 복합 색인을 먼저 만들어야 한다~~
+> **→ 2026-08-04 정정: 복합 색인은 필요 없었다.** 이 6곳은 전부 `uid == X` + `monthKey/date`
+> 처럼 **동등(==) 조건끼리의 결합**이고, Firestore 는 이런 조합을 단일 필드 색인 두 개를
+> 병합(zigzag merge join)해서 처리한다. 복합 색인은 범위·정렬이 섞일 때만 필요하다.
+> 실제로 이 프로젝트에는 **복합 색인이 하나도 없는데**(`firebase firestore:indexes` → `[]`)
+> `studentName + date`, `studentName + monthKey` 조회가 계속 돌아오고 있었다.
+> 운영 DB REST 로 `uid+monthKey`, `uid+monthKey IN 3`, `uid+date` 를 직접 쏴 확인함(전부 정상).
+
+### 3.5단계 — `attendance_sessions`·`checkin_logs` 학생별 조회 uid 전환 (2026-08-04 완료)
+
+> 3단계에서 "복합 색인 때문에" 남겨 뒀던 6곳(학생앱 2·학부모앱 2·관리앱 2)을 전부 uid 로 옮겼다.
+>
+> 🔴 **먼저 드러난 진짜 문제 — 새 기록에 uid 가 안 박히고 있었다.**
+> 2단계 백필은 그때까지의 문서만 채운다. 그런데 **쓰기 경로에 uid 를 넣는 작업이 빠져 있어**
+> 백필 이후 만들어진 세션·입퇴실 로그에는 uid 가 없었다. 3단계에서 이미 `recomputeMonthHours`
+> 를 uid 조회로 바꿔 둔 상태였으므로, **그 세션들은 월 누적 합산에서 통째로 빠지고 있었다**
+> (오류 없이 시간만 줄어드는 형태). 실측 시점 누락 3건(열린 세션 1·로그 1·포인터 1).
+> → `sessionCheckin`(트랜잭션·오프라인 폴백), `current_sessions` 포인터, `saveCheckinToFirebase`,
+>   기록 수기 추가 폼에 uid 를 넣었다. **쓰기가 먼저다 — 읽기만 uid 로 바꾸면 기록이 사라진다.**
+>
+> **uid 로 옮긴 6곳**
+> - 학생앱 `loadActualStudyData` — 최근 3개월 조회 + 그 폴백(전 기간)
+> - 학부모앱 `startStatusRealtime`(세션 실시간 구독), `loadAwayDetail`(외출 내역 + 캐시 필터)
+> - 관리앱 `saveCheckinToFirebase` 중복 이벤트 검사, `renameInSessions`
+> - 덤: `recomputeMonthHours` 는 `uid + monthKey` 결합으로 되돌려 클라이언트 월 필터를 걷어냈다.
+>
+> `renameInSessions` 는 uid 를 넘기면 **전 기간** 세션의 표시 이름을 고친다(전엔 이번 달치만).
+> 집계는 이미 uid 기준이라 시간이 사라지진 않지만, 화면에 옛 이름이 남는 것을 없앴다.
+>
+> **검증**: Firestore 에뮬레이터에 3앱을 붙여 실행(`?emu=1`).
+> 같은 uid·다른 이름(개명) 120분, 같은 이름·다른 uid(좌석 물려받음) 999분, 같은 uid·지난달 500분을
+> 심어 두고 — 관리앱 월 누적 2.0h, 학생앱 '오늘' 2시간 2분, 학부모앱 '오늘 공부' 2시간 3분,
+> 학부모앱 외출 내역 30분 1건. **999분은 어디에도 안 섞였고 120분은 이름이 달라도 전부 잡혔다.**
+> 중복 입실 방지(uid 조회)와 이름 이관(전 기간 3건 + 포인터)도 같은 실행에서 확인.
+>
+> ⚠️ **배포 직후 할 일**: 배포 전까지 쌓인 uid 없는 기록을 한 번 메꾼다(멱등).
+> `node scripts/backfill-uid.js --only attendance_sessions,checkin_logs,current_sessions --apply`
 >
 > **uid 유실 방지**(3단계에서 함께 넣음 — 이게 없으면 1·2단계 결과가 조용히 파괴된다)
 > - `saveStudentToFirebase`·`_studentDocData` 는 `setDoc` 으로 문서를 통째로 덮는다 → uid 보존 + 없으면 발급
