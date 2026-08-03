@@ -5919,15 +5919,14 @@ async function paInit() {
   if (_paLoaded) { paRender(); return; }
   root.innerHTML = `<div class="card"><div class="card-title"><i class="ti ti-chart-histogram"></i> 학습 분석</div>
     <div class="pa-note">불러오는 중...</div></div>`;
-  const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || String(currentStudent.seat || '');
   const list = [];
   try {
     if (window._fs && window._db) {
-      const { collection, query, where, getDocs } = window._fs;
-      const snap = await getDocs(query(collection(window._db, 'planner_ai_reviews'), where('seat', '==', seatKey)));
+      // 다른 기록과 같은 기준(uid) — 좌석 조회는 uid 가 없을 때만 내려가는 폴백이다
+      const snap = await _byStudent('planner_ai_reviews', 'seat');
+      const docs = []; snap.forEach(d => { const v = d.data(); if (v) docs.push(v); });
       // 선생님이 수치를 교정(statsFixed)했으면 그 값을 쓴다 — 분석은 교정본이 기준
-      // seat 조회라 이전 좌석 주인의 검사 결과가 섞일 수 있어 이름으로 한 번 더 거른다
-      snap.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date && window._sameStudentName(v.name || v.studentName, currentStudent.name)) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
+      _mineOnly(docs).forEach(v => { if (v.status === 'done' && v.date) { if (v.statsFixed) v.stats = v.statsFixed; list.push(v); } });
     }
   } catch(e) {
     // 검사 결과를 못 읽어도 순공 기반 분석은 보여줄 수 있으므로 빈 배열로 계속 진행한다

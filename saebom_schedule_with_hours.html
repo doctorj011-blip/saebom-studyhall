@@ -17431,15 +17431,22 @@ window.saRender = async function() {
   // 이 학생의 검사 결과 + 기간 내 전체 검사 결과(또래 추천용) + 순공 시간
   let reviews = [], peerAll = [], attend = {}, attendIn = {};
   try {
+    // 좌석이 아니라 불변 학생ID(uid)로 찾는다 — 좌석을 물려받았으면 이전 주인의 검사 결과가
+    // 이 학생 분석으로 그려진다. uid 가 없는 학생만 옛 방식(좌석 + 이름 검증)으로 내려간다.
+    const myUid = stu && stu.uid;
     const [mine, all, att] = await Promise.all([
-      getDocs(query(collection(db, 'planner_ai_reviews'), where('seat', '==', seatKey))),
+      getDocs(query(collection(db, 'planner_ai_reviews'),
+        myUid ? where('uid', '==', myUid) : where('seat', '==', seatKey))),
       getDocs(query(collection(db, 'planner_ai_reviews'), where('date', '>=', cutIso))),
       stu ? _saAttendance(stu.name, cutIso, todayIso) : Promise.resolve({ mins: {}, ins: {} })
     ]);
     // 수치 수정본(statsFixed)이 있으면 그걸 쓴다 — 학습분석은 사람이 교정한 값이 기준
-    // seat 조회라 이전 좌석 주인의 검사 결과가 섞일 수 있어 이름으로 한 번 더 거른다
-    mine.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date && (!stu || window._sameStudentName(v.name || v.studentName, stu.name))) { if (v.statsFixed) v.stats = v.statsFixed; reviews.push(v); } });
-    all.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat && v.seat !== seatKey) { if (v.statsFixed) v.stats = v.statsFixed; peerAll.push(v); } });
+    const _isMine = v => myUid ? v.uid === myUid : (!stu || window._sameStudentName(v.name || v.studentName, stu.name));
+    mine.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.date && _isMine(v)) { if (v.statsFixed) v.stats = v.statsFixed; reviews.push(v); } });
+    // 또래 비교 표본에서 본인은 뺀다 — uid 가 있으면 예전 좌석에 남은 본인 기록까지 정확히 빠진다
+    // (uid 가 없을 땐 예전처럼 좌석으로 뺀다 — 이름 판정을 쓰면 학생 미선택 시 표본이 통째로 비어 버린다)
+    const _notMe = v => myUid ? v.uid !== myUid : String(v.seat) !== String(seatKey);
+    all.forEach(d => { const v = d.data(); if (v && v.status === 'done' && v.seat && _notMe(v)) { if (v.statsFixed) v.stats = v.statsFixed; peerAll.push(v); } });
     attend = att.mins; attendIn = att.ins;
   } catch(e) {
     box.innerHTML = `<div style="color:#C62828;font-size:13px;text-align:center;padding:40px 0">조회 실패: ${_apcEsc(e.message || e)}</div>`;

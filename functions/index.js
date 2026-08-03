@@ -879,12 +879,42 @@ const PLANNER_AI_SCHEMA = {
   additionalProperties: false
 };
 
+// 좌석 → 학생ID(uid). 좌석은 교환·재배정되지만 uid 는 학생을 따라간다.
+// 검사 결과를 쓸 때 이걸 같이 넣어야 3앱이 uid 로 조회할 수 있다 — 백필은 그 시점 문서만
+// 채우므로, 쓰기 경로에서 빠뜨리면 오늘 이후 기록이 조용히 조회에서 사라진다.
+// ⚠️ students/{좌석} 의 uid 를 그냥 믿으면 안 된다 — 그 사이 좌석 주인이 바뀌었을 수 있어
+//    이름이 어긋나면 레지스트리(students/_meta_uid_registry)의 이름 표기로 다시 찾는다.
+async function plannerUid(seat, name) {
+  try {
+    const s = await db.collection('students').doc(String(seat)).get();
+    const v = s.exists ? (s.data() || {}) : {};
+    if (v.uid && (!name || !v.name || v.name === name)) return v.uid;
+
+    if (!name) return null;
+    const reg = await db.collection('students').doc('_meta_uid_registry').get();
+    if (!reg.exists) return null;
+    const ids = JSON.parse((reg.data() || {}).identities || '[]');
+    const hit = ids.filter(i => i && (i.name === name || (i.spellings || []).includes(name)));
+    // 동명이인은 두 uid 로 갈려 있다 — 좌석으로도 못 가리면 추측하지 않는다(빈 uid 가 낫다)
+    if (hit.length === 1) return hit[0].uid;
+    const bySeat = hit.filter(i => String(i.currentSeat) === String(seat));
+    return bySeat.length === 1 ? bySeat[0].uid : null;
+  } catch (e) {
+    logger.warn('plannerUid 조회 실패', { seat, name, message: e.message });
+    return null;
+  }
+}
+
 // 같은 학생의 이전 검사 기록(최근 4건) — "지난번보다 늘었다/줄었다" 비교 근거로 프롬프트에 넣는다.
 // ★최근 3건은 그때 준 '코멘트'까지 함께 넣는다. 이게 없으면 모델은 매번 처음 보는 학생처럼
 //   같은 지적("저녁 초반에 배치해 보자")을 무한 반복한다 — 코멘트가 형식적으로 느껴진 주된 원인.
-async function plannerAiHistory(seat, beforeDate) {
+// uid 가 있으면 uid 로 찾는다 — 좌석으로 찾으면 좌석을 물려받은 학생이 이전 주인의 학습이력을
+// 자기 것으로 프롬프트에 받게 된다(모델이 남의 기록과 비교하며 코멘트를 쓴다).
+async function plannerAiHistory(seat, beforeDate, uid) {
   try {
-    const hs = await db.collection('planner_ai_reviews').where('seat', '==', seat).get();
+    const hs = uid
+      ? await db.collection('planner_ai_reviews').where('uid', '==', uid).get()
+      : await db.collection('planner_ai_reviews').where('seat', '==', seat).get();
     const list = hs.docs.map(d => d.data())
       .filter(v => v.status === 'done' && v.date && v.date < beforeDate)
       .sort((a, b) => (a.date < b.date ? 1 : -1))
@@ -1026,7 +1056,7 @@ async function salvageTruncatedJpeg(buf) {
 }
 
 // 사진 다운로드 → 전처리(축소·확대본) → 메시지 content 조립
-async function buildPlannerAiUserContent(seat, dateStr, name, url) {
+async function buildPlannerAiUserContent(seat, dateStr, name, url, uid) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`사진 다운로드 실패 (HTTP ${res.status})`);
   let buf = Buffer.from(await res.arrayBuffer());
@@ -1089,7 +1119,7 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
   if (b64.length > 10 * 1024 * 1024) throw new Error('사진이 너무 큽니다 — 축소 후에도 10MB를 넘습니다');
 
   const [history, stuCtx] = await Promise.all([
-    plannerAiHistory(seat, dateStr),
+    plannerAiHistory(seat, dateStr, uid),
     plannerAiStudentCtx(seat, dateStr)
   ]);
 
@@ -1102,7 +1132,9 @@ async function buildPlannerAiUserContent(seat, dateStr, name, url) {
   ];
 }
 
-// 모델 응답 → planner_ai_reviews 문서 기록 (extra: 배치가 billing 표식 등을 얹는다)
+// 모델 응답 → planner_ai_reviews 문서 기록 (extra: 배치가 billing 표식·uid 등을 얹는다)
+// ⚠️ 이 함수는 문서를 통째로 교체(set)한다 — extra.uid 를 안 넘기면 '검사 중'에 넣어 둔 uid 가
+//    결과 기록에서 날아간다. 그래서 이전 문서의 uid 를 항상 이월한다(아래 keep).
 async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, extra) {
   if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
   const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
@@ -1116,6 +1148,7 @@ async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, 
     if (prev.exists) {
       const p = prev.data() || {};
       if (p.statsFixed) keep = { statsFixed: p.statsFixed, statsFixedAt: p.statsFixedAt || null };
+      if (p.uid) keep.uid = p.uid;
       prevComment = p.comment || '';
     }
   } catch (e) { logger.warn('statsFixed 이월 실패 — 새 결과만 기록', { seat, date: dateStr, message: e.message }); }
@@ -1167,16 +1200,17 @@ exports.plannerAiReview = onDocumentCreated(
       const url = pSnap.exists ? (pSnap.data() || {}).url : null;
       if (!url) throw new Error('제출된 플래너 사진이 없습니다');
 
-      await reviewRef.set({ seat, date: dateStr, name: req.name || null, status: 'running', startedAt: new Date().toISOString() }, { merge: true });
+      const uid = await plannerUid(seat, req.name);
+      await reviewRef.set({ seat, date: dateStr, name: req.name || null, ...(uid ? { uid } : {}), status: 'running', startedAt: new Date().toISOString() }, { merge: true });
 
       // 모델/프롬프트 덮어쓰기(선택) — ai_config/planner { model, prompt }
       const { model, sysPrompt } = await plannerAiConfig();
-      const content = await buildPlannerAiUserContent(seat, dateStr, req.name, url);
+      const content = await buildPlannerAiUserContent(seat, dateStr, req.name, url, uid);
 
       const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
       const msg = await client.messages.create(plannerAiRequestParams(model, sysPrompt, content));
 
-      const out = await writePlannerAiResult(reviewRef, seat, dateStr, req.name, model, msg);
+      const out = await writePlannerAiResult(reviewRef, seat, dateStr, req.name, model, msg, uid ? { uid } : null);
       logger.info('plannerAiReview 완료', { seat, date: dateStr, quality: out.quality });
     } catch (e) {
       logger.error('plannerAiReview', { seat, date: dateStr, message: e.message });
@@ -1241,13 +1275,17 @@ async function runPlannerBatchSubmit(label) {
   const batchIds = [];
 
   for (let i = 0; i < targets.length; i += CHUNK) {
-    let requests = [], names = {};
+    let requests = [], names = {}, uids = {};
     for (const v of targets.slice(i, i + CHUNK)) {
       try {
-        const content = await buildPlannerAiUserContent(v.seat, ds, v.name, v.url);
         const cid = `${v.seat}_${ds}`;
+        // uid 는 접수 시점에 확정해 배치 문서에 함께 남긴다 — 수거는 몇 시간 뒤라
+        // 그 사이 좌석이 바뀌면 그때 좌석으로 다시 찾은 uid 는 남의 것일 수 있다.
+        const uid = await plannerUid(v.seat, v.name);
+        const content = await buildPlannerAiUserContent(v.seat, ds, v.name, v.url, uid);
         requests.push({ custom_id: cid, params: plannerAiRequestParams(model, sysPrompt, content) });
         names[cid] = v.name || null;
+        if (uid) uids[cid] = uid;
       } catch (e) {
         skipped++;
         logger.warn('plannerBatch 대상 준비 실패 — 건너뜀', { seat: v.seat, ds, message: e.message });
@@ -1258,14 +1296,15 @@ async function runPlannerBatchSubmit(label) {
     try {
       const batch = await client.messages.batches.create({ requests });
       await db.collection('planner_ai_batches').doc(batch.id).set({
-        status: 'pending', date: ds, label, model, count: requests.length, names,
+        status: 'pending', date: ds, label, model, count: requests.length, names, uids,
         createdAt: new Date().toISOString()
       });
       // 관리앱에 '검사 중' 표시
       await Promise.all(requests.map(r => {
         const cut = r.custom_id.lastIndexOf('_');
+        const uid = uids[r.custom_id];
         return db.collection('planner_ai_reviews').doc(r.custom_id).set(
-          { seat: r.custom_id.slice(0, cut), date: ds, name: names[r.custom_id], status: 'running', startedAt: new Date().toISOString() },
+          { seat: r.custom_id.slice(0, cut), date: ds, name: names[r.custom_id], ...(uid ? { uid } : {}), status: 'running', startedAt: new Date().toISOString() },
           { merge: true });
       }));
       submitted += requests.length;
@@ -1275,7 +1314,7 @@ async function runPlannerBatchSubmit(label) {
       skipped += requests.length;
       logger.error('plannerBatch 조각 전송 실패', { ds, label, from: i, count: requests.length, message: e.message });
     }
-    requests = null; names = null;   // 다음 조각을 준비하기 전에 사진 데이터를 놓아준다
+    requests = null; names = null; uids = null;   // 다음 조각을 준비하기 전에 사진 데이터를 놓아준다
   }
 
   if (!submitted) { logger.error('plannerBatch 접수 실패 — 보낸 건이 없음', { ds, label, skipped }); return; }
@@ -1400,7 +1439,10 @@ exports.plannerBatchCollect = onSchedule(
           const reviewRef = db.collection('planner_ai_reviews').doc(cid);
           try {
             if (r.result.type !== 'succeeded') throw new Error(`배치 처리 실패 (${r.result.type})`);
-            await writePlannerAiResult(reviewRef, seat, rds, (b.names || {})[cid], b.model, r.result.message, { billing: 'batch' });
+            // uid 는 접수 때 확정한 값을 쓴다(결과 기록은 문서를 통째 교체하므로 반드시 같이 넣어야 한다)
+            const uid = (b.uids || {})[cid] || null;
+            await writePlannerAiResult(reviewRef, seat, rds, (b.names || {})[cid], b.model, r.result.message,
+              { billing: 'batch', ...(uid ? { uid } : {}) });
             ok++;
           } catch (e) {
             fail++;

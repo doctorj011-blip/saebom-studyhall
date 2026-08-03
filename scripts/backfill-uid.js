@@ -18,9 +18,10 @@
 //
 // 규칙상 백필이 불가능한 컬렉션 (firestore.rules)
 //   - usage_logs (12,870건) : allow update: if false
-//   - planner_ai_reviews (500건) : update 가 summary/statsFixed 로만 제한됨
-//   둘 다 규칙을 고쳐 수동 배포하지 않는 한 못 채운다. 3단계에서 이 둘만 좌석 조회를
-//   유지하거나, 규칙 변경을 별도 건으로 처리해야 한다.
+//     집계·분석용이고 학생별 조회 경로가 아니라 그대로 둔다.
+//   - planner_ai_reviews 는 2026-08-04 규칙에 uid 추가 허용이 들어가 대상으로 편입됐다.
+//     단 규칙이 write-once(!('uid' in resource.data))라, 이미 다른 uid 가 박힌 문서를
+//     고치려 들면 403 이 난다 — 그건 스크립트가 아니라 서버(Admin SDK)로 교정할 일이다.
 // ─────────────────────────────────────────────────────────────────────────────
 'use strict';
 const path = require('path');
@@ -46,11 +47,11 @@ const TARGETS = {
   consultations: 'name',
   withdrawn_students: 'name',
   current_sessions: 'studentName',
+  planner_ai_reviews: 'name',  // 규칙에 uid 추가 허용을 넣은 뒤 편입(2026-08-04)
 };
 const OPTIONAL = { sms_logs: 'student' };   // 로그성 — --include-sms 로만 포함
 const BLOCKED = {
   usage_logs: '규칙 allow update: if false',
-  planner_ai_reviews: '규칙상 summary/statsFixed 만 수정 가능',
 };
 
 const val = v => v == null ? null
