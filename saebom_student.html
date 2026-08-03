@@ -1710,6 +1710,7 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._noticeDateLabel=(d)=>{const s=String(d||'').replace(/\D/g,'');return s.length<8?String(d||''):s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.';};
   window._noticeSortKey=(n)=>{const s=String((n&&n.date)||'').replace(/\D/g,'');return s.length>=8?Number(s.slice(0,8)):((n&&n.id)?Number(String(n.id).slice(0,8)):0);};
   window._sortNoticesDesc=(items)=>[...(items||[])].sort((a,b)=>(window._noticeSortKey(b)-window._noticeSortKey(a))||((b.id||0)-(a.id||0)));
+  window._newStudentUid=()=>{const b=new Uint8Array(4);(window.crypto||window.msCrypto).getRandomValues(b);return 's_'+Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');};
   window._normStudentName=(n)=>String(n==null?'':n).trim().replace(/\s+/g,'').replace(/\(\d+\)$/,'');
   window._sameStudentName=(a,b)=>{const x=window._normStudentName(a),y=window._normStudentName(b);if(!x||!y)return false;if(x===y)return true;const lo=x.length<y.length?x:y,hi=x.length<y.length?y:x;return hi.indexOf(lo)===0&&/^[A-Za-z0-9]$/.test(hi.slice(lo.length));};
   window._onlyMine=(docs,student)=>{const me=student&&(student.name||student);return (docs||[]).filter(d=>window._sameStudentName(d&&(d.name||d.studentName),me));};
@@ -2009,19 +2010,38 @@ async function clearReturnedPenalties(periodsList) {
   } catch(e) { console.warn('벌점 취소 실패:', e); }
 }
 
+// ── 학생별 기록 조회 (이관 3단계) ──
+// 기준은 좌석이 아니라 불변 학생ID(uid)다. 좌석은 교환·재배정되므로 좌석으로 조회하면
+// 그 자리에 앉았던 이전 학생의 기록이 딸려온다(2026-08-04 실측: 37건 실제 혼입).
+// 이력 10,402건에 uid 백필을 마쳤으므로 uid 조회가 정본이다.
+//
+// uid 가 없을 때만 옛 방식(좌석 조회 + 이름 검증)으로 내려간다. 이 경우가 남는 이유:
+//   - sessionStorage 에 uid 도입 전 로그인 정보가 남아 있는 학생(재로그인하면 사라진다)
+//   - 어떤 경로로든 uid 없이 만들어진 신규 학생(관리앱이 다음 실행 때 발급해 준다)
+function _byStudent(col, seatField) {
+  const { collection, query, where, getDocs } = window._fs;
+  const c = collection(window._db, col);
+  if (currentStudent && currentStudent.uid) return getDocs(query(c, where('uid', '==', currentStudent.uid)));
+  const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
+  return getDocs(query(c, where(seatField, '==', seatKey)));
+}
+// 조회 결과 재확인. uid 조회면 이미 정확하지만, 좌석 폴백으로 내려온 경우 이름으로 걸러야 한다.
+function _mineOnly(docs) {
+  if (currentStudent && currentStudent.uid) return docs.filter(d => d.uid === currentStudent.uid);
+  return window._onlyMine(docs, currentStudent);
+}
+
 // ── 내 벌점 조회/표시 (오늘 일정 탭 상단 카드) ──
 let _penaltyDocs = null;
 async function loadMyPenalties() {
   if (!window._firebaseReady || !currentStudent) return;
   try {
     const { collection, query, where, getDocs } = window._fs;
-    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
-    const snap = await getDocs(query(collection(window._db, 'penalties'), where('seatKey','==',seatKey)));
+    const snap = await _byStudent('penalties', 'seatKey');
     const docs = [];
     snap.forEach(d => docs.push(d.data()));
     docs.sort((a,b) => a.date < b.date ? 1 : -1);
-    // 좌석은 교환·재배정되므로 seatKey만으로는 이전 좌석 주인의 벌점이 섞여 온다 → 이름으로 재확인
-    _penaltyDocs = window._onlyMine(docs, currentStudent);
+    _penaltyDocs = _mineOnly(docs);
     renderPenaltyCard();
   } catch(e) { console.warn('벌점 조회 실패:', e); }
 }
@@ -2230,13 +2250,11 @@ async function loadMyMerits() {
   if (!window._firebaseReady || !currentStudent) return;
   try {
     const { collection, query, where, getDocs } = window._fs;
-    const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
-    const snap = await getDocs(query(collection(window._db, 'merits'), where('seatKey','==',seatKey)));
+    const snap = await _byStudent('merits', 'seatKey');
     const docs = [];
     snap.forEach(d => docs.push(d.data()));
     docs.sort((a,b) => a.date < b.date ? 1 : -1);
-    // 벌점과 같은 이유 — 좌석 교환 시 이전 주인의 상점이 딸려오지 않도록 이름으로 재확인
-    _meritDocs = window._onlyMine(docs, currentStudent);
+    _meritDocs = _mineOnly(docs);
     renderMeritCard();
   } catch(e) { console.warn('상점 조회 실패:', e); }
 }
@@ -2336,6 +2354,8 @@ async function tryLogin() {
         const v = doc.data();
         if (v.name && v.phone && window._loginKey(v) === pinBuffer) {
           matched.push({
+            // 불변 학생ID — 상벌점·플래너 조회의 기준이다. 여기서 안 담으면 좌석 폴백으로 내려간다.
+            uid: v.uid || '',
             seat: v.seat, name: v.name,
             phone: v.phone || '', parent: v.parent || '',
             loginPin: v.loginPin || '',
@@ -2817,6 +2837,9 @@ async function refreshStudentData() {
     const snap = await window._fsGetDoc(window._fsDoc(window._db, 'students', seat));
     if (snap && snap.exists && snap.exists()) {
       currentStudent.hours = _normalizeHours(snap.data().hours);
+      // uid 도입(2026-08-04) 전에 로그인한 세션 캐시엔 uid가 없다 — 여기서 채우면
+      // 재로그인 없이 좌석 폴백에서 uid 조회로 올라온다.
+      if (snap.data().uid) currentStudent.uid = snap.data().uid;
       // 옛 세션 캐시엔 gender가 없다 — 여기서 채운다.
       const g = snap.data().gender === 'm' ? 'm' : 'f';
       currentStudent.gender = g;
@@ -5551,11 +5574,17 @@ async function _plDropOthersPhotos() {
     const { collection, query, where, getDocs } = window._fs;
     const db = window._db || window._fs.getFirestore();
     const seat = _plSeatKey();
+    // 좌석으로 긁어와 소유자를 가린다. Storage 경로가 좌석 기준이라 이 조회 자체는 좌석이어야 한다.
     const snap = await getDocs(query(collection(db, 'planners'), where('seat', '==', seat)));
+    const myUid = currentStudent.uid;
     snap.forEach(d => {
       const v = d.data();
-      if (!v || !v.date || !(v.name || v.studentName)) return;   // 이름 없는 기록은 판단 보류
-      if (!window._sameStudentName(v.name || v.studentName, currentStudent.name)) {
+      if (!v || !v.date) return;
+      // uid 가 양쪽에 있으면 그게 정답이다. 없을 때만 이름으로 판단한다.
+      const mine = (myUid && v.uid) ? v.uid === myUid
+        : (v.name || v.studentName) ? window._sameStudentName(v.name || v.studentName, currentStudent.name)
+        : true;   // 근거가 없으면 판단 보류 — 지우지 않는다
+      if (!mine) {
         _plNotMineDates.add(v.date);
         delete plannerUploadedDates[v.date];
       }

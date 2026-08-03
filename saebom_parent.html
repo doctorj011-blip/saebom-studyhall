@@ -719,6 +719,7 @@ if (!window._ymKey) { console.warn('saebom-common.js 미로드 — 내장 폴백
   window._noticeDateLabel=(d)=>{const s=String(d||'').replace(/\D/g,'');return s.length<8?String(d||''):s.slice(0,4)+'.'+s.slice(4,6)+'.'+s.slice(6,8)+'.';};
   window._noticeSortKey=(n)=>{const s=String((n&&n.date)||'').replace(/\D/g,'');return s.length>=8?Number(s.slice(0,8)):((n&&n.id)?Number(String(n.id).slice(0,8)):0);};
   window._sortNoticesDesc=(items)=>[...(items||[])].sort((a,b)=>(window._noticeSortKey(b)-window._noticeSortKey(a))||((b.id||0)-(a.id||0)));
+  window._newStudentUid=()=>{const b=new Uint8Array(4);(window.crypto||window.msCrypto).getRandomValues(b);return 's_'+Array.from(b).map(x=>x.toString(16).padStart(2,'0')).join('');};
   window._normStudentName=(n)=>String(n==null?'':n).trim().replace(/\s+/g,'').replace(/\(\d+\)$/,'');
   window._sameStudentName=(a,b)=>{const x=window._normStudentName(a),y=window._normStudentName(b);if(!x||!y)return false;if(x===y)return true;const lo=x.length<y.length?x:y,hi=x.length<y.length?y:x;return hi.indexOf(lo)===0&&/^[A-Za-z0-9]$/.test(hi.slice(lo.length));};
   window._onlyMine=(docs,student)=>{const me=student&&(student.name||student);return (docs||[]).filter(d=>window._sameStudentName(d&&(d.name||d.studentName),me));};
@@ -1111,19 +1112,32 @@ window.setTabletConsent = async function(want) {
 // 늦은 변경(교시 시작 5시간 전 마감 이후 출석 취소) = 교시당 1점 — 학생앱이 기록.
 // 무단결석(변경 없이 출석 예정 교시 미입실, type:'noshow') = 교시당 2점 — 관리자앱이 자동 판정.
 // 지각(교시 시작 5분을 넘겨 입실, type:'late') = 교시당 1점 — 같은 판정에서 함께 기록된다.
+// ── 학생별 기록 조회 (이관 3단계) ──
+// 기준은 좌석이 아니라 불변 학생ID(uid). 좌석은 교환·재배정되므로 좌석으로 조회하면
+// 그 자리에 앉았던 다른 집 아이의 기록이 학부모 화면에 뜬다(2026-08-04 실측으로 확인된 경로).
+// uid 가 없을 때만 옛 방식(좌석 조회 + 이름 검증)으로 내려간다.
+function _pByStudent(col, seatField) {
+  const c = window._collection(window._db, col);
+  if (currentStudent && currentStudent.uid) {
+    return window._getDocs(window._query(c, window._where('uid', '==', currentStudent.uid)));
+  }
+  const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
+  return window._getDocs(window._query(c, window._where(seatField, '==', seatKey)));
+}
+function _pMineOnly(docs) {
+  if (currentStudent && currentStudent.uid) return docs.filter(d => d.uid === currentStudent.uid);
+  return window._onlyMine(docs, currentStudent);
+}
+
 async function loadParentPenalties() {
   const el = document.getElementById('penalty-card');
   if (!el || !currentStudent) return;
   if (!window._firebaseReady || !window._getDocs || !window._query) return;
   try {
-    const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
-    const snap = await window._getDocs(window._query(
-      window._collection(window._db, 'penalties'), window._where('seatKey', '==', seatKey)));
+    const snap = await _pByStudent('penalties', 'seatKey');
     let docs = [];
     snap.forEach(d => docs.push(d.data()));
-    // 좌석은 교환·재배정되므로 seatKey만으로는 이전 좌석 주인의 벌점이 섞여 온다
-    // (학부모에게 남의 자녀 기록이 보이는 경로라 특히 중요) → 이름으로 재확인
-    docs = window._onlyMine(docs, currentStudent);
+    docs = _pMineOnly(docs);
     docs.sort((a, b) => a.date < b.date ? 1 : -1);
 
     const cyc = window._meritCycle();
@@ -1176,13 +1190,10 @@ async function loadParentMerits() {
   if (!el || !currentStudent) return;
   if (!window._firebaseReady || !window._getDocs || !window._query) return;
   try {
-    const seatKey = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || currentStudent.seat;
-    const snap = await window._getDocs(window._query(
-      window._collection(window._db, 'merits'), window._where('seatKey', '==', seatKey)));
+    const snap = await _pByStudent('merits', 'seatKey');
     let docs = [];
     snap.forEach(d => docs.push(d.data()));
-    // 벌점과 같은 이유 — 이전 좌석 주인의 상점이 딸려오지 않도록 이름으로 재확인
-    docs = window._onlyMine(docs, currentStudent);
+    docs = _pMineOnly(docs);
     docs.sort((a, b) => a.date < b.date ? 1 : -1);
 
     const cyc = window._meritCycle();

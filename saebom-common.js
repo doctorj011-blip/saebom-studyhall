@@ -104,6 +104,16 @@ window._phoneMid4 = function(phone) {
   return d.length === 11 ? d.slice(3, 7) : '';
 };
 
+// ── 불변 학생ID(uid) 발급 (이관 1단계) ──
+// 좌석·이름과 달리 절대 바뀌지 않는 식별자. 이력 기록이 전부 이 값으로 묶여 있으므로
+// 학생 문서를 만드는 모든 경로에서 반드시 하나씩 발급돼야 한다(없으면 그 학생은 조회에서 사라진다).
+// 순번을 쓰지 않는 이유: 학원이 늘어날 때 충돌하지 않아야 하고, 사람이 손으로 잘못 적기 쉽다.
+window._newStudentUid = function() {
+  const b = new Uint8Array(4);
+  (window.crypto || window.msCrypto).getRandomValues(b);
+  return 's_' + Array.from(b).map(x => x.toString(16).padStart(2, '0')).join('');
+};
+
 // ── 좌석 기준 기록의 소유자 판별 (3앱 공통) ──
 // penalties·merits·planners·planner_ai_reviews·daily_reports 는 문서키·조회키가 모두 '좌석번호'다.
 // 그런데 좌석은 교환·재배정되고, 좌석 교환은 students/schedules/schedule_base 세 개만 옮긴다.
