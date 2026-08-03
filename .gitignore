@@ -4,3 +4,9 @@
 # 의존성 / 로그
 node_modules/
 *.log
+
+# Firestore 백업 (scripts/export-firestore.js)
+# 기본 저장 위치는 저장소 밖이지만, --out 으로 안쪽을 지정했을 때의 안전망.
+# 이 저장소는 public 이라 운영 데이터(학생·학부모 개인정보)가 절대 들어오면 안 된다.
+saebom-backup/
+*-backup/
