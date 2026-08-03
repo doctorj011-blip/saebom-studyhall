@@ -2149,8 +2149,11 @@ function updateNowPeriodChip(){
 updateNowPeriodChip();
 setInterval(updateNowPeriodChip, 10*1000);
 
-// 교시별 출석현황(숫자·명단)에서 제외할 학생 이름
+// 교시별 출석현황(숫자·명단)에서 제외할 학생 이름 (관리자석 54~63번은 isAdminSeat로 따로 제외)
 const PERIOD_EXCLUDED_NAMES = ['정원혁', '이새봄'];
+// 교시별 출석현황 대상 여부 — 관리자석은 '근무' 스케줄이라 걸러지지 않으므로 좌석으로도 뺀다
+const _isPeriodTarget = s => !PERIOD_EXCLUDED_NAMES.includes(s.name)
+  && !(window.isAdminSeat && window.isAdminSeat(s.seat));
 
 let STUDENTS=[];
 
@@ -2213,8 +2216,20 @@ window.isTestStudent = function(name) {
 };
 
 // ── 관리자·조교 계정 (관리자석 54~63번) ──
-// 학생이 아니므로 '현재 입실' 인원수와 입실현황 목록에 넣지 않는다.
+// 학생이 아니므로 각종 집계에서 전부 뺀다 — 공부시간 순위, 기간 조회, 교시별 출석현황,
+// 상벌점 판정·순위, 주간목표, 학습분석 또래통계, 알림톡 발송 등.
 // 좌석 배치도에는 그대로 보인다(관리자석 입실 색 표시는 유지).
+// ★판정은 이름이 아니라 좌석번호로 한다 — 조교가 바뀌어도 코드를 고칠 필요가 없게.
+//   (아래 TEST_STUDENTS 이름 목록은 좌석이 없는 테스트 계정용으로만 남겨 둔다)
+window.ADMIN_SEAT_MIN = 54;
+window.ADMIN_SEAT_MAX = 63;
+window.isAdminSeat = function(seat) {
+  const n = parseInt(String(seat == null ? '' : seat).replace(/[^0-9]/g, ''), 10);
+  if (!n) return false;
+  if (n >= window.ADMIN_SEAT_MIN && n <= window.ADMIN_SEAT_MAX) return true;
+  // 배치도 고정칸(ADMIN_FIXED)에만 있는 좌석도 관리자석으로 본다(관리자석을 늘릴 때 대비)
+  return !!(window.ADMIN_FIXED && Object.values(window.ADMIN_FIXED).some(a => a.n === n));
+};
 window.isAdminName = function(name) {
   const s = (window.STUDENTS || []).find(x => x.name === name);
   return !!(s && window.isAdminSeat && window.isAdminSeat(s.seat));
@@ -5092,8 +5107,14 @@ window.showCycleRankModal = async function(){
 
     // 대상 = 현재 명부(실재·비테스트·비관리자) + 주기 내 기록이 있는 이름
     const roster = new Map();
-    (window.STUDENTS||[]).forEach(s => { if (s.name && (parseInt(s.seat)||0)<54 && !(window.isTestStudent && window.isTestStudent(s.name))) roster.set(s.name, (s.seat||'').replace(/[^0-9]/g,'')); });
-    Object.keys(Object.assign({}, meritByName, penByName)).forEach(nm => { if (!roster.has(nm) && !(window.isTestStudent && window.isTestStudent(nm))) roster.set(nm, seatOf[nm] || '—'); });
+    (window.STUDENTS||[]).forEach(s => { if (s.name && !window.isAdminSeat(s.seat) && !(window.isTestStudent && window.isTestStudent(s.name))) roster.set(s.name, (s.seat||'').replace(/[^0-9]/g,'')); });
+    // 명부에 없지만 주기 내 기록이 있는 이름(개명·퇴원 등). 기록의 seatKey가 관리자석이면 제외.
+    Object.keys(Object.assign({}, meritByName, penByName)).forEach(nm => {
+      if (roster.has(nm)) return;
+      if (window.isTestStudent && window.isTestStudent(nm)) return;
+      if (window.isAdminSeat(seatOf[nm]) || (window.isAdminName && window.isAdminName(nm))) return;
+      roster.set(nm, seatOf[nm] || '—');
+    });
 
     const rows = [...roster.entries()].map(([name, seat]) => {
       const off = window._computeOffset(meritByName[name]||0, penByName[name]||0);
@@ -5818,7 +5839,7 @@ function buildDashboard(){
   const periodData = todayPeriods.map((p) => {
     const pNum = parseInt(p.n); // '7교시' → 7
     const scheduled = STUDENTS.filter(s => {
-      if (PERIOD_EXCLUDED_NAMES.includes(s.name)) return false;
+      if (!_isPeriodTarget(s)) return false;
       const sched = s.schedule[todayName] || '';
       if (!sched || sched === '-') return false;
       const parsed = parseScheduleStr(sched);
@@ -6677,8 +6698,8 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
     console.log(`[알림톡] 서버 발송 모드 — 이 기기에서는 생략 (${student.name})`);
     return;
   }
-  // 테스트 계정은 입퇴실 알림톡을 보내지 않는다
-  if (window.isTestStudent(student.name)) return;
+  // 테스트 계정·관리자석(54~63번)은 입퇴실 알림톡을 보내지 않는다
+  if (window.isTestStudent(student.name) || window.isAdminSeat(student.seat)) return;
   const parentPhone = (student.parent || '').replace(/-/g, '');
   // 유효한 휴대폰 번호(010+8자리)만 발송. 미등록('010'만 있거나 미완성)이면 조용히 생략
   // → 학부모 번호가 없는 관리자 등도 알림톡 실패 토스트 없이 입퇴실 처리된다.
@@ -6769,7 +6790,7 @@ window.mealAwayTargetFor = mealAwayTargetFor;
 async function sendAwaySMS(student, isReturn, timeStr, mealName) {
   if (!MEAL_AWAY_SMS) return;
   if (student.mealAwaySms !== true) return;        // 수신 희망자만 (이중 방어)
-  if (window.isTestStudent(student.name)) return;  // 테스트 계정은 발송 안 함
+  if (window.isTestStudent(student.name) || window.isAdminSeat(student.seat)) return;  // 테스트·관리자 계정은 발송 안 함
   const parentPhone = (student.parent || '').replace(/-/g, '');
   // 입퇴실 알림과 동일: 유효한 번호가 없으면 실패 토스트 없이 조용히 생략(관리자 등)
   if (parentPhone.length < 10) return;
@@ -7148,11 +7169,8 @@ window.ADMIN_FIXED = {
   'r10_c1':{type:'admin',n:54,name:''},
 };
 
-// 관리자석 여부 판별 (관리자석 좌석번호는 스터디룸 배정 대상에서 제외)
-window.isAdminSeat = function(seat){
-  const n = parseInt(seat);
-  return !!(window.ADMIN_FIXED && Object.values(window.ADMIN_FIXED).some(a => a.n === n));
-};
+// 관리자석 여부 판별(window.isAdminSeat)은 파일 위쪽 '관리자·조교 계정' 블록에 한 곳만 둔다.
+// ADMIN_FIXED 정의보다 앞서 선언돼 있어도 되도록 좌석번호 범위(54~63)를 우선 검사한다.
 
 function buildFloorplan() {
   const el = document.getElementById('fp-room');
@@ -8918,7 +8936,7 @@ function showPeriodStudents(periodIdx) {
   const presentNames = new Set(todayRecords.filter(r => !r.outTime).map(r => r.studentName));
   const todayName = getTodayDayName();
   const students = STUDENTS.filter(s => {
-    if (PERIOD_EXCLUDED_NAMES.includes(s.name)) return false;
+    if (!_isPeriodTarget(s)) return false;
     const sched = s.schedule[todayName] || '';
     if (!sched || sched === '-') return false;
     const parsed = parseScheduleStr(sched);
@@ -9221,7 +9239,9 @@ window.hoInsertAbsent = function () {
   const names = [];
   try {
     (window.STUDENTS || []).forEach(s => {
-      if (window.isTestStudent && window.isTestStudent(s.name)) return;
+      // 관리자석(54~63번)은 스케줄이 '근무'라 아래 '-' 검사에 안 걸린다 — 좌석으로 뺀다
+      if (window.isNonStudent && window.isNonStudent(s.name)) return;
+      if (window.isAdminSeat && window.isAdminSeat(s.seat)) return;
       if ((window.PRESENT || []).includes(s.name)) return;
       const sched = day && s.schedule ? (s.schedule[day] || '-') : '-';
       if (sched === '-' || !sched) return;
@@ -9767,6 +9787,7 @@ window.showEventAchievers = async function(i){
       const s = docSnap.data();
       if (!s.studentName || !s.inDate || typeof s.inTs !== 'number') return;
       if (window.isTestStudent(s.studentName)) return;
+      if (window.isAdminSeat(s.seat)) return; // 관리자석(54~63번) 근무 세션 — 집계 제외
       if (s.seat) seatOf[s.studentName] = s.seat;
       let min = 0;
       if (s.status === 'closed' && typeof s.durationMin === 'number') {
@@ -11975,6 +11996,8 @@ function renderPenaltyBoard() {
   let totalPts = 0;
   _penaltyBoardDocs.forEach(d => {
     if (window.isTestStudent && window.isTestStudent(d.name || '')) return;
+    // 관리자석(54~63번)은 벌점 대상이 아니다 — 옛 기록이 남아 있어도 현황판에 올리지 않는다
+    if (window.isAdminSeat && window.isAdminSeat(d.seatKey != null ? d.seatKey : d.seat)) return;
     const isToday = d.date === today;
     Object.keys(d.periods || {}).sort((a, b) => a - b).forEach(pn => {
       const p = d.periods[pn];
@@ -13658,6 +13681,7 @@ window.assessPlannerExcellence = async function(){
       if (v.date < CYCLE1.start || v.date > CYCLE1.end) return; // 주기 내만
       const seatNum = String(v.seat || '').replace(/[^0-9]/g, '');
       if (!seatNum) return;
+      if (window.isAdminSeat(seatNum)) return; // 관리자석(54~63번) — 상점 대상 아님
       cntBySeat[seatNum] = (cntBySeat[seatNum] || 0) + 1;
     });
     const todayIso = SH.sessIsoDate(Date.now());
@@ -13836,8 +13860,9 @@ function _autoHandleScheduleChange(alertObj) {
     if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || day);
     if (window.buildStudentList) window.buildStudentList(document.getElementById('student-search')?.value || '');
   } catch(e) {}
-  // 테스트 계정: 스케줄 적용까지만 하고 알림톡은 보내지 않는다
+  // 테스트·관리자 계정: 스케줄 적용까지만 하고 알림톡은 보내지 않는다
   if (window.isTestStudent && window.isTestStudent(student.name)) return;
+  if (window.isAdminSeat && window.isAdminSeat(student.seat)) return;
   // 2) 알림톡 — 좌석별 디바운스: 마지막 변경 후 90초 뒤 최종 상태로 1회 발송
   const alertId = _getScheduleAlertId(alertObj);
   if (_autoSmsTimers[alertObj.seat]) clearTimeout(_autoSmsTimers[alertObj.seat]);
@@ -14072,7 +14097,7 @@ window.solapiAlimtalkSend = solapiAlimtalkSend;
 window.sendAbsentAlert = async function(idx) {
   const a = ALERTS[idx];
   if (!a) return;
-  if (window.isTestStudent(a.name)) return; // 테스트 계정 — 발송 안 함 (calcAlerts에서 이미 걸러지지만 이중 방어)
+  if (window.isNonStudent(a.name) || window.isAdminSeat(a.seat)) return; // 테스트·관리자 계정 — 발송 안 함 (calcAlerts에서 이미 걸러지지만 이중 방어)
   const student = STUDENTS.find(s => s.seat === a.seat);
   const parentPhone = (student?.parent || '').replace(/-/g, '');
   if (parentPhone.length < 10) {
@@ -15358,6 +15383,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   const student = STUDENTS.find(s => s.seat === seat);
   if (!student) return;
   if (window.isTestStudent && window.isTestStudent(student.name)) { showAdminToast('테스트 계정은 알림톡을 보내지 않습니다'); return; }
+  if (window.isAdminSeat && window.isAdminSeat(student.seat)) { showAdminToast('관리자석은 알림톡 대상이 아닙니다'); return; }
   const alert = scheduleAlerts[idx];
   if (!alert) return;
 

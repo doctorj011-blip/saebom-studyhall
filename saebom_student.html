@@ -1872,8 +1872,8 @@ function periodStartMs(pNum, dayName) {
 // 저장 직전 호출 — 오늘 요일에서 '마감 이후의 출석 취소'만 골라낸다.
 function computeLatePenalties() {
   if (!currentStudent || !todayDay || todayDay === '일') return [];
-  // 테스트 계정(실제 학생 아님)은 벌점 대상에서 제외
-  if (['이새봄','정원혁','손형준','김근우','이수연'].includes(String(currentStudent.name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim())) return [];
+  // 테스트 계정·관리자석(54~63번)은 벌점 대상에서 제외 — 판정은 _rankExcluded 한 곳으로 통일
+  if (_rankExcluded(currentStudent.name, currentStudent.seat)) return [];
   // 주간설정(관리자 허용 수정기간) 표에서 오늘 요일을 고친 경우는 정식 수정 → 벌점 제외
   if (scheduleEditEnabled && weeklyEditedDays.has(todayDay)) return [];
   const oldSched = currentStudent.schedule[todayDay] || '-';
@@ -3854,9 +3854,17 @@ async function loadActualStudyData(force) {
 }
 
 // ── 순위(랭킹) 데이터: 전체 학생의 오늘/이번달 공부시간 집계 ──
-// 순위에서 영구 제외할 대상(관리자·비대상 학생). "(관리)" 등 괄호 표기는 무시하고 비교.
+// 순위에서 영구 제외할 대상.
+// ★관리자·조교는 좌석번호(54~63번)로 거른다 — 조교가 바뀌어도 코드를 고칠 필요가 없게.
+//   이름 목록은 좌석이 없는 테스트 계정용 보조 수단으로만 남긴다. "(관리)" 괄호 표기는 무시하고 비교.
+const ADMIN_SEAT_MIN = 54, ADMIN_SEAT_MAX = 63;
+function _isAdminSeat(seat) {
+  const n = parseInt(String(seat == null ? '' : seat).replace(/[^0-9]/g, ''), 10);
+  return !!n && n >= ADMIN_SEAT_MIN && n <= ADMIN_SEAT_MAX;
+}
 const RANK_EXCLUDE = new Set(['정원혁','이새봄','이수연','김근우','손형준']);
-function _rankExcluded(name) {
+function _rankExcluded(name, seat) {
+  if (_isAdminSeat(seat)) return true;
   const base = String(name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
   return RANK_EXCLUDE.has(base);
 }
@@ -3898,7 +3906,7 @@ async function loadRankData(force) {
     const rows = [];
     stuSnap.forEach(d => {
       const v = d.data();
-      if (!v || !v.name || _rankExcluded(v.name)) return; // 순위 영구 제외 대상
+      if (!v || !v.name || _rankExcluded(v.name, v.seat != null ? v.seat : d.id)) return; // 순위 영구 제외 대상
       const month = _readHour(v.hours, monthKey) * 60 + (openMin[v.name] || 0);
       const today = todayMin[v.name] || 0;
       if (month <= 0 && today <= 0) return;
