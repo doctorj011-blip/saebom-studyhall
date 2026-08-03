@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Firebase Storage 보안 규칙
+//
+//  ⚠️  상태: 2026-08-04 현재 **미배포**. 이 파일은 실제 콘솔 규칙을 옮겨 적은 게 아니라
+//      바깥에서 동작을 찔러 보고 역추적한 재구성본이다(콘솔 규칙 원문은 CLI로 못 읽는다).
+//      firestore.rules 처럼 "이 파일이 원본"이 되려면 배포가 한 번 필요하고,
+//      배포는 콘솔의 현재 규칙과 눈으로 대조한 뒤에 할 것.
+//
+//      배포하려면 (firebase.json 에 storage 항목이 일부러 없다 — 실수로 딸려
+//      배포되지 않게 하려는 것):
+//        1) firebase.json 에  "storage": { "rules": "storage.rules" }  추가
+//        2) firebase deploy --only storage
+//        3) 위 '미배포' 표시를 배포일로 바꾸고 아래 [배포 이력]에 남길 것
+//
+//  ── 2026-08-04 실측 (미인증 REST 로 확인) ────────────────────────────────
+//    planners/{좌석}/{파일}   목록 O · 다운로드 O (토큰 없이도)  → 완전 공개
+//    planners/ , 버킷 루트     목록 X (403)
+//    notices/{공지}/{파일}     읽기 X (403)  ※ 앱은 토큰이 붙은 다운로드 URL로 표시하므로
+//                                            읽기 권한이 없어도 화면에는 잘 나온다
+//    그 외 경로                읽기 X (403)
+//    쓰기는 밖에서 확인할 방법이 없다. 다만 세 앱 모두 로그인 없이 업로드하고
+//    실제로 사진이 올라가 있으므로 planners 쓰기는 열려 있는 게 확실하다.
+//    ⚠️ 공지 사진 첨부는 아직 한 번도 쓰인 적이 없다(notices/list 에 이미지 0건).
+//       notices 쓰기 규칙이 콘솔에 없다면 사진 붙인 공지는 발행 자체가 실패한다.
+//
+//  ── 아래 규칙이 지금 동작과 다른 점 ──────────────────────────────────────
+//    · 업로드에 크기(15MB)·이미지 타입 제한을 건다. 지금은 아무 파일이나 올릴 수 있다.
+//      (실측 최대 사진 8.0MB 라 정상 사용은 안 막힌다)
+//    · 나머지(플래너 공개 읽기, 삭제 허용, 공지 읽기 차단)는 현재 동작 그대로다.
+//
+//  ── 남는 위험 (규칙으로는 못 막는 것, 알고 쓸 것) ────────────────────────
+//    앱에 로그인이 없어 "본인 것만" 같은 조건을 쓸 수 없다. 그래서
+//    planners/{좌석}/{날짜}.jpg 주소만 알면 누구나 남의 플래너 사진을 보고,
+//    덮어쓰고, 지울 수 있다. 좌석·날짜는 추측하기 쉬운 값이다.
+//    제대로 막으려면 Firebase Auth 가 필요하다(네이티브 앱의 appauth 가 그 방향).
+//
+//  [배포 이력]
+//    - (아직 없음)
+// ══════════════════════════════════════════════════════════════════════════
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // 사람이 올린 사진인지 — 크기·타입만 본다(로그인이 없어 소유자는 못 따진다)
+    function isPhoto() {
+      return request.resource != null
+          && request.resource.size < 15 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*');
+    }
+
+    // 플래너 사진 — 학생앱/네이티브앱 업로드, 학생·학부모·관리앱이 조회
+    // read 에 list 가 포함된다. 학생앱 loadPlannerMonthData 가 폴더 목록을 쓰므로 필요.
+    match /planners/{seatKey}/{fileName} {
+      allow read: if true;
+      allow create, update: if isPhoto();
+      allow delete: if true;          // 사진 교체·철회 (학생앱 plannerDeletePhoto)
+    }
+
+    // 공지 이미지 — 관리자앱이 올리고, 표시는 토큰 URL 로 한다
+    // 그래서 read 를 열지 않는다(공지 사진이 검색·크롤링에 노출되지 않게).
+    match /notices/{noticeId}/{fileName} {
+      allow read: if false;
+      allow create, update: if isPhoto();
+      allow delete: if true;
+    }
+
+    // 그 외 전부 차단 (지금 동작과 같음)
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

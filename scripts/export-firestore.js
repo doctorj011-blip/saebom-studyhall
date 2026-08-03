@@ -20,6 +20,8 @@
 // 한계 (백업으로 안 덮이는 것)
 //   - 규칙상 미인증 읽기가 막힌 컬렉션(push_tokens 등)은 못 가져온다. manifest 에 남는다.
 //   - Firebase Storage(플래너 사진 planners/{좌석}/{날짜}.jpg)는 이 스크립트 범위 밖이다.
+//     → 사진은 scripts/export-storage.js 로 따로 받는다. 이 백업에는 사진의 '주소'만 들어 있어
+//       버킷이 날아가면 주소만 남는다. 데이터를 만지기 전에는 두 스크립트를 같이 돌릴 것.
 //   - 서브컬렉션은 다루지 않는다. 현재 이 프로젝트는 전부 최상위 컬렉션이다.
 // ─────────────────────────────────────────────────────────────────────────────
 'use strict';
@@ -125,7 +127,7 @@ async function runExport(outRoot) {
     failed,
     notes: [
       'Firestore 원본 typed value 형식 그대로 저장됨',
-      'Storage(플래너 사진)는 이 백업에 포함되지 않음',
+      'Storage(플래너 사진)는 이 백업에 포함되지 않음 — scripts/export-storage.js 로 따로 받을 것',
       '서브컬렉션은 다루지 않음',
     ],
   };
