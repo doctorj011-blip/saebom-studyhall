@@ -6125,6 +6125,7 @@ async function processCheckin() {
           const existing = STUDENTS.find(s => s.seat === v.seat);
           if (!existing) {
             STUDENTS.push({
+              uid: v.uid || '',   // 불변 학생ID — 빠뜨리면 이 경로로 들어온 학생이 저장 시 새 uid를 받는다
               seat: String(v.seat).replace('번',''), name: v.name,
               phone: v.phone || '', parent: v.parent || '', loginPin: v.loginPin || '',
               schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
@@ -10799,6 +10800,10 @@ async function loadStudentsFromFirebase() {
       }
       const vSeat = String(v.seat).replace('번','');
       const updated = {
+        // ★불변 학생ID — 여기서 빠뜨리면 실시간 갱신이 메모리의 uid를 지우고,
+        //   다음 저장(saveStudentToFirebase·좌석 교환)이 새 uid를 발급해 이력과 끊긴다.
+        //   초기 로더(getDocs)와 이 핸들러 양쪽에 다 있어야 한다.
+        uid: v.uid || '',
         seat: vSeat, name: v.name,
         phone: v.phone || '', parent: v.parent || '',
         gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
@@ -15912,6 +15917,7 @@ async function autoWithdrawExpired() {
         // students onSnapshot이 added를 무시하므로 로컬 배열에 직접 넣어야 화면에 뜬다.
         if (!STUDENTS.some(s => s.name === clean.name)) {
           STUDENTS.push({
+            uid: clean.uid || '',   // 바로 위에서 발급한 uid를 메모리에도 반영
             seat: String(d.id) + '번', name: clean.name, phone: clean.phone || '', parent: clean.parent || '',
             gender: clean.gender || 'f', expiry: clean.expiry || '', startDate: clean.startDate || '',
             loginPin: clean.loginPin || '',
@@ -16032,6 +16038,7 @@ window.restoreWithdrawnStudent = async function(archiveId) {
     await deleteDoc(doc(db, 'withdrawn_students', archiveId));
     // students onSnapshot은 added를 무시하므로 이 기기 화면엔 직접 반영 (다른 기기는 새로고침 시 반영 — 신규등록과 동일)
     STUDENTS.push({
+      uid: restoreUid,   // 방금 문서에 쓴 uid와 같은 값을 메모리에도
       seat, name: a.name,
       phone: stu.phone || '', parent: stu.parent || '',
       gender: stu.gender || 'f', expiry: stu.expiry || '', startDate: stu.startDate || '',
