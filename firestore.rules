@@ -38,6 +38,10 @@ rules_version = '2';
 //                 (saebom-geometry.web.app). 규칙이 빠진 채 앱만 배포돼 캐치올에
 //                 전부 막혀 있던 것을 수정. alg_ 와 같은 구조 + 반(sec) 구분:
 //                 담당 선생님(geo_teachers/{이메일}의 sec)은 자기 요일 반만 조회
+//   - 2026-08-04  settings 의 read 를 화이트리스트로 전환 — 예전에는 read 가 전면 개방이라
+//                 새로 만드는 설정 문서가 자동으로 전세계 공개됐다(solapi 키 노출이 그 사고).
+//                 지금 열려 있는 문서는 그대로 두고, 목록에 없는 문서만 기본 차단.
+//                 ⚠️ settings 에 문서를 새로 만들어 앱이 읽게 하면 이 목록에 추가할 것
 //   - 2026-07-30  zai_notes·zai_roster 추가 — 중2-2 자이스토리 여름특강 오답노트
 //                 (saebom-xistory22.web.app). 같은 사고(규칙 누락 403) 수정.
 //                 반 구분 없이 alg_ 와 완전히 동일한 원장 단독 구조
@@ -311,8 +315,29 @@ service cloud.firestore {
     // admin_auth = 관리자 기기 등록 마스터 비밀번호(salt+PBKDF2 해시). read는 검증에 필요.
     // vacation_mode = 방학 시간표(평일도 1~11교시). 3개 앱이 read, 관리자앱 설정 탭이 write.
     // meal_away_sms = 점심·저녁 식사시간 외출/복귀 학부모 알림 on/off. 관리자앱만 read/write.
+    //
+    // ── 2026-08-04: read 도 화이트리스트로 전환 ──
+    // 예전에는 `allow read: if true` 라 **settings 에 새로 만드는 문서가 자동으로 전세계
+    // 공개**됐다. solapi(API 키·시크릿) 노출이 정확히 그렇게 생긴 사고다. 앞으로 추가되는
+    // 문서는 기본 차단되고, 클라이언트가 읽어야 할 때만 여기 이름을 넣는다.
+    // ⚠️ 반대 방향 사고도 있었다(geo_notes·zai_notes 규칙 누락 403) — settings 에 문서를
+    //    새로 만들면서 앱이 읽게 했다면 **이 목록에 추가하고 규칙을 배포**해야 한다.
+    //
+    // 목록에 없어서 막히는 문서(의도된 것):
+    //   netblock          — Cloud Functions 만 읽고 쓴다. 관리앱은 netBlockToggle HTTP 경유.
+    //   planner_ai_health — plannerAiWatchdog 가 쓰기만 한다(관리앱은 아직 안 읽는다).
+    //                       관리앱에서 읽게 되면 여기 추가할 것.
+    //
+    // 🔴 solapi·admin_auth·shinmungo_auth 는 **비밀인데 아직 열려 있다**. 지금 잠그면:
+    //   solapi        → 브라우저가 솔라피 키로 직접 문자를 쏘고 있어 문자 전면 중단
+    //                   (2026-08-04 실측: 최근 300건 전부 클라이언트 발송, 서버 스위치 꺼짐).
+    //   admin/shinmungo_auth → 해시가 곧 기기 토큰이라 읽기가 막히면 **새 기기 등록·비번 변경**이
+    //                   깨진다(이미 등록된 기기는 계속 동작 — 검증 실패 시 유지하도록 돼 있다).
+    // 순서: 알림톡·문자를 서버 발송으로 옮기고, 비번 검증/변경을 서버 함수로 옮긴 뒤에 잠근다.
     match /settings/{id} {
-      allow read: if true;
+      allow read: if id in ['solapi', 'admin_auth', 'shinmungo_auth', 'billing',
+                            'seatSelection', 'vacation_mode', 'schedule_edit',
+                            'meal_away_sms', 'summerInvites', 'alimtalk_server'];
       allow write: if id in ['solapi', 'schedule_edit', 'billing', 'admin_auth', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'shinmungo_auth'];
     }
 
