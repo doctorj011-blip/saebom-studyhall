@@ -6852,7 +6852,10 @@ const KAKAO_TPL_AWAY_BACK = 'KA01TP260725145519212fisofCKOjSU';
 //   문제가 생기면 이 문서를 false 로 되돌리면 즉시 원래대로 돌아온다.
 // ★ 마지막 값을 localStorage 에 캐시해 두는 이유: 구독이 도착하기 전(페이지 로드
 //   직후)에 입실이 찍히면 판정을 못 해 이중 발송이 날 수 있다. 지난 값으로 메운다.
+// ★ 입퇴실(enabled)과 식사 외출/복귀(awayEnabled)는 **따로** 켠다. 하나를 켜서 확인한 뒤
+//   다른 하나를 켜야 하고, 되돌릴 때도 멀쩡한 쪽까지 같이 꺼지면 안 되기 때문이다.
 let ALIMTALK_BY_SERVER = localStorage.getItem('saebom_alimtalk_server') === '1';
+let AWAY_BY_SERVER     = localStorage.getItem('saebom_alimtalk_server_away') === '1';
 (async function subscribeAlimtalkServerFlag() {
   try {
     const db = await window.waitDb();
@@ -6860,9 +6863,12 @@ let ALIMTALK_BY_SERVER = localStorage.getItem('saebom_alimtalk_server') === '1';
     // onSnapshot 은 window._fs 에서 꺼내 쓴다(_fsOnSnapshot 전역은 없다).
     const { onSnapshot } = window._fs;
     onSnapshot(window._fsDoc(db, 'settings', 'alimtalk_server'), snap => {
-      ALIMTALK_BY_SERVER = snap.exists() ? !!(snap.data() || {}).enabled : false;
+      const d = snap.exists() ? (snap.data() || {}) : {};
+      ALIMTALK_BY_SERVER = !!d.enabled;
+      AWAY_BY_SERVER     = !!d.awayEnabled;
       localStorage.setItem('saebom_alimtalk_server', ALIMTALK_BY_SERVER ? '1' : '0');
-      console.log(`[알림톡] 입퇴실 발송 주체 = ${ALIMTALK_BY_SERVER ? '서버' : '이 기기'}`);
+      localStorage.setItem('saebom_alimtalk_server_away', AWAY_BY_SERVER ? '1' : '0');
+      console.log(`[알림톡] 발송 주체 — 입퇴실=${ALIMTALK_BY_SERVER ? '서버' : '이 기기'} · 식사외출=${AWAY_BY_SERVER ? '서버' : '이 기기'}`);
     });
   } catch(e) {}
 })();
@@ -6963,6 +6969,13 @@ window.mealAwayTargetFor = mealAwayTargetFor;
 
 // 식사 외출/복귀 학부모 알림. 템플릿 ID가 비어 있으면 문자(LMS)로 폴백한다.
 async function sendAwaySMS(student, isReturn, timeStr, mealName) {
+  // 서버(appauth smsOnAway)가 보내는 중이면 여기서는 손대지 않는다(이중 발송 방지).
+  // 서버는 checkin_logs 의 away 마커를 트리거로 잡으므로, 이 함수가 생략돼도
+  // saveCheckinToFirebase(…, awayFlag=true) 가 그대로 돌아 알림이 나간다.
+  if (AWAY_BY_SERVER) {
+    console.log(`[식사외출알림] 서버 발송 모드 — 이 기기에서는 생략 (${student.name})`);
+    return;
+  }
   if (!MEAL_AWAY_SMS) return;
   if (student.mealAwaySms !== true) return;        // 수신 희망자만 (이중 방어)
   if (window.isTestStudent(student.name) || window.isAdminSeat(student.seat)) return;  // 테스트·관리자 계정은 발송 안 함
