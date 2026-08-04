@@ -4860,6 +4860,7 @@ async function submitStudyroomReq(periodNum) {
     });
     await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
       name: currentStudent.name, seat: currentStudent.seat,
+      ...(currentStudent.uid ? { uid: currentStudent.uid } : {}),
       period: periodNum, room: assignRoom, reason,
       date: studyroomDayKey(),
       status: 'approved', createdAt: window._fsServerTimestamp()
@@ -4930,6 +4931,7 @@ window.submitLockReq = async function() {
     for (const p of checked) {
       await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {
         name: currentStudent.name, seat: currentStudent.seat,
+        ...(currentStudent.uid ? { uid: currentStudent.uid } : {}),
         period: p, room: 0, reason,
         date: today, lock: true, lockGroup,
         status: 'pending', createdAt: window._fsServerTimestamp()

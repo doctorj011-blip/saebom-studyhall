@@ -7002,9 +7002,11 @@ async function saveAutoStudyroomAssignment(student, room, period) {
     const seatNum = String(student.seat).replace('번','').trim();
     // (좌석·날짜·교시)당 하나로 고정 → 재입실 시 중복 문서 생성 방지(덮어쓰기)
     const id = `auto_${date}_${seatNum}_p${period}`;
+    const uid = student.uid || (window._uidForSeat ? window._uidForSeat(seatNum, student.name) : '');
     await setDoc(doc(db, 'studyroom_requests', id), {
       name: student.name,
       seat: student.seat,
+      ...(uid ? { uid } : {}),
       period: period,
       room: room,
       status: 'approved',
