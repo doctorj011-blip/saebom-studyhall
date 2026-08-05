@@ -15395,17 +15395,51 @@ window.clearOldSmsLogs = function() {
   loadSmsLog();
 }
 
+// ══════════════════════════════════════════════════════════════════════
+// 키오스크는 솔라피 자격증명을 기기에 남기지 않는다 (2026-08-05)
+// ══════════════════════════════════════════════════════════════════════
+// 키오스크는 학생이 하루 종일 번호를 찍는 기기다. 그런데 키오스크 '모드'는 CSS 클래스
+// 하나(body.kiosk-mode)일 뿐이라 우상단 투명 버튼(#kiosk-exit-btn, opacity:0)·ESC·
+// 전체화면 해제로 벗겨진다. 그 순간 localStorage 에 남아 있는 API 키·시크릿은 사실상
+// 학생 손에 있는 것과 같다(설정 탭으로도, 개발자도구로도 보인다).
+// → 키오스크에서는 **메모리에만** 들고 저장하지 않는다. 이미 저장돼 있던 값도 지운다.
+//
+// 발송에는 지장이 없다 — 페이지를 열 때마다 서버 중개(getSolapiConfig)나 문서에서 다시
+// 받는다. 네트워크가 없으면 입퇴실 기록 자체가 안 되므로 캐시로 얻을 이득도 없다.
+//
+// ⚠️ 판정은 body.kiosk-mode 가 **아니라** window._kioskAuto(주소의 #kiosk)로 한다.
+//    클래스는 벗겨지는 값이라 그걸 보면 모드가 풀린 순간부터 다시 캐시가 시작된다.
+//    _kioskAuto 는 classic 스크립트에서 정해지는데, 이 블록은 module(=defer)이라
+//    항상 그 뒤에 실행된다.
+const KIOSK_DEVICE = !!window._kioskAuto;
+const SOLAPI_SECRET_KEYS = ['solapi_api_key', 'solapi_api_secret'];
+
+// 솔라피 값을 기기에 저장하는 **유일한 통로**. 키오스크면 비밀 두 개는 남기지 않는다.
+// (발신번호 solapi_sender 는 학원 대표번호라 비밀이 아니어서 그대로 저장한다.)
+function _solapiCacheSet(key, val) {
+  if (KIOSK_DEVICE && SOLAPI_SECRET_KEYS.indexOf(key) >= 0) return;
+  try { localStorage.setItem(key, val); } catch (e) {}
+}
+
 // 솔라피 API 키 설정 (최초 1회 입력)
+// ★ 읽기가 먼저다 — 이번 로드에서 서버 응답이 오기 전에 입실이 찍혀도 발송할 수 있어야 한다.
 let SOLAPI_API_KEY = localStorage.getItem('solapi_api_key') || '';
 let SOLAPI_API_SECRET = localStorage.getItem('solapi_api_secret') || '';
 let SOLAPI_SENDER = (function() {
   const saved = localStorage.getItem('solapi_sender');
   if (!saved || saved === '01012345678') {
-    localStorage.setItem('solapi_sender', '01041301139');
+    _solapiCacheSet('solapi_sender', '01041301139');
     return '01041301139';
   }
   return saved;
 })();
+
+// 메모리에 실은 뒤 기기에서는 지운다(키오스크 한정). 지금까지 폴백 경로가 캐시해 둔
+// 값이 그대로 남아 있으므로, 이 배포가 그 잔재를 치우는 역할도 한다.
+if (KIOSK_DEVICE) {
+  SOLAPI_SECRET_KEYS.forEach(k => { try { localStorage.removeItem(k); } catch (e) {} });
+  console.log('[솔라피] 키오스크 기기 — 자격증명을 저장하지 않고 메모리에만 유지합니다');
+}
 
 // 솔라피 설정을 Firestore에도 저장/복원 — localStorage가 유지 안 되는 환경(임베드/개인정보보호) 대비
 //
@@ -15425,9 +15459,10 @@ window.loadSolapiConfigFromCloud = async function() {
   // 받은 값을 적용하는 부분은 두 경로가 공유한다.
   const apply = (d) => {
     if (!d) return false;
-    if (d.apiKey)    { SOLAPI_API_KEY    = d.apiKey;    localStorage.setItem('solapi_api_key', d.apiKey); }
-    if (d.apiSecret) { SOLAPI_API_SECRET = d.apiSecret; localStorage.setItem('solapi_api_secret', d.apiSecret); }
-    if (d.sender)    { SOLAPI_SENDER     = d.sender;    localStorage.setItem('solapi_sender', d.sender); }
+    // 저장은 _solapiCacheSet 만 거친다 — 키오스크면 비밀 두 개가 기기에 남지 않는다.
+    if (d.apiKey)    { SOLAPI_API_KEY    = d.apiKey;    _solapiCacheSet('solapi_api_key', d.apiKey); }
+    if (d.apiSecret) { SOLAPI_API_SECRET = d.apiSecret; _solapiCacheSet('solapi_api_secret', d.apiSecret); }
+    if (d.sender)    { SOLAPI_SENDER     = d.sender;    _solapiCacheSet('solapi_sender', d.sender); }
     // 설정창이 열려 있으면 입력칸도 채워줌
     const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
     set('cfg-key', SOLAPI_API_KEY);   set('cfg-secret', SOLAPI_API_SECRET);   set('cfg-sender', SOLAPI_SENDER);
@@ -15489,9 +15524,9 @@ window.saveSolapiConfigToCloud = async function() {
 // '옛 값'이 클라우드에 덮여, 다음 로드 때 새로 넣은 키가 되돌아간다.
 window.applySolapiConfig = function(cfg) {
   cfg = cfg || {};
-  if (cfg.apiKey    != null) { SOLAPI_API_KEY    = cfg.apiKey;    localStorage.setItem('solapi_api_key', cfg.apiKey); }
-  if (cfg.apiSecret != null) { SOLAPI_API_SECRET = cfg.apiSecret; localStorage.setItem('solapi_api_secret', cfg.apiSecret); }
-  if (cfg.sender    != null) { SOLAPI_SENDER     = cfg.sender;    localStorage.setItem('solapi_sender', cfg.sender); }
+  if (cfg.apiKey    != null) { SOLAPI_API_KEY    = cfg.apiKey;    _solapiCacheSet('solapi_api_key', cfg.apiKey); }
+  if (cfg.apiSecret != null) { SOLAPI_API_SECRET = cfg.apiSecret; _solapiCacheSet('solapi_api_secret', cfg.apiSecret); }
+  if (cfg.sender    != null) { SOLAPI_SENDER     = cfg.sender;    _solapiCacheSet('solapi_sender', cfg.sender); }
   return window.saveSolapiConfigToCloud();   // 갱신된 값으로 클라우드 저장
 };
 
@@ -15545,9 +15580,9 @@ window.saveSolapiSettings = function() {
   SOLAPI_API_KEY    = document.getElementById('sp-key').value.trim();
   SOLAPI_API_SECRET = document.getElementById('sp-secret').value.trim();
   SOLAPI_SENDER     = document.getElementById('sp-sender').value.trim().replace(/-/g,'');
-  localStorage.setItem('solapi_api_key', SOLAPI_API_KEY);
-  localStorage.setItem('solapi_api_secret', SOLAPI_API_SECRET);
-  localStorage.setItem('solapi_sender', SOLAPI_SENDER);
+  _solapiCacheSet('solapi_api_key', SOLAPI_API_KEY);
+  _solapiCacheSet('solapi_api_secret', SOLAPI_API_SECRET);
+  _solapiCacheSet('solapi_sender', SOLAPI_SENDER);
   if (window.saveSolapiConfigToCloud) window.saveSolapiConfigToCloud();
   document.getElementById('solapi-modal').remove();
   showAdminToast('✅ 솔라피 설정이 저장됐습니다');
