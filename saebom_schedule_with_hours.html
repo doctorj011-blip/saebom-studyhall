@@ -73,13 +73,27 @@
 body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary);background:var(--color-background-tertiary)}
 .topbar{background:#6C5DD3;padding:0 16px;display:flex;align-items:center;justify-content:space-between;height:48px}
 .topbar-title{color:#1E1B4B;font-size:15px;font-weight:500;display:flex;align-items:center;gap:8px}
-.topbar-tabs{display:none;gap:2px}
+.topbar-tabs{display:none;gap:2px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
 body.admin-device .topbar-tabs{display:flex}
+.topbar-tabs::-webkit-scrollbar{display:none}
 /* 원장 전용 탭(신문고·설정): 원장 기기로 등록된 기기에서만 표시 */
 .tab-btn.director-only{display:none}
 body.director-device .tab-btn.director-only{display:inline-block}
-.tab-btn{padding:6px 14px;border:none;background:rgba(255,255,255,0.35);color:#1E1B4B;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s}
+.tab-btn{padding:6px 14px;border:none;background:rgba(255,255,255,0.35);color:#1E1B4B;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s;white-space:nowrap;flex:0 0 auto}
 .tab-btn.active{background:#fff;color:#6C5DD3;box-shadow:0 2px 6px rgba(0,0,0,0.15)}
+.tab-caret{margin-left:4px;font-size:9px;opacity:.7}
+
+/* ── 그룹 탭의 서브탭 바 ──
+   상단바에는 그룹(학습·알림·기록)만 두고, 그 안의 실제 화면은 여기서 고른다.
+   보일 항목이 1개뿐이면(폰에서 대부분 감춰질 때) 바 자체를 숨긴다. */
+.subtab-bar{display:none;align-items:center;gap:0;background:#fff;border-bottom:.5px solid rgba(30,27,75,.10);
+  padding:0 16px;position:sticky;top:52px;z-index:199;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
+body.admin-device .subtab-bar.on{display:flex}
+.subtab-bar::-webkit-scrollbar{display:none}
+.subtab-btn{flex:0 0 auto;white-space:nowrap;padding:9px 14px;border:none;background:none;cursor:pointer;
+  font-size:12.5px;font-weight:600;color:#6B6B7B;border-bottom:2px solid transparent;margin-bottom:-.5px;transition:color .15s}
+.subtab-btn:hover{color:#4A3FA8}
+.subtab-btn.active{color:#4A3FA8;border-bottom-color:#6C5DD3}
 .content{padding:16px}
 .section{display:none}.section.active{display:block}
 
@@ -101,7 +115,11 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .schedule-table tr:hover td{background:var(--color-background-secondary)}
 /* ── 반(수업 블록) 기능 ── */
 .sched-toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 10px}
-.sched-toolbar .class-edit-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid #6C5DD3;background:#fff;color:#6C5DD3;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+/* .stu-toolbar = 학생 탭 오른쪽 도구(상벌점) — 시간표 툴바와 버튼 모양을 공유한다.
+   ※ 여기서 .class-edit-btn 의 범위를 넓히면 플래너 탭 버튼(apcPrevDay 등)까지 모양이 바뀐다 */
+.stu-toolbar{display:flex;align-items:center;gap:8px;margin-left:auto;flex-wrap:wrap}
+.sched-toolbar .class-edit-btn,
+.stu-toolbar .class-edit-btn{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1.5px solid #6C5DD3;background:#fff;color:#6C5DD3;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
 .sched-toolbar .class-edit-btn.on{background:#6C5DD3;color:#fff}
 .sched-toolbar .class-edit-hint{font-size:12px;color:#4A3FA8}
 .schedule-table td.class-block{font-weight:700;color:#3a2a00;cursor:default;position:relative;white-space:normal;word-break:keep-all;line-height:1.3}
@@ -162,7 +180,7 @@ body.director-device .tab-btn.director-only{display:inline-block}
 .student-name{font-size:13px;font-weight:500}
 .student-meta{font-size:11px;color:var(--color-text-secondary)}
 .student-schedule{font-size:11px;color:var(--color-text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.search-bar{display:flex;gap:10px;margin-bottom:12px;align-items:center}
+.search-bar{display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
 .student-search-box{flex:1;max-width:420px;display:flex;align-items:center;gap:8px;background:var(--color-background-primary);border:1.5px solid #8F82E4;border-radius:12px;padding:9px 12px;transition:border-color 0.15s,box-shadow 0.15s}
 .student-search-box:focus-within{border-color:#6C5DD3;box-shadow:0 0 0 3px rgba(108,93,211,0.12)}
 .student-search-box .ti-search{font-size:16px;color:#6C5DD3;flex-shrink:0}
@@ -486,6 +504,7 @@ body.director-device .tab-btn.director-only{display:inline-block}
 
 /* 키오스크 전체화면 모드 (입실·퇴실 화면만 표시) */
 body.kiosk-mode .topbar{display:none}
+body.kiosk-mode .subtab-bar{display:none!important}
 body.kiosk-mode #checkin-door-controls{display:none !important}
 body.kiosk-mode .checkin-wrap{margin-top:4vh;zoom:var(--kiosk-zoom,1.8)}
 body.kiosk-mode .checkin-today-wrap{display:none}
@@ -783,21 +802,17 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   .checkin-shortcut-btn{margin-left:auto!important}
 
   /* ── 폰에서 감출 탭 ──
-     폰은 '확인용'(대시보드·배치도·공지·이벤트·관리·시간·설정)으로만 쓴다.
-     입퇴실은 키오스크 태블릿 몫이고, 스케줄·문자·수납·플래너·학습분석·인수인계는
+     폰은 '확인용'(대시보드·배치도·학생·공부시간·알림·설정)으로만 쓴다.
+     입퇴실은 키오스크 태블릿 몫이고, 시간표·문자·수납·플래너·학습분석·인수인계는
      입력이 많아 PC에서 하는 작업이라 좁은 화면에 띄울 이유가 없다.
      ※ 미등록 기기는 입퇴실 화면밖에 못 보므로, 입퇴실 버튼은 관리자 기기에서만 감춘다.
-        (JS 쪽 MOBILE_HIDDEN_TABS와 목록을 맞출 것) */
+     ※ '학습' 그룹은 폰에서 공부시간 하나만 남으므로 그룹 버튼은 남기고 서브탭 바만 감춘다
+        (그 판정은 JS 쪽 MOBILE_HIDDEN_TABS·renderSubtabs가 한다. 목록을 맞출 것) */
   body.admin-device .checkin-shortcut-btn,
-  .tab-btn[onclick*="'handover'"],
-  .tab-btn[onclick*="'planner'"],
-  .tab-btn[onclick*="'analytics'"],
-  .tab-btn[onclick*="'report'"],
-  .tab-btn[onclick*="'schedule'"],
-  .tab-btn[onclick*="'smslog'"],
-  .tab-btn[onclick*="'usagelog'"],
-  .tab-btn[onclick*="'netlog'"],
-  .tab-btn[onclick*="'billing'"]{display:none}
+  .tab-btn.hide-mobile{display:none}
+
+  /* 서브탭 바는 폰에서 붙박이(sticky)로 두면 좁은 화면을 더 잡아먹는다 */
+  .subtab-bar{position:static;padding:0 10px}
 
   /* 탭은 줄바꿈 대신 가로 스크롤 — 세로로 쌓이면 본문이 안 보인다 */
   body.admin-device .topbar-tabs{
@@ -957,6 +972,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 @media print{
   @page{size:A4; margin:12mm}
   body.rp-printing .topbar,
+  body.rp-printing .subtab-bar,
   body.rp-printing .rp-toolbar,
   body.rp-printing .section:not(#sec-report),
   body.rp-printing #sec-report > .card{display:none !important}
@@ -987,27 +1003,25 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn checkin-shortcut-btn active" onclick="showSection('checkin',this)" style="margin-left:8px;background:rgba(255,255,255,0.35);color:#1E1B4B;font-weight:600;border:1px solid rgba(255,255,255,0.6)">입실·퇴실</button>
   </div>
   <div class="topbar-tabs">
-    <!-- 앞 4개 = 근무 중 상시로 보는 탭. 구분선 뒤는 필요할 때만 여는 탭. -->
+    <!-- 구분선 앞 = 근무 중 상시로 보는 탭. 뒤는 필요할 때만 여는 탭.
+         ▾ 가 붙은 것은 그룹 탭 — 누르면 아래 서브탭 바에서 실제 화면을 고른다.
+         (그룹 내용은 JS 쪽 TAB_GROUPS에 있다. 여기와 목록을 맞출 것) -->
     <button class="tab-btn" onclick="showSection('dashboard',this)">대시보드</button>
     <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
-    <button class="tab-btn" onclick="showSection('handover',this)">📝 인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
-    <button class="tab-btn director-only" onclick="showSection('shinmungo',this)">🔔 신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
-    <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
-    <button class="tab-btn" onclick="showSection('analytics',this)">📈 학습분석</button>
-    <button class="tab-btn" onclick="showSection('report',this)">📄 리포트</button>
+    <button class="tab-btn hide-mobile" onclick="showSection('handover',this)">인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
+    <button class="tab-btn director-only" onclick="showSection('shinmungo',this)">신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
     <span class="tab-divider" aria-hidden="true"></span>
-    <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
-    <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
-    <button class="tab-btn" onclick="showSection('students',this)">관리</button>
-    <button class="tab-btn" onclick="showSection('schedule',this)">스케줄</button>
-    <button class="tab-btn" onclick="showSection('hours',this)">시간</button>
-    <button class="tab-btn" onclick="showSection('smslog',this)">📨 문자</button>
-    <button class="tab-btn" onclick="showSection('usagelog',this)">📊 사용기록</button>
-    <button class="tab-btn" onclick="showSection('netlog',this)">🌐 와이파이</button>
-    <button class="tab-btn" onclick="showSection('billing',this)">💳 수납</button>
-    <button class="tab-btn director-only" onclick="showSection('settings',this)">⚙️ 설정</button>
+    <button class="tab-btn" onclick="showSection('students',this)">학생</button>
+    <button class="tab-btn" data-group="learn" onclick="showGroup('learn',this)">학습<span class="tab-caret" aria-hidden="true">▾</span></button>
+    <button class="tab-btn hide-mobile" onclick="showSection('schedule',this)">시간표</button>
+    <button class="tab-btn" data-group="notify" onclick="showGroup('notify',this)">알림<span class="tab-caret" aria-hidden="true">▾</span></button>
+    <button class="tab-btn hide-mobile" onclick="showSection('billing',this)">수납</button>
+    <button class="tab-btn hide-mobile" data-group="logs" onclick="showGroup('logs',this)">기록<span class="tab-caret" aria-hidden="true">▾</span></button>
+    <span class="tab-divider" aria-hidden="true"></span>
+    <button class="tab-btn director-only" onclick="showSection('settings',this)">설정</button>
   </div>
 </div>
+<div class="subtab-bar" id="subtab-bar"></div>
 
 <div class="content">
 
@@ -1300,8 +1314,6 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   <div class="day-tabs" id="day-tabs"></div>
   <div class="sched-toolbar">
     <button id="class-edit-btn" class="class-edit-btn" onclick="toggleClassEdit()"><i class="ti ti-layout-grid-add" aria-hidden="true"></i> 반 편집</button>
-    <button class="class-edit-btn" style="border-color:#C62828;color:#C62828" onclick="showPenaltyModal()">⚠️ 벌점 현황</button>
-    <button class="class-edit-btn" style="border-color:#4338A8;color:#4338A8" onclick="showCycleRankModal()">🏆 주기 순위</button>
     <span id="class-edit-hint" class="class-edit-hint" style="display:none">셀을 드래그해 묶으면 반이 생성됩니다 · 반을 누르면 수정/삭제</span>
   </div>
   <div id="schedule-scroll" style="overflow-x:auto">
@@ -1349,6 +1361,11 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
       <button id="student-search-clear" onclick="clearStudentSearch()" aria-label="검색어 지우기">✕</button>
     </div>
     <span id="student-search-count"></span>
+    <!-- 상벌점은 학생에 딸린 정보라 학생 탭에 둔다 (예전엔 시간표 툴바에 있었음) -->
+    <div class="stu-toolbar">
+      <button class="class-edit-btn" style="border-color:#C62828;color:#C62828" onclick="showPenaltyModal()">⚠️ 벌점 현황</button>
+      <button class="class-edit-btn" style="border-color:#4338A8;color:#4338A8" onclick="showCycleRankModal()">🏆 주기 순위</button>
+    </div>
   </div>
   <div class="student-list" id="student-list"></div>
 </div>
@@ -1789,7 +1806,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
           <div style="font-size:15px;font-weight:700;color:#1E1B4B">🔔 신문고 접수함</div>
           <div style="font-size:11px;color:#888;margin-top:3px;line-height:1.6">
             👑 <b>원장 전용 탭</b> — 신고 확인·처리(학생앱에 그대로 회신)와 신고자 열람 모두 원장 기기에서만 됩니다.<br>
-            피신고 학생 벌점은 <b>관리 탭 학생 팝업</b>에서 부여하고,
+            피신고 학생 벌점은 <b>학생 탭 학생 팝업</b>에서 부여하고,
             <b>조치 완료</b> 처리 시 신고자 상점 1점이 <b>자동 부여</b>됩니다(건당 1점).
           </div>
         </div>
@@ -2579,15 +2596,64 @@ function isTabHiddenOnMobile(id) {
 }
 window.isTabHiddenOnMobile = isTabHiddenOnMobile;
 
+// ══════════════════════════════════════════════════════════════════════
+// 그룹 탭 — 상단바에는 그룹만 두고, 그룹 안의 화면은 서브탭 바에서 고른다.
+// 섹션(sec-*)과 showSection()은 손대지 않는다. 바뀌는 건 '어느 버튼을 켜는가'뿐.
+// 상단바 HTML의 data-group과 목록을 항상 같이 고칠 것.
+// ══════════════════════════════════════════════════════════════════════
+const TAB_GROUPS = {
+  learn:  { items: [['planner','플래너'],['analytics','학습분석'],['hours','공부시간'],['report','리포트']] },
+  notify: { items: [['notice','공지'],['events','이벤트']] },
+  logs:   { items: [['smslog','문자'],['usagelog','사용기록'],['netlog','와이파이']] },
+};
+const SECTION_GROUP = {};
+Object.keys(TAB_GROUPS).forEach(g => TAB_GROUPS[g].items.forEach(([id]) => { SECTION_GROUP[id] = g; }));
+
+// 폰에서 감춰지는 화면을 뺀 그룹 항목
+function _groupItems(g) {
+  return TAB_GROUPS[g].items.filter(([id]) => !isTabHiddenOnMobile(id));
+}
+// 그룹을 다시 열면 마지막으로 보던 화면으로 — 없으면 첫 번째
+function _groupLastTab(g) {
+  const items = _groupItems(g);
+  if (!items.length) return null;
+  let saved = null;
+  try { saved = sessionStorage.getItem('saebom_group_' + g); } catch (e) {}
+  return items.some(([id]) => id === saved) ? saved : items[0][0];
+}
+// 섹션 id로 상단바 버튼 찾기 — 그룹에 속한 화면이면 그룹 버튼이 켜진다
+function _tabBtnFor(id) {
+  const g = SECTION_GROUP[id];
+  if (g) return document.querySelector('.tab-btn[data-group="' + g + '"]');
+  return document.querySelector('.tab-btn[onclick*="\'' + id + '\'"]');
+}
+// 현재 화면에 맞춰 서브탭 바를 그린다. 그룹이 아니거나 고를 게 하나뿐이면 감춘다.
+function renderSubtabs(id) {
+  const bar = document.getElementById('subtab-bar');
+  if (!bar) return;
+  const g = SECTION_GROUP[id];
+  const items = g ? _groupItems(g) : [];
+  if (items.length < 2) { bar.classList.remove('on'); bar.innerHTML = ''; return; }
+  bar.innerHTML = items.map(([sid, label]) =>
+    '<button class="subtab-btn' + (sid === id ? ' active' : '') +
+    '" onclick="showSection(\'' + sid + '\')">' + label + '</button>'
+  ).join('');
+  bar.classList.add('on');
+}
+window.showGroup = function (g, btn) {
+  const id = _groupLastTab(g);
+  if (id) window.showSection(id, btn);
+};
+
 // 폰에서 감춰진 탭이 열려 있으면 대시보드로 돌린다.
 // (sec-checkin이 HTML상 기본 active라, 관리자 폰으로 열면 탭 없이 입퇴실만 떠 있게 된다)
 function redirectIfHiddenOnMobile() {
   if (window._kioskAuto) return;
   const cur = document.querySelector('.section.active');
   const id = cur ? cur.id.replace('sec-', '') : null;
-  if (!id || !isTabHiddenOnMobile(id)) return;
-  const btn = document.querySelector('.tab-btn[onclick*="\'dashboard\'"]');
-  if (btn) showSection('dashboard', btn);
+  if (!id) return;
+  if (!isTabHiddenOnMobile(id)) { renderSubtabs(id); return; }  // 폭이 바뀌면 서브탭 목록도 달라진다
+  showSection('dashboard');
 }
 // 가로↔세로 회전으로 600px 경계를 넘나들 때도 맞춰준다
 window.addEventListener('resize', redirectIfHiddenOnMobile);
@@ -2598,8 +2664,7 @@ window.addEventListener('load', function() {
   try {
     const saved = sessionStorage.getItem('saebom_active_tab');
     if (saved && saved !== 'dashboard' && !isTabHiddenOnMobile(saved)) {
-      const btn = document.querySelector('.tab-btn[onclick*="\'' + saved + '\'"]');
-      if (btn) setTimeout(() => showSection(saved, btn), 800);
+      setTimeout(() => showSection(saved), 800);   // 그룹 탭은 버튼을 showSection이 찾는다
     }
   } catch(e) {}
   redirectIfHiddenOnMobile();
@@ -2894,10 +2959,13 @@ window.showSection = function(id,btn){
   if ((id === 'shinmungo' || id === 'settings') && !isDirectorDevice()) {
     return;
   }
+  // 서브탭·탭 복원 경로는 버튼을 안 넘긴다 → 그룹 탭이면 그룹 버튼이 켜지도록 직접 찾는다
+  btn = btn || _tabBtnFor(id);
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('sec-'+id).classList.add('active');
-  btn.classList.add('active');
+  if (btn) btn.classList.add('active');
+  renderSubtabs(id);
   if (id === 'settings') { loadSettingsTab(); }
   if (id === 'handover') { hoResetForm(); loadHandover(); }
   if (id === 'shinmungo') { if (window.smAdminRender) window.smAdminRender(); }
@@ -2913,7 +2981,10 @@ window.showSection = function(id,btn){
   if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
   if (id === 'report') { if (window.reportInit) window.reportInit(); }
   if (id === 'students') { if (window.refreshSummerMinutes) window.refreshSummerMinutes(); }  // ⏱ SUMMER 누적 갱신
-  try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
+  try {
+    sessionStorage.setItem('saebom_active_tab', id);
+    if (SECTION_GROUP[id]) sessionStorage.setItem('saebom_group_' + SECTION_GROUP[id], id);
+  } catch(e) {}
 }
 
 // ── 키오스크 전체화면 모드 (입실·퇴실 화면만 표시) ──
@@ -5279,7 +5350,7 @@ window.smSetStatus = async function(id, status) {
   if (!_requireDirector()) return;
   const r = (window._smReports||[]).find(x => x.id === id);
   if (!r) return;
-  if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신되고, 신고자에게 상점 1점이 자동 부여됩니다(건당 1점).\n(피신고 학생 벌점은 관리 탭 학생 팝업에서 별도 부여하세요)')) return;
+  if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신되고, 신고자에게 상점 1점이 자동 부여됩니다(건당 1점).\n(피신고 학생 벌점은 학생 탭 학생 팝업에서 별도 부여하세요)')) return;
   if (status === 'rejected' && !confirm('이 신고를 "기각"으로 표시할까요?\n학생앱에 기각으로 회신됩니다.' + (r.meritGiven ? '\n⚠️ 이미 부여된 상점은 자동 회수되지 않습니다(상점현황에서 취소).' : ''))) return;
   if (status === 'checking' && r.meritGiven && !confirm('"확인 중"으로 되돌릴까요?\n⚠️ 이미 부여된 상점은 자동 회수되지 않습니다(상점현황에서 취소).')) return;
   try {
@@ -10344,8 +10415,7 @@ window.initApp = function(){
     if (window._kioskAuto) return;
     const saved = sessionStorage.getItem('saebom_active_tab');
     if (saved && saved !== 'dashboard' && !isTabHiddenOnMobile(saved)) {
-      const btn = document.querySelector('.tab-btn[onclick*="' + saved + '"]');
-      if (btn) showSection(saved, btn);
+      showSection(saved);                          // 그룹 탭은 버튼을 showSection이 찾는다
     }
     redirectIfHiddenOnMobile();
   } catch(e) {}
@@ -16576,7 +16646,7 @@ function showStudyroomOverflowAlert(name, seat) {
   if (section) section.style.display = 'block';
   // 대시보드로 자동 이동 (등록 안 된 기기에서는 관리 화면 대신 토스트만)
   if (isAdminDevice()) {
-    showSection('dashboard', document.querySelector('[onclick*="dashboard"]'));
+    showSection('dashboard');
   } else {
     window.showAdminToast && showAdminToast(`⚠️ 스터디룸 정원 초과: ${name} (${seat})`);
   }
