@@ -12508,6 +12508,11 @@ function renderSeatcamBoard() {
     const cov = seats[seatKey];
     if (!cov) return;                                   // 좌석 영역 미설정 = 판정 대상 아님
     if (window.awayInfo && window.awayInfo(r.studentName)) return; // 외출 중 = 비어 있는 게 정상
+    // 🚪 스터디룸 배정 / 🧍 스탠드 책상 이동도 좌석이 비어 있는 게 정상 — 외출과 같은 이유로 제외한다.
+    // (교시·운영일 판정은 studyRoomStudents·_sdApprovedNames 가 이미 끝낸 것을 그대로 쓴다.
+    //  엔진이 교시를 직접 계산하게 만들면 교시표·운영일키·방학 판정을 통째로 복제해야 한다)
+    if (Object.values(studyRoomStudents).some(list => list.includes(r.studentName))) return;
+    if (window._sdApprovedNames && window._sdApprovedNames().has(r.studentName)) return;
     coveredIn++;
     const badges = [];
     let sortMin = 0;
