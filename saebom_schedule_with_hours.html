@@ -792,6 +792,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   .tab-btn[onclick*="'handover'"],
   .tab-btn[onclick*="'planner'"],
   .tab-btn[onclick*="'analytics'"],
+  .tab-btn[onclick*="'report'"],
   .tab-btn[onclick*="'schedule'"],
   .tab-btn[onclick*="'smslog'"],
   .tab-btn[onclick*="'usagelog'"],
@@ -838,6 +839,140 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
      16px 입력칸이 1fr 트랙보다 넓어져 카드를 밀어낸다 */
   #sec-settings [style*="1fr 1fr"]{grid-template-columns:1fr!important}
 }
+
+/* ══ 학부모 리포트 (📄 리포트 탭) ══
+   화면에서는 A4 한 장을 흉내 낸 흰 종이로 보이고, 인쇄하면 그 종이만 나간다.
+   앱 팔레트(보라)가 아니라 학부모께 나가는 문서용 초록 계열을 따로 쓴다. */
+.rp-sheet{
+  --rp-ink:#1B2420; --rp-ink2:#4A5852; --rp-ink3:#7C8A84;
+  --rp-rule:#E2E0D8; --rp-field:#F2F0E9;
+  --rp-ac:#2F6B4F; --rp-ac-soft:#DDE9E1; --rp-ac-line:#B7D0C1;
+  --rp-amber:#9A6420; --rp-amber-soft:#F3E7D5; --rp-crit:#A2402F;
+  background:#FBFAF7; color:var(--rp-ink);
+  max-width:860px; margin:0 auto; padding:38px 44px 46px;
+  border:1px solid var(--rp-rule); border-radius:12px;
+  box-shadow:0 2px 14px rgba(27,36,32,.07);
+  font-size:14px; line-height:1.62;
+}
+.rp-sheet .num{font-variant-numeric:tabular-nums}
+.rp-mast{padding-bottom:18px; border-bottom:2px solid var(--rp-ink)}
+.rp-mast-top{display:flex; justify-content:space-between; align-items:baseline; gap:14px; flex-wrap:wrap}
+.rp-org{font-size:11.5px; letter-spacing:.2em; color:var(--rp-ac); font-weight:700}
+.rp-period{font-size:11.5px; letter-spacing:.06em; color:var(--rp-ink3)}
+.rp-who{display:flex; align-items:baseline; gap:10px; margin-top:11px; flex-wrap:wrap}
+.rp-who h1{margin:0; font-size:31px; font-weight:800; letter-spacing:-.025em; line-height:1.12; color:var(--rp-ink)}
+.rp-tag{font-size:12px; color:var(--rp-ink2); border:1px solid var(--rp-rule); border-radius:999px; padding:1px 10px}
+.rp-lede{margin:11px 0 0; max-width:62ch; color:var(--rp-ink2); font-size:13.5px}
+.rp-sec{padding-top:30px}
+.rp-eye{display:flex; align-items:center; gap:9px; margin-bottom:13px; flex-wrap:wrap}
+.rp-eye h2{margin:0; font-size:14px; font-weight:750; color:var(--rp-ink)}
+.rp-eye .rp-bar{width:20px; height:3px; background:var(--rp-ac); border-radius:2px; flex:none}
+.rp-eye .rp-note{margin-left:auto; font-size:11px; color:var(--rp-ink3)}
+.rp-tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--rp-rule);
+  border:1px solid var(--rp-rule); border-radius:10px; overflow:hidden}
+.rp-tile{background:#FBFAF7; padding:15px 14px}
+.rp-tile .k{font-size:11px; color:var(--rp-ink3); letter-spacing:.03em}
+.rp-tile .v{font-size:26px; font-weight:800; letter-spacing:-.03em; margin-top:4px; line-height:1.05}
+.rp-tile .v small{font-size:13px; font-weight:600; margin-left:2px; color:var(--rp-ink2)}
+.rp-tile .s{font-size:11.5px; color:var(--rp-ink2); margin-top:4px}
+.rp-up{color:var(--rp-ac); font-weight:700}
+.rp-wk{display:flex; flex-direction:column; gap:9px}
+.rp-wk-row{display:grid; grid-template-columns:112px 1fr 92px; align-items:center; gap:11px}
+.rp-wk-lab{font-size:12px; color:var(--rp-ink2); line-height:1.3}
+.rp-wk-lab i{display:block; font-style:normal; font-size:10px; color:var(--rp-amber); font-weight:700}
+.rp-wk-track{display:block; position:relative; height:25px; background:var(--rp-field); border-radius:5px; overflow:hidden}
+/* 막대는 span이라 display:block 이 없으면 width:% 가 통째로 무시된다(폭 0으로 안 보임) */
+.rp-wk-fill{display:block; height:100%; background:var(--rp-ac); border-radius:5px 3px 3px 5px}
+.rp-wk-fill.part{background:repeating-linear-gradient(115deg,var(--rp-ac),var(--rp-ac) 7px,var(--rp-ac-line) 7px,var(--rp-ac-line) 14px)}
+.rp-wk-goal{position:absolute; top:0; bottom:0; width:2px; background:var(--rp-amber)}
+.rp-wk-val{font-size:12.5px; text-align:right; font-weight:700; line-height:1.3}
+.rp-wk-val i{display:block; font-style:normal; color:var(--rp-ink3); font-weight:500; font-size:10.5px}
+.rp-days{display:flex; align-items:flex-end; gap:3px; height:92px}
+.rp-day{flex:1; display:flex; flex-direction:column; justify-content:flex-end; height:100%; min-width:0}
+.rp-day i{display:block; background:var(--rp-ac); border-radius:2px 2px 0 0}
+.rp-day.sun i{background:var(--rp-ac-line)}
+.rp-dayx{display:flex; gap:3px; margin-top:6px}
+.rp-dayx span{flex:1; text-align:center; font-size:9px; color:var(--rp-ink3); min-width:0; line-height:1.3}
+.rp-dayx b{display:block; font-weight:500; font-size:8.5px; opacity:.7}
+.rp-dayx span.sun, .rp-dayx span.sun b{color:var(--rp-ac)}
+.rp-subj{display:flex; flex-direction:column; gap:7px}
+.rp-srow{display:grid; grid-template-columns:52px 1fr 96px; align-items:center; gap:11px}
+.rp-sname{font-size:12.5px; font-weight:650}
+.rp-strack{display:block; height:18px; background:var(--rp-field); border-radius:4px; overflow:hidden}
+.rp-sfill{display:block; height:100%; opacity:.9}
+.rp-sval{font-size:12px; text-align:right; color:var(--rp-ink2)}
+.rp-sval b{color:var(--rp-ink); font-weight:700}
+.rp-tblwrap{overflow-x:auto; border:1px solid var(--rp-rule); border-radius:10px}
+.rp-sheet table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:560px; background:transparent}
+.rp-sheet th{text-align:left; font-size:10.5px; letter-spacing:.05em; color:var(--rp-ink3); font-weight:650;
+  padding:9px 12px; background:var(--rp-field); border-bottom:1px solid var(--rp-rule); white-space:nowrap}
+.rp-sheet td{padding:9px 12px; border-bottom:1px solid var(--rp-rule); vertical-align:top; color:var(--rp-ink)}
+.rp-sheet tr:last-child td{border-bottom:0}
+.rp-kind{display:inline-block; font-size:10px; padding:1px 7px; border-radius:999px; white-space:nowrap;
+  border:1px solid var(--rp-ac-line); color:var(--rp-ac); background:var(--rp-ac-soft)}
+.rp-kind.lc{border-color:var(--rp-amber); color:var(--rp-amber); background:var(--rp-amber-soft)}
+.rp-kind.et{border-color:var(--rp-rule); color:var(--rp-ink3); background:transparent}
+.rp-mname{font-weight:700}
+.rp-msub{color:var(--rp-ink3); font-size:11px; margin-left:5px; font-weight:500}
+.rp-prog{color:var(--rp-ink2); font-size:12px}
+.rp-prog .arw{color:var(--rp-ink3); margin:0 5px}
+.rp-dcount{text-align:right; white-space:nowrap; font-weight:700}
+.rp-dcount i{font-style:normal; font-weight:500; color:var(--rp-ink3); font-size:11px}
+.rp-cols{display:grid; grid-template-columns:1fr 1fr; gap:22px}
+.rp-card{border:1px solid var(--rp-rule); border-radius:10px; padding:16px; background:#FBFAF7}
+.rp-card h3{margin:0 0 11px; font-size:12.5px; font-weight:700; color:var(--rp-ink)}
+.rp-kv{display:flex; justify-content:space-between; align-items:baseline; gap:10px; padding:6px 0;
+  border-bottom:1px dashed var(--rp-rule); font-size:12.5px}
+.rp-kv:last-child{border-bottom:0}
+.rp-kv .k{color:var(--rp-ink2); flex:none}
+.rp-kv .v{font-weight:700; text-align:right}
+.rp-exec{display:flex; align-items:center; gap:16px}
+.rp-exec-t{font-size:12px; color:var(--rp-ink2)}
+.rp-exec-t b{display:block; font-size:14px; color:var(--rp-ink); margin-bottom:2px}
+.rp-qbar{display:flex; height:8px; border-radius:5px; overflow:hidden; margin-top:12px; background:var(--rp-field)}
+.rp-qkey{display:flex; gap:12px; margin-top:7px; font-size:11px; color:var(--rp-ink3); flex-wrap:wrap}
+.rp-qkey span{display:flex; align-items:center; gap:4px}
+.rp-qkey b{width:8px; height:8px; border-radius:2px; display:inline-block; flex:none}
+.rp-merit{display:flex; flex-direction:column; gap:6px; margin-top:2px}
+.rp-mrow{display:flex; align-items:baseline; gap:8px; font-size:12px}
+.rp-mrow .pt{font-weight:800; color:var(--rp-ac); flex:none; width:32px; text-align:right}
+.rp-mrow .rs{color:var(--rp-ink2)}
+.rp-mrow .dt{margin-left:auto; color:var(--rp-ink3); font-size:10.5px; flex:none}
+.rp-mrow.neg .pt{color:var(--rp-crit)}
+.rp-cmt{border-left:3px solid var(--rp-ac); background:var(--rp-ac-soft); border-radius:0 8px 8px 0;
+  padding:13px 16px; margin-bottom:10px}
+.rp-cmt .d{font-size:11px; color:var(--rp-ac); font-weight:700; letter-spacing:.03em; margin-bottom:5px}
+.rp-cmt p{margin:0; font-size:12.5px; line-height:1.7; color:var(--rp-ink)}
+.rp-foot{margin-top:34px; padding-top:15px; border-top:1px solid var(--rp-rule);
+  font-size:10.5px; color:var(--rp-ink3); line-height:1.7}
+.rp-foot b{color:var(--rp-ink2)}
+.rp-foot ul{margin:6px 0 0; padding-left:16px}
+@media (max-width:760px){
+  .rp-sheet{padding:24px 18px 30px}
+  .rp-tiles{grid-template-columns:repeat(2,1fr)}
+  .rp-cols{grid-template-columns:1fr}
+}
+
+/* 인쇄 = PDF 저장. 리포트 종이만 남기고 앱 UI(탭·툴바·다른 섹션)는 전부 숨긴다. */
+@media print{
+  @page{size:A4; margin:12mm}
+  body.rp-printing .topbar,
+  body.rp-printing .rp-toolbar,
+  body.rp-printing .section:not(#sec-report),
+  body.rp-printing #sec-report > .card{display:none !important}
+  body.rp-printing .app,
+  body.rp-printing .content{padding:0 !important; margin:0 !important; background:#fff !important}
+  body.rp-printing .rp-sheet{
+    max-width:none; margin:0; padding:0; border:0; border-radius:0; box-shadow:none; font-size:10.5pt;
+  }
+  body.rp-printing .rp-sec{break-inside:avoid; page-break-inside:avoid}
+  body.rp-printing .rp-cmt,
+  body.rp-printing .rp-card,
+  body.rp-printing .rp-tblwrap{break-inside:avoid; page-break-inside:avoid}
+  body.rp-printing .rp-tblwrap{overflow:visible}
+  body.rp-printing .rp-sheet table{min-width:0}
+  .rp-sheet{-webkit-print-color-adjust:exact; print-color-adjust:exact}
+}
 </style>
 
 
@@ -859,6 +994,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn director-only" onclick="showSection('shinmungo',this)">🔔 신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
     <button class="tab-btn" onclick="showSection('planner',this)">📓 플래너</button>
     <button class="tab-btn" onclick="showSection('analytics',this)">📈 학습분석</button>
+    <button class="tab-btn" onclick="showSection('report',this)">📄 리포트</button>
     <span class="tab-divider" aria-hidden="true"></span>
     <button class="tab-btn" onclick="showSection('notice',this)">📢 공지</button>
     <button class="tab-btn" onclick="showSection('events',this)">🎉 이벤트</button>
@@ -1528,6 +1664,33 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <div style="font-size:11px;color:#9CA3AF;margin-bottom:12px">플래너 검사를 완료한 날의 데이터와 입·퇴실 기록을 함께 집계합니다.</div>
     <div id="sa-content"><div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생을 선택하세요</div></div>
   </div>
+</div>
+
+<!-- 학부모 학습 리포트 — 기간을 잡아 학생 한 명의 리포트를 만들고 인쇄(PDF)한다 -->
+<div id="sec-report" class="section">
+  <div class="card rp-toolbar">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:700;color:#1E1B4B">📄 학부모 리포트</div>
+      <div style="flex:1"></div>
+      <select id="rp-student-sel"
+        style="padding:6px 10px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none;min-width:150px">
+        <option value="">학생 선택</option>
+      </select>
+      <input type="date" id="rp-start" style="padding:6px 9px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none">
+      <span style="color:#9CA3AF;font-size:12px">~</span>
+      <input type="date" id="rp-end" style="padding:6px 9px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12.5px;background:#fff;color:#1E1B4B;outline:none">
+      <button onclick="window.reportPreset('summer')" title="여름방학 자습 시작일부터 오늘까지"
+        style="background:#F1EEFF;color:#6C5DD3;border:1px solid #C7BEF5;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer">썸머</button>
+      <button onclick="window.reportPreset('month')" title="이번 달 1일부터 오늘까지"
+        style="background:#F1EEFF;color:#6C5DD3;border:1px solid #C7BEF5;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer">이번 달</button>
+      <button onclick="window.reportRender()"
+        style="background:#6C5DD3;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">만들기</button>
+      <button id="rp-print-btn" onclick="window.reportPrint()" disabled
+        style="background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖨 PDF로 저장</button>
+    </div>
+    <div style="font-size:11px;color:#9CA3AF">입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다.</div>
+  </div>
+  <div id="rp-content"><div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생과 기간을 고르고 <b>만들기</b>를 누르세요</div></div>
 </div>
 
 <!-- 플래너 상세 모달 (사진 확대 + 코멘트) -->
@@ -2408,7 +2571,7 @@ document.addEventListener('keydown', function(e) {
 // CSS(@media max-width:600px)에서 버튼을 숨기지만, 탭 복원·기본 활성 섹션은
 // JS가 정하므로 목록을 여기에도 둔다. 한쪽만 고치면 '버튼은 없는데 화면은 떠 있는'
 // 상태가 되니 CSS 쪽 목록과 항상 같이 고칠 것.
-const MOBILE_HIDDEN_TABS = ['checkin','handover','planner','analytics','schedule','smslog','usagelog','netlog','billing'];
+const MOBILE_HIDDEN_TABS = ['checkin','handover','planner','analytics','report','schedule','smslog','usagelog','netlog','billing'];
 function isMobileView() { return window.matchMedia('(max-width:600px)').matches; }
 // 미등록 기기는 입퇴실 말고는 열 수 있는 화면이 없으므로 감추지 않는다.
 function isTabHiddenOnMobile(id) {
@@ -2748,6 +2911,7 @@ window.showSection = function(id,btn){
   if (id === 'billing') { if (window.loadBillingTab) window.loadBillingTab(); }
   if (id === 'planner') { adminPlannerInit(); }
   if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
+  if (id === 'report') { if (window.reportInit) window.reportInit(); }
   if (id === 'students') { if (window.refreshSummerMinutes) window.refreshSummerMinutes(); }  // ⏱ SUMMER 누적 갱신
   try { sessionStorage.setItem('saebom_active_tab', id); } catch(e) {}
 }
@@ -18281,6 +18445,390 @@ window.saRender = async function() {
 
   box.innerHTML = noReviewNote + tiles + diagnostics + daily + weekly + trend + hourPattern
     + (reviews.length ? subjects : '') + rhythm + (reviews.length ? recommend : '');
+};
+
+// ══════════════════════════════════════════════════════════════════
+// 📄 학부모 리포트 — 기간을 잡아 학생 한 명의 학습 요약을 만들고 인쇄(PDF)한다.
+//   학습분석 탭(sec-analytics)이 화면에서 보는 용도라면, 이쪽은 학부모께 나가는 문서다.
+//   데이터 출처는 같다: attendance_sessions + planner_ai_reviews(statsFixed 우선) + merits/penalties.
+// ══════════════════════════════════════════════════════════════════
+const RP_SUMMER_START = '2026-07-20';   // 여름방학 자습(오전 개시) 시작일 — '썸머' 프리셋 기준
+let _rpLast = null;                      // 마지막으로 만든 리포트(인쇄 버튼 활성화 판단용)
+
+function _rpStudent() {
+  const sel = document.getElementById('rp-student-sel');
+  if (!sel || !sel.value) return null;
+  return _apcStudents().find(s => _apcSeatKey(s.seat) === sel.value) || null;
+}
+
+window.reportInit = function() {
+  const sel = document.getElementById('rp-student-sel');
+  if (!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">학생 선택</option>' + _apcStudents()
+    .filter(s => !(window.isTestStudent && window.isTestStudent(s.name)))
+    .map(s => { const k = _apcSeatKey(s.seat);
+      return `<option value="${k}" ${k === cur ? 'selected' : ''}>${_apcEsc(s.name)} (${_apcEsc(s.seat)}번)</option>`; })
+    .join('');
+  const st = document.getElementById('rp-start'), en = document.getElementById('rp-end');
+  if (st && !st.value) window.reportPreset('summer');
+  else if (en && !en.value) en.value = _apcIso(new Date());
+};
+
+window.reportPreset = function(kind) {
+  const st = document.getElementById('rp-start'), en = document.getElementById('rp-end');
+  if (!st || !en) return;
+  const today = new Date();
+  en.value = _apcIso(today);
+  st.value = kind === 'month'
+    ? _apcIso(new Date(today.getFullYear(), today.getMonth(), 1))
+    : RP_SUMMER_START;
+};
+
+// 기간 내 이 학생의 순공/외출/첫 입실 — _saAttendance 와 같은 청크 쿼리에 외출(awayMs)을 더해 받는다
+async function _rpAttendance(studentName, startISO, endISO) {
+  const mins = {}, ins = {}, away = {};
+  const isoDates = _rangeDateStringsISO(startISO, endISO);
+  const chunks = [];
+  for (let i = 0; i < isoDates.length; i += 30) chunks.push(isoDates.slice(i, i + 30));
+  const snaps = await Promise.all(chunks.map(c =>
+    getDocs(query(collection(db, 'attendance_sessions'), where('inDate', 'in', c)))
+  ));
+  const now = Date.now();
+  snaps.forEach(snap => snap.forEach(d => {
+    const s = d.data();
+    if (!s || s.studentName !== studentName || typeof s.inTs !== 'number' || !s.inDate) return;
+    let min = 0, aw = s.awayMs || 0;
+    if (s.status === 'closed' && s.outTs) {
+      min = (typeof s.durationMin === 'number') ? s.durationMin : sessDurationMin(s.inTs, s.outTs, aw);
+    } else {
+      if (s.awayStartTs) aw += Math.max(0, now - s.awayStartTs);
+      min = sessDurationMin(s.inTs, now, aw);
+    }
+    mins[s.inDate] = (mins[s.inDate] || 0) + Math.max(0, min);
+    away[s.inDate] = (away[s.inDate] || 0) + Math.round(aw / 60000);
+    const at = new Date(s.inTs), im = at.getHours() * 60 + at.getMinutes();
+    if (ins[s.inDate] == null || im < ins[s.inDate]) ins[s.inDate] = im;
+  }));
+  return { mins, ins, away };
+}
+
+window.reportRender = async function() {
+  const box = document.getElementById('rp-content');
+  const stu = _rpStudent();
+  const startISO = (document.getElementById('rp-start') || {}).value;
+  const endISO   = (document.getElementById('rp-end')   || {}).value;
+  const btn = document.getElementById('rp-print-btn');
+  if (btn) btn.disabled = true;
+  _rpLast = null;
+  if (!box) return;
+  if (!stu)               { box.innerHTML = _rpMsg('학생을 선택하세요'); return; }
+  if (!startISO || !endISO) { box.innerHTML = _rpMsg('기간을 지정하세요'); return; }
+  if (startISO > endISO)  { box.innerHTML = _rpMsg('시작일이 종료일보다 늦습니다'); return; }
+  if (_rangeDateStringsISO(startISO, endISO).length > 120) { box.innerHTML = _rpMsg('기간이 너무 깁니다 (최대 120일)'); return; }
+
+  box.innerHTML = _rpMsg('불러오는 중...');
+  const seatKey = _apcSeatKey(stu.seat), uid = stu.uid;
+  let att, reviews = [], peerByName = {}, merits = [], penalties = [];
+  try {
+    const [a, mine, all, mSnap, pSnap] = await Promise.all([
+      _rpAttendance(stu.name, startISO, endISO),
+      getDocs(query(collection(db, 'planner_ai_reviews'),
+        uid ? where('uid', '==', uid) : where('seat', '==', seatKey))),
+      _saAttendanceAll(startISO, endISO),
+      getDocs(uid ? query(collection(db, 'merits'), where('uid', '==', uid))
+                  : query(collection(db, 'merits'), where('seatKey', '==', seatKey))),
+      getDocs(uid ? query(collection(db, 'penalties'), where('uid', '==', uid))
+                  : query(collection(db, 'penalties'), where('seatKey', '==', seatKey))),
+    ]);
+    att = a; peerByName = all;
+    // uid 가 없는 학생만 이름으로 한 번 더 거른다(좌석을 물려받았을 때 이전 주인 기록 방지)
+    const isMine = v => uid ? v.uid === uid : (window._sameStudentName ? window._sameStudentName(v.name || v.studentName, stu.name) : true);
+    mine.forEach(d => {
+      const v = d.data();
+      if (!v || v.status !== 'done' || !v.date || v.date < startISO || v.date > endISO || !isMine(v)) return;
+      if (v.statsFixed) v.stats = v.statsFixed;   // 사람이 교정한 수치가 기준
+      reviews.push(v);
+    });
+    mSnap.forEach(d => { const v = d.data();
+      if (v && v.date >= startISO && v.date <= endISO && !v.canceled) merits.push(v); });
+    pSnap.forEach(d => { const v = d.data();
+      if (v && v.date >= startISO && v.date <= endISO) penalties.push(v); });
+  } catch(e) {
+    box.innerHTML = `<div style="color:#C62828;font-size:13px;text-align:center;padding:40px 0">조회 실패: ${_apcEsc(e.message || e)}</div>`;
+    return;
+  }
+  reviews.sort((a, b) => a.date < b.date ? -1 : 1);
+
+  const data = _rpAggregate({ stu, startISO, endISO, att, reviews, peerByName, merits, penalties });
+  if (!data.attDays && !reviews.length) { box.innerHTML = _rpMsg('이 기간에 출석 기록도 플래너 검사도 없습니다'); return; }
+  box.innerHTML = _rpSheet(data);
+  _rpLast = data;
+  if (btn) btn.disabled = false;
+};
+
+const _rpMsg = t => `<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">${t}</div>`;
+
+// 집계 — 화면 그리기 전에 숫자를 전부 확정한다
+function _rpAggregate(o) {
+  const { stu, startISO, endISO, att, reviews, peerByName, merits, penalties } = o;
+  const span = _rangeDateStringsISO(startISO, endISO);
+  const isSun = d => new Date(d + 'T00:00:00').getDay() === 0;
+  const attended = span.filter(d => att.mins[d] > 0);
+  const schedDays = span.filter(d => !isSun(d));          // 등원 예정일 = 월~토
+  const totalMin = attended.reduce((n, d) => n + att.mins[d], 0);
+
+  // 주차(월요일 시작)
+  const weeks = {};
+  span.forEach(d => {
+    const dt = new Date(d + 'T00:00:00');
+    const mon = new Date(dt); mon.setDate(dt.getDate() - ((dt.getDay() + 6) % 7));
+    const k = _apcIso(mon);
+    const w = weeks[k] || (weeks[k] = { week: k, from: d, to: d, min: 0, days: 0, att: 0 });
+    w.to = d; w.days++;
+    if (att.mins[d]) { w.min += att.mins[d]; w.att++; }
+  });
+
+  // 플래너 검사 집계
+  const subj = {}, matAgg = {}, quality = {};
+  let planned = 0, completed = 0, plannerMin = 0;
+  reviews.forEach(r => {
+    const st = r.stats || {};
+    planned += st.planned_count || 0; completed += st.completed_count || 0;
+    plannerMin += st.total_minutes || 0;
+    quality[r.quality || '?'] = (quality[r.quality || '?'] || 0) + 1;
+    (st.subjects || []).forEach(s => { if (s && s.name) subj[s.name] = (subj[s.name] || 0) + (s.minutes || 0); });
+    (st.materials || []).forEach(m => {
+      if (!m || !m.name) return;
+      const key = String(m.name).replace(/\s+/g, '').toLowerCase();
+      const g = matAgg[key] || (matAgg[key] = { name: m.name, subject: m.subject, kind: m.kind, days: new Set(), raws: [] });
+      g.days.add(r.date); if (m.raw) g.raws.push({ d: r.date, raw: m.raw });
+    });
+  });
+  // 진도는 숫자 자동추출이 부정확해("고쟁이 1~345") 플래너에 적힌 문구를 그대로 쓴다
+  const materials = Object.keys(matAgg).map(k => {
+    const g = matAgg[k], rs = g.raws.sort((a, b) => a.d < b.d ? -1 : 1);
+    return { name: g.name, subject: g.subject, kind: g.kind, days: g.days.size,
+             first: rs.length ? rs[0].raw : null, last: rs.length ? rs[rs.length - 1].raw : null };
+  }).sort((a, b) => b.days - a.days || String(a.subject).localeCompare(String(b.subject)));
+
+  // 또래 평균 — 같은 학년, 테스트·관리자 제외
+  const grade = stu.grade || '';
+  const peerH = _apcStudents()
+    .filter(s => _apcSeatKey(s.seat) !== _apcSeatKey(stu.seat) && (s.grade || '') === grade
+             && !(window.isTestStudent && window.isTestStudent(s.name)))
+    .map(s => ((peerByName[s.name] || {}).min || 0) / 60).filter(h => h > 0);
+  const peerAvgH = peerH.length ? peerH.reduce((a, b) => a + b, 0) / peerH.length : null;
+
+  // 벌점: penalties 문서는 하루 한 건이고 periods 가 비어 있으면 벌점 없는 날
+  const penRows = [];
+  penalties.forEach(p => Object.keys(p.periods || {}).forEach(pd => {
+    const v = p.periods[pd];
+    if (!v || v.canceled) return;
+    penRows.push({ date: p.date, period: pd, type: v.type, pt: v.points || 0, lateMin: v.lateMin });
+  }));
+  const meritRows = merits.map(m => ({ date: m.date, reason: m.reason || '', pt: m.points || m.point || 0 }))
+    .sort((a, b) => a.date < b.date ? -1 : 1);
+
+  // 등원 시각 — 새벽 0~2시 기록은 전날의 심야 연장이므로 '등원'으로 세지 않는다
+  const arrive = attended.filter(d => att.ins[d] != null && att.ins[d] >= 300);
+  const half = Math.floor(arrive.length / 2);
+  const avgIn = a => a.length ? a.reduce((n, d) => n + att.ins[d], 0) / a.length : null;
+
+  return {
+    stu, startISO, endISO, span, isSun,
+    attended, attDays: attended.length, schedDays: schedDays.length,
+    sundayDays: attended.filter(isSun).length,
+    absent: schedDays.filter(d => !att.mins[d]),
+    totalMin, totalH: totalMin / 60,
+    avgSchedH: schedDays.length ? totalMin / 60 / schedDays.length : 0,
+    avgAttH: attended.length ? totalMin / 60 / attended.length : 0,
+    peerAvgH, peerN: peerH.length, grade,
+    weeks: Object.keys(weeks).sort().map(k => weeks[k]).filter(w => w.att > 0),
+    goalWeekly: Number(stu.weeklyGoalH) || 0,
+    att,
+    subjects: Object.keys(subj).sort((a, b) => subj[b] - subj[a]).map(n => ({ name: n, min: subj[n] })),
+    materials,
+    planner: { revDays: reviews.length, planned, completed,
+               rate: planned ? Math.round(completed / planned * 100) : 0,
+               plannerH: plannerMin / 60, quality,
+               missing: attended.filter(d => !reviews.find(r => r.date === d)).length },
+    merits: meritRows, penalties: penRows,
+    meritPt: meritRows.reduce((n, m) => n + m.pt, 0),
+    penPt: penRows.reduce((n, p) => n + p.pt, 0),
+    awayTotalMin: attended.reduce((n, d) => n + (att.away[d] || 0), 0),
+    arriveAvg: avgIn(arrive),
+    arriveEarly: avgIn(arrive.slice(0, half)), arriveLate: avgIn(arrive.slice(half)),
+    comments: reviews.filter(r => r.comment && r.comment.trim()).slice(-2).map(r => ({ date: r.date, text: r.comment })),
+  };
+}
+
+const _RP_DOW = ['일','월','화','수','목','금','토'];
+const _rpH1 = n => (Math.round(n * 10) / 10).toFixed(1);
+const _rpMd = d => (+d.slice(5,7)) + '/' + (+d.slice(8,10));
+const _rpDow = d => _RP_DOW[new Date(d + 'T00:00:00').getDay()];
+const _rpClock = m => m == null ? '—' : String(Math.floor(m/60)).padStart(2,'0') + ':' + String(Math.round(m%60)).padStart(2,'0');
+const _rpKind = k => k === '인강' ? 'lc' : (k === '문제집' ? '' : 'et');
+
+function _rpSheet(d) {
+  const maxDay = Math.max(...d.span.map(x => (d.att.mins[x] || 0) / 60), 1);
+  const subjTotal = d.subjects.reduce((n, s) => n + s.min, 0) || 1;
+  // 6% 여유 — 목표가 최댓값일 때 목표선이 트랙 오른쪽 끝에 붙어 테두리처럼 보이는 것을 막는다
+  const wkMax = Math.max(...d.weeks.map(w => w.min / 60), d.goalWeekly || 0, 1) * 1.06;
+  const mats = d.materials.filter(m => m.days >= 2);
+  const q = d.planner.quality, qd = d.planner.revDays || 1;
+  const qCell = (label, n, color) => n ? `<i style="width:${n / qd * 100}%;background:${color}"></i>` : '';
+
+  return `<div class="rp-sheet">
+  <header class="rp-mast">
+    <div class="rp-mast-top">
+      <span class="rp-org">새봄면학관</span>
+      <span class="rp-period num">${d.startISO.replace(/-/g,'. ')} — ${d.endISO.replace(/-/g,'. ')}</span>
+    </div>
+    <div class="rp-who">
+      <h1>${_apcEsc(d.stu.name)} 학생 학습 리포트</h1>
+      ${d.grade ? `<span class="rp-tag">${_apcEsc(d.grade)}</span>` : ''}
+      <span class="rp-tag num">좌석 ${_apcEsc(d.stu.seat)}</span>
+    </div>
+    <p class="rp-lede">${d.span.length}일간의 기록입니다. 실제 입·퇴실 시각과 매일 제출한 플래너에서 자동으로 집계했습니다.</p>
+  </header>
+
+  <section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>한눈에</h2>
+      <span class="rp-note">${d.span.length}일 중 ${d.attDays}일 등원</span></div>
+    <div class="rp-tiles">
+      <div class="rp-tile"><div class="k">총 순공시간</div>
+        <div class="v num">${_rpH1(d.totalH)}<small>시간</small></div>
+        <div class="s">외출을 뺀 실제 공부시간</div></div>
+      <div class="rp-tile"><div class="k">하루 평균</div>
+        <div class="v num">${_rpH1(d.avgSchedH)}<small>시간</small></div>
+        <div class="s">등원 예정일 ${d.schedDays}일 기준</div></div>
+      <div class="rp-tile"><div class="k">출석</div>
+        <div class="v num">${d.attDays}<small>일</small></div>
+        <div class="s">${d.absent.length ? `결석 ${d.absent.length}일` : '<span class="rp-up">결석 없음</span>'}${d.sundayDays ? `<br>일요일 ${d.sundayDays}일 자율등원 포함` : ''}</div></div>
+      ${d.peerAvgH ? `<div class="rp-tile"><div class="k">같은 학년 평균 대비</div>
+        <div class="v num ${d.totalH >= d.peerAvgH ? 'rp-up' : ''}">${d.totalH >= d.peerAvgH ? '+' : ''}${Math.round((d.totalH / d.peerAvgH - 1) * 100)}<small>%</small></div>
+        <div class="s">${_apcEsc(d.grade)} ${d.peerN}명 평균 ${_rpH1(d.peerAvgH)}시간</div></div>`
+      : `<div class="rp-tile"><div class="k">플래너 제출</div>
+        <div class="v num">${d.planner.revDays}<small>일</small></div>
+        <div class="s">등원일 ${d.attDays}일 중</div></div>`}
+    </div>
+  </section>
+
+  ${d.weeks.length ? `<section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>주차별 순공시간</h2>
+      ${d.goalWeekly ? `<span class="rp-note">세로선 = 주간목표 ${d.goalWeekly}시간</span>` : ''}</div>
+    <div class="rp-wk">
+      ${d.weeks.map(w => {
+        const h = w.min / 60, partial = w.days < 7;
+        return `<div class="rp-wk-row">
+        <span class="rp-wk-lab num">${_rpMd(w.from)} – ${_rpMd(w.to)}${partial ? '<i style="color:#7C8A84">일부 주간</i>' : ''}</span>
+        <span class="rp-wk-track"><span class="rp-wk-fill${partial ? ' part' : ''}" style="width:${Math.round(h / wkMax * 100)}%"></span>${d.goalWeekly && !partial ? `<span class="rp-wk-goal" style="left:${(d.goalWeekly / wkMax * 100).toFixed(1)}%"></span>` : ''}</span>
+        <!-- 잘린 주(기간 시작·종료가 주 중간)는 목표 달성률을 내지 않는다 — 7일치와 비교되어 낮게 보인다 -->
+        <span class="rp-wk-val num">${_rpH1(h)}h${(d.goalWeekly && !partial) ? `<i>목표의 ${Math.round(h / d.goalWeekly * 100)}%</i>` : `<i>${w.att}일치</i>`}</span>
+      </div>`; }).join('')}
+    </div>
+  </section>` : ''}
+
+  <section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>날마다</h2>
+      <span class="rp-note">가장 긴 날 ${_rpH1(maxDay)}시간${d.sundayDays ? ' · 연한 막대 = 일요일' : ''}</span></div>
+    <div class="rp-days">${d.span.map(x => {
+      const h = (d.att.mins[x] || 0) / 60;
+      return `<span class="rp-day${d.isSun(x) ? ' sun' : ''}" title="${x} ${_rpH1(h)}시간"><i style="height:${Math.max(3, Math.round(h / maxDay * 100))}%"></i></span>`;
+    }).join('')}</div>
+    <div class="rp-dayx">${d.span.map(x => `<span class="${d.isSun(x) ? 'sun' : ''}">${+x.slice(8,10)}<b>${_rpDow(x)}</b></span>`).join('')}</div>
+  </section>
+
+  ${d.subjects.length ? `<section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>과목별 학습시간</h2>
+      <span class="rp-note">플래너 기록 ${d.planner.revDays}일치</span></div>
+    <div class="rp-subj">
+      ${d.subjects.map(s => `<div class="rp-srow">
+        <span class="rp-sname">${_apcEsc(s.name)}</span>
+        <span class="rp-strack"><span class="rp-sfill" style="width:${Math.round(s.min / d.subjects[0].min * 100)}%;background:${_saFill(s.name)}"></span></span>
+        <span class="rp-sval num"><b>${_rpH1(s.min / 60)}h</b> · ${Math.round(s.min / subjTotal * 100)}%</span>
+      </div>`).join('')}
+    </div>
+  </section>` : ''}
+
+  ${mats.length ? `<section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>이 기간에 공부한 교재</h2>
+      <span class="rp-note">2일 이상 기록된 것만 · 전체 ${d.materials.length}종</span></div>
+    <div class="rp-tblwrap"><table>
+      <thead><tr><th>교재 · 강의</th><th>종류</th><th>진도 (처음 → 마지막 기록)</th><th style="text-align:right">학습일</th></tr></thead>
+      <tbody>${mats.map(m => `<tr>
+        <td><span class="rp-mname">${_apcEsc(m.name)}</span><span class="rp-msub">${_apcEsc(m.subject)}</span></td>
+        <td><span class="rp-kind ${_rpKind(m.kind)}">${_apcEsc(m.kind)}</span></td>
+        <td class="rp-prog">${_apcEsc(m.first)}${m.last && m.last !== m.first ? `<span class="arw">→</span>${_apcEsc(m.last)}` : ''}</td>
+        <td class="rp-dcount num">${m.days}<i>일</i></td></tr>`).join('')}</tbody>
+    </table></div>
+  </section>` : ''}
+
+  <section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>계획 실행력과 생활 리듬</h2></div>
+    <div class="rp-cols">
+      <div class="rp-card">
+        <h3>세운 계획을 얼마나 지켰나</h3>
+        ${d.planner.planned ? `<div class="rp-exec">
+          <svg width="82" height="82" viewBox="0 0 88 88" role="img" aria-label="계획 실행률 ${d.planner.rate}퍼센트">
+            <circle cx="44" cy="44" r="36" fill="none" stroke="#F2F0E9" stroke-width="12"/>
+            <circle cx="44" cy="44" r="36" fill="none" stroke="#2F6B4F" stroke-width="12" stroke-linecap="round"
+              stroke-dasharray="${(2 * Math.PI * 36 * d.planner.rate / 100).toFixed(1)} 999" transform="rotate(-90 44 44)"/>
+            <text x="44" y="49" text-anchor="middle" font-size="20" font-weight="800" fill="#1B2420">${d.planner.rate}%</text>
+          </svg>
+          <div class="rp-exec-t"><b class="num">계획 ${d.planner.planned}개 중 ${d.planner.completed}개 완료</b>
+            ${d.planner.revDays}일간 플래너에 적은 학습 계획 기준입니다.</div>
+        </div>
+        <div class="rp-qbar">${qCell('우수', q['우수'], '#A9D6B6')}${qCell('양호', q['양호'], '#2F6B4F')}${qCell('보통', q['보통'], '#B7D0C1')}${qCell('부실', q['부실'], '#A2402F')}</div>
+        <div class="rp-qkey">
+          ${q['우수'] ? `<span><b style="background:#A9D6B6"></b>우수 ${q['우수']}일</span>` : ''}
+          ${q['양호'] ? `<span><b style="background:#2F6B4F"></b>충실 ${q['양호']}일</span>` : ''}
+          ${q['보통'] ? `<span><b style="background:#B7D0C1"></b>보통 ${q['보통']}일</span>` : ''}
+          ${q['부실'] ? `<span><b style="background:#A2402F"></b>부실 ${q['부실']}일</span>` : ''}
+        </div>` : '<div style="font-size:12px;color:#7C8A84;padding:8px 0">이 기간에 검사된 플래너가 없습니다.</div>'}
+      </div>
+      <div class="rp-card">
+        <h3>등원 시각과 자리 비움</h3>
+        <div class="rp-kv"><span class="k">평균 등원 시각</span><span class="v num">${_rpClock(d.arriveAvg)}</span></div>
+        ${d.arriveEarly != null && d.arriveLate != null && Math.abs(d.arriveEarly - d.arriveLate) >= 10
+          ? `<div class="rp-kv"><span class="k">기간 후반 평균</span><span class="v num">${_rpClock(d.arriveLate)}
+              <span class="${d.arriveLate < d.arriveEarly ? 'rp-up' : ''}" style="${d.arriveLate < d.arriveEarly ? '' : 'color:#A2402F;font-weight:700'}">${d.arriveLate < d.arriveEarly ? '▲' : '▼'} ${Math.abs(Math.round(d.arriveEarly - d.arriveLate))}분 ${d.arriveLate < d.arriveEarly ? '빨라짐' : '늦어짐'}</span></span></div>` : ''}
+        <div class="rp-kv"><span class="k">기간 중 외출 합계</span><span class="v num">${Math.floor(d.awayTotalMin/60)}시간 ${d.awayTotalMin%60}분</span></div>
+        <div class="rp-kv"><span class="k">상점 · 벌점</span><span class="v num"><span class="rp-up">+${d.meritPt}점</span> · <span style="color:#A2402F">−${d.penPt}점</span></span></div>
+        ${(d.merits.length || d.penalties.length) ? `<div class="rp-merit">
+          ${d.merits.map(m => `<div class="rp-mrow"><span class="pt">+${m.pt}</span><span class="rs">${_apcEsc(m.reason)}</span><span class="dt num">${_rpMd(m.date)}</span></div>`).join('')}
+          ${d.penalties.map(p => `<div class="rp-mrow neg"><span class="pt">−${p.pt}</span><span class="rs">${p.period}교시 ${p.type === 'late' ? '지각' + (p.lateMin != null ? ' ' + p.lateMin + '분' : '') : '무단결석'}</span><span class="dt num">${_rpMd(p.date)}</span></div>`).join('')}
+        </div>` : ''}
+      </div>
+    </div>
+  </section>
+
+  ${d.comments.length ? `<section class="rp-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>담임 선생님 기록</h2>
+      <span class="rp-note">최근 플래너 코멘트</span></div>
+    ${d.comments.map(c => `<div class="rp-cmt">
+      <div class="d num">${+c.date.slice(5,7)}월 ${+c.date.slice(8,10)}일 (${_rpDow(c.date)})</div>
+      <p>${_apcEsc(c.text)}</p></div>`).join('')}
+  </section>` : ''}
+
+  <div class="rp-foot"><b>수치 기준</b>
+    <ul>
+      <li>순공시간은 입·퇴실 기록에서 <b>외출 시간을 뺀</b> 값입니다. 하루 평균은 등원 예정일(월~토) ${d.schedDays}일을 분모로 한 <b>성실도 기준</b>이며, 실제 등원한 ${d.attDays}일만으로 계산하면 ${_rpH1(d.avgAttH)}시간입니다.</li>
+      ${d.planner.revDays ? `<li>과목·교재는 플래너 기록 ${d.planner.revDays}일치에서 뽑았습니다.${d.planner.missing ? ` 등원했지만 플래너를 내지 않은 날이 ${d.planner.missing}일 있습니다.` : ''} 플래너에 적힌 학습시간 합계 ${_rpH1(d.planner.plannerH)}시간은 집·학교에서 한 공부가 함께 적히기도 해 면학관 순공시간과 다를 수 있습니다.</li>
+      <li>진도는 플래너에 적힌 문구를 그대로 옮긴 것이라 표기가 고르지 않을 수 있습니다.</li>` : ''}
+    </ul>
+  </div>
+</div>`;
+}
+
+// 인쇄 = PDF 저장. body에 표식을 달아 @media print 규칙이 리포트만 남기게 한다.
+window.reportPrint = function() {
+  if (!_rpLast) { showAdminToast('⚠️ 먼저 리포트를 만드세요'); return; }
+  document.body.classList.add('rp-printing');
+  const off = () => { document.body.classList.remove('rp-printing'); window.removeEventListener('afterprint', off); };
+  window.addEventListener('afterprint', off);
+  setTimeout(() => { window.print(); setTimeout(off, 1000); }, 60);
 };
 
 // 페이지 로드 시 localStorage에서 복원된 알림을 즉시 화면에 표시
