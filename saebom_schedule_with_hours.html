@@ -10251,6 +10251,8 @@ window.clearAllScheduleAlerts = function() {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction, orderBy, limit, startAfter, getCountFromServer }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+import { initializeAppCheck, ReCaptchaV3Provider }
+  from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app-check.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
@@ -10262,6 +10264,14 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+// App Check(reCAPTCHA v3): 이 요청이 "등록된 우리 앱"에서 왔는지 증명한다.
+// API 키만 긁어 curl·외부 스크립트로 명부를 덤프하는 경로를 막기 위한 것으로,
+// 사용자가 누구인지는 묻지 않는다(그건 Auth 2단계의 몫). 사이트 키는 공개값.
+// ⚠️ Firestore 인스턴스를 만들기 전에 호출해야 한다.
+initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider('6LcQwngtAAAAAFxj7D7q_0t-y6TzNees-GJ7uata'),
+  isTokenAutoRefreshEnabled: true
+});
 // 오프라인 캐시(IndexedDB) 활성화: 인터넷이 잠시 끊겨도 입퇴실 기록이 로컬에 남고
 // 재연결 시 자동으로 서버에 동기화된다. (미지원 환경이면 기존 메모리 캐시로 폴백)
 let db;
