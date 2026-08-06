@@ -12097,6 +12097,11 @@ window.renderStudyroomBoard = renderStudyroomBoard;
 let _penaltyBoardDocs = [];
 let _penaltyBoardUnsub = null;
 let _penaltyBoardKey = '';
+// 화면 순서 고정용 — 학생(좌석키)이 현황판에 처음 뜬 순서를 기억한다.
+// 점수순으로 매번 다시 정렬하면 벌점을 취소하는 순간 점수가 줄어 그 행이 아래로 미끄러지고,
+// 이어서 누르려던 칩이 다른 학생 것으로 바뀌어 오조작이 난다. 날짜가 바뀌면 초기화.
+let _penaltyBoardRank = new Map();
+let _penaltyBoardSeq = 0;
 
 // ── 대시보드 현황판 접힘 상태 기억 (localStorage) ──
 // { 'penalty-board': 1, 'schedvar-board': 0 } 꼴. 1=접힘, 0=펼침. 저장값 없으면 기본 접힘.
@@ -12183,6 +12188,7 @@ function subscribePenaltyBoard() {
   if (key === _penaltyBoardKey && _penaltyBoardUnsub) return; // 날짜가 바뀔 때만 재구독
   if (_penaltyBoardUnsub) { _penaltyBoardUnsub(); _penaltyBoardUnsub = null; }
   _penaltyBoardKey = key;
+  _penaltyBoardRank = new Map(); _penaltyBoardSeq = 0; // 날짜가 바뀌면 순서도 새로 잡는다
   _penaltyBoardUnsub = onSnapshot(
     query(collection(db, 'penalties'), where('date', 'in', [today, yesterday])),
     snap => {
@@ -12226,8 +12232,15 @@ function renderPenaltyBoard() {
     });
   });
 
-  const students = Object.values(byStudent).filter(s => s.items.length)
-    .sort((a, b) => (b.pts - a.pts) || ((parseInt(a.seatKey)||999) - (parseInt(b.seatKey)||999)));
+  const students = Object.values(byStudent).filter(s => s.items.length);
+
+  // 처음 보는 학생만 점수순(같으면 좌석순)으로 줄을 세워 뒤에 붙이고, 이미 떠 있던 학생은
+  // 처음 자리를 그대로 지킨다 → 벌점을 취소해도(=점수가 줄어도) 행이 움직이지 않는다.
+  // 취소로 사라진 학생도 순번은 남겨 둬서 복구하면 원래 자리로 돌아온다.
+  students.filter(s => !_penaltyBoardRank.has(s.seatKey))
+    .sort((a, b) => (b.pts - a.pts) || ((parseInt(a.seatKey)||999) - (parseInt(b.seatKey)||999)))
+    .forEach(s => _penaltyBoardRank.set(s.seatKey, _penaltyBoardSeq++));
+  students.sort((a, b) => _penaltyBoardRank.get(a.seatKey) - _penaltyBoardRank.get(b.seatKey));
 
   if (summary) summary.textContent = students.length ? `${students.length}명 · 합계 ${totalPts}점` : '';
 
