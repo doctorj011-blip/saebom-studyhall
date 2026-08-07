@@ -2985,6 +2985,8 @@ document.addEventListener('visibilitychange', function() {
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
 import { getFirestore, connectFirestoreEmulator, getDocs, collection, getDoc, doc, query, where, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 import { getStorage, ref, listAll, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-storage.js";
+import { initializeAppCheck, ReCaptchaV3Provider }
+  from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app-check.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
@@ -2996,6 +2998,13 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
+// App Check(reCAPTCHA v3): 이 요청이 "등록된 우리 앱"에서 왔는지 증명한다.
+// Firestore·Storage 양쪽에 함께 적용된다. 사이트 키는 공개값.
+// ⚠️ Firestore 인스턴스를 만들기 전에 호출해야 한다.
+initializeAppCheck(app, {
+  provider: new ReCaptchaV3Provider('6LcQwngtAAAAAFxj7D7q_0t-y6TzNees-GJ7uata'),
+  isTokenAutoRefreshEnabled: true
+});
 const db = getFirestore(app);
 // ── [테스트 전용] 로컬 Firestore 에뮬레이터 연결 (URL에 ?emu=1 일 때만) ──
 // 운영에서는 이 파라미터가 없으므로 절대 활성화되지 않는다(실데이터와 완전 격리).
