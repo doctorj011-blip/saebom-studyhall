@@ -2653,49 +2653,29 @@ function _setAdminDevice(token) { localStorage.setItem(ADMIN_TOKEN_KEY, token); 
 function _clearAdminDevice() { localStorage.removeItem(ADMIN_TOKEN_KEY); _applyAdminDeviceUI(); }
 window.isAdminDevice = isAdminDevice;
 
-function _randSalt() {
-  const a = new Uint8Array(16); crypto.getRandomValues(a);
-  return Array.from(a, b => b.toString(16).padStart(2, '0')).join('');
-}
-// PBKDF2(SHA-256, 150k) — 저장된 해시가 읽혀도 오프라인 무차별 대입을 어렵게 한다.
-async function _hashPw(salt, pw) {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey('raw', enc.encode(pw), 'PBKDF2', false, ['deriveBits']);
-  const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 150000, hash: 'SHA-256' }, key, 256);
-  return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('');
-}
-// 반환: 객체(설정됨) | null(서버에 미설정) | undefined(읽기 실패=판정 보류)
-async function _loadAdminAuth() {
-  const db = await window.waitDb();
-  if (!db) return undefined;
-  try {
-    const { doc, getDoc } = window._fs;
-    const snap = await getDoc(doc(db, 'settings', 'admin_auth'));
-    return snap.exists() ? snap.data() : null;
-  } catch (e) { console.warn('[관리자인증] 읽기 실패:', e); return undefined; }
-}
-async function _saveAdminAuth(salt, hash) {
-  const db = await window.waitDb();
-  if (!db) throw new Error('db-not-ready');
-  const { doc, setDoc, serverTimestamp } = window._fs;
-  await setDoc(doc(db, 'settings', 'admin_auth'), { salt, hash, updatedAt: serverTimestamp() });
-}
+// ★ 비밀번호 해싱(_hashPw/_randSalt)과 문서 직접 읽기·쓰기(_loadAdminAuth/_saveAdminAuth/
+//   _loadDirectorAuth)는 2026-08-07 규칙 잠금과 함께 전부 지웠다. 해시를 만드는 곳도,
+//   settings/admin_auth·shinmungo_auth 를 브라우저에서 읽거나 쓰는 곳도 이제 없다 —
+//   전부 서버(appauth:authPassword)가 한다. 되살리지 말 것. 되살리면 잠금이 무의미해진다.
 
 // ══════════════════════════════════════════════════════════════════════
 // 비밀번호 서버 경로 (appauth:authPassword) — settings 잠금 준비 (2026-08-04)
 // ══════════════════════════════════════════════════════════════════════
-// settings/admin_auth·shinmungo_auth 의 `hash` 는 **곧 기기 토큰**이다. 규칙이 read
-// 개방이라 지금은 누구나 REST 로 해시를 읽어 localStorage 에 넣으면 관리자(원장) 기기가
-// 된다. 잠그려면 이 문서를 직접 읽는 경로를 전부 서버로 옮겨야 한다:
-//   ① 로드 시 토큰 검사  ② 기기 등록  ③ 최초 설정  ④ 비번 변경  ⑤ 신문고 신고자 열람
+// settings/admin_auth·shinmungo_auth 의 `hash` 는 **곧 기기 토큰**이다. 예전에는 규칙이
+// read 개방이라 **누구나 학생앱 콘솔에서 해시를 읽어 localStorage 에 넣으면 관리자(원장)
+// 기기가 됐다** — 비밀번호를 몰라도. App Check 로도 막히지 않는다(정상 앱 컨텍스트라
+// 토큰이 정상 발급된다). 2026-08-07 에 규칙을 잠그고 이 폴백들을 전부 지웠다.
+//
+// 서버로 옮긴 경로 다섯: ① 로드 시 토큰 검사 ② 기기 등록 ③ 최초 설정 ④ 비번 변경
+//                      ⑤ 신문고 신고자 열람
 // ① 을 빠뜨리면 안 된다 — "비밀번호를 바꾸면 다른 기기가 자동 해제된다" 가 그 읽기에서
 // 나오므로, 서버로 안 옮기고 잠그면 해제가 **조용히** 멈춘다.
 //
-// 지금은 **문서 직접 읽기를 폴백으로 남긴다**(솔라피 2단계와 같은 방식). 함수가 안 떠
-// 있거나 네트워크가 막힌 기기에서 관리앱이 통째로 잠기면 안 되기 때문.
-// ⚠️ 규칙에서 read 를 잠글 때 이 폴백들을 **함께 지운다** — 남겨 두면 잠근 뒤 조용히
-//    폴백으로 떨어져 "동작은 하는데 왜 되는지 모르는" 상태가 된다.
+// 🔴 문서 직접 읽기/쓰기 폴백을 되살리지 말 것. 규칙이 잠겨 있어 동작하지도 않고,
+//    동작하게 만들면(규칙을 다시 열면) 잠금 자체가 무의미해진다.
+//    서버에 못 닿을 때는 **폴백 대신 중단**한다 — 새 권한을 주는 일은 실패하는 쪽이 안전하다.
+//    단, 이미 등록된 기기는 해제하지 않는다(_checkDeviceToken 이 null 을 돌려준다).
+//    인터넷이 잠깐 끊길 때마다 조교가 로그아웃되면 운영이 안 되기 때문이다.
 const AUTH_PW_FN = 'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/authPassword';
 
 // 반환: {ok:true, result} | {denied:true, message} | {unavailable:true}
@@ -2729,20 +2709,18 @@ async function _authPwCall(payload) {
 
 // 기기 토큰이 아직 유효한가.
 // 반환: true(유효) · false(무효 → 해제) · null(판정 보류 → 유지, 가용성 우선)
-// loadDoc 은 폴백용 문서 로더(_loadAdminAuth / _loadDirectorAuth).
-async function _checkDeviceToken(kind, token, loadDoc) {
+// 판정은 서버만 한다. 문서 직접 읽기 폴백은 규칙 잠금과 함께 제거했다(2026-08-07).
+async function _checkDeviceToken(kind, token) {
   if (!token) return false;
   const r = await _authPwCall({ kind, action: 'check', token });
   if (r.ok) return !!r.result.valid;
-  if (r.denied) return null;                 // 형식 오류 등 — 섣불리 기기를 해제하지 않는다
-  const auth = await loadDoc();              // 폴백: 문서 직접 읽기(잠그면 여기서 undefined)
-  if (auth === undefined) return null;
-  if (!auth) return false;                   // 서버에 비번 자체가 없음 → 해제
-  return token === auth.hash;
+  // denied(형식 오류)든 unavailable(네트워크·5xx)이든 '모른다'로 둔다.
+  // 서버에 못 닿았다고 기기를 해제해 버리면 인터넷이 잠깐 끊길 때마다 조교가 로그아웃된다.
+  return null;
 }
 
 // 비밀번호가 설정돼 있는지만 확인(비번을 보내지 않으므로 레이트리밋을 안 먹는다).
-// 반환: true · false · null(모름 → 호출부가 폴백)
+// 반환: true · false · null(서버에 못 닿음 → 호출부는 진행하지 말고 중단할 것)
 async function _authPwConfigured(kind) {
   const r = await _authPwCall({ kind, action: 'check', token: '' });
   return r.ok ? !!r.result.configured : null;
@@ -2761,10 +2739,10 @@ function _applyAdminDeviceUI() {
   }
 }
 // 로드 시 토큰 검증: 서버 해시와 다르거나(비번 변경) 서버에 비번이 없으면 로그아웃.
-// 판정은 서버(authPassword check)가 하고, 못 닿으면 문서 직접 읽기로 폴백한다.
+// ★ "비밀번호를 바꾸면 다른 기기가 자동 해제된다" 는 성질이 이 읽기에서 나온다. 빼면 안 된다.
 async function _validateAdminToken() {
   if (!isAdminDevice()) return;
-  const ok = await _checkDeviceToken('admin', localStorage.getItem(ADMIN_TOKEN_KEY), _loadAdminAuth);
+  const ok = await _checkDeviceToken('admin', localStorage.getItem(ADMIN_TOKEN_KEY));
   if (ok === false) _clearAdminDevice();          // null = 판정 보류 → 유지(가용성 우선)
 }
 window.adminLogoutDevice = function () {
@@ -2806,22 +2784,14 @@ window.openAdminLogin = async function (mode) {
     alert('키오스크 기기에서는 관리자 로그인을 할 수 없습니다.\n관리자 본인 기기에서 접속하세요.');
     return;
   }
-  // 비번이 설정돼 있는지만 먼저 본다. 서버가 답하면 문서를 아예 안 읽는다.
-  let auth = null;                       // 폴백 경로에서만 채운다(문서 직접 읽기)
-  let configured = await _authPwConfigured('admin');
+  // 비번이 설정돼 있는지 서버에 묻는다. 문서 직접 읽기 폴백은 규칙 잠금과 함께 제거했다.
+  const configured = await _authPwConfigured('admin');
   if (configured === null) {
-    auth = await _loadAdminAuth();
-    if (auth === undefined) { alert('네트워크 연결을 확인하세요.\n관리자 인증 정보를 불러오지 못했습니다.'); return; }
-    configured = !!auth;
+    alert('서버에 연결할 수 없습니다.\n네트워크를 확인하고 잠시 후 다시 시도하세요.');
+    return;
   }
   if (!configured) mode = 'setup';
   else if (!mode || mode === 'login') mode = 'login';
-
-  // 폴백 경로에서만 쓰는 문서(로그인·변경 시 salt 가 필요하다). 이미 읽었으면 그대로 쓴다.
-  async function fallbackAuth() {
-    if (auth === null) auth = await _loadAdminAuth();
-    return (auth && auth !== undefined) ? auth : null;
-  }
 
   const overlay = _buildAdminOverlay(mode);
   const msgEl = overlay.querySelector('#al-msg');
@@ -2845,12 +2815,9 @@ window.openAdminLogin = async function (mode) {
         const r = await _authPwCall({ kind: 'admin', action: 'verify', password: pw.value });
         if (r.ok) { _setAdminDevice(r.result.token); close(); _afterAdminLogin(false); return; }
         if (r.denied) { shake(r.message || '비밀번호가 틀렸습니다'); return; }
-        // 폴백: 서버에 못 닿음 → 기존 경로(문서 읽어 브라우저에서 비교)
-        const a = await fallbackAuth();
-        if (!a) { shake('네트워크 오류 — 잠시 후 다시 시도하세요'); return; }
-        const h = await _hashPw(a.salt, pw.value);
-        if (h === a.hash) { _setAdminDevice(h); close(); _afterAdminLogin(false); }
-        else { shake('비밀번호가 틀렸습니다'); }
+        // 서버에 못 닿으면 여기서 멈춘다. 예전에는 문서를 직접 읽어 비교했지만,
+        // 그 문서(settings/admin_auth)는 이제 규칙으로 잠겨 있어 읽히지 않는다.
+        shake('서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요');
         return;
       }
 
@@ -2872,17 +2839,9 @@ window.openAdminLogin = async function (mode) {
       if (r.ok) { done(r.result.token); return; }
       if (r.denied) { shake(r.message || (mode === 'change' ? '현재 비밀번호가 틀렸습니다' : '설정에 실패했습니다')); return; }
 
-      // 폴백: 서버에 못 닿음 → 기존 경로(브라우저에서 해시 만들어 문서에 저장)
-      if (mode === 'change') {
-        const a = await fallbackAuth();
-        if (!a) { shake('네트워크 오류 — 잠시 후 다시 시도하세요'); return; }
-        const hc = await _hashPw(a.salt, cur.value);
-        if (hc !== a.hash) { shake('현재 비밀번호가 틀렸습니다'); return; }
-      }
-      const salt = _randSalt();
-      const hash = await _hashPw(salt, p);
-      await _saveAdminAuth(salt, hash);
-      done(hash);
+      // 서버에 못 닿으면 여기서 멈춘다. 예전에는 브라우저에서 해시를 만들어 문서에 직접
+      // 저장했지만, 그 경로를 남겨 두면 규칙을 잠근 뒤에도 쓰기가 통해 잠금이 무의미해진다.
+      shake('서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요');
     } catch (e) {
       console.error('[관리자로그인] 오류:', e);
       shake('오류가 발생했습니다. 다시 시도하세요');
@@ -5109,22 +5068,13 @@ function _applyDirectorUI() {
   document.body.classList.toggle('director-device', isDirectorDevice());
 }
 
-// 반환: 객체(설정됨) | null(서버에 미설정) | undefined(읽기 실패=판정 보류)
-async function _loadDirectorAuth() {
-  const db = await window.waitDb();
-  if (!db) return undefined;
-  try {
-    const { doc, getDoc } = window._fs;
-    const snap = await getDoc(doc(db, 'settings', 'shinmungo_auth'));
-    return snap.exists() ? snap.data() : null;
-  } catch (e) { console.warn('[원장인증] 읽기 실패:', e); return undefined; }
-}
+// (_loadDirectorAuth 는 2026-08-07 규칙 잠금과 함께 제거 — 위 _hashPw 자리 주석 참고)
 
 // 로드 시 토큰 검증: 서버 해시와 다르거나(비번 변경) 서버에 비번이 없으면 원장 해제
 async function _validateDirectorToken() {
   if (!isDirectorDevice()) { _applyDirectorUI(); return; }
-  // 판정은 서버(authPassword check)가 하고, 못 닿으면 문서 직접 읽기로 폴백한다.
-  const ok = await _checkDeviceToken('director', localStorage.getItem(DIRECTOR_TOKEN_KEY), _loadDirectorAuth);
+  // 판정은 서버(authPassword check)만 한다 — 문서 직접 읽기 폴백은 규칙 잠금과 함께 제거했다.
+  const ok = await _checkDeviceToken('director', localStorage.getItem(DIRECTOR_TOKEN_KEY));
   if (ok === null) return;                        // 판정 보류 → 유지(가용성 우선)
   if (ok === false) {
     localStorage.removeItem(DIRECTOR_TOKEN_KEY);
@@ -5140,13 +5090,8 @@ async function _validateDirectorToken() {
 
 window.openDirectorLogin = async function() {
   if (!isAdminDevice()) { alert('먼저 관리자 기기로 등록하세요(?admin).'); return; }
-  let auth = null;                       // 폴백 경로에서만 채운다
-  let configured = await _authPwConfigured('director');
-  if (configured === null) {
-    auth = await _loadDirectorAuth();
-    if (auth === undefined) { alert('네트워크 오류 — 잠시 후 다시 시도하세요.'); return; }
-    configured = !!auth;
-  }
+  const configured = await _authPwConfigured('director');
+  if (configured === null) { alert('서버에 연결할 수 없습니다.\n잠시 후 다시 시도하세요.'); return; }
   _smPinOverlay(configured ? 'login' : 'setup', async (pw, err, ov) => {
     const r = await _authPwCall(configured
       ? { kind: 'director', action: 'verify', password: pw }
@@ -5159,19 +5104,9 @@ window.openDirectorLogin = async function() {
       err(r.message || '비밀번호가 틀렸습니다');
       return;
     } else {
-      // 폴백: 서버에 못 닿음 → 기존 경로
-      if (auth === null) auth = await _loadDirectorAuth();
-      if (auth === undefined) { err('네트워크 오류 — 잠시 후 다시 시도하세요'); return; }
-      if (auth) {
-        hash = await _hashPw(auth.salt, pw);
-        if (hash !== auth.hash) { err('비밀번호가 틀렸습니다'); return; }
-      } else {
-        const db = await window.waitDb(); if (!db) { err('DB 준비 안 됨'); return; }
-        const { doc, setDoc, serverTimestamp } = window._fs;
-        const salt = _randSalt();
-        hash = await _hashPw(salt, pw);
-        await setDoc(doc(db, 'settings', 'shinmungo_auth'), { salt, hash, updatedAt: serverTimestamp() });
-      }
+      // 서버에 못 닿으면 멈춘다 — settings/shinmungo_auth 는 이제 규칙으로 잠겨 있다.
+      err('서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요');
+      return;
     }
     localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
     ov.remove();
@@ -5190,13 +5125,8 @@ window.directorLogoutDevice = function() {
 
 // 원장 비밀번호 변경 — 다른 원장 기기는 다음 로드 시 자동 해제
 window.changeDirectorPassword = async function() {
-  let auth = null;                       // 폴백 경로에서만 채운다
-  let configured = await _authPwConfigured('director');
-  if (configured === null) {
-    auth = await _loadDirectorAuth();
-    if (auth === undefined) { alert('네트워크 오류 — 잠시 후 다시 시도하세요.'); return; }
-    configured = !!auth;
-  }
+  const configured = await _authPwConfigured('director');
+  if (configured === null) { alert('서버에 연결할 수 없습니다.\n잠시 후 다시 시도하세요.'); return; }
   if (!configured) { alert('아직 원장 비밀번호가 없습니다. ?director 로 최초 설정하세요.'); return; }
   _smPinOverlay('change', async (pws, err, ov) => {
     const r = await _authPwCall({
@@ -5210,16 +5140,9 @@ window.changeDirectorPassword = async function() {
       err(r.message || '현재 비밀번호가 틀렸습니다');
       return;
     } else {
-      // 폴백: 서버에 못 닿음 → 기존 경로
-      if (auth === null) auth = await _loadDirectorAuth();
-      if (!auth || auth === undefined) { err('네트워크 오류 — 잠시 후 다시 시도하세요'); return; }
-      const curHash = await _hashPw(auth.salt, pws.cur);
-      if (curHash !== auth.hash) { err('현재 비밀번호가 틀렸습니다'); return; }
-      const db = await window.waitDb(); if (!db) { err('DB 준비 안 됨'); return; }
-      const { doc, setDoc, serverTimestamp } = window._fs;
-      const salt = _randSalt();
-      hash = await _hashPw(salt, pws.pw);
-      await setDoc(doc(db, 'settings', 'shinmungo_auth'), { salt, hash, updatedAt: serverTimestamp() });
+      // 서버에 못 닿으면 멈춘다 — settings/shinmungo_auth 는 이제 규칙으로 잠겨 있다.
+      err('서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요');
+      return;
     }
     localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
     ov.remove();
@@ -5410,14 +5333,9 @@ window.smRevealReporter = async function(id) {
   if (isDirectorDevice()) { _smShowReporter(id); return; }
   if (Date.now() < _smUnlockUntil) { _smShowReporter(id); return; }
 
-  // 원장 비번 검증도 서버로 옮겼다(문서 직접 읽기는 폴백). 원장 기기 등록과 같은 경로다.
-  let auth = null;                       // 폴백 경로에서만 채운다
-  let configured = await _authPwConfigured('director');
-  if (configured === null) {
-    auth = await _loadDirectorAuth();
-    if (auth === undefined) { alert('인증 정보 확인 실패 — 잠시 후 다시 시도하세요.'); return; }
-    configured = !!auth;
-  }
+  // 원장 비번 검증은 서버(authPassword)만 한다. 원장 기기 등록과 같은 경로다.
+  const configured = await _authPwConfigured('director');
+  if (configured === null) { alert('서버에 연결할 수 없습니다.\n잠시 후 다시 시도하세요.'); return; }
 
   _smPinOverlay(configured ? 'login' : 'setup', async (pw, err, ov) => {
     const r = await _authPwCall(configured
@@ -5426,19 +5344,9 @@ window.smRevealReporter = async function(id) {
 
     if (!r.ok) {
       if (r.denied) { err(r.message || '비밀번호가 틀렸습니다'); return; }
-      // 폴백: 서버에 못 닿음 → 기존 경로
-      if (auth === null) auth = await _loadDirectorAuth();
-      if (auth === undefined) { err('인증 정보 확인 실패 — 잠시 후 다시 시도하세요'); return; }
-      const db = await window.waitDb(); if (!db) { err('DB 준비 안 됨'); return; }
-      const { doc, setDoc, serverTimestamp } = window._fs;
-      if (auth) {
-        const hash = await _hashPw(auth.salt, pw);
-        if (hash !== auth.hash) { err('비밀번호가 틀렸습니다'); return; }
-      } else {
-        const salt = _randSalt();
-        const hash = await _hashPw(salt, pw);
-        await setDoc(doc(db, 'settings', 'shinmungo_auth'), { salt, hash, updatedAt: serverTimestamp() });
-      }
+      // 서버에 못 닿으면 멈춘다 — 신고자 실명은 서버가 확인해 준 사람에게만 보여준다.
+      err('서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요');
+      return;
     }
     ov.remove();
     _smUnlockUntil = Date.now() + 10*60*1000;
