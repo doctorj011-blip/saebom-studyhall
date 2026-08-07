@@ -42,6 +42,10 @@ rules_version = '2';
 //                 새로 만드는 설정 문서가 자동으로 전세계 공개됐다(solapi 키 노출이 그 사고).
 //                 지금 열려 있는 문서는 그대로 두고, 목록에 없는 문서만 기본 차단.
 //                 ⚠️ settings 에 문서를 새로 만들어 앱이 읽게 하면 이 목록에 추가할 것
+//   - 2026-08-07  settings 에서 admin_auth·shinmungo_auth 를 read·write 양쪽에서 제거.
+//                 해시가 곧 기기 토큰이라 읽히면 비밀번호 없이 관리자·원장 기기가 됐다.
+//                 비번 경로는 이미 서버(appauth:authPassword)로 옮겨져 있었고, 같은 날
+//                 관리앱의 문서 직접 읽기 폴백도 함께 지웠다. solapi 는 키오스크 때문에 남김.
 //   - 2026-07-30  zai_notes·zai_roster 추가 — 중2-2 자이스토리 여름특강 오답노트
 //                 (saebom-xistory22.web.app). 같은 사고(규칙 누락 403) 수정.
 //                 반 구분 없이 alg_ 와 완전히 동일한 원장 단독 구조
@@ -312,7 +316,8 @@ service cloud.firestore {
     }
 
     // 설정: 앱이 실제로 쓰는 문서만 허용
-    // admin_auth = 관리자 기기 등록 마스터 비밀번호(salt+PBKDF2 해시). read는 검증에 필요.
+    // admin_auth = 관리자 기기 등록 마스터 비밀번호(salt+PBKDF2 해시).
+    //              2026-08-07 부로 **클라이언트는 읽지도 쓰지도 않는다** — 서버 전용.
     // vacation_mode = 방학 시간표(평일도 1~11교시). 3개 앱이 read, 관리자앱 설정 탭이 write.
     // meal_away_sms = 점심·저녁 식사시간 외출/복귀 학부모 알림 on/off. 관리자앱만 read/write.
     //
@@ -328,17 +333,25 @@ service cloud.firestore {
     //   planner_ai_health — plannerAiWatchdog 가 쓰기만 한다(관리앱은 아직 안 읽는다).
     //                       관리앱에서 읽게 되면 여기 추가할 것.
     //
-    // 🔴 solapi·admin_auth·shinmungo_auth 는 **비밀인데 아직 열려 있다**. 지금 잠그면:
-    //   solapi        → 브라우저가 솔라피 키로 직접 문자를 쏘고 있어 문자 전면 중단
-    //                   (2026-08-04 실측: 최근 300건 전부 클라이언트 발송, 서버 스위치 꺼짐).
-    //   admin/shinmungo_auth → 해시가 곧 기기 토큰이라 읽기가 막히면 **새 기기 등록·비번 변경**이
-    //                   깨진다(이미 등록된 기기는 계속 동작 — 검증 실패 시 유지하도록 돼 있다).
-    // 순서: 알림톡·문자를 서버 발송으로 옮기고, 비번 검증/변경을 서버 함수로 옮긴 뒤에 잠근다.
+    // ── 2026-08-07: admin_auth·shinmungo_auth 잠금 ──
+    // 두 문서의 `hash` 는 **곧 기기 토큰**이다(클라이언트도 서버도 token === hash 로 판정).
+    // read 가 열려 있는 동안은 **학생앱 콘솔에서 해시를 읽어 localStorage 에 넣으면
+    // 비밀번호 없이 관리자·원장 기기가 됐다.** App Check 로도 안 막힌다(정상 앱 컨텍스트라
+    // 토큰이 정상 발급된다). 그래서 read·write 양쪽에서 뺐다.
+    //
+    // 선행조건은 이미 끝나 있었다 — 비번 검증·기기 등록·변경·신고자 열람이 전부
+    // appauth:authPassword 로 옮겨져 있다(2026-08-04, 커밋 219e332). 같은 날 관리앱의
+    // 문서 직접 읽기 폴백 5곳도 함께 지웠다. 폴백을 남기면 잠근 뒤 조용히 그쪽으로 떨어져
+    // "동작은 하는데 왜 되는지 모르는" 상태가 된다.
+    //
+    // 🔴 solapi 는 아직 남긴다. 키오스크는 관리자 토큰이 없어 서버 중개(getSolapiConfig)를
+    //    못 타고 이 문서를 직접 읽어 키를 얻는다. 지금 빼면 **입퇴실 알림톡이 마비된다.**
+    //    선행조건은 알림톡 서버 발송 스위치(settings/alimtalk_server.enabled)를 켜는 것.
     match /settings/{id} {
-      allow read: if id in ['solapi', 'admin_auth', 'shinmungo_auth', 'billing',
+      allow read: if id in ['solapi', 'billing',
                             'seatSelection', 'vacation_mode', 'schedule_edit',
                             'meal_away_sms', 'summerInvites', 'alimtalk_server'];
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'admin_auth', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'shinmungo_auth'];
+      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms'];
     }
 
     // 문자 발송 로그
