@@ -4710,6 +4710,9 @@ async function reserveSeat(seatNum, oldSeat, effDate) {
 // 룸당 수용 인원. 관리앱(saebom_schedule_with_hours.html)의 STUDYROOM_CAPACITY와 반드시 같아야
 // 학생 신청분과 입실 자동배정분의 정원 판정이 어긋나지 않는다.
 const STUDYROOM_CAPACITY = 3;
+// 예비로 남겨두는 룸 — 1·2번이 모두 정원(2 x 3 = 6명)을 채운 뒤에만 배정한다.
+// 관리앱의 STUDYROOM_OVERFLOW_ROOM과 반드시 같아야 신청 경로와 입실 자동배정이 같은 순서로 찬다.
+const STUDYROOM_OVERFLOW_ROOM = 3;
 let studyroomUnsubscribe = null;
 
 // 오늘 운영 교시 목록 (일요일=null). 일반 신청 버튼과 단독 사용 모달이 공유한다.
@@ -4854,8 +4857,12 @@ async function submitStudyroomReq(periodNum) {
       alert(`${periodNum}교시는 방금 스터디룸 정원이 모두 찼습니다. (룸당 ${STUDYROOM_CAPACITY}명)\n다른 교시를 선택해주세요.`);
       return;
     }
-    let assignRoom = rooms[0], minCount = st.openCounts[assignRoom].length;
-    rooms.forEach(r => {
+    // 1·2번을 번갈아 채우고, 두 방이 모두 정원(=6명)이 찬 뒤에야 3번을 연다 (2026-08-07 원장 지시).
+    // 1·2번이 단독 사용(lock)으로 빠져 후보가 없을 때도 3번으로 넘어간다.
+    const primary = rooms.filter(r => r !== STUDYROOM_OVERFLOW_ROOM);
+    const cands = primary.length ? primary : rooms;
+    let assignRoom = cands[0], minCount = st.openCounts[assignRoom].length;
+    cands.forEach(r => {
       if (st.openCounts[r].length < minCount) { minCount = st.openCounts[r].length; assignRoom = r; }
     });
     await window._fsAddDoc(window._fsCollection(db, 'studyroom_requests'), {

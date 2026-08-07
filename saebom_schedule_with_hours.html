@@ -2532,6 +2532,8 @@ function getTodayDayName() {
 // 룸당 수용 인원. module 스크립트(초과 경고)에서도 쓰므로 window로 노출한다.
 const STUDYROOM_CAPACITY = 3;
 window.STUDYROOM_CAPACITY = STUDYROOM_CAPACITY;
+// 예비로 남겨두는 룸 — 1·2번이 모두 정원(2 x 3 = 6명)을 채운 뒤에만 배정한다.
+const STUDYROOM_OVERFLOW_ROOM = 3;
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 let studyRoomWaiting  = { 1: [], 2: [], 3: [] };
 
@@ -7146,8 +7148,14 @@ function autoAssignStudyroom(student, curPeriod) {
     else if (window.showAdminToast) showAdminToast(`⚠️ 스터디룸 정원 초과: ${student.name} (${student.seat})`);
     return null;
   }
-  let room = avail[0];
-  avail.forEach(r => { if (studyRoomStudents[r].length < studyRoomStudents[room].length) room = r; });
+  // 1·2번을 번갈아 채우고, 두 방이 모두 정원(=6명)이 찬 뒤에야 3번을 연다 (2026-08-07 원장 지시).
+  // 인원이 적은 방을 고르는 규칙은 그대로라 1·2번 사이에서는 계속 번갈아 배정된다.
+  // 1·2번이 단독 사용(lock)으로 빠져 후보가 없을 때도 3번으로 넘어간다.
+  // ★학생앱(saebom_student.html) submitStudyroomReq의 배정 규칙과 반드시 같아야 한다.
+  const primary = avail.filter(r => r !== STUDYROOM_OVERFLOW_ROOM);
+  const cands = primary.length ? primary : avail;
+  let room = cands[0];
+  cands.forEach(r => { if (studyRoomStudents[r].length < studyRoomStudents[room].length) room = r; });
   studyRoomStudents[room].push(student.name);
   saveAutoStudyroomAssignment(student, room, curPeriod);
   return room;
