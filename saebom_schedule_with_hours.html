@@ -6705,6 +6705,170 @@ async function saveAwayToFirebase(student, isBack, timeStr) {
   } catch(e) { console.error('외출 상태 저장 실패:', e); }
 }
 
+// ══════════════════════════════════════════════════════════════
+// 🚶 외출 복귀 — 관리자 보정
+// ══════════════════════════════════════════════════════════════
+// 왜 필요한가: 학생이 외출을 누르고 나갔다가 돌아오면서 복귀를 안 누르면 시계가 멈춘 채
+// 외출 시간만 계속 불어난다. 키오스크에서 대신 '복귀 확인'을 눌러 줄 수는 있지만 복귀 시각이
+// '누른 지금'으로 박혀 실제보다 외출이 길게 정산되고, 식사시간 외출이었다면 학부모에게
+// 복귀 알림톡까지 나간다. 재실 중(열린 세션)은 '시간 보정' 화면에서도 못 고치므로
+// (퇴실 후에만 수정 가능 — sessEditOpen) 그날 안에는 바로잡을 방법이 없었다.
+// 여기서는 복귀 시각을 직접 받아 세션 awayMs 를 그 시각으로 정산하고,
+// 학부모 알림과 스터디룸 배정 안내는 건너뛴다 — 학생의 실제 출입이 아니라 기록 보정이므로.
+window._awrCtx = null;
+
+function _awrTimeInputValue(ms){
+  const d = new Date(ms);
+  return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+}
+// "HH:MM" → epoch. 외출 시작일 기준으로 해석하고, 시작보다 이르면 자정을 넘긴 복귀로 본다
+// (11교시는 자정을 넘기므로 23:50 외출 → 00:10 복귀가 실제로 나온다).
+function _awrResolveTs(hhmm, startTs){
+  const p = String(hhmm || '').split(':');
+  const h = Number(p[0]), m = Number(p[1]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+  const b = new Date(startTs);
+  let ts = new Date(b.getFullYear(), b.getMonth(), b.getDate(), h, m, 0, 0).getTime();
+  if (ts < startTs) ts += 86400000;
+  return ts;
+}
+
+window.awrPreview = function(){
+  const el = document.getElementById('awr-preview');
+  const ctx = window._awrCtx;
+  if (!el || !ctx || !ctx.startTs) return;
+  const btn = document.getElementById('awr-ok');
+  const ts = _awrResolveTs(document.getElementById('awr-time')?.value, ctx.startTs);
+  if (ts == null) {
+    el.innerHTML = '<span style="color:#C62828">복귀 시각을 입력해 주세요</span>';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (ts > Date.now() + 60000) {
+    el.innerHTML = '<span style="color:#C62828">복귀 시각이 현재 시각보다 미래입니다</span>';
+    if (btn) btn.disabled = true;
+    return;
+  }
+  if (btn) btn.disabled = false;
+  const mins = Math.max(0, Math.round((ts - ctx.startTs) / 60000));
+  const nowMins = Math.max(0, Math.round((Date.now() - ctx.startTs) / 60000));
+  el.innerHTML = `외출 시간 <b style="color:#5546C4">${formatTotalTime(mins)}</b>으로 정산됩니다`
+    + (nowMins > mins ? ` <span style="color:#059669">(지금 누른 것으로 처리하면 ${formatTotalTime(nowMins)} — ${formatTotalTime(nowMins - mins)} 되찾음)</span>` : '');
+};
+
+window.adminAwayReturn = function(name){
+  const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+  if (!rec) { showAdminToast(`ℹ️ ${name} 학생은 입실 중이 아닙니다`); return; }
+  const aw = window.awayInfo ? window.awayInfo(name) : null;
+  if (!aw) { showAdminToast(`ℹ️ ${name} 학생은 외출 중이 아닙니다`); return; }
+
+  document.getElementById('awr-modal')?.remove();
+  window._awrCtx = { name, startTs: aw.ts || null, startAt: aw.at || '', busy: false };
+
+  // 외출 시작 epoch 은 세션 문서에서만 온다. 보조 미러(students.awayAt)로만 외출이 잡힌
+  // 경우엔 시각 문자열밖에 없어 정산할 구간을 계산할 수 없다 → 표시만 해제한다.
+  const hasStart = !!aw.ts;
+  const body = hasStart
+    ? `<div class="awr-row"><span>외출 시작</span><b>${aw.at}${aw.min != null ? ` · ${formatTotalTime(aw.min)} 경과` : ''}</b></div>
+       <div class="awr-row"><span>복귀 시각</span>
+         <input type="time" id="awr-time" value="${_awrTimeInputValue(Date.now())}" oninput="awrPreview()"></div>
+       <div id="awr-preview" style="font-size:12px;color:var(--color-text-secondary);margin-top:8px"></div>`
+    : `<div class="awr-row"><span>외출 시작</span><b>${aw.at || '기록 없음'}</b></div>
+       <div style="font-size:12px;color:#B45309;background:#FEF3C7;border-radius:8px;padding:8px 10px;margin-top:8px;line-height:1.6">
+         이 학생은 외출 시작 시각이 세션 기록에 없어(다른 기기의 옛 기록) <b>학습시간 정산 없이 외출 표시만 해제</b>합니다.
+         시간이 어긋났다면 퇴실 후 <b>입·퇴실 기록 / 시간 보정</b>에서 외출(분)을 고쳐 주세요.
+       </div>`;
+
+  const ov = document.createElement('div');
+  ov.id = 'awr-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = `
+    <style>
+      #awr-modal .awr-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:13px;color:#374151;padding:7px 0}
+      #awr-modal .awr-row input{border:1.5px solid #C7C0F0;border-radius:8px;padding:6px 10px;font-size:14px;font-weight:700;color:#1E1B4B}
+      #awr-modal button:disabled{opacity:.45;cursor:not-allowed}
+    </style>
+    <div style="background:#fff;border-radius:18px;padding:22px;width:min(92vw,360px);box-shadow:0 8px 40px rgba(0,0,0,0.3)">
+      <div style="font-size:15px;font-weight:800;color:#1E1B4B;margin-bottom:4px">🚶 외출 복귀 처리</div>
+      <div style="font-size:12px;color:#6B7280;margin-bottom:14px">${name}${rec.seat ? ` · ${rec.seat}` : ''} · 입실 ${rec.inTime || ''}</div>
+      ${body}
+      <div style="font-size:11.5px;color:#6B7280;line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid #F0F0F0">
+        관리자 보정이라 <b>학부모 알림과 스터디룸 배정 안내는 나가지 않습니다.</b>
+        ${hasStart ? '<br>입·퇴실 기록에는 입력한 복귀 시각으로 남습니다.' : ''}
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button onclick="document.getElementById('awr-modal').remove()"
+          style="flex:1;padding:11px;background:#F3F4F6;color:#374151;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">취소</button>
+        <button id="awr-ok" onclick="awrCommit()"
+          style="flex:1;padding:11px;background:#6C5DD3;color:#fff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">복귀 처리</button>
+      </div>
+    </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+  if (hasStart) window.awrPreview();
+};
+
+window.awrCommit = async function(){
+  const ctx = window._awrCtx;
+  if (!ctx || ctx.busy) return;
+  const name = ctx.name;
+  const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+  if (!rec) { showAdminToast(`ℹ️ ${name} 학생은 입실 중이 아닙니다`); document.getElementById('awr-modal')?.remove(); return; }
+
+  let retMs = Date.now();
+  if (ctx.startTs) {
+    const ts = _awrResolveTs(document.getElementById('awr-time')?.value, ctx.startTs);
+    if (ts == null) { showAdminToast('⚠️ 복귀 시각을 입력해 주세요'); return; }
+    if (ts > Date.now() + 60000) { showAdminToast('⚠️ 복귀 시각이 현재보다 미래입니다'); return; }
+    retMs = ts;
+  }
+  const timeStr = new Date(retMs).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const mins = ctx.startTs ? Math.max(0, Math.round((retMs - ctx.startTs) / 60000)) : null;
+  if (!confirm(`${name} 학생을 ${timeStr} 복귀로 처리할까요?`
+      + (mins != null ? `\n외출 ${formatTotalTime(mins)}이 학습시간에서 제외됩니다.` : '\n(정산 없이 외출 표시만 해제됩니다)')
+      + '\n학부모 알림은 발송되지 않습니다.')) return;
+
+  ctx.busy = true;
+  const okBtn = document.getElementById('awr-ok');
+  if (okBtn) { okBtn.disabled = true; okBtn.textContent = '처리 중...'; }
+
+  const student = STUDENTS.find(s => s.name === name) || { name, seat: rec.seat || '' };
+  try {
+    // 1) 세션 정산 — 여기가 학습시간의 원본이라 실패하면 나머지를 진행하지 않는다
+    //    (표시만 풀리고 시간은 계속 외출로 흐르는 어긋난 상태가 제일 나쁘다)
+    const api = await waitSessionApi();
+    const r = await api.away(student, true, retMs);
+    if (!r || r.ok === false) {
+      showAdminToast(`⚠️ 복귀 정산 실패 (${(r && r.reason) || '오류'}) — 상태를 바꾸지 않았습니다`);
+      ctx.busy = false;
+      if (okBtn) { okBtn.disabled = false; okBtn.textContent = '복귀 처리'; }
+      return;
+    }
+    // 2) 보조 미러(students.awayAt) 해제 — 이게 남으면 다른 기기에서 '외출 중'으로 되살아난다
+    await saveAwayToFirebase(student, true, timeStr);
+    // 3) 감사기록 — 실제 복귀 시각(retMs)으로 남겨야 '외출 구간 보기'가 정산값과 일치한다.
+    //    날짜도 retMs 기준으로 넘긴다 — 자정 넘겨(11교시) 보정하면 '지금' 날짜로 저장돼
+    //    그 세션의 날짜로 조회하는 외출 구간 목록에서 복귀가 통째로 빠지기 때문.
+    const retDate = new Date(retMs).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    saveCheckinToFirebase(student, false, timeStr, retDate, true, retMs).catch(console.error);
+
+    // 4) 로컬 상태 즉시 반영 (세션 스냅샷이 오면 어차피 같은 값으로 덮어쓴다)
+    if (window._awayStudents) delete window._awayStudents[name];
+    if (window._awayStartTs) delete window._awayStartTs[name];
+    document.getElementById('awr-modal')?.remove();
+    buildDashboard();
+    buildCheckinTodayList();
+    if (document.getElementById('fp-room')) buildFloorplan();
+    if (window._todayModalRender) { try { window._todayModalRender(); } catch(e){} }
+    showAdminToast(`✅ ${name} 복귀 처리 완료 (${timeStr}${mins != null ? ` · 외출 ${formatTotalTime(mins)}` : ''})`);
+  } catch(e){
+    console.error('외출 복귀 보정 실패:', e);
+    showAdminToast('⚠️ 복귀 처리 중 오류: ' + (e && e.message ? e.message : e));
+    ctx.busy = false;
+    if (okBtn) { okBtn.disabled = false; okBtn.textContent = '복귀 처리'; }
+  }
+};
+
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
 window.checkinFreshCheckin = function() {
   const btn = document.getElementById('confirm-ok-btn');
@@ -6936,13 +7100,19 @@ async function sendAwaySMS(student, isReturn, timeStr, mealName) {
 // Firebase에 입퇴실 기록 저장
 // awayFlag=true → 외출(type 'out')·복귀(type 'in') 이벤트. 문서에 away:true 마커를 남겨
 //   실시간 리스너·재구성 로직이 '진짜 퇴실/입실'과 구분하고, 사용시간 계산에서 그 구간을 제외한다.
-async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride, awayFlag) {
+// tsOverride → 사건이 실제로 일어난 시각(epoch). 관리자 보정(adminAwayReturn)에서만 쓴다.
+//   '외출 구간 보기'가 time 문자열이 아니라 ts 로 짝을 맞추고 시각을 그리므로, 이걸 안 넘기면
+//   보정한 복귀가 목록에는 '관리자가 누른 시각'으로 찍혀 세션 정산값과 어긋난다.
+async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride, awayFlag, tsOverride) {
   try {
     const today = dateOverride || new Date().toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
     const type = isCheckout ? 'out' : 'in';
     // 같은 '분' 안에 같은 종류(입실/입실)가 들어와도 서로 다른 문서가 되도록
     // epoch ms를 ID 끝에 붙여 고유성을 보장한다. (기존엔 분 단위라 setDoc이 덮어써 유실됐음)
     const nowMs = Date.now();
+    // 정렬·구간 계산에 쓰이는 '사건 시각'. 문서 ID의 고유성은 실제 현재 시각(nowMs)으로 유지한다
+    // — 보정을 두 번 눌러 같은 사건 시각이 나와도 문서가 덮어써지지 않아야 하기 때문.
+    const eventMs = (typeof tsOverride === 'number' && tsOverride > 0) ? tsOverride : nowMs;
     const logId = `${today}_${student.seat}_${type}${awayFlag ? '_away' : ''}_${timeStr.replace(/[:\s]/g,'')}_${nowMs}`;
     // Firebase가 준비될 때까지 대기
     const db = await window.waitDb();
@@ -6993,9 +7163,10 @@ async function saveCheckinToFirebase(student, isCheckout, timeStr, dateOverride,
       type: isCheckout ? 'out' : 'in',
       time: timeStr,
       date: today,
-      ts: nowMs,            // 초 단위 유실 방지용 정렬 키(epoch ms)
+      ts: eventMs,          // 초 단위 유실 방지용 정렬 키(epoch ms) — 보정 시 실제 사건 시각
       createdAt: serverTimestamp(),
-      ...(awayFlag ? { away: true } : {})   // 외출/복귀 마커
+      ...(awayFlag ? { away: true } : {}),  // 외출/복귀 마커
+      ...(eventMs !== nowMs ? { correctedAt: nowMs, correctedBy: 'admin' } : {})  // 사후 보정 표시
     });
 
   } catch(e) { console.error('Firebase 입퇴실 저장 실패:', e); }
@@ -8274,6 +8445,11 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
   const checkoutBtn = isIn
     ? `<button onclick="adminForceCheckout('${name}');document.getElementById('fp-popup-overlay').remove()" style="width:100%;padding:10px;background:#C62828;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">퇴실 처리</button>`
     : '';
+  // 외출 중이면 복귀 보정 — 복귀를 안 누르고 들어온 학생을 여기서 바로 재실로 되돌린다
+  const _pAw = isIn && window.awayInfo ? window.awayInfo(name) : null;
+  const awayReturnBtn = _pAw
+    ? `<button onclick="document.getElementById('fp-popup-overlay').remove();adminAwayReturn('${String(name).replace(/'/g,"\\'")}')" style="width:100%;padding:10px;background:#FEF3C7;color:#B45309;border:1.5px solid #FCD34D;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🚶 외출 복귀 처리${_pAw.min != null ? ` (${_pAw.min}분째)` : ''}</button>`
+    : '';
   // 특별관리 메모 — 있으면 상태 바로 아래에 내용을 펼쳐 준다(자리를 클릭한 이유가 대개 이것)
   const fpmMemo = fpMemoOf(name);
   const fpmLv = fpmMemo ? fpMemoLevel(fpmMemo.level) : null;
@@ -8311,6 +8487,7 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     </div>
     <div style="font-size:12px;font-weight:500;color:${statusColor};margin-bottom:16px;padding:6px 10px;background:${isIn?'#EEF2FF':'#F3F4F6'};border-radius:8px">${status}</div>
     ${memoBox}
+    ${awayReturnBtn}
     ${memoBtn}
     ${editBtn}
     ${sessBtn}
@@ -10382,11 +10559,17 @@ async function _sessionCheckoutFallback(student, closedBy){
 }
 
 // ── 외출/복귀 (트랜잭션) — 세션 문서의 awayStartTs/awayMs 가 외출 제외의 원본 ──
-async function sessionAway(student, isReturn){
+// atMs: 이 사건이 '실제로' 일어난 시각(epoch). 생략하면 현재 시각(키오스크에서 누른 경우).
+//   과거 시각은 관리자 보정(adminAwayReturn)에서만 들어온다 — 학생이 복귀를 안 누르고 들어와
+//   한참 뒤에 발견한 경우, 발견 시각이 아니라 실제 복귀 시각으로 정산해야 하기 때문이다.
+//   updatedAt 은 '문서를 언제 만졌나'이므로 보정이어도 항상 실제 현재 시각을 쓴다.
+async function sessionAway(student, isReturn, atMs){
   const name = student.name;
+  const _evtOf = now => (typeof atMs === 'number' && atMs > 0) ? atMs : now;
   try {
     return await runTransaction(db, async tx => {
       const now = Date.now();
+      const evt = _evtOf(now);
       const ptrSnap = await tx.get(_sessPtrRef(name));
       if (!ptrSnap.exists()) return { ok:false, reason:'not-open' };
       const sRef = doc(db, SESS_COL, ptrSnap.data().sessionId);
@@ -10394,11 +10577,11 @@ async function sessionAway(student, isReturn){
       if (!sSnap.exists() || sSnap.data().status !== 'open') return { ok:false, reason:'not-open' };
       const o = sSnap.data();
       if (isReturn) {
-        if (o.awayStartTs) {
-          tx.update(sRef, { awayMs: (o.awayMs||0) + Math.max(0, now - o.awayStartTs), awayStartTs: null, updatedAt: now });
-        }
+        if (!o.awayStartTs) return { ok:true, settled:false };
+        tx.update(sRef, { awayMs: (o.awayMs||0) + Math.max(0, evt - o.awayStartTs), awayStartTs: null, updatedAt: now });
+        return { ok:true, settled:true, awayStartTs: o.awayStartTs };
       } else {
-        if (!o.awayStartTs) tx.update(sRef, { awayStartTs: now, updatedAt: now });
+        if (!o.awayStartTs) tx.update(sRef, { awayStartTs: evt, updatedAt: now });
       }
       return { ok:true };
     });
@@ -10407,6 +10590,7 @@ async function sessionAway(student, isReturn){
     console.warn('[세션] 외출/복귀 트랜잭션 실패 — 폴백 기록:', e);
     try {
       const now = Date.now();
+      const evt = _evtOf(now);
       const ptrSnap = await getDoc(_sessPtrRef(name));
       if (!ptrSnap.exists()) return { ok:false, reason:'not-open' };
       const sRef = doc(db, SESS_COL, ptrSnap.data().sessionId);
@@ -10414,9 +10598,11 @@ async function sessionAway(student, isReturn){
       if (!sSnap.exists() || sSnap.data().status !== 'open') return { ok:false, reason:'not-open' };
       const o = sSnap.data();
       if (isReturn) {
-        if (o.awayStartTs) await updateDoc(sRef, { awayMs: (o.awayMs||0) + Math.max(0, now - o.awayStartTs), awayStartTs: null, updatedAt: now });
+        if (!o.awayStartTs) return { ok:true, settled:false, fallback:true };
+        await updateDoc(sRef, { awayMs: (o.awayMs||0) + Math.max(0, evt - o.awayStartTs), awayStartTs: null, updatedAt: now });
+        return { ok:true, settled:true, awayStartTs: o.awayStartTs, fallback:true };
       } else {
-        if (!o.awayStartTs) await updateDoc(sRef, { awayStartTs: now, updatedAt: now });
+        if (!o.awayStartTs) await updateDoc(sRef, { awayStartTs: evt, updatedAt: now });
       }
       return { ok:true, fallback:true };
     } catch(e2){ console.error('[세션] 외출/복귀 폴백도 실패:', e2); return { ok:false, reason:'error' }; }
@@ -15861,7 +16047,10 @@ window.showTodayAttendees = function() {
             <div style="font-size:11px;color:${fg}">${s?.seat||''} · 입실 ${rec?.inTime||''}${aw ? ` · 외출 ${aw.at}${aw.min != null ? ` (${aw.min}분)` : ''}` : ''}</div>
           </div>
         </div>
-        <button onclick="adminForceCheckout('${name}')" style="background:#C62828;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">퇴실 처리</button>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          ${aw ? `<button onclick="adminAwayReturn('${String(name).replace(/'/g,"\\'")}')" style="background:#fff;color:#B45309;border:1.5px solid #F59E0B;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer">🚶 복귀</button>` : ''}
+          <button onclick="adminForceCheckout('${name}')" style="background:#C62828;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">퇴실 처리</button>
+        </div>
       </div>`;
     }).join('');
     const inner = document.getElementById('today-modal-list');
@@ -15979,6 +16168,8 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
   const isIn = todayRecords.some(r => r.studentName === student.name && !r.outTime);
+  // 외출 중이어도 '입실 중'이라 그동안 퇴실 처리밖에 못 골랐다 — 복귀 보정을 따로 띄운다
+  const _awCtx = isIn && window.awayInfo ? window.awayInfo(student.name) : null;
   const _hasMemo = !!(window._fpMemos && window._fpMemos[student.name]);
   // 🧍 스탠드 책상 — 이미 서 있으면 '자리 복귀', 아니면 '보내기'를 띄운다.
   const _atStand = !!(window.isAtStandDesk && window.isAtStandDesk(student.name));
@@ -16023,6 +16214,12 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#2D7A4F;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
       onmouseover="this.style.background='#E8F5E9'" onmouseout="this.style.background=''">
       ✅ 입실 처리
+    </div>` : ''}
+    ${_awCtx ? `
+    <div onclick="adminAwayReturn('${_nameArg}');document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#B45309;font-weight:700;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0;background:#FEF3C7"
+      onmouseover="this.style.background='#FDE68A'" onmouseout="this.style.background='#FEF3C7'">
+      🚶 외출 복귀 처리${_awCtx.min != null ? ` (${_awCtx.min}분째)` : ''}
     </div>` : ''}
     ${isIn ? `
     <div onclick="adminForceCheckout('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
