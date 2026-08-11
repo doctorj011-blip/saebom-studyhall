@@ -2237,7 +2237,7 @@ function renderWeeklyGoalCard() {
   if (!el || !currentStudent) return;
   // 챌린지 주간(관리자앱 WEEKLY_CHALLENGES와 짝, 키 = 그 주 월요일 ISO): 그 주만 목표·상점·문구를 오버라이드.
   // 판정이 이 고정값으로 도므로 표시도 DB weeklyGoalH가 아닌 여기 값을 우선한다.
-  const CHAL_WEEKS = { '2026-08-03': { goalH: 65, points: 15 } };
+  const CHAL_WEEKS = { '2026-08-03': { goalH: 65, points: 15 }, '2026-08-09': { goalH: 45, points: 10 } };
   const _d = new Date(); _d.setHours(0,0,0,0);
   _d.setDate(_d.getDate() - ((_d.getDay()+6)%7)); // 그 주 월요일
   const _monIso = `${_d.getFullYear()}-${String(_d.getMonth()+1).padStart(2,'0')}-${String(_d.getDate()).padStart(2,'0')}`;
