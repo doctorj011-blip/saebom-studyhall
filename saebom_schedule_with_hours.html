@@ -2078,6 +2078,31 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         </div>
       </div>
 
+      <!-- 낮 쉬는시간 자동문 -->
+      <div style="background:#EEF2FF;border:1.5px solid #6C5DD3;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#312E81;margin-bottom:6px">🚪 낮 쉬는시간 자동문</div>
+        <div style="font-size:11px;color:#4A3FA8;margin-bottom:10px">
+          특강·방학처럼 <b>평일 오전부터 운영하는 기간</b>에 켜세요. 낮 쉬는시간
+          <b>10:00 · 11:10 · 14:30 · 15:40(각 10분)</b>에도 현관문이 자동으로 열립니다.
+          <br>저녁 쉬는시간(18:50 · 20:20 · 22:00 · 23:50)과 토요일은 이 설정과 상관없이 늘 자동 개방됩니다.
+          <br><b>종료일이 지나면 저절로 꺼집니다</b> — 끄는 걸 잊어도 아무도 없는 평일 오전에 문이 열리지 않습니다.
+          기간을 늘리려면 종료일만 다시 고르면 됩니다.
+          <br>※ 실제로 문이 열리려면 현관 키오스크에서 <b>릴레이 포트가 연결</b>되어 있고 <b>'쉬는시간 자동개방'</b>이 켜져 있어야 합니다.
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button id="day-break-door-toggle-btn" onclick="toggleDayBreakDoor()"
+            style="padding:8px 18px;background:#bdc1c6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
+            🚪 낮 자동문
+          </button>
+          <label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#4A3FA8">
+            종료일
+            <input type="date" id="day-break-door-end" onchange="saveDayBreakDoorEnd()"
+              style="padding:5px 8px;border:1.5px solid #8F82E4;border-radius:8px;font-size:12px;color:#312E81">
+          </label>
+          <span id="day-break-door-status" style="font-size:11px;color:#888"></span>
+        </div>
+      </div>
+
       <!-- 식사시간 외출 알림 -->
       <div style="background:#F0FDF4;border:1.5px solid #16A34A;border-radius:10px;padding:12px 14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:#14532D;margin-bottom:6px">🍚 식사시간 외출 알림</div>
@@ -3400,6 +3425,9 @@ function loadSettingsTab() {
   loadScheduleEditStatus();
   loadVacationModeStatus();
   loadMealAwaySmsStatus();
+  // 낮 자동문은 module 쪽에 있다(문을 여는 코드와 같이 둬야 판단이 한 곳에 모인다).
+  // 실시간 구독이 이미 버튼을 채우지만, 구독 전에 탭을 열었을 때를 위해 한 번 더 읽는다.
+  if (window.loadDayBreakDoorStatus) window.loadDayBreakDoorStatus();
   try {
     const k = document.getElementById('cfg-key');
     const s = document.getElementById('cfg-secret');
@@ -11452,6 +11480,15 @@ onSnapshot(doc(db, 'settings', 'meal_away_sms'), (snap) => {
   console.error('❌ 식사시간 외출 알림 구독 에러:', error);
 });
 
+// ── 낮 쉬는시간 자동문(settings/day_break_door) 실시간 구독 ──
+// 문을 실제로 여는 건 릴레이가 물린 현관 키오스크라, 원장이 자기 폰에서 켜도
+// 키오스크가 새로고침 없이 받아야 한다. 문서가 없으면 꺼진 것으로 본다.
+onSnapshot(doc(db, 'settings', 'day_break_door'), (snap) => {
+  if (window.applyDayBreakDoor) window.applyDayBreakDoor(snap.exists() ? snap.data() : null);
+}, (error) => {
+  console.error('❌ 낮 쉬는시간 자동문 구독 에러:', error);
+});
+
 // ── 스터디룸 신청자의 퇴실 여부 ──
 // 배치도 명단(_syncStudyRoomStudents)과 현황판(renderStudyroomBoard)이 같은 기준으로 판단하도록
 // 한 곳에 모았다. 재입실해서 열린 기록이 있으면 퇴실로 보지 않는다(외출·재입실 오표시 방지).
@@ -16694,14 +16731,23 @@ const BREAKS_DAY = [ // 낮 (1~6교시 사이, 점심 12:30~1:30·저녁 5:00~6:
   [15*60+40, 15*60+50, '5~6교시'],
 ];
 
-// 낮 교시는 평소엔 토요일만 돌지만, 여름특강 기간엔 평일에도 돈다.
-// 이 기간이 아닌 평일 낮에 낮 목록을 켜면 아무도 없는 면학관 문이 자동으로 열리므로
-// 반드시 기간을 좁혀 둘 것. 특강 일정이 바뀌면 여기만 고치면 된다.
-const SUMMER_DAY_BREAKS = { startISO: '2026-07-22', endISO: '2026-08-11' };
+// ── 낮 쉬는시간 자동문 (settings/day_break_door) ──
+// 낮 교시는 평소엔 토요일만 돌지만, 특강·방학처럼 평일 오전부터 운영하는 기간엔 평일에도 돈다.
+// 그런 기간이 아닌 평일 낮에 낮 목록을 켜면 아무도 없는 면학관 문이 자동으로 열리므로
+// 반드시 기간을 좁혀 둔다. 예전엔 기간을 코드에 박아 뒀지만(고칠 때마다 배포가 필요했다)
+// 지금은 원장이 설정 탭에서 켜고 종료일을 정한다. 종료일이 지나면 저절로 꺼지는 게 핵심 —
+// 끄는 걸 잊어도 사고가 나지 않게 하는 안전장치다.
+let DAY_BREAK_DOOR = { enabled: false, endDate: '' };
 
-function isSummerDaySession(d) {
-  const iso = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-  return iso >= SUMMER_DAY_BREAKS.startISO && iso <= SUMMER_DAY_BREAKS.endISO;
+function _isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+// 지금 낮 쉬는시간 자동문이 실제로 유효한지 (켜짐 + 종료일 안 지남)
+function isDayBreakDoorOn() {
+  if (!DAY_BREAK_DOOR.enabled) return false;
+  if (!DAY_BREAK_DOOR.endDate) return false; // 종료일 없는 켜짐은 인정하지 않는다
+  return _isoDate(new Date()) <= DAY_BREAK_DOOR.endDate;
 }
 
 function getCurrentBreak() {
@@ -16709,13 +16755,107 @@ function getCurrentBreak() {
   const day = now.getDay();
   if (day === 0) return null; // 일요일은 교시 없음
   const t = now.getHours()*60 + now.getMinutes();
-  const useDay = day === 6 || isSummerDaySession(now); // 토요일 + 여름특강 평일
+  const useDay = day === 6 || isDayBreakDoorOn(); // 토요일 + 낮 자동문 켜진 평일
   const list = useDay ? [...BREAKS_DAY, ...BREAKS_EVENING] : BREAKS_EVENING;
   for (const [start, end, label] of list) {
     if (t >= start && t < end) return { start, end, label };
   }
   return null;
 }
+
+function applyDayBreakDoor(cfg) {
+  DAY_BREAK_DOOR = { enabled: !!(cfg && cfg.enabled), endDate: (cfg && cfg.endDate) || '' };
+  updateDayBreakDoorBtn(DAY_BREAK_DOOR);
+  checkBreakDoor(); // 방금 켰는데 지금이 낮 쉬는시간이면 다음 점검(10초)을 기다리지 않고 바로 연다
+}
+window.applyDayBreakDoor = applyDayBreakDoor;
+
+function updateDayBreakDoorBtn(cfg) {
+  const btn    = document.getElementById('day-break-door-toggle-btn');
+  const status = document.getElementById('day-break-door-status');
+  const dateEl = document.getElementById('day-break-door-end');
+  if (!btn) return;
+  if (cfg === null) { // 상태 조회 실패 — 화면값을 믿게 두지 않는다
+    btn.textContent = '⚠️ 상태 확인 실패';
+    btn.style.background = '#E0A800';
+    if (status) { status.textContent = '새로고침 후 다시 확인하세요'; status.style.color = '#B45309'; }
+    btn.dataset.enabled = '';
+    btn.dataset.live = '';
+    return;
+  }
+  // 원장이 날짜를 고르는 중이면 덮어쓰지 않는다
+  if (dateEl && cfg.endDate && document.activeElement !== dateEl) dateEl.value = cfg.endDate;
+  const live = isDayBreakDoorOn();
+  const fmt = iso => iso ? `${Number(iso.slice(5,7))}/${Number(iso.slice(8,10))}` : '';
+  if (cfg.enabled && live) {
+    btn.textContent = '🚪 낮 자동문 켜짐';
+    btn.style.background = '#6C5DD3';
+    if (status) { status.textContent = `${fmt(cfg.endDate)}까지 · 평일 10:00 · 11:10 · 14:30 · 15:40 개방`; status.style.color = '#4A3FA8'; }
+  } else if (cfg.enabled) { // 저장은 켜짐인데 종료일이 지났다 — 안전장치가 작동한 상태
+    btn.textContent = '⏰ 종료일 지남 — 다시 켜기';
+    btn.style.background = '#E0A800';
+    if (status) { status.textContent = `${fmt(cfg.endDate)}에 끝나 지금은 꺼져 있습니다 — 종료일을 다시 고르고 눌러 주세요`; status.style.color = '#B45309'; }
+  } else {
+    btn.textContent = '🚪 낮 자동문 꺼짐';
+    btn.style.background = '#bdc1c6';
+    if (status) { status.textContent = '평일 낮엔 문이 자동으로 열리지 않습니다'; status.style.color = '#888'; }
+  }
+  btn.dataset.enabled = cfg.enabled ? '1' : '0';
+  btn.dataset.live    = live ? '1' : '0';
+}
+
+async function loadDayBreakDoorStatus() {
+  try {
+    const snap = await getDoc(doc(db, 'settings', 'day_break_door'));
+    applyDayBreakDoor(snap.exists() ? snap.data() : null);
+  } catch(e) {
+    console.error('낮 쉬는시간 자동문 상태 조회 실패:', e);
+    updateDayBreakDoorBtn(null);
+  }
+}
+window.loadDayBreakDoorStatus = loadDayBreakDoorStatus;
+
+window.toggleDayBreakDoor = async function() {
+  try {
+    const btn = document.getElementById('day-break-door-toggle-btn');
+    if (btn.dataset.enabled !== '0' && btn.dataset.enabled !== '1') {
+      await loadDayBreakDoorStatus();
+      showAdminToast('🔄 현재 상태를 불러왔습니다 — 다시 눌러 변경하세요');
+      return;
+    }
+    const stored  = btn.dataset.enabled === '1';
+    const expired = stored && btn.dataset.live !== '1';
+    // 종료일이 지나 저절로 꺼진 상태에서 누르면 '다시 켜기'가 된다
+    if (!stored || expired) {
+      const end = (document.getElementById('day-break-door-end').value || '').trim();
+      if (!end) { showAdminToast('⚠️ 종료일을 먼저 고르세요'); return; }
+      if (end < _isoDate(new Date())) { showAdminToast('⚠️ 종료일이 이미 지났습니다 — 앞으로의 날짜로 고르세요'); return; }
+      if (!confirm(`낮 쉬는시간 자동문을 켤까요?\n\n${end}까지 평일 10:00 · 11:10 · 14:30 · 15:40 쉬는시간에 현관문이 자동으로 열립니다.\n종료일이 지나면 저절로 꺼집니다.`)) return;
+      await setDoc(doc(db, 'settings', 'day_break_door'), { enabled: true, endDate: end, updatedAt: serverTimestamp() });
+      applyDayBreakDoor({ enabled: true, endDate: end });
+      showAdminToast(`🚪 낮 쉬는시간 자동문 켜짐 — ${end}까지`);
+    } else {
+      if (!confirm('낮 쉬는시간 자동문을 끌까요?\n\n평일 낮 쉬는시간엔 문이 자동으로 열리지 않습니다.\n(저녁 쉬는시간과 토요일은 그대로입니다)')) return;
+      await setDoc(doc(db, 'settings', 'day_break_door'), { enabled: false, updatedAt: serverTimestamp() }, { merge: true });
+      applyDayBreakDoor({ enabled: false, endDate: DAY_BREAK_DOOR.endDate });
+      showAdminToast('🚪 낮 쉬는시간 자동문 꺼짐');
+    }
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
+
+// 켜져 있는 동안 종료일만 바꾸면(기간 연장) 바로 저장한다.
+// 꺼짐·종료일 지남 상태에선 저장하지 않는다 — 날짜를 고른 것만으로 문이 다시 열리면 곤란하다.
+window.saveDayBreakDoorEnd = async function() {
+  try {
+    const btn = document.getElementById('day-break-door-toggle-btn');
+    const end = (document.getElementById('day-break-door-end').value || '').trim();
+    if (!btn || btn.dataset.enabled !== '1' || btn.dataset.live !== '1' || !end) return;
+    if (end < _isoDate(new Date())) { showAdminToast('⚠️ 종료일이 이미 지났습니다 — 앞으로의 날짜로 고르세요'); return; }
+    await setDoc(doc(db, 'settings', 'day_break_door'), { enabled: true, endDate: end, updatedAt: serverTimestamp() });
+    applyDayBreakDoor({ enabled: true, endDate: end });
+    showAdminToast(`🚪 낮 자동문 종료일 → ${end}`);
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
 
 // ── 쉬는시간 입퇴실 오처리 방지 창(window) ──
 // 쉬는 시간엔 문이 열려 있어 학생들이 번호를 안 누르고 드나든다. 그 결과 밖에 나갔던

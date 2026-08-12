@@ -350,8 +350,9 @@ service cloud.firestore {
     match /settings/{id} {
       allow read: if id in ['solapi', 'billing',
                             'seatSelection', 'vacation_mode', 'schedule_edit',
-                            'meal_away_sms', 'summerInvites', 'alimtalk_server'];
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms'];
+                            'meal_away_sms', 'summerInvites', 'alimtalk_server',
+                            'day_break_door'];
+      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door'];
     }
 
     // 문자 발송 로그
