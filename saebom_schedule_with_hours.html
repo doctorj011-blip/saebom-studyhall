@@ -10338,7 +10338,7 @@ window.applyStudentSchedule = function(seat, idx) {
   // 이 변경을 영구 고정하려면 스케줄 편집 모달에서 '🔒 고정' 버튼을 사용한다.
   // (saveScheduleToFirebase(student, false, 'student') = students + schedules 저장, base 유지,
   //  daily_reports에는 학생발로 기록 → 변동판이 '신청'으로 표시)
-  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student, false, 'student').catch(console.error);
+  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student, false, 'student', a.changes.map(c => c.day)).catch(console.error);
   else if (window.saveStudentToFirebase) window.saveStudentToFirebase(student).catch(console.error);
   buildScheduleTable(currentDay);
   buildStudentList(document.getElementById('student-search')?.value || '');
@@ -12762,6 +12762,25 @@ function renderSeatcamBoard() {
 }
 window.renderSeatcamBoard = renderSeatcamBoard;
 
+// ── '내일 일정' 미리 변경 (학생앱: 전날 22:00부터) ──
+// 학생앱이 밤 10시 이후에 다음날 일정을 바꾸면 daily_reports/{내일날짜}_{좌석}에 기록된다.
+// 그 문서는 새벽 2시 리셋(resetSchedulesToBase)이 '그날 날짜'로 다시 읽어 고정 시간표 위에
+// 얹어 주므로, 리셋 로직 자체는 손댈 필요가 없다. 관리자앱이 할 일은 두 가지뿐이다 —
+//   ① daily_reports를 쓸 때 올바른 날짜에 쓰기(saveScheduleToFirebase)
+//   ② 밤에 들어온 내일 신청을 변동판에 보여 주기(아래 '내일 변동' 섹션)
+// ★ SV_TOMORROW_FROM_HOUR는 학생앱 TOMORROW_EDIT_FROM_HOUR와 같은 값이어야 한다.
+const SV_TOMORROW_FROM_HOUR = 22;
+const SV_DAY_NAMES = ['일','월','화','수','목','금','토'];
+const SV_RDAYS = ['월','화','수','목','금','토'];
+const _svIsoDate = d => SH.sessIsoDate(d.getTime());
+const svTomorrowDay = now => SV_DAY_NAMES[(((now || new Date()).getDay()) + 1) % 7];
+// 지금이 '내일 일정' 창(22시~자정)인가 — 내일이 일요일(휴관)이면 닫혀 있다.
+function svTomorrowOpen(now) {
+  const d = now || new Date();
+  if (d.getHours() < SV_TOMORROW_FROM_HOUR) return false;
+  return SV_RDAYS.includes(svTomorrowDay(d));
+}
+
 // ── 오늘 스케줄 변동 현황판 (대시보드) ──
 // 고정 시간표(schedule_base)와 현재 적용 스케줄(schedules)을 '오늘 요일'에서 비교해,
 // 학생이 당일 변경(불참·중간입실·복귀 등)한 내역을 한눈에 보여준다.
@@ -12775,8 +12794,11 @@ let _svCurUnsub = null, _svBaseUnsub = null;
 // (학생앱 saveDailyReportToFirebase / 관리자 당일저장 둘 다 여기에 기록한다)
 // ⚠️ schedules.updatedAt은 신청 시각이 아니다 — 새벽 2시 리셋이 전 좌석 문서를 다시 쓰면서
 //    02시로 덮어쓴다. daily_reports는 리셋이 건드리지 않아 신청 시각이 그대로 남는다.
-let _svReports = {};                     // seatKey → { ms, by }
+let _svReports = {};                     // seatKey → { ms, by }  (오늘 날짜)
 let _svRptUnsub = null, _svRptDate = '';
+// 22시 이후에만 붙는 '내일 날짜' 구독 — 학생이 미리 신청한 내일 변동의 신청 시각.
+let _svReportsTmr = {};
+let _svRptTmrUnsub = null, _svRptTmrDate = '';
 
 // Firestore Timestamp / 숫자 / 직렬화 형태 → epoch ms (없으면 0)
 function _svMs(u) {
@@ -12840,12 +12862,11 @@ function _svAtHtml(r) {
   </div>`;
 }
 
-function renderSchedVarBoard() {
-  const body    = document.getElementById('schedvar-board-body');
-  const summary = document.getElementById('schedvar-board-summary');
-  if (!body) return;
-  const today = (typeof getTodayDayName === 'function') ? getTodayDayName() : (window.currentDay || '월');
-
+// 한 요일(dayName)에 대해 고정 대비 변동이 있는 학생 행을 모은다.
+// reports = 그 요일이 놓인 날짜의 daily_reports 맵(신청 시각·작성자).
+// fallbackToSchedules: 신청 시각을 모를 때 schedules.updatedAt으로 대신할지 —
+//   '오늘'만 참이다. 내일치는 schedules.updatedAt이 오늘 안의 다른 저장일 수 있어 쓰지 않는다.
+function _svCollectRows(dayName, reports, fallbackToSchedules) {
   const rows = [];
   Object.keys(_svBase).forEach(seatKey => {
     const bd = _svBase[seatKey];
@@ -12855,38 +12876,37 @@ function renderSchedVarBoard() {
     if (window.isTestStudent && window.isTestStudent(name)) return;
     const seat = bd.seat || cd.seat || seatKey;
     if (window.isAdminSeat && window.isAdminSeat(seat)) return;
-    const delta = _svDelta(bd[today], cd[today]);
+    const delta = _svDelta(bd[dayName], cd[dayName]);
     if (!delta.length) return;
-    // 신청 시각: 오늘자 daily_reports가 1순위. 없으면 changedBy가 없는 schedules 문서
+    // 신청 시각: 그 날짜의 daily_reports가 1순위. 없으면 changedBy가 없는 schedules 문서
     // (= 학생앱이 마지막으로 쓴 문서)의 updatedAt으로 대체한다. changedBy:'admin'인 문서의
     // 시각은 2시 리셋 시각일 수 있어 쓰지 않는다 — 틀린 시각보다 공백이 낫다.
-    const rpt = _svReports[seatKey];
-    const at = rpt ? rpt.ms : (cd.changedBy ? 0 : _svMs(cd.updatedAt));
+    const rpt = reports[seatKey];
+    const at = rpt ? rpt.ms : (fallbackToSchedules && !cd.changedBy ? _svMs(cd.updatedAt) : 0);
     const by = rpt ? rpt.by : (cd.changedBy || '');
-    rows.push({ seatKey, name, seat, base: bd[today], cur: cd[today], delta, at, by });
+    rows.push({ seatKey, name, seat, base: bd[dayName], cur: cd[dayName], delta, at, by });
   });
   // 최신 변경이 위로 — 신청 시각(at) 내림차순. 시각을 모르는 행(at=0)은 자연히 맨 아래로,
   // 같은 시각(주로 둘 다 0)은 좌석번호순으로 안정 정렬.
   rows.sort((a, b) => (b.at - a.at) || ((parseInt(a.seatKey) || 999) - (parseInt(b.seatKey) || 999)));
+  return rows;
+}
 
-  if (summary) summary.textContent = rows.length ? `${rows.length}명 변동` : '';
-  if (!rows.length) {
-    body.innerHTML = `<div style="text-align:center;padding:20px;color:#9CA3AF;font-size:12.5px">오늘 스케줄 변동 없음</div>`;
-    return;
-  }
+const _SV_PALETTE = {
+  absent:  ['#FDE7E7', '#8B1A1A'],
+  partial: ['#FFF4E5', '#9A5B00'],
+  early:   ['#EAF2FF', '#0B4A9B'],
+  return:  ['#E8F5E9', '#2D7A4F'],
+  add:     ['#EDE9FE', '#5B21B6'],
+  remove:  ['#F3F4F6', '#6B7280'],
+};
 
-  const palette = {
-    absent:  ['#FDE7E7', '#8B1A1A'],
-    partial: ['#FFF4E5', '#9A5B00'],
-    early:   ['#EAF2FF', '#0B4A9B'],
-    return:  ['#E8F5E9', '#2D7A4F'],
-    add:     ['#EDE9FE', '#5B21B6'],
-    remove:  ['#F3F4F6', '#6B7280'],
-  };
+// 행 묶음 → HTML. curLabel은 '고정 … → <여기> …' 자리에 들어갈 말('오늘'/'내일').
+function _svRowsHtml(rows, curLabel) {
   const fmt = window._fmtSchedAlertVal || (s => s || '-');
-  body.innerHTML = rows.map(r => {
+  return rows.map(r => {
     const chips = r.delta.map(d => {
-      const [bg, fg] = palette[d.kind] || palette.remove;
+      const [bg, fg] = _SV_PALETTE[d.kind] || _SV_PALETTE.remove;
       return `<span style="background:${bg};color:${fg};border-radius:8px;padding:3px 8px;font-size:11px;font-weight:600">${d.label}</span>`;
     }).join('');
     const seatNum = String(r.seat).replace(/[^0-9]/g, '') || r.seatKey;
@@ -12898,11 +12918,49 @@ function renderSchedVarBoard() {
       </div>
       <div style="flex:1;min-width:0">
         <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:4px">${chips}</div>
-        <div style="font-size:10.5px;color:#9CA3AF">고정 ${fmt(r.base)} → 오늘 <span style="color:#5546C4;font-weight:600">${fmt(r.cur)}</span></div>
+        <div style="font-size:10.5px;color:#9CA3AF">고정 ${fmt(r.base)} → ${curLabel} <span style="color:#5546C4;font-weight:600">${fmt(r.cur)}</span></div>
       </div>
       ${_svAtHtml(r)}
     </div>`;
   }).join('');
+}
+
+function renderSchedVarBoard() {
+  const body    = document.getElementById('schedvar-board-body');
+  const summary = document.getElementById('schedvar-board-summary');
+  if (!body) return;
+  const today = (typeof getTodayDayName === 'function') ? getTodayDayName() : (window.currentDay || '월');
+
+  const rows = _svCollectRows(today, _svReports, true);
+
+  // 밤 10시 이후 학생이 미리 신청한 '내일' 변동. 새벽 2시 리셋이 반영해 주므로 관리자가
+  // 손댈 일은 없지만, 그때까지 화면에 안 보이면 내일 인원을 미리 못 잡는다.
+  // ※ 요일 비교라 오늘과 내일이 같은 요일일 수는 없다(항상 다른 칸을 본다).
+  const tmrOpen = svTomorrowOpen();
+  const tmrDay  = tmrOpen ? svTomorrowDay() : null;
+  const tmrRows = tmrOpen ? _svCollectRows(tmrDay, _svReportsTmr, false) : [];
+
+  if (summary) {
+    summary.textContent = [
+      rows.length ? `${rows.length}명 변동` : '',
+      tmrRows.length ? `내일 ${tmrRows.length}명` : '',
+    ].filter(Boolean).join(' · ');
+  }
+
+  const todayHtml = rows.length
+    ? _svRowsHtml(rows, '오늘')
+    : `<div style="text-align:center;padding:20px;color:#9CA3AF;font-size:12.5px">오늘 스케줄 변동 없음</div>`;
+
+  const tmrHtml = tmrRows.length
+    ? `<div style="margin-top:14px;padding-top:10px;border-top:2px solid #E5E1F8">
+         <div style="font-size:11.5px;font-weight:700;color:#5546C4;margin-bottom:2px">
+           🌙 내일(${tmrDay}) 변동 ${tmrRows.length}명 <span style="font-weight:500;color:#9CA3AF">— 학생이 미리 신청한 내역. 새벽 2시에 자동 반영됩니다</span>
+         </div>
+         ${_svRowsHtml(tmrRows, '내일')}
+       </div>`
+    : '';
+
+  body.innerHTML = todayHtml + tmrHtml;
 }
 window.renderSchedVarBoard = renderSchedVarBoard;
 
@@ -12913,6 +12971,9 @@ window.svOpenStudent = function(name) {
 // 오늘자 daily_reports 구독 (신청 시각의 원본). 날짜가 바뀌면 어제 구독을 끊고 새로 건다.
 // 날짜 키는 달력 날짜 — 기록하는 쪽(학생앱·2시 리셋)과 같은 기준이어야 문서를 찾는다.
 function subscribeSchedVarReports() {
+  // 내일자 구독은 22시 경계에서 붙고 떨어지므로, 오늘자 조기 반환보다 먼저 확인해야 한다
+  // (뒤에 두면 오늘자 구독이 자리잡은 뒤로는 60초 타이머가 이 줄에 영영 닿지 못한다).
+  subscribeSchedVarReportsTomorrow();
   const iso = SH.sessIsoDate(Date.now());
   if (_svRptUnsub && _svRptDate === iso) return; // 이미 오늘자 구독 중
   if (_svRptUnsub) { _svRptUnsub(); _svRptUnsub = null; }
@@ -12929,6 +12990,34 @@ function subscribeSchedVarReports() {
     });
     renderSchedVarBoard();
   }, e => { console.error('스케줄 변동판(daily_reports) 구독 실패:', e); });
+}
+
+// 내일자 daily_reports 구독 — 22시~자정에만 붙였다가 창이 닫히면 끊는다.
+// (하루 종일 붙여 둘 이유가 없다. 그 시간 밖에는 내일 날짜 문서가 만들어지지 않는다.)
+function subscribeSchedVarReportsTomorrow() {
+  const open = svTomorrowOpen();
+  if (!open) {
+    if (_svRptTmrUnsub) { _svRptTmrUnsub(); _svRptTmrUnsub = null; }
+    _svRptTmrDate = ''; _svReportsTmr = {};
+    return;
+  }
+  const now = new Date();
+  const iso = _svIsoDate(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  if (_svRptTmrUnsub && _svRptTmrDate === iso) return; // 이미 내일자 구독 중
+  if (_svRptTmrUnsub) { _svRptTmrUnsub(); _svRptTmrUnsub = null; }
+  _svRptTmrDate = iso;
+  _svReportsTmr = {};
+  _svRptTmrUnsub = onSnapshot(query(collection(db, 'daily_reports'), where('date', '==', iso)), snap => {
+    _svReportsTmr = {};
+    snap.forEach(d => {
+      if (!d.id.startsWith(iso + '_')) return;
+      const seatKey = d.id.slice(iso.length + 1);
+      const rd = d.data();
+      const ms = _svMs(rd.updatedAt);
+      if (ms) _svReportsTmr[seatKey] = { ms, by: rd.changedBy || '' };
+    });
+    renderSchedVarBoard();
+  }, e => { console.error('스케줄 변동판(내일 daily_reports) 구독 실패:', e); });
 }
 
 function subscribeSchedVarBoard() {
@@ -13203,7 +13292,10 @@ window.clearAllScheduleAlerts = function() {
 //   schedules.changedBy는 이 경우에도 'admin'을 유지해야 한다 — onSnapshot이 이 표시를 보고
 //   자기 저장을 학생발 변경으로 오인해 무한 적용하는 것을 막는 잠금장치이기 때문.
 //   대신 daily_reports.changedBy에만 원 작성자를 남겨, 변동판이 '신청'과 '관리자'를 구분한다.
-async function saveScheduleToFirebase(student, commitBase, origin) {
+// changedDays=['화',...] → 실제로 바뀐 요일 목록. 학생앱이 22시 이후 '내일' 일정을 미리 바꾸면
+//   그 변경은 오늘이 아니라 내일 날짜의 당일변경이므로, daily_reports도 내일 날짜 문서에 써야
+//   한다. 넘기지 않으면(관리자 수동 저장) 오늘 + 창이 열린 경우 내일까지 현재 값으로 기록한다.
+async function saveScheduleToFirebase(student, commitBase, origin, changedDays) {
   try {
     await window.saveStudentToFirebase(student);
     // schedules 컬렉션도 동기화 (학생앱 실시간 감지용)
@@ -13230,16 +13322,36 @@ async function saveScheduleToFirebase(student, commitBase, origin) {
         ['월','화','수','목','금','토'].forEach(d => { basePayload[d] = student.schedule[d] || '-'; });
         await setDoc(baseRef, basePayload);
       }
-      // 관리자의 당일 임시변경도 학생 당일변경과 동일하게 '오늘 요일' daily_reports에 기록한다.
-      // → 학생이 학생앱을 열어도(applyBaseAndRevert) 오늘 값이 유지되고, 다음날 2시엔 리셋된다.
+      // 관리자의 당일 임시변경도 학생 당일변경과 동일하게 '그 날짜' daily_reports에 기록한다.
+      // → 학생이 학생앱을 열어도(applyBaseAndRevert) 그날 값이 유지되고, 그 다음 2시엔 리셋된다.
       try {
         const now = new Date();
-        const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-        const tDay = ['일','월','화','수','목','금','토'][now.getDay()];
-        if (tDay !== '일') {
+        // 기록 대상 = { 요일 → 그 요일이 놓인 날짜 }. 기본은 오늘 하루.
+        const targets = new Map();
+        const todayDay = SV_DAY_NAMES[now.getDay()];
+        const tmrDay = SV_DAY_NAMES[(now.getDay() + 1) % 7];
+        const tmrDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+        if (Array.isArray(changedDays) && changedDays.length) {
+          changedDays.forEach(d => {
+            if (d === todayDay) targets.set(d, now);
+            // 22시 이후의 '내일' 변경만 미래 날짜로 인정한다. 그 밖의 요일은 당일변경이 아니라
+            // 고정 시간표(주간 수정기간) 영역이므로 daily_reports를 만들지 않는다 —
+            // 만들면 엉뚱한 날 새벽 2시에 그 값이 되살아난다.
+            else if (d === tmrDay && svTomorrowOpen(now)) targets.set(d, tmrDate);
+          });
+        } else {
+          // 관리자 수동 저장 — 어느 요일을 고쳤는지 모르고 6일치를 통째로 쓴다.
+          // 오늘은 물론, 창이 열려 있으면 내일치도 현재 값으로 함께 고정해 둔다. 안 그러면
+          // 22시 이후 관리자가 내일 칸을 손봐도 새벽 2시에 학생이 신청해 둔 값으로 되돌아간다.
+          if (todayDay !== '일') targets.set(todayDay, now);
+          if (svTomorrowOpen(now)) targets.set(tmrDay, tmrDate);
+        }
+        for (const [dName, dDate] of targets) {
+          if (dName === '일') continue;
+          const dateStr = _svIsoDate(dDate);
           await setDoc(doc(db, 'daily_reports', `${dateStr}_${seatKey}`), {
-            name: student.name, seat: student.seat, date: dateStr, day: tDay,
-            schedule: student.schedule[tDay] || '-',
+            name: student.name, seat: student.seat, date: dateStr, day: dName,
+            schedule: student.schedule[dName] || '-',
             changedBy: origin === 'student' ? 'student' : 'admin',
             updatedAt: serverTimestamp()
           }, { merge: true });
@@ -14253,7 +14365,11 @@ function _autoHandleScheduleChange(alertObj) {
   }
   // origin='student' — 학생이 신청한 값을 그대로 적용하는 것이므로 daily_reports에 학생발로 남긴다
   // (이걸 'admin'으로 남기면 변동판이 학생 신청을 '관리자 변경'으로 잘못 표시한다)
-  if (window.saveScheduleToFirebase) window.saveScheduleToFirebase(student, false, 'student').catch(console.error);
+  // 바뀐 요일을 함께 넘긴다 — 22시 이후 '내일' 신청이면 daily_reports가 오늘이 아니라
+  // 내일 날짜에 기록돼야 한다(안 넘기면 오늘 문서의 신청 시각이 밤 10시로 덮어써진다).
+  if (window.saveScheduleToFirebase) {
+    window.saveScheduleToFirebase(student, false, 'student', (alertObj.changes || []).map(c => c.day)).catch(console.error);
+  }
   try {
     const day = window.getTodayDayName ? window.getTodayDayName() : (window.currentDay || '월');
     if (window.buildScheduleTable) window.buildScheduleTable(window.currentDay || day);

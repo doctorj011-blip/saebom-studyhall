@@ -253,6 +253,8 @@ body{font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-s
 .day-tab{flex-shrink:0;padding:7px 15px;border-radius:20px;border:1.5px solid var(--border);background:var(--card);font-size:13px;font-weight:500;color:var(--text2);cursor:pointer;transition:all 0.15s}
 .day-tab.active{background:var(--amber);color:#fff;border-color:var(--amber);font-weight:700;box-shadow:0 2px 8px rgba(108,93,211,0.35)}
 .day-tab.today{border-color:var(--amber);color:var(--amber);font-weight:600}
+/* 22시 이후 미리 고칠 수 있는 '내일' 탭 — 오늘(실선)과 구분되게 점선 테두리 */
+.day-tab.tomorrow{border-color:#7C6BE0;border-style:dashed;color:#5B4FC7;font-weight:600}
 
 /* 교시 카드 */
 .period-card{background:var(--card);border-radius:var(--r-md);padding:13px 16px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;box-shadow:var(--shadow-sm);transition:opacity 0.15s;border:1px solid var(--border-light)}
@@ -1416,7 +1418,7 @@ body{
       <div class="weekly-table-wrap">
         <table class="weekly-table" id="weekly-table"></table>
       </div>
-      <div id="weekly-today-note" style="display:none;font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #F3D9A4;background:#FFF8EC;color:#8A5A00;margin-top:10px">🟡 <b>오늘만</b> 표시는 ‘오늘 일정’에서 임시로 변경된 교시입니다. 고정 시간표는 그대로 유지되며, 내일이 되면 자동으로 원래 시간표로 돌아갑니다.</div>
+      <div id="weekly-today-note" style="display:none;font-size:12px;padding:10px 14px;border-radius:var(--r-sm);border:1px solid #F3D9A4;background:#FFF8EC;color:#8A5A00;margin-top:10px">🟡 <b>오늘만</b>·<b>내일만</b> 표시는 임시로 변경된 교시입니다. 고정 시간표는 그대로 유지되며, 그날이 지나면 자동으로 원래 시간표로 돌아갑니다.</div>
       <div style="height:80px"></div>
     </div>
 
@@ -1860,6 +1862,31 @@ let weeklyEditedDays = new Set();
 let baseScheduleRaw = null;
 let todayDay = '';
 const DAY_NAMES = ['일','월','화','수','목','금','토'];
+
+// ── 내일 일정 미리 변경 (전날 22:00부터) ──
+// 밤 10시가 지나면 '내일' 요일 탭도 열려서, 다음날 일정을 미리 바꿔 둘 수 있다.
+// 저장 경로는 오늘 변경과 완전히 같고 daily_reports 문서만 '내일 날짜'로 쓴다.
+// 관리자앱 새벽 2시 리셋(resetSchedulesToBase)이 '그날 날짜'의 daily_reports를 고정 시간표 위에
+// 다시 얹어 주므로, 내일 날짜로 미리 써 두면 리셋이 지우는 게 아니라 오히려 살려 준다.
+// ★ 이 창(22시~자정)에서 만든 변경도 어디까지나 '당일 변경'이다 — schedule_base는 건드리지 않는다.
+const TOMORROW_EDIT_FROM_HOUR = 22;
+function tomorrowDayName(now) { return DAY_NAMES[((now || new Date()).getDay() + 1) % 7]; }
+// 지금 '내일 일정'을 열 수 있는가 — 22시가 지났고, 내일이 일요일(휴관)이 아닐 때만.
+function tomorrowEditOpen(now) {
+  const d = now || new Date();
+  if (d.getHours() < TOMORROW_EDIT_FROM_HOUR) return false;
+  return DAYS.includes(tomorrowDayName(d));
+}
+// 이 요일을 지금 고칠 수 있는가 — 오늘은 언제든, 내일은 22시부터.
+function isEditableDay(day) {
+  if (!day) return false;
+  if (day === todayDay) return true;
+  return tomorrowEditOpen() && day === tomorrowDayName();
+}
+// YYYY-MM-DD (daily_reports 문서 ID의 날짜부). 학생앱·관리자앱·2시 리셋이 모두 이 형식을 쓴다.
+function _isoDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 
 // ── 스케줄 변경 벌점 (교시 시작 5시간 전 마감) ──
 // 오늘 출석 예정(o/m)이던 교시를 마감 이후에 불참/해제로 바꾸면 교시당 벌점 1점.
@@ -3169,12 +3196,34 @@ window.noticeImgZoom = function(url) {
 // ── 요일 탭 ──
 function buildDayTabs() {
   const todayName = DAY_NAMES[new Date().getDay()];
+  const tmrName = tomorrowEditOpen() ? tomorrowDayName() : null;
   document.getElementById('student-day-tabs').innerHTML = DAYS.map(d => {
     const isToday = d === todayName;
+    const isTmr = d === tmrName;
     const isActive = d === currentDayTab;
-    return `<button class="day-tab${isActive?' active':''}${isToday&&!isActive?' today':''}" onclick="selectDayTab('${d}',this)">${d}</button>`;
+    // ※ 3060줄 근처가 탭을 textContent로 찾는다 — 요일 글자만 담아야 하므로 라벨은 건드리지 않는다.
+    const cls = `day-tab${isActive?' active':''}${!isActive&&isToday?' today':''}${!isActive&&!isToday&&isTmr?' tomorrow':''}`;
+    const tip = isTmr ? ' title="내일 일정 — 지금(밤 10시 이후) 미리 바꿀 수 있습니다"' : '';
+    return `<button class="${cls}"${tip} onclick="selectDayTab('${d}',this)">${d}</button>`;
   }).join('');
 }
+
+// ── 22:00 경계 감시 ──
+// 밤 10시가 지나도 화면이 그대로면 '내일' 탭이 열리지 않는다(면학관은 10~11교시가 있어
+// 그 시각에 앱을 켜 둔 학생이 많다). 30초마다 창이 열렸는지/닫혔는지만 보고 다시 그린다.
+let _tomorrowOpenState = null;
+setInterval(() => {
+  if (!currentStudent) return;
+  // 자정을 넘겼으면 '오늘'부터 다시 잡는다. 미저장 수정이 있으면 저장 시점의 처리에 맡긴다
+  // (_recheckTodayDay는 어제 향한 수정을 버리므로 여기서 조용히 부르면 안 된다).
+  if (!isDirty && _recheckTodayDay()) { _tomorrowOpenState = tomorrowEditOpen(); return; }
+  const open = tomorrowEditOpen();
+  if (open === _tomorrowOpenState) return;
+  _tomorrowOpenState = open;
+  buildDayTabs();
+  buildDailyPeriods();
+  buildWeeklyTable();
+}, 30000);
 
 function selectDayTab(day, btn) {
   currentDayTab = day;
@@ -3189,14 +3238,21 @@ function buildDailyPeriods() {
   const dayDraft = draftSchedule[currentDayTab];
   const el = document.getElementById('daily-periods');
   const isToday = currentDayTab === todayDay;
+  const isTomorrow = !isToday && tomorrowEditOpen() && currentDayTab === tomorrowDayName();
+  const canEdit = isToday || isTomorrow;
 
   const banner = document.getElementById('daily-edit-banner');
   if (isToday) {
     banner.style.cssText = 'font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #A5D6A7;background:#F0FBF0;color:#1B4D2E;margin-bottom:12px';
     banner.innerHTML = '✏️ 오늘 일정은 언제든지 수정할 수 있습니다. 변경 내용은 관리자에게 실시간으로 전달됩니다.';
+  } else if (isTomorrow) {
+    banner.style.cssText = 'font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #C7BFF2;background:#F4F2FE;color:#4A3FA8;margin-bottom:12px';
+    banner.innerHTML = '🌙 <b>내일 일정</b>을 미리 바꿀 수 있습니다 (밤 10시부터). 내일 하루만 적용되고, 고정 시간표는 그대로입니다.';
   } else {
     banner.style.cssText = 'font-size:12px;padding:10px 14px;border-radius:10px;border:1.5px solid #F5BABA;background:#FEF0F0;color:#C62828;margin-bottom:12px';
-    banner.innerHTML = '🔒 오늘 일정만 수정할 수 있습니다. 다른 날짜는 조회만 가능합니다.';
+    banner.innerHTML = tomorrowEditOpen()
+      ? '🔒 오늘·내일 일정만 수정할 수 있습니다. 다른 날짜는 조회만 가능합니다.'
+      : '🔒 오늘 일정만 수정할 수 있습니다. 내일 일정은 밤 10시부터 미리 바꿀 수 있습니다.';
   }
 
   el.innerHTML = periods.map(p => {
@@ -3210,28 +3266,32 @@ function buildDailyPeriods() {
         </div>
       </div>
       <div class="period-toggle">
-        <button class="toggle-btn${(status==='attend'||status==='partial')?' attend':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
-        <button class="toggle-btn${status==='early'?' early':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'early')"`:' disabled'} title="교시 도중에 나감">중간퇴실</button>
-        <button class="toggle-btn${status==='absent'?' absent':''}" ${isToday?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
+        <button class="toggle-btn${(status==='attend'||status==='partial')?' attend':''}" ${canEdit?`onclick="setPeriod('${currentDayTab}',${p.n},'attend')"`:' disabled'}>참여</button>
+        <button class="toggle-btn${status==='early'?' early':''}" ${canEdit?`onclick="setPeriod('${currentDayTab}',${p.n},'early')"`:' disabled'} title="교시 도중에 나감">중간퇴실</button>
+        <button class="toggle-btn${status==='absent'?' absent':''}" ${canEdit?`onclick="setPeriod('${currentDayTab}',${p.n},'absent')"`:' disabled'}>불참</button>
       </div>
     </div>
     <div class="absent-reason${status==='absent'?' show':''}" id="reason-${currentDayTab}-${p.n}">
       <span class="reason-label">불참 사유</span>
       <input class="reason-input" type="text" placeholder="예: 수학학원"
         value="${((dayDraft.reasons&&dayDraft.reasons[p.n])||'').replace(/"/g,'&quot;')}"
-        ${isToday?`oninput="setReason('${currentDayTab}',${p.n},this.value)"`:'readonly'}>
+        ${canEdit?`oninput="setReason('${currentDayTab}',${p.n},this.value)"`:'readonly'}>
     </div>
     <div class="early-time${status==='early'?' show':''}" id="early-${currentDayTab}-${p.n}">
       <span class="early-label">나가는 시간</span>
       <input class="early-input" type="text" inputmode="numeric" placeholder="숫자만 (예: 2030 → 20:30)"
         value="${((dayDraft.earlies&&dayDraft.earlies[p.n])||'').replace(/"/g,'&quot;')}"
-        ${isToday?`oninput="setEarlyTime('${currentDayTab}',${p.n},this)" onblur="finishEarlyTime('${currentDayTab}',${p.n},this)"`:'readonly'}>
+        ${canEdit?`oninput="setEarlyTime('${currentDayTab}',${p.n},this)" onblur="finishEarlyTime('${currentDayTab}',${p.n},this)"`:'readonly'}>
     </div>`;
   }).join('');
 }
 
 function setPeriod(day, pNum, status) {
-  if (day !== todayDay) { showToast('🔒 오늘 일정만 수정할 수 있습니다'); return; }
+  if (!isEditableDay(day)) {
+    showToast(tomorrowEditOpen() ? '🔒 오늘·내일 일정만 수정할 수 있습니다'
+                                 : '🔒 오늘 일정만 수정할 수 있습니다 (내일 일정은 밤 10시부터)');
+    return;
+  }
   const prev = draftSchedule[day].periods[pNum];
   // 같은 버튼 다시 누르면 none으로
   const next = prev === status ? 'none' : status;
@@ -3291,13 +3351,20 @@ function buildWeeklyTable() {
   // 모든 교시 (1~11) — 방학 중에는 11교시를 운영하지 않으므로 행 자체를 뺀다
   const allPeriods = [1,2,3,4,5,6,7,8,9,10,11].filter(n => !(VACATION_MODE && VACATION_HIDDEN_PERIODS.has(n)));
 
-  // '오늘만' 임시변경 배지: 오늘 요일 셀이 고정 시간표(base)와 다르면 표시.
-  // 주간 수정모드에서 오늘 요일을 직접 고친 경우는 base에 반영될 값이므로 제외.
-  const badgeDay = (baseScheduleRaw && DAYS.includes(todayDay)
-    && !(scheduleEditEnabled && weeklyEditedDays.has(todayDay))) ? todayDay : null;
-  const baseStr = badgeDay ? (baseScheduleRaw[badgeDay] || '-') : '-';
-  const basePartials = badgeDay ? parsePartials(baseStr) : {};
-  const baseEarlies = badgeDay ? parseEarlies(baseStr) : {};
+  // 임시변경 배지: 고정 시간표(base)와 다른 셀에 '오늘만'/'내일만'을 붙인다.
+  // 대상은 오늘 요일 + (22시 이후) 내일 요일 — 둘 다 당일 변경이라 새벽 2시에 base로 돌아간다.
+  // 주간 수정모드에서 그 요일을 직접 고친 경우는 base에 반영될 값이므로 제외.
+  const badgeInfo = {};   // 요일 → { label, baseStr, partials, earlies }
+  if (baseScheduleRaw) {
+    const cand = [];
+    if (DAYS.includes(todayDay)) cand.push({ day: todayDay, label: '오늘만' });
+    if (tomorrowEditOpen()) cand.push({ day: tomorrowDayName(), label: '내일만' });
+    cand.forEach(c => {
+      if (scheduleEditEnabled && weeklyEditedDays.has(c.day)) return;
+      const bs = baseScheduleRaw[c.day] || '-';
+      badgeInfo[c.day] = { label: c.label, baseStr: bs, partials: parsePartials(bs), earlies: parseEarlies(bs) };
+    });
+  }
   let todayDiffCount = 0;
 
   let html = `<thead><tr><th>교시</th>${DAYS.map(d=>`<th${d===todayDay?' class="wk-th-todaycol"':''}>${d}${d===todayDay?'<span class="wk-th-today">오늘</span>':''}</th>`).join('')}</tr></thead><tbody>`;
@@ -3337,19 +3404,20 @@ function buildWeeklyTable() {
 
       // 오늘 요일: 열 전체를 옅게 강조 + 고정 시간표(base)와 다른 셀에 '오늘만' 배지
       let tdCls = day === todayDay ? ' class="wk-todaycol"' : '';
-      if (day === badgeDay) {
-        const bSt = parsePeriodStatus(baseStr, pNum);
+      const bi = badgeInfo[day];
+      if (bi) {
+        const bSt = parsePeriodStatus(bi.baseStr, pNum);
         const dReason = (draftSchedule[day]?.reasons && draftSchedule[day].reasons[pNum]) || '';
         const dTime = (draftSchedule[day]?.partials && draftSchedule[day].partials[pNum]) || '';
         const dEarly = (draftSchedule[day]?.earlies && draftSchedule[day].earlies[pNum]) || '';
         const diff = bSt !== status
-          || (status === 'absent' && (parsePeriodReason(baseStr, pNum) || '') !== dReason)
-          || (status === 'partial' && (basePartials[pNum] || '') !== dTime)
-          || (status === 'early' && (baseEarlies[pNum] || '') !== dEarly);
+          || (status === 'absent' && (parsePeriodReason(bi.baseStr, pNum) || '') !== dReason)
+          || (status === 'partial' && (bi.partials[pNum] || '') !== dTime)
+          || (status === 'early' && (bi.earlies[pNum] || '') !== dEarly);
         if (diff) {
           todayDiffCount++;
-          tdCls = ' class="wk-todaycol wk-today-diff"';
-          cell += `<div class="wk-today-badge">오늘만</div>`;
+          tdCls = day === todayDay ? ' class="wk-todaycol wk-today-diff"' : ' class="wk-today-diff"';
+          cell += `<div class="wk-today-badge">${bi.label}</div>`;
         }
       }
       html += `<td${tdCls}>${cell}</td>`;
@@ -3593,9 +3661,13 @@ async function saveToFirebase() {
         seat: currentStudent.seat,
         updatedAt: window._fsServerTimestamp(),
       };
+      // ※ '내일'(22시 이후 미리 변경)도 당일 변경이므로 '오늘'과 똑같이 base 보존 대상이다.
+      //   빼먹으면 수정기간에 밤 10시 넘겨 저장한 학생의 내일 임시변경이 고정 시간표로 굳는다.
+      const _tmrDay = tomorrowEditOpen() ? tomorrowDayName() : null;
       DAYS.forEach(day => {
-        const keepOldToday = day === todayDay && !weeklyEditedDays.has(day) && prevBase && prevBase[day] != null;
-        basePayload[day] = keepOldToday ? prevBase[day] : (currentStudent.schedule[day] || '-');
+        const isTempDay = (day === todayDay || day === _tmrDay);
+        const keepOld = isTempDay && !weeklyEditedDays.has(day) && prevBase && prevBase[day] != null;
+        basePayload[day] = keepOld ? prevBase[day] : (currentStudent.schedule[day] || '-');
       });
       await window._fsSetDoc(baseRef, basePayload);
       // '오늘만' 배지 비교 기준도 새 base로 갱신
@@ -3615,28 +3687,39 @@ async function saveToFirebase() {
 
 async function saveDailyReportToFirebase(db, seatKey) {
   try {
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-    const todayDay = DAY_NAMES[today.getDay()];
-    const todayDraft = draftSchedule[todayDay] || {};
-    const periods = periodsFor(todayDay);
-    const periodsPayload = {};
-    periods.forEach(p => {
-      periodsPayload[p.n] = todayDraft.periods?.[p.n] || 'none';
-    });
-    const reportRef = window._fsDoc(db, 'daily_reports', `${dateStr}_${seatKey}`);
-    await window._fsSetDoc(reportRef, {
-      name: currentStudent.name,
-      seat: currentStudent.seat,
-      date: dateStr,
-      day: todayDay,
-      schedule: currentStudent.schedule[todayDay] || '-',
-      periods: periodsPayload,
-      updatedAt: window._fsServerTimestamp(),
-    });
+    const now = new Date();
+    await _writeDailyReport(db, seatKey, now, DAY_NAMES[now.getDay()]);
+    // 22시 이후에는 '내일 날짜' 문서도 함께 쓴다. 관리자앱의 새벽 2시 리셋이 그날 날짜의
+    // daily_reports를 고정 시간표 위에 다시 얹으므로, 미리 써 둔 내일 변경이 그때 자동 반영된다.
+    // (조건이 맞을 때 항상 쓴다 — 학생이 되돌려서 고정 시간표와 같아진 경우에도 덮어써야
+    //  옛 신청이 문서에 남아 리셋 때 되살아나는 일이 없다.)
+    if (tomorrowEditOpen(now)) {
+      const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+      await _writeDailyReport(db, seatKey, tmr, tomorrowDayName(now));
+    }
   } catch(e) {
     console.error('일일 리포트 저장 실패:', e);
   }
+}
+
+// daily_reports/{YYYY-MM-DD}_{좌석} 한 건 쓰기. dateObj가 문서 날짜, dayName이 그 날의 요일.
+async function _writeDailyReport(db, seatKey, dateObj, dayName) {
+  const dateStr = _isoDate(dateObj);
+  const dayDraft = draftSchedule[dayName] || {};
+  const periodsPayload = {};
+  periodsFor(dayName).forEach(p => {
+    periodsPayload[p.n] = dayDraft.periods?.[p.n] || 'none';
+  });
+  const reportRef = window._fsDoc(db, 'daily_reports', `${dateStr}_${seatKey}`);
+  await window._fsSetDoc(reportRef, {
+    name: currentStudent.name,
+    seat: currentStudent.seat,
+    date: dateStr,
+    day: dayName,
+    schedule: currentStudent.schedule[dayName] || '-',
+    periods: periodsPayload,
+    updatedAt: window._fsServerTimestamp(),
+  });
 }
 
 // Firebase에서 기존 저장된 스케줄 로드
@@ -3695,22 +3778,32 @@ async function applyBaseAndRevert(db, seatKey, liveData) {
     }
     baseScheduleRaw = Object.assign({}, base); // 주간표 '오늘만' 배지 비교 기준
 
-    // 2) '오늘 날짜'의 당일변경(daily_reports)만 오늘 요일에 유지
+    // 2) 당일변경(daily_reports) 읽기 — '오늘 날짜' + (22시 이후라면) '내일 날짜'.
+    //    ★ 내일치를 여기서 빼먹으면 안 된다. 밤 10시에 미리 저장한 내일 변경이, 학생이 앱을
+    //      다시 열거나 다른 기기로 여는 순간 아래 4)에서 고정 시간표로 되돌려 쓰여 조용히
+    //      사라진다(changedBy:'restore'라 관리자 알림도 안 뜬다).
     const now = new Date();
-    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const tDay = DAY_NAMES[now.getDay()];
-    let todayOverride = null;
-    try {
-      const rptSnap = await window._fsGetDoc(window._fsDoc(db, 'daily_reports', `${dateStr}_${seatKey}`));
-      if (rptSnap.exists() && typeof rptSnap.data().schedule === 'string') {
-        todayOverride = rptSnap.data().schedule;
-      }
-    } catch(e) {}
+    const _readOverride = async (dateObj) => {
+      try {
+        const snap = await window._fsGetDoc(
+          window._fsDoc(db, 'daily_reports', `${_isoDate(dateObj)}_${seatKey}`));
+        if (snap.exists() && typeof snap.data().schedule === 'string') return snap.data().schedule;
+      } catch(e) {}
+      return null;
+    };
+    const todayOverride = await _readOverride(now);
+    let tmrDay = null, tmrOverride = null;
+    if (tomorrowEditOpen(now)) {
+      tmrDay = tomorrowDayName(now);
+      tmrOverride = await _readOverride(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+    }
 
-    // 3) 표시값 재구성: 모든 요일 = 원본, 단 오늘 요일은 오늘자 당일변경이 있으면 그 값
+    // 3) 표시값 재구성: 모든 요일 = 원본, 단 오늘·내일 요일은 그 날짜의 당일변경이 있으면 그 값
     const rebuilt = {};
     DAYS.forEach(day => { rebuilt[day] = base[day]; });
     if (DAYS.includes(tDay) && todayOverride != null) rebuilt[tDay] = todayOverride;
+    if (tmrDay && tmrOverride != null) rebuilt[tmrDay] = tmrOverride;
     DAYS.forEach(day => { currentStudent.schedule[day] = rebuilt[day]; });
 
     // 4) Firebase schedules가 재구성값과 다르면 되돌려 씀 (지난 당일변경 복구).
