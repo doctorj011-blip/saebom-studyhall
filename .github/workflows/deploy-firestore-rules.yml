@@ -32,11 +32,12 @@ jobs:
   rules:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      # v4 는 액션 자체가 Node 20 으로 도는데 그게 지원 종료돼 매 실행 경고가 떴다(v7 = Node 24).
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: '20'
+          node-version: '24'   # firebase-tools 가 도는 런타임. 24 = 현재 LTS
 
       - name: Install firebase-tools
         run: npm install -g firebase-tools
