@@ -49,6 +49,13 @@ rules_version = '2';
 //   - 2026-07-30  zai_notes·zai_roster 추가 — 중2-2 자이스토리 여름특강 오답노트
 //                 (saebom-xistory22.web.app). 같은 사고(규칙 누락 403) 수정.
 //                 반 구분 없이 alg_ 와 완전히 동일한 원장 단독 구조
+//   - 2026-08-13  report_ai_requests·report_comments 추가 — 학부모 리포트 '선생님 의견'.
+//                 의견은 학부모께 나가는 글이라 opinion·editedAt 만 수정 허용,
+//                 status·model·usage 는 서버(Cloud Function) 전용
+//   - 2026-08-13  school_calendars 추가 — 학사일정 탭(관리앱). 학교별 나이스 학교코드 매핑과
+//                 받아둔 연간 일정 캐시가 들어간다. _config 문서에는 나이스 인증키.
+//                 ⚠️ 무료 공공데이터 키지만 read 가 열려 있어 사실상 공개다. 호출 한도가
+//                 문제되면 solapi 처럼 서버 중개로 옮길 것
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -388,6 +395,19 @@ service cloud.firestore {
                     && request.resource.data.uid.matches('^s_[0-9a-f]{8}$');
     }
 
+    // 학부모 리포트 '선생님 의견' — 관리앱이 요청 생성(create만), 결과는 서버가 쓴다
+    match /report_ai_requests/{id} { allow read, create: if true; }
+    // 의견은 학부모께 나가는 글이라 선생님이 손볼 수 있어야 한다 → opinion 만 열어 둔다
+    // (다시 생성은 API 재호출이라 비용이 든다). status·model·usage 는 서버 전용.
+    match /report_comments/{id} {
+      allow read: if true;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['opinion', 'editedAt'])
+                    && request.resource.data.opinion is map;
+      // AI를 안 쓰고 처음부터 손으로 쓰는 경우 — 문서가 아직 없을 때
+      allow create: if request.resource.data.opinion is map;
+    }
+
     // 자동문 원격 명령: current 문서만, action=open, 30초 이내
     match /door_commands/{id} {
       allow read: if true;
@@ -410,6 +430,9 @@ service cloud.firestore {
     match /consultations/{docId} {
       allow read, create, update, delete: if true;
     }
+
+    // 학사일정: 학교별 나이스 코드 매핑 + 받아둔 연간 일정(캐시)
+    match /school_calendars/{id} { allow read, write: if true; }
 
     // 학생관리앱: sm_ 접두사 컬렉션 (프로토타입 단계: 로그인 필요)
     match /{coll}/{docId} {

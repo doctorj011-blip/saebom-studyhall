@@ -929,6 +929,30 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   padding:13px 16px; margin-bottom:10px}
 .rp-cmt .d{font-size:11px; color:var(--rp-ac); font-weight:700; letter-spacing:.03em; margin-bottom:5px}
 .rp-cmt p{margin:0; font-size:12.5px; line-height:1.7; color:var(--rp-ink)}
+/* 선생님 의견 — 리포트 맨 끝. 화면에서는 고쳐 쓸 수 있고, 인쇄·이미지에는 글만 나간다 */
+.rp-op-lead{margin:0 0 16px; padding:14px 16px; background:var(--rp-ac-soft);
+  border-radius:10px; font-size:13px; line-height:1.78; color:var(--rp-ink); white-space:pre-wrap}
+.rp-op-grp{margin-bottom:18px}
+.rp-op-grp:last-of-type{margin-bottom:0}
+.rp-op-h{font-size:11.5px; font-weight:750; letter-spacing:.03em; margin-bottom:9px; color:var(--rp-ac)}
+.rp-op-grp.warn .rp-op-h{color:var(--rp-amber)}
+.rp-op-grp.next .rp-op-h{color:var(--rp-ink2)}
+.rp-op-item{border-left:3px solid var(--rp-ac); padding:1px 0 1px 13px; margin-bottom:12px}
+.rp-op-item:last-child{margin-bottom:0}
+.rp-op-grp.warn .rp-op-item{border-left-color:var(--rp-amber)}
+.rp-op-grp.next .rp-op-item{border-left-color:var(--rp-ac-line)}
+.rp-op-item .t{font-size:12.5px; font-weight:750; color:var(--rp-ink); margin-bottom:3px}
+.rp-op-item .b{font-size:12.5px; line-height:1.78; color:var(--rp-ink2); white-space:pre-wrap}
+.rp-op-sign{margin-top:20px; text-align:right; font-size:12px; color:var(--rp-ink3)}
+.rp-op-wait{font-size:12.5px; color:var(--rp-ink3); padding:14px 0}
+.rp-op-err{font-size:12.5px; color:var(--rp-crit); padding:10px 0}
+/* 편집 중 표시 — 어디를 고칠 수 있는지 보이게 */
+.rp-sheet [contenteditable="true"]{outline:none; background:#FFFDF5;
+  box-shadow:inset 0 -1px 0 var(--rp-amber); border-radius:3px; padding:1px 3px; margin:0 -3px}
+.rp-op-tools{display:flex; gap:7px; margin-top:16px; flex-wrap:wrap}
+.rp-op-tools button{border:1px solid var(--rp-ac-line); background:#fff; color:var(--rp-ac);
+  border-radius:8px; padding:5px 11px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit}
+.rp-op-tools button.warn{border-color:var(--rp-rule); color:var(--rp-ink3)}
 .rp-foot{margin-top:34px; padding-top:15px; border-top:1px solid var(--rp-rule);
   font-size:10.5px; color:var(--rp-ink3); line-height:1.7}
 .rp-foot b{color:var(--rp-ink2)}
@@ -958,8 +982,23 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   body.rp-printing .rp-tblwrap{break-inside:avoid; page-break-inside:avoid}
   body.rp-printing .rp-tblwrap{overflow:visible}
   body.rp-printing .rp-sheet table{min-width:0}
+  body.rp-printing .rp-op-tools{display:none !important}
   .rp-sheet{-webkit-print-color-adjust:exact; print-color-adjust:exact}
 }
+
+/* 🖼 이미지로 저장 — 캡처하는 동안만 켜지는 상태.
+   화면 너비와 상관없이 항상 같은 그림이 나오게 종이를 데스크톱 폭으로 고정한다
+   (폰에서 만들면 2단 타일에 좁은 여백으로 찍혀 학부모께 보내기 어색하다).
+   화면 밖으로 밀어 두는 이유는 그 순간 화면이 출렁이는 것을 감추기 위해서다. */
+body.rp-capturing #rp-content{position:fixed !important; left:-12000px !important; top:0 !important;
+  width:940px !important; z-index:-1 !important}
+body.rp-capturing .rp-sheet{width:860px !important; max-width:860px !important; margin:0 !important;
+  padding:38px 44px 46px !important; box-shadow:none !important; border-radius:0 !important}
+body.rp-capturing .rp-tiles{grid-template-columns:repeat(4,1fr) !important}
+body.rp-capturing .rp-cols{grid-template-columns:1fr 1fr !important}
+body.rp-capturing .rp-tblwrap{overflow:visible !important}
+body.rp-capturing .rp-op-tools{display:none !important}
+body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important; box-shadow:none !important}
 </style>
 
 
@@ -983,6 +1022,7 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
     <button class="tab-btn director-only" onclick="showSection('shinmungo',this)">신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
     <span class="tab-divider" aria-hidden="true"></span>
     <button class="tab-btn" onclick="showSection('students',this)">학생</button>
+    <button class="tab-btn" onclick="showSection('schoolcal',this)">학사일정</button>
     <button class="tab-btn" data-group="learn" onclick="showGroup('learn',this)">학습<span class="tab-caret" aria-hidden="true">▾</span></button>
     <button class="tab-btn hide-mobile" onclick="showSection('schedule',this)">시간표</button>
     <button class="tab-btn" data-group="notify" onclick="showGroup('notify',this)">알림<span class="tab-caret" aria-hidden="true">▾</span></button>
@@ -1339,6 +1379,22 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 
 </div>
 
+<!-- 학사일정 (나이스 학사일정 API) -->
+<div id="sec-schoolcal" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700;color:#1E1B4B">🗓 학사일정</div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <span id="scal-status" style="font-size:11.5px;color:#6C5DD3"></span>
+      <button onclick="scalRefreshAll()"
+        style="padding:6px 14px;background:#6C5DD3;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">
+        ↻ 전체 새로고침
+      </button>
+    </div>
+  </div>
+  <div id="scal-toolbar" class="card" style="margin-bottom:12px;display:none"></div>
+  <div id="scal-body"></div>
+</div>
+
 <!-- 문자 발신내역 -->
 <div id="sec-smslog" class="section">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -1671,8 +1727,10 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
         style="background:#6C5DD3;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">만들기</button>
       <button id="rp-print-btn" onclick="window.reportPrint()" disabled
         style="background:#ECFDF5;color:#059669;border:1px solid #A7F3D0;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖨 PDF로 저장</button>
+      <button id="rp-img-btn" onclick="window.reportImage()" disabled title="리포트 전체를 그림 파일(PNG) 한 장으로 저장합니다"
+        style="background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖼 이미지로 저장</button>
     </div>
-    <div style="font-size:11px;color:#9CA3AF">입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다.</div>
+    <div style="font-size:11px;color:#9CA3AF">입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다. <b>이미지로 저장</b>은 카카오톡으로 바로 보내기 좋은 그림 파일(PNG)로 내려받습니다.</div>
   </div>
   <div id="rp-content"><div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생과 기간을 고르고 <b>만들기</b>를 누르세요</div></div>
 </div>
@@ -2148,7 +2206,27 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
             style="border:none;border-bottom:1px dashed var(--color-border-secondary);background:transparent;color:var(--color-text-primary);outline:none;width:100px;padding:0 2px 2px">
           <div id="sched-modal-seat" style="font-size:16px;font-weight:700;color:#6C5DD3"></div>
         </div>
-        <div id="edit-phone-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+        <!-- 학교·학년 — 이름 바로 아래(신원 정보), 연락처·이용기간보다 위. 학년은 학습분석 또래 비교의 기준이라
+             '학습분석' 탭의 학년 선택(sa-grade-sel)과 같은 students.grade 를 쓴다(어느 쪽에서 고쳐도 같은 값). -->
+        <div id="edit-school-wrap" style="display:grid;grid-template-columns:1.6fr 1fr;gap:8px;margin-top:10px">
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">🏫 학교</div>
+            <input id="edit-school" type="text" list="edit-school-list" maxlength="20" placeholder="예: 새봄고"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
+            <!-- 이미 등록된 학교 목록(openScheduleModal에서 채움) — 같은 학교를 매번 다르게 적는 걸 막는다 -->
+            <datalist id="edit-school-list"></datalist>
+          </div>
+          <div>
+            <div style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">🎓 학년</div>
+            <select id="edit-grade"
+              style="width:100%;padding:5px 8px;border:0.5px solid var(--color-border-secondary);border-radius:6px;font-size:12px;background:var(--color-background-primary);color:var(--color-text-primary);outline:none;box-sizing:border-box">
+              <option value="">미지정</option>
+              <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
+              <option value="N수">N수</option>
+            </select>
+          </div>
+        </div>
+        <div id="edit-phone-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px">
           <div>
             <div id="edit-phone-label" style="font-size:11px;color:var(--color-text-secondary);margin-bottom:3px">📱 학생 번호</div>
             <div style="display:flex;align-items:stretch;border:0.5px solid var(--color-border-secondary);border-radius:6px;overflow:hidden;background:var(--color-background-primary)">
@@ -2934,6 +3012,7 @@ window.showSection = function(id,btn){
   if (id === 'analytics') { if (window.studyAnalyticsInit) window.studyAnalyticsInit(); }
   if (id === 'report') { if (window.reportInit) window.reportInit(); }
   if (id === 'students') { if (window.refreshSummerMinutes) window.refreshSummerMinutes(); }  // ⏱ SUMMER 누적 갱신
+  if (id === 'schoolcal') { if (window.scalInit) window.scalInit(); }
   try {
     sessionStorage.setItem('saebom_active_tab', id);
     if (SECTION_GROUP[id]) sessionStorage.setItem('saebom_group_' + SECTION_GROUP[id], id);
@@ -8364,6 +8443,7 @@ function _studentDocData(student, ns) {
     ...(student.withdrawAt  ? { withdrawAt:  String(student.withdrawAt) } : {}),
     ...(student.nextStudent ? { nextStudent: student.nextStudent } : {}),
     ...(student.grade       ? { grade:       String(student.grade) } : {}),
+    ...(student.school      ? { school:      String(student.school) } : {}),
     updatedAt: window._fsServerTimestamp()
   };
 }
@@ -8672,9 +8752,29 @@ function openScheduleModal(idx) {
   document.getElementById('edit-fee-memo').value = s.feeMemo || '';
   setEditGender(s.gender || 'f');
 
+  // 학교 — 이미 쓰인 학교 이름을 자동완성 후보로 (같은 학교를 '새봄고'/'새봄고등학교'로 갈라 적는 걸 막는다)
+  document.getElementById('edit-school').value = s.school || '';
+  const schools = [...new Set(STUDENTS.map(st => (st.school || '').trim()).filter(Boolean))].sort();
+  const dl = document.getElementById('edit-school-list');
+  dl.innerHTML = '';
+  schools.forEach(sc => dl.appendChild(new Option('', sc)));   // value만 채운 <option> — 문자열 조립 대신 DOM으로
+
+  // 학년 — 저장된 값이 기본 보기(미지정·고1~N수)에 없으면 그 값을 옵션으로 덧붙인다.
+  // 안 하면 select가 빈값으로 떨어지고, 저장하는 순간 원래 학년이 조용히 지워진다.
+  // 덧붙인 옵션은 다음 학생을 열 때 걷어낸다(학생마다 하나씩 쌓이지 않도록).
+  const gradeSel = document.getElementById('edit-grade');
+  const GRADE_BASE_N = 5;   // 미지정/고1/고2/고3/N수
+  while (gradeSel.options.length > GRADE_BASE_N) gradeSel.remove(GRADE_BASE_N);
+  const curGrade = s.grade || '';
+  if (curGrade && !Array.from(gradeSel.options).some(o => o.value === curGrade)) {
+    gradeSel.add(new Option(curGrade, curGrade));
+  }
+  gradeSel.value = curGrade;
+
   // 관리자: 부모님번호·이용기간 숨기고, 전화번호 라벨을 '관리자 번호'로, 본문을 근무요일 편집으로 대체
   const isAdmin = parseInt(s.seat) >= 54;
   document.getElementById('edit-parent-wrap').style.display = isAdmin ? 'none' : '';
+  document.getElementById('edit-school-wrap').style.display = isAdmin ? 'none' : 'grid';
   document.getElementById('edit-dates-wrap').style.display = isAdmin ? 'none' : '';
   document.getElementById('edit-fee-wrap').style.display = isAdmin ? 'none' : '';
   document.getElementById('edit-phone-label').textContent = isAdmin ? '📱 관리자 번호' : '📱 학생 번호';
@@ -9195,6 +9295,8 @@ function saveSchedule(commitBase) {
   s.startDate = document.getElementById('edit-start-date').value || '';
   s.fee       = parseInt(document.getElementById('edit-fee').value, 10) || 0;
   s.feeMemo   = document.getElementById('edit-fee-memo').value.trim() || '';
+  s.school    = document.getElementById('edit-school').value.trim() || '';
+  s.grade     = document.getElementById('edit-grade').value || '';   // 학습분석 또래 비교의 기준
 
   const isAdmin = parseInt(s.seat) >= 54;
   if (isAdmin) {
@@ -10365,6 +10467,614 @@ window.clearAllScheduleAlerts = function() {
   if (window.renderScheduleAlerts) window.renderScheduleAlerts();
 };
 
+// ══════════════════════════════════════════════════════════════════════
+// 학사일정 — 나이스(NEIS) 교육정보 개방포털
+//
+// 학생 문서의 school(학교)·grade(학년)를 기준으로 학교별 학사일정을 모아 보여준다.
+// 출처는 open.neis.go.kr 의 공개 API 두 개다.
+//   schoolInfo      학교 이름 → 시도교육청코드(ATPT_OFCDC_SC_CODE) + 학교코드(SD_SCHUL_CODE)
+//   SchoolSchedule  그 두 코드로 학년도 전체 일정
+// 응답에 Access-Control-Allow-Origin:* 이 있어 브라우저에서 바로 부른다(중계 서버 불필요).
+//
+// ★인증키(KEY)가 없으면 어떤 요청이든 '앞 5건'만 돌아온다. pIndex 페이징도 무시된다
+//   (2026-08-13 확인: pIndex=1,2,3… 이 전부 같은 5건). 그래서 키가 없으면 기능이 성립하지
+//   않는다 → 키 없을 때는 목록을 그리지 않고 발급 안내를 띄운다.
+//
+// 저장: school_calendars/{학교명}  = 학교 코드 매핑 + 받아둔 일정(캐시)
+//       school_calendars/_config   = { neisKey }
+// 매번 NEIS를 부르지 않고 캐시를 읽는다. 갱신은 '새로고침'을 누를 때만 한다.
+// ══════════════════════════════════════════════════════════════════════
+const SCAL = {
+  key: '',          // NEIS 인증키
+  schools: {},      // 학교명 → { name, neisName, atptCode, schulCode, ay, events:[], fetchedAt }
+  loaded: false,
+  view: 'school',   // 'school' | 'student'
+  grade: '',        // '' | 고1 | 고2 | 고3  (빈값=전체)
+  sort: 'name',     // 학교별: name|count|next   학생별: seat|name|school|grade
+  q: '',
+  cats: null,       // 켜 둔 분류 id 집합 (null이면 기본값으로 초기화)
+};
+
+// 행사 분류 — EVENT_NM 에 아래 키워드가 있으면 그 분류로 본다. 위에서부터 먼저 맞는 것이 이긴다.
+//
+// ★'중간고사/기말고사'로 적는 학교는 오히려 드물다. 2026학년도 수원 관내 고교 10곳을 받아 보니
+//   '1차정기시험'(매탄) · '1학기 1차 정기시험'(영덕·수원) · '1차 정기고사'(조원) ·
+//   '1학기 1차 지필평가'(청명) · '1차지필평가(1,2,3)'(망포) · '2차지필(3학년)'(태장) ·
+//   '중간고사(1,2,3)'(수성) 처럼 제각각이다. 가장 흔한 표기는 '정기시험'이고 '중간/기말고사'는 소수다.
+//   학기당 1차=중간, 2차=기말이고, 2학기를 3·4차로 이어 세는 학교가 있어 그것도 받는다.
+//   번호 없는 '지필평가'·'정기시험'·'고사'는 갈래를 알 수 없으므로 모의·기타시험으로 보낸다.
+//   ※ 위 10곳은 모두 시험을 나이스에 올려 뒀다. 그래도 안 올리는 학교가 있을 수 있어
+//     scalHasExam()으로 '시험만 비어 있음'을 화면에 따로 알린다(일정 전체가 빈 것과 구분).
+const SCAL_CATS = [
+  { id:'vac',    label:'방학',        color:'#0284C7', bg:'#E0F2FE', kw:['방학'] },
+  { id:'open',   label:'개학',        color:'#15803D', bg:'#DCFCE7', kw:['개학','시업식','입학식'] },
+  { id:'mid',    label:'중간고사',    color:'#DC2626', bg:'#FEE2E2', kw:['중간고사','중간평가','1차 지필','1차지필','3차 지필','3차지필','1차 정기','1차정기','3차 정기','3차정기'] },
+  { id:'fin',    label:'기말고사',    color:'#9F1239', bg:'#FFE4E6', kw:['기말고사','기말평가','2차 지필','2차지필','4차 지필','4차지필','2차 정기','2차정기','4차 정기','4차정기'] },
+  { id:'exam',   label:'모의·기타시험', color:'#C2410C', bg:'#FFEDD5', kw:['학력평가','전국연합','모의고사','모의평가','수학능력','수능','지필','정기시험','고사'] },
+  { id:'sports', label:'체육대회',    color:'#6D28D9', bg:'#EDE9FE', kw:['체육대회','체육한마당','체육페스티벌','운동회','체육행사','스포츠','체육'] },
+  { id:'event',  label:'학교행사',    color:'#BE185D', bg:'#FCE7F3', kw:['축제','수학여행','수련','현장체험','졸업','공연','발표회','한마당','개교기념','진로','상담','총회'] },
+  { id:'off',    label:'휴업일',      color:'#64748B', bg:'#F1F5F9', kw:['휴업','재량','공휴일','대체'] },
+  { id:'etc',    label:'기타',        color:'#475569', bg:'#F1F5F9', kw:[] },
+];
+// 기본으로 켜 두는 분류 — 휴업일은 토요휴업일이 매주 잡혀 목록을 덮어버리므로 꺼 둔다.
+const SCAL_CATS_DEFAULT = ['vac','open','mid','fin','exam','sports','event','etc'];
+
+const _scEsc = s => String(s == null ? '' : s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+// 행사 객체(또는 이름)를 분류로. 이름으로 못 가른 것만 나이스의 휴업일 구분(SBTR_DD_SC_NM)을 본다.
+// 순서가 중요하다 — 수능일은 '학교장재량휴업일'이기도 해서, 구분을 먼저 보면 시험이 휴업일에 묻힌다.
+function scalCat(ev) {
+  const s = String((ev && ev.nm != null) ? ev.nm : (ev || ''));
+  for (const c of SCAL_CATS) if (c.kw.length && c.kw.some(k => s.includes(k))) return c;
+  const sub = (ev && typeof ev === 'object' && ev.sub) ? String(ev.sub) : '';
+  if (sub.includes('휴업') || sub.includes('공휴')) return SCAL_CATS.find(c => c.id === 'off');
+  return SCAL_CATS[SCAL_CATS.length - 1];
+}
+
+// 학년도 — 3월 시작. 1~2월은 아직 전년도 학년도다(2027-01은 2026학년도).
+function scalAY(d = new Date()) {
+  return (d.getMonth() + 1) >= 3 ? d.getFullYear() : d.getFullYear() - 1;
+}
+function scalRange(ay) {
+  const ny = ay + 1;
+  const leap = (ny % 4 === 0 && ny % 100 !== 0) || ny % 400 === 0;
+  return { from: `${ay}0301`, to: `${ny}02${leap ? 29 : 28}` };
+}
+// 'YYYYMMDD' → '8/13(목)'
+function scalFmtD(ymd) {
+  const s = String(ymd);
+  const dt = new Date(+s.slice(0,4), +s.slice(4,6) - 1, +s.slice(6,8));
+  return `${dt.getMonth()+1}/${dt.getDate()}(${['일','월','화','수','목','금','토'][dt.getDay()]})`;
+}
+function scalYmdAdd(ymd, n) {
+  const s = String(ymd);
+  const d = new Date(+s.slice(0,4), +s.slice(4,6) - 1, +s.slice(6,8) + n);
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+// 기간 행사의 마지막 날 (하루짜리면 그날)
+function scalEnd(ev) { return ev.de || ev.d; }
+// 하루면 '8/13(목)', 기간이면 '7/21~8/12 (23일)'
+function scalFmtSpan(ev) {
+  if (!ev.de || ev.de === ev.d) return scalFmtD(ev.d);
+  const a = String(ev.d), b = String(ev.de);
+  const days = Math.round((new Date(+b.slice(0,4), +b.slice(4,6)-1, +b.slice(6,8))
+                         - new Date(+a.slice(0,4), +a.slice(4,6)-1, +a.slice(6,8))) / 86400000) + 1;
+  return `${+a.slice(4,6)}/${+a.slice(6,8)}~${+b.slice(4,6)}/${+b.slice(6,8)} <span style="font-weight:600;opacity:.7">${days}일</span>`;
+}
+
+// ★나이스는 여러 날 걸친 행사를 '하루에 한 줄씩' 준다. 매탄고 2026학년도는 189건 중 78건이
+//   방학이었다(여름 23줄 + 겨울 54줄). 그대로 두면 목록이 방학으로 덮여 시험·행사가 안 보인다.
+//   이름과 대상 학년이 같고 날짜가 하루씩 이어지면 한 줄(d~de)로 접는다.
+//   ※ 같은 날짜에 여러 행사가 있어 정렬만으로는 이어짐을 못 보므로, 먼저 (이름+학년)으로 묶는다.
+function scalMergeRuns(events) {
+  const groups = new Map();
+  events.forEach(ev => {
+    const k = ev.nm + '|' + ev.g;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(ev);
+  });
+  const out = [];
+  groups.forEach(list => {
+    list.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+    let cur = null;
+    list.forEach(ev => {
+      if (cur && scalYmdAdd(scalEnd(cur), 1) === ev.d) { cur.de = ev.d; return; }
+      cur = Object.assign({}, ev);
+      out.push(cur);
+    });
+  });
+  return out.sort((a, b) => a.d < b.d ? -1 : a.d > b.d ? 1 : 0);
+}
+function scalToday() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+}
+// 문서 ID로 못 쓰는 글자만 정리. Firestore ID는 '/' 금지, '__' 로 시작 금지.
+function scalDocId(name) {
+  return (String(name || '').trim().replace(/\//g,'_').replace(/^__/,'_')) || '_';
+}
+
+// ── NEIS 호출 ──
+// 응답 모양이 두 가지다. 성공하면 { <경로>: [ {head:[...]}, {row:[...]} ] },
+// 조회 결과가 없거나 키가 틀리면 { RESULT: { CODE, MESSAGE } } 만 온다.
+async function scalNeis(path, params) {
+  if (!SCAL.key) throw new Error('NEIS 인증키가 없습니다');
+  const qs = new URLSearchParams({ Type:'json', KEY: SCAL.key, pIndex:'1', pSize:'1000', ...params });
+  const res = await fetch(`https://open.neis.go.kr/hub/${path}?${qs}`);
+  if (!res.ok) throw new Error(`NEIS 응답 오류 ${res.status}`);
+  const j = await res.json();
+  const fail = (r) => {
+    if (!r || r.CODE === 'INFO-000') return null;
+    if (r.CODE === 'INFO-200') return [];          // 조회 결과 없음 — 오류가 아니다
+    throw new Error(`${r.MESSAGE || '알 수 없는 오류'} (${r.CODE})`);
+  };
+  const top = fail(j.RESULT);
+  if (top) return top;
+  if (j.RESULT) return [];
+  const box = j[path];
+  if (!Array.isArray(box)) throw new Error('NEIS 응답 형식이 예상과 다릅니다');
+  const inner = fail(box[0] && box[0].head && box[0].head[1] && box[0].head[1].RESULT);
+  if (inner) return inner;
+  return (box[1] && box[1].row) || [];
+}
+
+// 학교 이름으로 검색 — '매탄고'처럼 줄여 적어도 찾아진다(부분 일치).
+async function scalSearchSchool(name) {
+  const rows = await scalNeis('schoolInfo', { SCHUL_NM: String(name).trim() });
+  return rows.map(r => ({
+    neisName: r.SCHUL_NM, atptCode: r.ATPT_OFCDC_SC_CODE, schulCode: r.SD_SCHUL_CODE,
+    office: r.ATPT_OFCDC_SC_NM, kind: r.SCHUL_KND_SC_NM, addr: r.ORG_RDNMA || '',
+  }));
+}
+
+// 학년도 전체 일정. 같은 날 같은 행사가 학년별로 여러 줄 오는 학교가 있어 (날짜+행사명)으로
+// 합치고 학년 플래그는 OR 로 모은다. 안 합치면 목록에 같은 줄이 세 번 뜬다.
+async function scalFetchEvents(rec) {
+  const ay = scalAY();
+  const { from, to } = scalRange(ay);
+  const rows = await scalNeis('SchoolSchedule', {
+    ATPT_OFCDC_SC_CODE: rec.atptCode, SD_SCHUL_CODE: rec.schulCode,
+    AA_FROM_YMD: from, AA_TO_YMD: to,
+  });
+  const map = new Map();
+  rows.forEach(r => {
+    const k = r.AA_YMD + '|' + r.EVENT_NM;
+    const g = [r.ONE_GRADE_EVENT_YN, r.TW_GRADE_EVENT_YN, r.THREE_GRADE_EVENT_YN]
+      .map(v => v === 'Y' ? 'Y' : 'N');
+    const cur = map.get(k);
+    if (cur) {
+      cur.g = cur.g.split('').map((v, i) => (v === 'Y' || g[i] === 'Y') ? 'Y' : 'N').join('');
+    } else {
+      map.set(k, {
+        d: String(r.AA_YMD), nm: String(r.EVENT_NM || '').trim(), g: g.join(''),
+        sub: r.SBTR_DD_SC_NM && r.SBTR_DD_SC_NM !== '해당없음' ? r.SBTR_DD_SC_NM : '',
+        memo: String(r.EVENT_CNTNT || '').trim(),
+      });
+    }
+  });
+  return { ay, events: scalMergeRuns([...map.values()]) };
+}
+
+// ── 저장·불러오기 ──
+async function scalLoad(force) {
+  if (SCAL.loaded && !force) return;
+  const db = await window.waitDb();
+  if (!db) throw new Error('DB 연결 대기 시간 초과');
+  const snap = await window._fs.getDocs(window._fs.collection(db, 'school_calendars'));
+  SCAL.schools = {};
+  snap.forEach(d => {
+    const v = d.data() || {};
+    if (d.id === '_config') { SCAL.key = v.neisKey || ''; return; }
+    const nm = v.name || d.id;
+    SCAL.schools[nm] = {
+      name: nm, neisName: v.neisName || '', atptCode: v.atptCode || '', schulCode: v.schulCode || '',
+      office: v.office || '', ay: v.ay || 0, events: Array.isArray(v.events) ? v.events : [],
+      fetchedAt: v.fetchedAt || '',
+    };
+  });
+  SCAL.loaded = true;
+}
+async function scalSaveSchool(rec) {
+  const db = await window.waitDb();
+  await window._fsSetDoc(window._fsDoc(db, 'school_calendars', scalDocId(rec.name)), {
+    name: rec.name, neisName: rec.neisName || '', atptCode: rec.atptCode || '',
+    schulCode: rec.schulCode || '', office: rec.office || '', ay: rec.ay || 0,
+    events: rec.events || [], fetchedAt: rec.fetchedAt || '',
+    updatedAt: window._fsServerTimestamp(),
+  });
+}
+window.scalSaveKey = async function() {
+  const el = document.getElementById('scal-key-input');
+  const key = (el.value || '').trim();
+  if (!key) { showAdminToast('⚠️ 인증키를 입력해 주세요'); return; }
+  try {
+    const db = await window.waitDb();
+    await window._fsSetDoc(window._fsDoc(db, 'school_calendars', '_config'),
+      { neisKey: key, updatedAt: window._fsServerTimestamp() });
+    SCAL.key = key;
+    showAdminToast('✅ 인증키를 저장했습니다');
+    scalRender();
+  } catch (e) {
+    showAdminToast('❌ 저장 실패: ' + e.message);
+  }
+};
+
+// ── 학생 명단에서 학교 목록 뽑기 ──
+// 관리자 좌석(54번~)은 학생이 아니므로 뺀다.
+function scalStudents() {
+  return (window.STUDENTS || []).filter(s => s.name && parseInt(s.seat) < 54);
+}
+function scalSchoolNames() {
+  const set = new Set(scalStudents().map(s => (s.school || '').trim()).filter(Boolean));
+  Object.keys(SCAL.schools).forEach(n => set.add(n));   // 학생은 없지만 받아둔 학교도 유지
+  return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+}
+function scalStudentsOf(school) {
+  return scalStudents().filter(s => (s.school || '').trim() === school)
+    .sort((a, b) => parseInt(a.seat) - parseInt(b.seat));
+}
+
+// ── 필터 ──
+function scalGradeIdx(grade) {
+  return { '고1':0, '고2':1, '고3':2 }[grade];   // 그 밖(N수·미지정)은 undefined → 학년 필터 안 함
+}
+function scalVisibleEvents(rec, grade) {
+  if (!rec || !rec.events) return [];
+  const gi = scalGradeIdx(grade);
+  const q = SCAL.q.trim();
+  return rec.events.filter(ev => {
+    if (!SCAL.cats.has(scalCat(ev).id)) return false;
+    if (gi != null && ev.g && ev.g[gi] !== 'Y') return false;
+    if (q && !ev.nm.includes(q)) return false;
+    return true;
+  });
+}
+// 진행 중인 기간 행사(방학 한가운데 등)도 '다가오는 일정'으로 본다 — 끝나야 지난 것이다.
+function scalUpcoming(evs, t) { return evs.filter(ev => scalEnd(ev) >= t); }
+function scalNextEvent(rec, grade) {
+  const t = scalToday();
+  return scalUpcoming(scalVisibleEvents(rec, grade), t)[0] || null;
+}
+// 이 학교가 시험 일정을 나이스에 올렸는가 (안 올린 학교가 절반쯤 된다)
+function scalHasExam(rec) {
+  const evs = (rec && rec.events) || [];
+  return evs.some(ev => ev && (scalCat(ev).id === 'mid' || scalCat(ev).id === 'fin'));
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// 그리기
+// ══════════════════════════════════════════════════════════════════════
+window.scalInit = async function() {
+  if (SCAL.cats === null) SCAL.cats = new Set(SCAL_CATS_DEFAULT);
+  const body = document.getElementById('scal-body');
+  if (body && !SCAL.loaded) body.innerHTML = `<div style="padding:40px;text-align:center;color:#8F82E4;font-size:13px">불러오는 중…</div>`;
+  try {
+    await scalLoad();
+  } catch (e) {
+    if (body) body.innerHTML = `<div style="padding:40px;text-align:center;color:#C62828;font-size:13px">❌ 불러오기 실패: ${_scEsc(e.message)}</div>`;
+    return;
+  }
+  scalRender();
+};
+
+window.scalSetView = function(v) { SCAL.view = v; SCAL.sort = (v === 'school' ? 'name' : 'seat'); scalRender(); };
+window.scalSetGrade = function(g) { SCAL.grade = g; scalRender(); };
+window.scalSetSort = function(s) { SCAL.sort = s; scalRender(); };
+window.scalToggleCat = function(id) {
+  if (SCAL.cats.has(id)) SCAL.cats.delete(id); else SCAL.cats.add(id);
+  scalRender();
+};
+window.scalSearch = function(v) { SCAL.q = v || ''; scalRender(); };
+
+function scalRender() {
+  scalRenderToolbar();
+  const body = document.getElementById('scal-body');
+  if (!body) return;
+  if (!SCAL.key) { body.innerHTML = scalKeyGuideHtml(); return; }
+  body.innerHTML = SCAL.view === 'school' ? scalRenderBySchool() : scalRenderByStudent();
+}
+
+// 인증키가 없으면 목록 대신 발급 안내. (키 없이는 앞 5건만 와서 일정이 성립하지 않는다)
+function scalKeyGuideHtml() {
+  return `
+  <div class="card" style="max-width:640px;margin:0 auto">
+    <div style="font-size:14px;font-weight:700;color:#1E1B4B;margin-bottom:8px">🔑 나이스 인증키가 필요합니다</div>
+    <div style="font-size:12.5px;color:#4A3FA8;line-height:1.75;margin-bottom:14px">
+      학사일정은 나이스 교육정보 개방포털에서 받아옵니다. 인증키 없이 부르면 학교마다
+      <b>앞 5건</b>만 와서 일정을 채울 수 없습니다(연간 200건 안팎).<br>
+      <a href="https://open.neis.go.kr" target="_blank" rel="noopener" style="color:#6C5DD3;font-weight:700">open.neis.go.kr →</a>
+      회원가입 후 <b>인증키 신청</b>에서 즉시 무료 발급됩니다.
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input id="scal-key-input" type="text" autocomplete="off" placeholder="발급받은 인증키를 붙여넣으세요"
+        style="flex:1;min-width:240px;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;background:#F8FAFF;outline:none">
+      <button onclick="scalSaveKey()"
+        style="padding:9px 20px;background:#6C5DD3;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">저장</button>
+    </div>
+    <div style="font-size:11px;color:#8F82E4;margin-top:10px">
+      ⚠️ 키는 Firestore(school_calendars/_config)에 저장돼 모든 관리자 기기에서 함께 씁니다.
+    </div>
+  </div>`;
+}
+
+function scalRenderToolbar() {
+  const bar = document.getElementById('scal-toolbar');
+  if (!bar) return;
+  if (!SCAL.key) { bar.style.display = 'none'; return; }
+  bar.style.display = '';
+  const seg = (cur, val, label, fn) =>
+    `<button onclick="${fn}('${val}')" style="padding:6px 13px;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;
+      background:${cur === val ? '#6C5DD3' : '#EEF2FF'};color:${cur === val ? '#fff' : '#4A3FA8'}">${label}</button>`;
+
+  const sorts = SCAL.view === 'school'
+    ? [['name','학교명'],['count','재원생 수'],['next','가까운 일정']]
+    : [['seat','좌석'],['name','이름'],['school','학교'],['grade','학년']];
+
+  bar.innerHTML = `
+    <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;gap:5px;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#8F82E4">보기</span>
+        ${seg(SCAL.view,'school','학교별','scalSetView')}${seg(SCAL.view,'student','학생별','scalSetView')}
+      </div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#8F82E4">학년</span>
+        ${seg(SCAL.grade,'','전체','scalSetGrade')}${seg(SCAL.grade,'고1','고1','scalSetGrade')}${seg(SCAL.grade,'고2','고2','scalSetGrade')}${seg(SCAL.grade,'고3','고3','scalSetGrade')}
+      </div>
+      <div style="display:flex;gap:5px;align-items:center">
+        <span style="font-size:11px;font-weight:700;color:#8F82E4">정렬</span>
+        ${sorts.map(([v,l]) => seg(SCAL.sort, v, l, 'scalSetSort')).join('')}
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+        <input type="text" value="${_scEsc(SCAL.q)}" oninput="scalSearch(this.value)" placeholder="행사명 검색"
+          style="width:150px;padding:6px 10px;border:1.5px solid #C7C0EE;border-radius:8px;font-size:12px;outline:none">
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:10px;padding-top:10px;border-top:1px solid #EEF2FF">
+      <span style="font-size:11px;font-weight:700;color:#8F82E4;margin-right:2px">종류</span>
+      ${SCAL_CATS.map(c => {
+        const on = SCAL.cats.has(c.id);
+        return `<button onclick="scalToggleCat('${c.id}')" style="padding:4px 11px;border-radius:20px;cursor:pointer;font-size:11.5px;font-weight:700;
+          border:1.5px solid ${on ? c.color : '#DDD8F5'};background:${on ? c.bg : '#fff'};color:${on ? c.color : '#B0A8D8'}">${c.label}</button>`;
+      }).join('')}
+    </div>`;
+}
+
+// 행사 한 줄
+function scalEventRow(ev, showGrade) {
+  const c = scalCat(ev);
+  const today = scalToday();
+  const past = scalEnd(ev) < today;                        // 기간 행사는 끝나야 지난 것
+  const now = !past && ev.d <= today && scalEnd(ev) >= today;  // 오늘 진행 중
+  const gtxt = ev.g && ev.g !== 'YYY'
+    ? ['1','2','3'].filter((_, i) => ev.g[i] === 'Y').map(n => '고' + n).join('·')
+    : '';
+  return `<div style="display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid #F4F2FD;opacity:${past ? 0.45 : 1}">
+    <div style="flex:0 0 104px;font-size:12px;font-weight:700;color:${past ? '#A9A2C9' : '#1E1B4B'}">${scalFmtSpan(ev)}</div>
+    <div style="flex:0 0 66px"><span style="display:inline-block;padding:2px 8px;border-radius:20px;font-size:10.5px;font-weight:700;background:${c.bg};color:${c.color}">${c.label}</span></div>
+    ${now ? `<div style="flex:0 0 auto;font-size:10px;font-weight:700;color:#fff;background:#16A34A;border-radius:5px;padding:1px 6px">진행 중</div>` : ''}
+    <div style="flex:1;font-size:12.5px;color:#1E1B4B;min-width:0">${_scEsc(ev.nm)}${ev.memo ? `<span style="color:#8F82E4"> · ${_scEsc(ev.memo)}</span>` : ''}</div>
+    ${showGrade && gtxt ? `<div style="flex:0 0 auto;font-size:10.5px;font-weight:700;color:#6C5DD3;background:#EEF2FF;border-radius:6px;padding:2px 7px">${gtxt}</div>` : ''}
+  </div>`;
+}
+
+// ── 학교별 ──
+function scalRenderBySchool() {
+  const names = scalSchoolNames();
+  if (!names.length) {
+    return `<div class="card" style="text-align:center;padding:36px;color:#8F82E4;font-size:13px">
+      아직 학교가 등록된 학생이 없습니다.<br>
+      <span style="font-size:12px">학생 탭에서 학생을 열어 🏫 학교를 채우면 여기에 나타납니다.</span></div>`;
+  }
+  const rows = names.map(n => {
+    const rec = SCAL.schools[n] || null;
+    const studs = scalStudentsOf(n);
+    const evs = rec ? scalVisibleEvents(rec, SCAL.grade) : [];
+    const next = rec ? scalNextEvent(rec, SCAL.grade) : null;
+    return { name: n, rec, studs, evs, next };
+  });
+  if (SCAL.sort === 'count') rows.sort((a, b) => b.studs.length - a.studs.length || a.name.localeCompare(b.name, 'ko'));
+  else if (SCAL.sort === 'next') rows.sort((a, b) => (a.next ? a.next.d : '99999999').localeCompare(b.next ? b.next.d : '99999999'));
+  else rows.sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+
+  // 버튼에 학교 이름을 문자열로 박으면 따옴표·역슬래시가 든 이름에서 onclick이 깨진다.
+  // 그린 순서를 그대로 들고 있다가 번호로 넘긴다.
+  SCAL._names = rows.map(r => r.name);
+
+  return rows.map((r, ri) => {
+    const gcount = ['고1','고2','고3'].map(g => [g, r.studs.filter(s => s.grade === g).length]).filter(([, n]) => n);
+    const etc = r.studs.length - gcount.reduce((a, [, n]) => a + n, 0);
+    const sub = [...gcount.map(([g, n]) => `${g} ${n}`), etc ? `기타 ${etc}` : ''].filter(Boolean).join(' · ');
+    const t = scalToday();
+    const upcoming = scalUpcoming(r.evs, t);
+    const shown = upcoming.length ? upcoming : r.evs.slice(-8);
+    return `
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px">
+        <div style="min-width:0">
+          <div style="font-size:14px;font-weight:700;color:#1E1B4B">🏫 ${_scEsc(r.name)}
+            ${r.rec && r.rec.neisName && r.rec.neisName !== r.name ? `<span style="font-size:11px;font-weight:600;color:#8F82E4">(${_scEsc(r.rec.neisName)})</span>` : ''}
+          </div>
+          <div style="font-size:11.5px;color:#6C5DD3;margin-top:2px">재원생 ${r.studs.length}명${sub ? ' · ' + sub : ''}${r.rec && r.rec.fetchedAt ? ` · 갱신 ${_scEsc(r.rec.fetchedAt)}` : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0">
+          <button onclick="scalPickSchoolAt(${ri})"
+            style="padding:5px 12px;background:#fff;border:1.5px solid #C7C0EE;border-radius:8px;font-size:11.5px;color:#4A3FA8;cursor:pointer;font-weight:600">학교 찾기</button>
+          <button onclick="scalRefreshAt(${ri})"
+            style="padding:5px 12px;background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:8px;font-size:11.5px;color:#4A3FA8;cursor:pointer;font-weight:600">↻ 새로고침</button>
+        </div>
+      </div>
+      ${!r.rec || !r.rec.schulCode
+        ? `<div style="padding:16px;text-align:center;font-size:12.5px;color:#B45309;background:#FFFBEB;border-radius:10px">
+             나이스에서 이 학교를 아직 찾지 못했습니다 — <b>학교 찾기</b>를 눌러 지정해 주세요.</div>`
+        : !r.rec.events.length
+          ? `<div style="padding:16px;text-align:center;font-size:12.5px;color:#8F82E4">받아둔 일정이 없습니다 — <b>새로고침</b>을 눌러 주세요.</div>`
+          : !shown.length
+            ? `<div style="padding:16px;text-align:center;font-size:12.5px;color:#8F82E4">이 조건에 맞는 일정이 없습니다.</div>`
+            : `<div>${!upcoming.length ? `<div style="font-size:11px;color:#8F82E4;padding-bottom:6px">남은 일정이 없어 지난 일정을 보여줍니다</div>` : ''}
+                 ${shown.map(ev => scalEventRow(ev, true)).join('')}</div>`}
+      ${r.rec && r.rec.events.length && !scalHasExam(r.rec)
+        ? `<div style="margin-top:10px;padding:9px 12px;font-size:11.5px;color:#B45309;background:#FFFBEB;border-radius:9px;line-height:1.6">
+             ⚠️ 이 학교는 <b>중간·기말고사를 나이스에 올리지 않았습니다</b>. 다른 일정은 정상이며 시험만 빠진 것입니다 —
+             학교 홈페이지에는 있는 경우가 많으니 시험 일정은 따로 확인해 주세요.</div>`
+        : ''}
+    </div>`;
+  }).join('');
+}
+
+// ── 학생별 ──
+// 학생마다 '그 학생 학년에 해당하는' 일정만 추린다. 학년 플래그(ONE/TW/THREE_GRADE_EVENT_YN)가
+// 있어서 고3에게만 있는 시험이 고1 학생 줄에는 안 뜬다.
+function scalRenderByStudent() {
+  let studs = scalStudents();
+  if (SCAL.grade) studs = studs.filter(s => s.grade === SCAL.grade);
+  if (!studs.length) return `<div class="card" style="text-align:center;padding:36px;color:#8F82E4;font-size:13px">해당하는 학생이 없습니다.</div>`;
+
+  const key = {
+    seat:   s => String(parseInt(s.seat)).padStart(4, '0'),
+    name:   s => s.name || '',
+    school: s => (s.school || 'ㅎㅎㅎ') + '|' + (s.grade || '') + '|' + String(parseInt(s.seat)).padStart(4,'0'),
+    grade:  s => (s.grade || 'ㅎㅎ') + '|' + String(parseInt(s.seat)).padStart(4,'0'),
+  }[SCAL.sort] || (s => String(parseInt(s.seat)).padStart(4, '0'));
+  studs = studs.slice().sort((a, b) => key(a).localeCompare(key(b), 'ko'));
+
+  const t = scalToday();
+  const rows = studs.map(s => {
+    const school = (s.school || '').trim();
+    const rec = school ? SCAL.schools[school] : null;
+    const evs = rec ? scalUpcoming(scalVisibleEvents(rec, s.grade), t) : [];
+    const open = SCAL._open === s.seat;
+    const next3 = evs.slice(0, 3);
+    return `
+    <div style="border-bottom:1px solid #F0EDFB">
+      <div onclick="scalToggleStudent('${_scEsc(s.seat)}')" style="display:flex;align-items:center;gap:10px;padding:9px 4px;cursor:pointer">
+        <div style="flex:0 0 40px;font-size:12px;font-weight:700;color:#6C5DD3">${_scEsc(s.seat)}번</div>
+        <div style="flex:0 0 76px;font-size:13px;font-weight:700;color:#1E1B4B">${_scEsc(s.name)}</div>
+        <div style="flex:0 0 96px;font-size:12px;color:${school ? '#4A3FA8' : '#C0B9E0'}">${_scEsc(school || '학교 미등록')}</div>
+        <div style="flex:0 0 42px;font-size:11.5px;font-weight:700;color:#8F82E4">${_scEsc(s.grade || '-')}</div>
+        <div style="flex:1;min-width:0;font-size:12px;color:#4A3FA8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+          ${!school ? '<span style="color:#C0B9E0">학교를 등록하면 일정이 보입니다</span>'
+            : !rec || !rec.schulCode ? '<span style="color:#B45309">나이스 학교 매칭 필요</span>'
+            : !next3.length ? '<span style="color:#C0B9E0">남은 일정 없음</span>'
+            : next3.map(ev => {
+                const c = scalCat(ev);
+                return `<span style="display:inline-block;margin-right:8px"><b style="color:#1E1B4B">${scalFmtSpan(ev)}</b> <span style="color:${c.color};font-weight:600">${_scEsc(ev.nm)}</span></span>`;
+              }).join('')}
+        </div>
+        <div style="flex:0 0 14px;font-size:11px;color:#8F82E4">${evs.length ? (open ? '▴' : '▾') : ''}</div>
+      </div>
+      ${open && evs.length ? `<div style="padding:4px 4px 12px 50px;background:#FBFAFF">${evs.map(ev => scalEventRow(ev, false)).join('')}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  return `<div class="card">
+    <div style="display:flex;gap:10px;padding:0 4px 8px;border-bottom:2px solid #EEF2FF;font-size:11px;font-weight:700;color:#8F82E4">
+      <div style="flex:0 0 40px">좌석</div><div style="flex:0 0 76px">이름</div>
+      <div style="flex:0 0 96px">학교</div><div style="flex:0 0 42px">학년</div>
+      <div style="flex:1">다가오는 일정</div><div style="flex:0 0 14px"></div>
+    </div>
+    ${rows}
+  </div>`;
+}
+window.scalToggleStudent = function(seat) {
+  SCAL._open = (SCAL._open === seat) ? null : seat;
+  scalRender();
+};
+
+// ── 학교 찾기(코드 매칭) ──
+window.scalPickSchoolAt = function(i) { const n = (SCAL._names || [])[i]; if (n) scalPickSchool(n); };
+window.scalRefreshAt   = function(i) { const n = (SCAL._names || [])[i]; if (n) scalRefreshOne(n); };
+
+window.scalPickSchool = async function(name) {
+  if (!SCAL.key) { showAdminToast('⚠️ 먼저 나이스 인증키를 저장해 주세요'); return; }
+  const q = prompt(`나이스에서 검색할 학교 이름을 입력하세요.\n('매탄고'처럼 줄여 적어도 찾아집니다)`, name);
+  if (q === null) return;
+  const term = q.trim();
+  if (!term) return;
+  showAdminToast('🔎 검색 중…');
+  let list;
+  try {
+    list = await scalSearchSchool(term);
+  } catch (e) { showAdminToast('❌ 검색 실패: ' + e.message); return; }
+  if (!list.length) { showAdminToast(`❌ '${term}' — 검색 결과가 없습니다`); return; }
+
+  let pick = list[0];
+  if (list.length > 1) {
+    const msg = list.map((s, i) => `${i + 1}. ${s.neisName} (${s.office}${s.addr ? ' · ' + s.addr : ''})`).join('\n');
+    const n = prompt(`${list.length}곳이 검색됐습니다. 번호를 고르세요.\n\n${msg}`, '1');
+    if (n === null) return;
+    const i = parseInt(n, 10) - 1;
+    if (!(i >= 0 && i < list.length)) { showAdminToast('⚠️ 번호가 올바르지 않습니다'); return; }
+    pick = list[i];
+  }
+  const rec = Object.assign(SCAL.schools[name] || { name, events: [], fetchedAt: '' }, pick);
+  SCAL.schools[name] = rec;
+  try {
+    await scalSaveSchool(rec);
+    showAdminToast(`✅ ${name} → ${pick.neisName} 로 연결했습니다`);
+    scalRender();
+    await scalRefreshOne(name);
+  } catch (e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
+
+// ── 일정 새로고침 ──
+window.scalRefreshOne = async function(name) {
+  if (!SCAL.key) { showAdminToast('⚠️ 먼저 나이스 인증키를 저장해 주세요'); return; }
+  let rec = SCAL.schools[name];
+  // 아직 매칭 안 된 학교면 이름으로 한 번 찾아본다. 딱 하나면 그대로 연결하고,
+  // 여러 곳이면 사람이 골라야 하므로 '학교 찾기'로 넘긴다.
+  if (!rec || !rec.schulCode) {
+    try {
+      const list = await scalSearchSchool(name);
+      if (list.length === 1) {
+        rec = Object.assign({ name, events: [], fetchedAt: '' }, list[0]);
+        SCAL.schools[name] = rec;
+      } else {
+        showAdminToast(list.length ? `⚠️ ${name} — ${list.length}곳이 검색됩니다. '학교 찾기'에서 골라 주세요` : `❌ ${name} — 나이스에서 못 찾았습니다`);
+        return;
+      }
+    } catch (e) { showAdminToast('❌ 검색 실패: ' + e.message); return; }
+  }
+  try {
+    const { ay, events } = await scalFetchEvents(rec);
+    rec.ay = ay; rec.events = events;
+    rec.fetchedAt = new Date().toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+    await scalSaveSchool(rec);
+    showAdminToast(`✅ ${name} 일정 ${events.length}건`);
+    scalRender();
+  } catch (e) {
+    showAdminToast(`❌ ${name} 실패: ${e.message}`);
+  }
+};
+
+window.scalRefreshAll = async function() {
+  if (!SCAL.key) { showAdminToast('⚠️ 먼저 나이스 인증키를 저장해 주세요'); return; }
+  const names = scalSchoolNames();
+  if (!names.length) { showAdminToast('갱신할 학교가 없습니다'); return; }
+  const st = document.getElementById('scal-status');
+  let ok = 0, fail = 0;
+  for (let i = 0; i < names.length; i++) {
+    if (st) st.textContent = `갱신 중 ${i + 1}/${names.length} — ${names[i]}`;
+    try {
+      let rec = SCAL.schools[names[i]];
+      if (!rec || !rec.schulCode) {
+        const list = await scalSearchSchool(names[i]);
+        if (list.length !== 1) { fail++; continue; }   // 여러 곳이면 사람이 골라야 한다
+        rec = Object.assign({ name: names[i], events: [], fetchedAt: '' }, list[0]);
+        SCAL.schools[names[i]] = rec;
+      }
+      const { ay, events } = await scalFetchEvents(rec);
+      rec.ay = ay; rec.events = events;
+      rec.fetchedAt = new Date().toLocaleDateString('ko-KR', { month: 'numeric', day: 'numeric' });
+      await scalSaveSchool(rec);
+      ok++;
+    } catch (e) { fail++; console.error('학사일정 갱신 실패:', names[i], e); }
+  }
+  if (st) st.textContent = '';
+  showAdminToast(`✅ ${ok}곳 갱신${fail ? ` · ${fail}곳 실패(학교 찾기 필요)` : ''}`);
+  scalRender();
+};
+
 </script>
 
 <!-- Firebase 실시간 연동 -->
@@ -10811,6 +11521,7 @@ async function saveStudentToFirebase(student) {
     ...(student.withdrawAt ? { withdrawAt: String(student.withdrawAt) } : {}),
     ...(student.nextStudent ? { nextStudent: student.nextStudent } : {}),
     ...(student.grade ? { grade: String(student.grade) } : {}),   // 학년(학습분석 또래 비교) 보존
+    ...(student.school ? { school: String(student.school) } : {}),  // 학교(상세 모달에서 입력) 보존
     // 식사 외출 알림 수신 희망(학부모가 학부모앱에서 고른 값) — 관리자 저장으로 지워지면 안 된다.
     // 미응답(null/undefined)은 필드를 아예 쓰지 않아 '아직 안 골랐음'을 유지한다.
     ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
@@ -11102,6 +11813,7 @@ async function loadStudentsFromFirebase() {
           loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
           nextStudent: v.nextStudent || null,
           grade: v.grade || '',   // 학년 — 학습분석의 또래 교재 추천 기준
+          school: v.school || '', // 학교 — 상세 모달에서 입력·표시
           // 식사 외출 알림 수신 희망 — 학부모앱에서 학부모가 직접 고른다.
           // null = 아직 응답 안 함(= 발송 안 함). true/false 만 응답으로 본다.
           mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
@@ -11207,6 +11919,7 @@ async function loadStudentsFromFirebase() {
         loginPin: v.loginPin || '', withdrawAt: v.withdrawAt || '',
         nextStudent: v.nextStudent || null,
         grade: v.grade || '',   // 학년 — 학습분석의 또래 교재 추천 기준
+        school: v.school || '', // 학교 — 상세 모달에서 입력·표시
         // 식사 외출 알림 수신 희망(학부모앱에서 학부모가 고른 값). null = 미응답 = 발송 안 함.
         // ★학부모앱이 이 필드를 쓰면 이 스냅샷으로 키오스크에 즉시 반영된다.
         mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
@@ -16047,14 +16760,23 @@ window.openAddStudentModal = function(seatNum) {
             </div>
           </div>
         </div>
-        <div>
-          <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:4px">학년</div>
-          <select id="new-st-grade"
-            style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box;background:#fff;color:#1E1B4B">
-            <option value="">학년 미지정</option>
-            <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
-            <option value="N수">N수</option>
-          </select>
+        <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:10px">
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:4px">학교</div>
+            <input id="new-st-school" type="text" list="new-st-school-list" maxlength="20" placeholder="예: 새봄고"
+              style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box">
+            <!-- 이미 등록된 학교 목록(모달을 띄운 뒤 채움) — 상세 모달의 학교 칸과 같은 자동완성 -->
+            <datalist id="new-st-school-list"></datalist>
+          </div>
+          <div>
+            <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:4px">학년</div>
+            <select id="new-st-grade"
+              style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;outline:none;box-sizing:border-box;background:#fff;color:#1E1B4B">
+              <option value="">미지정</option>
+              <option value="고1">고1</option><option value="고2">고2</option><option value="고3">고3</option>
+              <option value="N수">N수</option>
+            </select>
+          </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div>
@@ -16102,6 +16824,12 @@ window.openAddStudentModal = function(seatNum) {
 
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
   document.body.appendChild(modal);
+  // 학교 자동완성 후보 — 이미 등록된 학교 이름(관리자 좌석 모달엔 학교 칸이 없어 null)
+  const _schoolDl = document.getElementById('new-st-school-list');
+  if (_schoolDl) {
+    [...new Set(STUDENTS.map(st => (st.school || '').trim()).filter(Boolean))].sort()
+      .forEach(sc => _schoolDl.appendChild(new Option('', sc)));
+  }
   setTimeout(() => document.getElementById('new-st-name')?.focus(), 100);
 };
 
@@ -16138,7 +16866,7 @@ window.confirmAddStudent = function(seatNum) {
 
   // 근무요일(관리자) → schedule에 '근무'로 저장, 학생은 시작일/만료일/부모님번호 사용
   const schedule = { 월:'-', 화:'-', 수:'-', 목:'-', 금:'-', 토:'-' };
-  let parent = '', expiry = '', startDate = '', grade = '';
+  let parent = '', expiry = '', startDate = '', grade = '', school = '';
   if (isAdmin) {
     (window._newAdminDays || new Set()).forEach(d => { schedule[d] = '근무'; });
   } else {
@@ -16146,6 +16874,7 @@ window.confirmAddStudent = function(seatNum) {
     expiry    = document.getElementById('new-st-expiry').value;
     startDate = document.getElementById('new-st-start-date').value;
     grade     = document.getElementById('new-st-grade').value;   // 학습분석 또래 비교의 기준
+    school    = document.getElementById('new-st-school').value.trim();
   }
 
   // STUDENTS 배열에 추가
@@ -16156,6 +16885,7 @@ window.confirmAddStudent = function(seatNum) {
     parent,
     gender,
     grade,
+    school,
     expiry,
     startDate,
     schedule,
@@ -18731,7 +19461,10 @@ window.reportRender = async function() {
   const startISO = (document.getElementById('rp-start') || {}).value;
   const endISO   = (document.getElementById('rp-end')   || {}).value;
   const btn = document.getElementById('rp-print-btn');
+  const imgBtn = document.getElementById('rp-img-btn');
   if (btn) btn.disabled = true;
+  if (imgBtn) imgBtn.disabled = true;
+  _rpOpStop();
   _rpLast = null;
   if (!box) return;
   if (!stu)               { box.innerHTML = _rpMsg('학생을 선택하세요'); return; }
@@ -18777,6 +19510,8 @@ window.reportRender = async function() {
   box.innerHTML = _rpSheet(data);
   _rpLast = data;
   if (btn) btn.disabled = false;
+  if (imgBtn) imgBtn.disabled = false;
+  _rpOpStart(data);   // 선생님 의견 — 저장된 게 있으면 불러오고, 없으면 새로 쓴다
 };
 
 const _rpMsg = t => `<div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">${t}</div>`;
@@ -19024,6 +19759,12 @@ function _rpSheet(d) {
       <p>${_apcEsc(c.text)}</p></div>`).join('')}
   </section>` : ''}
 
+  <!-- 선생님 의견 — 내용은 report_comments 에서 비동기로 와서 #rp-op-body 안에 채워진다 -->
+  <section class="rp-sec rp-op-sec">
+    <div class="rp-eye"><span class="rp-bar"></span><h2>선생님 의견</h2></div>
+    <div id="rp-op-body"><div class="rp-op-wait">불러오는 중...</div></div>
+  </section>
+
   <div class="rp-foot"><b>수치 기준</b>
     <ul>
       <li>순공시간은 입·퇴실 기록에서 <b>외출 시간을 뺀</b> 값입니다. 하루 평균은 등원 예정일(월~토) ${d.schedDays}일을 분모로 한 <b>성실도 기준</b>이며, 실제 등원한 ${d.attDays}일만으로 계산하면 ${_rpH1(d.avgAttH)}시간입니다.</li>
@@ -19041,6 +19782,243 @@ window.reportPrint = function() {
   const off = () => { document.body.classList.remove('rp-printing'); window.removeEventListener('afterprint', off); };
   window.addEventListener('afterprint', off);
   setTimeout(() => { window.print(); setTimeout(off, 1000); }, 60);
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// 💬 선생님 의견 — 리포트 맨 끝에 들어가는 글
+//   집계된 숫자(_rpAggregate 결과)를 서버로 보내면 담임 말투의 의견을 써서 돌려준다.
+//   요청: report_ai_requests/{키}_{타임스탬프}  → 서버가 처리하고 지운다
+//   결과: report_comments/{키}                 → onSnapshot 으로 받는다
+//   키에 기간이 들어가므로 같은 학생·같은 기간이면 다시 만들어도 쓴 글이 그대로 나온다.
+//   선생님이 손으로 고치면 editedAt 이 박히고, 그다음부터는 '다시 생성'을 눌러야만 덮인다.
+// ══════════════════════════════════════════════════════════════════════════
+let _rpOpUnsub = null;    // 결과 구독 해제 함수
+let _rpOpKey   = null;    // 지금 보고 있는 (학생, 기간) 키
+let _rpOpCur   = null;    // 화면에 그려진 의견 객체(수정 취소 때 되돌릴 원본)
+let _rpOpEditing = false;
+let _rpOpAsked = null;    // 이 키로 이미 생성 요청을 보냈는지 — 구독 콜백이 여러 번 와도 한 번만 보낸다
+
+function _rpOpStop() {
+  if (_rpOpUnsub) { _rpOpUnsub(); _rpOpUnsub = null; }
+  _rpOpKey = null; _rpOpCur = null; _rpOpEditing = false;
+}
+
+// 서버에 보낼 집계 자료. 사진은 안 보내고 숫자만 보낸다.
+// 날짜별은 등원한 날만 담는다 — 결석일은 '결석' 목록에 이미 있고, 0시간짜리를
+// 120개 늘어놓으면 읽을거리 없이 분량만 늘어난다.
+function _rpAiPayload(d) {
+  const N = n => Math.round(n * 10) / 10;
+  return {
+    학생: { 이름: d.stu.name, 학년: d.grade || null, 좌석: String(d.stu.seat) },
+    기간: { 시작: d.startISO, 종료: d.endISO, 전체일수: d.span.length,
+            등원예정일수: d.schedDays, 등원일수: d.attDays,
+            결석: d.absent.map(x => `${_rpMd(x)}(${_rpDow(x)})`),
+            일요일자율등원일수: d.sundayDays },
+    순공시간: { 총시간: N(d.totalH), 하루평균_등원예정일기준: N(d.avgSchedH),
+                하루평균_등원일기준: N(d.avgAttH), 주간목표시간: d.goalWeekly || null,
+                또래평균: d.peerAvgH ? { 학년: d.grade, 인원: d.peerN, 평균시간: N(d.peerAvgH) } : null },
+    주차별: d.weeks.map(w => ({ 기간: `${_rpMd(w.from)}~${_rpMd(w.to)}`, 시간: N(w.min / 60),
+                                등원일수: w.att, 온전한주: w.days >= 7 })),
+    날짜별: d.attended.map(x => ({ 날짜: `${_rpMd(x)}(${_rpDow(x)})`, 시간: N((d.att.mins[x] || 0) / 60) })),
+    과목별: d.subjects.map(s => ({ 과목: s.name, 시간: N(s.min / 60) })),
+    교재: d.materials.slice(0, 25).map(m => ({ 이름: m.name, 과목: m.subject, 종류: m.kind,
+                                               학습일수: m.days, 처음: m.first, 마지막: m.last })),
+    플래너: { 검사일수: d.planner.revDays, 등원했지만미제출일수: d.planner.missing,
+              계획수: d.planner.planned, 완료수: d.planner.completed, 실행률퍼센트: d.planner.rate,
+              플래너에적힌학습시간: N(d.planner.plannerH), 작성품질: d.planner.quality },
+    생활: { 평균등원시각: _rpClock(d.arriveAvg), 기간전반평균등원: _rpClock(d.arriveEarly),
+            기간후반평균등원: _rpClock(d.arriveLate), 외출합계분: d.awayTotalMin,
+            상점합계: d.meritPt, 벌점합계: d.penPt,
+            상점내역: d.merits.map(m => ({ 날짜: _rpMd(m.date), 사유: m.reason, 점수: m.pt })),
+            벌점내역: d.penalties.map(p => ({ 날짜: _rpMd(p.date), 교시: p.period,
+                                             종류: p.type === 'late' ? '지각' : '무단결석', 점수: p.pt })) },
+    최근담임코멘트: d.comments.map(c => ({ 날짜: _rpMd(c.date), 내용: c.text }))
+  };
+}
+
+function _rpOpStart(d) {
+  _rpOpStop();
+  const key = `${d.stu.uid || _apcSeatKey(d.stu.seat)}_${d.startISO}_${d.endISO}`;
+  _rpOpKey = key;
+  _rpOpUnsub = onSnapshot(doc(db, 'report_comments', key), snap => {
+    if (_rpOpKey !== key) return;                      // 그 사이 다른 학생으로 넘어갔다
+    if (_rpOpEditing) return;                          // 고쳐 쓰는 중에 덮어 그리면 입력이 날아간다
+    const v = snap.exists() ? snap.data() : null;
+    if (!v && _rpOpAsked !== key) { _rpOpAsk(false); return; }   // 처음 만드는 기간 → 자동 생성
+    _rpOpRender(v);
+  }, e => {
+    console.warn('[report opinion] 구독 실패:', e.message || e);
+    _rpOpRender({ status: 'error', error: e.message || String(e) });
+  });
+}
+
+// 생성 요청. force=true 면 선생님이 고쳐 둔 글도 새로 쓴다.
+async function _rpOpAsk(force) {
+  if (!_rpLast || !_rpOpKey) return;
+  const key = _rpOpKey, d = _rpLast;
+  _rpOpAsked = key;
+  _rpOpRender({ status: 'running' });
+  try {
+    await setDoc(doc(db, 'report_ai_requests', `${key}_${Date.now()}`), {
+      key, uid: d.stu.uid || null, seat: _apcSeatKey(d.stu.seat), name: d.stu.name,
+      startISO: d.startISO, endISO: d.endISO, force: !!force,
+      payload: JSON.stringify(_rpAiPayload(d)),   // 중첩이 깊어 문자열로 넣는다(Firestore 제약 회피)
+      requestedAt: serverTimestamp()
+    });
+  } catch (e) {
+    _rpOpRender({ status: 'error', error: e.message || String(e) });
+  }
+}
+
+const _RP_OP_GRP = [
+  { key: 'praise',  cls: 'good', label: '잘하고 있는 점' },
+  { key: 'improve', cls: 'warn', label: '보완이 필요한 부분' },
+  { key: 'advice',  cls: 'next', label: '이렇게 해 보시면 좋겠습니다' },
+];
+
+function _rpOpRender(v) {
+  const box = document.getElementById('rp-op-body');
+  if (!box) return;
+  const st = v && v.status;
+  if (!v || st === 'running' || st === 'requested') {
+    box.innerHTML = `<div class="rp-op-wait">🖊 이 기간의 기록을 읽고 의견을 쓰는 중입니다... (20초쯤 걸립니다)</div>`;
+    return;
+  }
+  if (st === 'error' && !v.opinion) {
+    box.innerHTML = `<div class="rp-op-err">의견을 만들지 못했습니다: ${_apcEsc(v.error || '알 수 없는 오류')}</div>
+      <div class="rp-op-tools"><button onclick="window.reportOpRegen()">🔄 다시 시도</button></div>`;
+    return;
+  }
+  const o = v.opinion;
+  if (!o) { box.innerHTML = `<div class="rp-op-wait">아직 의견이 없습니다.</div>
+      <div class="rp-op-tools"><button onclick="window.reportOpRegen()">🖊 의견 쓰기</button></div>`; return; }
+  _rpOpCur = o;
+  const ed = _rpOpEditing ? ' contenteditable="true"' : '';
+  const items = (arr, path) => (arr || []).map((it, i) => `<div class="rp-op-item">
+      <div class="t"${ed} data-ed="${path}.${i}.title">${_apcEsc(it.title || '')}</div>
+      <div class="b"${ed} data-ed="${path}.${i}.body">${_apcEsc(it.body || '')}</div>
+    </div>`).join('');
+
+  box.innerHTML = `
+    <p class="rp-op-lead"${ed} data-ed="overall">${_apcEsc(o.overall || '')}</p>
+    ${_RP_OP_GRP.map(g => (o[g.key] || []).length ? `<div class="rp-op-grp ${g.cls}">
+        <div class="rp-op-h">${g.label}</div>${items(o[g.key], g.key)}</div>` : '').join('')}
+    <div class="rp-op-sign">새봄면학관 담임 드림</div>
+    <div class="rp-op-tools">${_rpOpEditing
+      ? `<button onclick="window.reportOpSave()">💾 저장</button>
+         <button class="warn" onclick="window.reportOpCancel()">취소</button>`
+      : `<button onclick="window.reportOpEdit()">✏️ 고쳐 쓰기</button>
+         <button class="warn" onclick="window.reportOpRegen()">🔄 다시 생성</button>`}</div>`;
+}
+
+window.reportOpEdit = function() {
+  if (!_rpOpCur) return;
+  _rpOpEditing = true; _rpOpRender({ opinion: _rpOpCur, status: 'done' });
+  showAdminToast('✏️ 글을 눌러 고친 뒤 저장하세요');
+};
+window.reportOpCancel = function() {
+  _rpOpEditing = false; _rpOpRender({ opinion: _rpOpCur, status: 'done' });
+};
+window.reportOpRegen = function() {
+  if (!_rpLast) { showAdminToast('⚠️ 먼저 리포트를 만드세요'); return; }
+  if (_rpOpCur && !confirm('의견을 새로 씁니다. 지금 글은 사라집니다. 계속할까요?')) return;
+  _rpOpEditing = false;
+  _rpOpAsk(true);
+};
+
+// 편집 결과 모으기 — 화면의 data-ed 경로를 따라 원본 객체에 되박는다.
+// 제목·내용을 둘 다 비우면 그 항목은 지운 것으로 본다(항목 삭제 수단).
+window.reportOpSave = async function() {
+  const box = document.getElementById('rp-op-body');
+  if (!box || !_rpOpCur || !_rpOpKey) return;
+  const out = JSON.parse(JSON.stringify(_rpOpCur));
+  box.querySelectorAll('[data-ed]').forEach(el => {
+    const t = (el.innerText || '').replace(/\u00a0/g, ' ').trim();
+    const p = el.getAttribute('data-ed').split('.');
+    if (p.length === 1) out[p[0]] = t;
+    else if (out[p[0]] && out[p[0]][+p[1]]) out[p[0]][+p[1]][p[2]] = t;
+  });
+  _RP_OP_GRP.forEach(g => {
+    if (Array.isArray(out[g.key])) out[g.key] = out[g.key].filter(it => (it.title || '').trim() || (it.body || '').trim());
+  });
+  try {
+    await setDoc(doc(db, 'report_comments', _rpOpKey),
+      { opinion: out, editedAt: new Date().toISOString() }, { merge: true });
+    _rpOpCur = out; _rpOpEditing = false;
+    _rpOpRender({ opinion: out, status: 'done' });
+    showAdminToast('💾 의견을 저장했습니다');
+  } catch (e) {
+    showAdminToast('❌ 저장 실패: ' + (e.message || e));
+  }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🖼 이미지로 저장 — 리포트 종이를 PNG 한 장으로. 카카오톡으로 바로 보내는 용도.
+//   html2canvas 는 처음 누를 때만 CDN에서 받아 온다(평소 로딩을 늘리지 않는다).
+//   캡처 직전에 body.rp-capturing 을 걸어 화면 밖에서 데스크톱 폭으로 다시 그린다
+//   → 폰에서 만들든 PC에서 만들든 같은 그림이 나온다.
+// ══════════════════════════════════════════════════════════════════════════
+const _RP_H2C_SRC = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+let _rpH2C = null;
+function _rpLoadH2C() {
+  if (window.html2canvas) return Promise.resolve(window.html2canvas);
+  if (_rpH2C) return _rpH2C;
+  _rpH2C = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = _RP_H2C_SRC;
+    s.onload = () => window.html2canvas ? res(window.html2canvas) : rej(new Error('이미지 변환기를 읽지 못했습니다'));
+    s.onerror = () => { _rpH2C = null; rej(new Error('이미지 변환기를 내려받지 못했습니다 — 인터넷 연결을 확인하세요')); };
+    document.head.appendChild(s);
+  });
+  return _rpH2C;
+}
+
+// 폰에서는 내려받기보다 공유 시트가 낫다(카카오톡으로 바로 넘길 수 있다).
+// 안 되면 조용히 내려받기로 넘어간다.
+async function _rpSaveBlob(blob, filename) {
+  const file = new File([blob], filename, { type: 'image/png' });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: filename }); return '공유'; }
+    catch (e) { if (e && e.name === 'AbortError') return null; }   // 사용자가 닫음
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return '저장';
+}
+
+window.reportImage = async function() {
+  if (!_rpLast) { showAdminToast('⚠️ 먼저 리포트를 만드세요'); return; }
+  if (_rpOpEditing) { showAdminToast('⚠️ 의견을 저장하거나 취소한 뒤 다시 눌러 주세요'); return; }
+  const btn = document.getElementById('rp-img-btn');
+  const sheet = document.querySelector('#rp-content .rp-sheet');
+  if (!sheet) return;
+  if (btn) { btn.disabled = true; btn.textContent = '🖼 만드는 중...'; }
+  try {
+    const h2c = await _rpLoadH2C();
+    document.body.classList.add('rp-capturing');
+    await new Promise(r => setTimeout(r, 120));   // 레이아웃이 새 폭으로 자리잡을 시간
+    let canvas;
+    try {
+      canvas = await h2c(sheet, { scale: 2, backgroundColor: '#FBFAF7', useCORS: true, logging: false });
+    } finally {
+      document.body.classList.remove('rp-capturing');
+    }
+    if (!canvas || canvas.width < 100) throw new Error('그림이 비어 있습니다');
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    if (!blob) throw new Error('그림 파일을 만들지 못했습니다');
+    const d = _rpLast;
+    const name = `새봄리포트_${d.stu.name}_${d.startISO.replace(/-/g, '')}-${d.endISO.replace(/-/g, '')}.png`;
+    const how = await _rpSaveBlob(blob, name);
+    if (how) showAdminToast(`🖼 이미지를 ${how}했습니다`);
+  } catch (e) {
+    console.error('[report image]', e);
+    showAdminToast('❌ ' + (e.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🖼 이미지로 저장'; }
+  }
 };
 
 // 페이지 로드 시 localStorage에서 복원된 알림을 즉시 화면에 표시
