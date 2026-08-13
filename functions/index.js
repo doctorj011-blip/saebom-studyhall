@@ -804,6 +804,7 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 - "~더라" 어미를 한 코멘트에 두 번 이상 쓰지 말 것.
 - 계획 항목을 그대로 옮겨 적는 나열식 문장 금지 — 요약은 summary가 한다.
 - 이모티콘, 번호 매기기, 과장된 감탄, "AI"·"분석"·"평가"·"데이터" 같은 단어 금지.
+- 내부용·시스템용 XML 태그를 응답에 넣지 말 것.
 
 [summary — 선생님만 보는 기록]
 - 무슨 과목·교재를 얼마나 계획하고 실행했는지 2~3문장으로 적을 것.
@@ -1037,15 +1038,14 @@ async function plannerAiHistory(seat, beforeDate, uid) {
       // 요일을 붙인다 — 평일은 학교에 있어 총량이 적은 게 정상이라, 요일 없이 숫자만 보면
       // 주말과 평일을 같은 선에서 비교하며 "줄었다"고 말한다.
       const dow = '일월화수목금토'[new Date(h.date).getDay()] || '';
-      // 그날 쓴 교재는 그날 줄에 붙인다 — 이름만 한 덩어리로 뭉쳐 놓으면 어느 날 것인지 알 수 없어
-      // "영어 단어가 며칠째 안 적힌다" 같은 판정이 아예 불가능하다.
-      const mats = (st.materials || []).map(m => m && m.name).filter(Boolean);
-      // 오래된 날은 summary 를 뺀다. 4일 전보다 이전 기록은 밸런스 누적에만 쓰이는데,
+      // 날짜별 교재 목록은 일부러 넣지 않는다 — 아래 [교재별 마지막 등장] 블록이 같은 정보를
+      // 훨씬 짧게 담고 있어서, 여기 또 적으면 매 요청 400자쯤을 중복으로 돈 내고 보내게 된다.
+      // "며칠째 안 보인다" 판정에 필요한 건 마지막 등장일이지 날짜별 전체 목록이 아니다.
+      // 오래된 날은 summary 도 뺀다. 4일 전보다 이전 기록은 밸런스 누적에만 쓰이는데,
       // summary 가 한 건에 300자를 넘어 7일치를 다 넣으면 매 요청 user 메시지가 5천 자를 넘는다
       // (시스템 프롬프트와 달리 여기는 캐시가 안 걸려 전액 과금된다).
       let line = `- ${h.date}(${dow}): ${parts.filter(Boolean).join(', ')}`;
       if (i < 4 && h.summary) line += ` — ${h.summary}`;
-      if (mats.length) line += `\n  · 그날 교재: ${mats.slice(0, 10).join(', ')}`;
       if (i < 3 && h.comment) line += `\n  · 그날 준 코멘트: "${String(h.comment).slice(0, 400)}"`;
       return line;
     });
@@ -1197,16 +1197,19 @@ async function plannerAiConfig() {
 // max_tokens 2048 이면 hourly 항목이 20개를 넘는 날 응답이 중간에 잘려
 // "Unterminated string in JSON" 으로 검사 자체가 실패한다(2026-07-24 윤지호 7/23).
 // 생성한 만큼만 과금되므로 넉넉히 잡는다.
-// ★Opus 5부터는 여기에 사고(thinking) 토큰도 함께 들어간다 — max_tokens 는 사고와 답변의
-//   합에 걸리는 상한이라, 4096 그대로 두면 사고하다가 JSON 이 잘려 위 사고가 재현된다.
-//   그래서 16000으로 올렸다. 상한만 올린 것이라 안 쓰면 과금되지 않는다.
-// thinking: Opus 4.8 은 이 필드를 빼면 사고를 안 했지만 Opus 5 는 빼면 사고를 한다.
-//   기본값에 기대지 않도록 명시한다. 사고를 켠 이유는 이 작업의 고질적 오류(타임테이블
-//   색칠 칸을 잘못 세어 총량이 재검사마다 100분씩 달라지던 것)가 정확히 사고가 잡아 주는
-//   종류이기 때문이다. 끄려면 { type: 'disabled' } 로 바꾸면 되고, 그때 effort 는
-//   'high' 이하여야 한다(Opus 5는 disabled + xhigh/max 조합을 400으로 거부한다).
-// effort: 명시하지 않으면 'high' 가 기본이라 사고 토큰이 많이 나온다. 이 작업은 판독과
-//   짧은 글쓰기라 'medium' 에서 시작한다. 정확도가 모자라면 'high' 로 올릴 것.
+// max_tokens 를 16000으로 둔 것은 상한일 뿐이라 안 쓰면 과금되지 않는다. 사고를 켜면
+//   max_tokens 는 사고와 답변의 합에 걸리므로 이 여유가 필요해진다(4096이면 사고하다
+//   JSON 이 잘려 위 사고가 재현된다). 지금은 사고가 꺼져 있지만 켤 때를 대비해 남겨 둔다.
+// thinking: ★반드시 명시할 것. Opus 4.8 은 이 필드를 빼면 사고를 안 했지만 Opus 5 는
+//   빼면 사고를 한다. 빼 두면 모델 문자열만 바꿔도 사고 토큰이 출력 요금($25/1M)으로
+//   붙어 비용이 조용히 오른다. 여기서 끈 이유는 비용을 Opus 4.8 과 똑같이 유지하기
+//   위해서다 — 끈 상태의 Opus 5 는 토큰 단가가 4.8 과 같아서 모델 업그레이드 자체는
+//   추가 비용이 0이다.
+//   ※켜려면 { type: 'adaptive' }. 타임테이블 색칠 칸을 잘못 세는 고질적 오류에는 사고가
+//     도움이 될 가능성이 크지만, 사고 토큰이 얼마나 나오는지 usage 필드로 실측한 뒤에
+//     판단할 것. 켜면 effort 도 함께 내려야 값이 안 튄다('medium' 부터).
+// effort: disabled 와 함께 쓸 때는 'high' 이하여야 한다 — Opus 5 는 disabled + xhigh/max
+//   조합을 400으로 거부한다. 'high' 가 기본값이라 동작은 그대로지만 명시해 둔다.
 // 시스템 프롬프트(1만4천자 남짓)는 매 건 완전히 동일해서 캐싱하면 1/10 값이 된다
 // (실시간 검사는 concurrency:1 순차 실행이라 앞 건이 5분 캐시를 데워 주고,
 //  배치도 같은 프롬프트가 몰리므로 적중 가능성이 있다 — 50% 할인과 별도로 겹쳐 적용).
@@ -1215,9 +1218,9 @@ function plannerAiRequestParams(model, sysPrompt, content) {
   return {
     model,
     max_tokens: 16000,
-    thinking: { type: 'adaptive' },
+    thinking: { type: 'disabled' },
     system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
-    output_config: { effort: 'medium', format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
+    output_config: { effort: 'high', format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
     messages: [{ role: 'user', content }]
   };
 }
@@ -1811,13 +1814,16 @@ const REPORT_AI_ITEM = {
   required: ['title', 'body'],
   additionalProperties: false
 };
+// ⚠️ minItems·maxItems 를 넣지 말 것. 구조화 출력 스키마는 배열 개수 제약을 안 받는다
+//    (2026-08-13 실제로 400 "For 'array' type, property 'maxItems' is not supported").
+//    개수는 프롬프트에서 말한다 — 칭찬 1~3, 보완 1~3, 제안 2~4.
 const REPORT_AI_SCHEMA = {
   type: 'object',
   properties: {
     overall: { type: 'string', description: '총평 2~4문장' },
-    praise:  { type: 'array', minItems: 1, maxItems: 3, items: REPORT_AI_ITEM },
-    improve: { type: 'array', minItems: 1, maxItems: 3, items: REPORT_AI_ITEM },
-    advice:  { type: 'array', minItems: 2, maxItems: 4, items: REPORT_AI_ITEM }
+    praise:  { type: 'array', items: REPORT_AI_ITEM, description: '칭찬할 점 1~3개' },
+    improve: { type: 'array', items: REPORT_AI_ITEM, description: '보완이 필요한 부분 1~3개' },
+    advice:  { type: 'array', items: REPORT_AI_ITEM, description: '개선 방향·학습법 2~4개' }
   },
   required: ['overall', 'praise', 'improve', 'advice'],
   additionalProperties: false
