@@ -1829,6 +1829,11 @@ const REPORT_AI_SCHEMA = {
   additionalProperties: false
 };
 
+// 비어 있는 항목 이름들. required 가 잡아 주지 못하는 '키는 있는데 배열이 빈' 경우를 본다.
+const REPORT_AI_LISTS = ['praise', 'improve', 'advice'];
+const reportOpinionEmptyKeys = (o) =>
+  REPORT_AI_LISTS.filter(k => !Array.isArray((o || {})[k]) || !(o || {})[k].length);
+
 async function reportAiConfig() {
   const snap = await db.collection('ai_config').doc('report').get();
   const cfg = snap.exists ? (snap.data() || {}) : {};
@@ -1867,18 +1872,49 @@ exports.reportAiOpinion = onDocumentCreated(
 
       const { model, sysPrompt } = await reportAiConfig();
       const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
-      const msg = await client.messages.create({
-        model,
-        max_tokens: 16000,   // 적응형 사고 + 본문. 사고가 길어져도 잘리지 않게 넉넉히
-        system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
-        output_config: { effort: 'high', format: { type: 'json_schema', schema: REPORT_AI_SCHEMA } },
-        messages: [{ role: 'user', content:
-          `아래는 ${data.학생 && data.학생.이름 ? data.학생.이름 : '한 학생'}의 학습 기록입니다. 선생님 의견을 써 주세요.\n\n` +
-          '```json\n' + JSON.stringify(data, null, 1) + '\n```' }]
-      });
-      if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
-      const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
-      const out = JSON.parse(text);
+      const userContent =
+        `아래는 ${data.학생 && data.학생.이름 ? data.학생.이름 : '한 학생'}의 학습 기록입니다. 선생님 의견을 써 주세요.\n\n` +
+        '```json\n' + JSON.stringify(data, null, 1) + '\n```';
+
+      const askOnce = async (note) => {
+        const m = await client.messages.create({
+          model,
+          max_tokens: 16000,   // 적응형 사고 + 본문. 사고가 길어져도 잘리지 않게 넉넉히
+          system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
+          output_config: { effort: 'high', format: { type: 'json_schema', schema: REPORT_AI_SCHEMA } },
+          messages: [{ role: 'user', content: note ? `${userContent}\n\n${note}` : userContent }]
+        });
+        if (m.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
+        return { m, o: JSON.parse((m.content.find(b => b.type === 'text') || {}).text || '') };
+      };
+
+      let { m: msg, o: out } = await askOnce(null);
+      let usage = { in: msg.usage.input_tokens, out: msg.usage.output_tokens };
+
+      // ── 빈 항목 가드 ────────────────────────────────────────────────────────
+      // 스키마로는 못 막는다 — required 는 키가 있는지만 보고, 개수 제약(minItems)은
+      // 구조화 출력이 400 으로 거부한다(REPORT_AI_SCHEMA 위 주석).
+      // 2026-08-13 김지후 건이 overall 만 채우고 세 배열이 전부 빈 채 저장돼 리포트에
+      // 총평 한 문단만 나갔다(출력 268토큰, 같은 날 다른 16건은 2,000~6,400).
+      // 플래너가 5일치뿐인 학생이라 '자료가 빈약하면 하나씩만 짧게' 지침을
+      // '아예 안 씀'으로 과하게 적용한 것으로 보인다.
+      // 다시 부르는 건 한 번뿐. 두 번째도 비면 받은 대로 저장한다 — 에러로 만들면
+      // 멀쩡한 총평까지 버려지고 선생님은 빈 화면을 보게 되어 더 나쁘다.
+      let missing = reportOpinionEmptyKeys(out);
+      if (missing.length) {
+        logger.warn('reportAiOpinion — 빈 항목이 있어 한 번 다시 부른다', { key, missing });
+        const note = `앞선 시도에서 ${missing.join('·')} 항목이 비어 있었습니다.`
+          + ` praise·improve·advice 는 자료가 적더라도 각각 최소 하나씩은 반드시 채워 주세요.`
+          + ` 근거로 쓸 기록이 얇으면 그 사실 자체를 적으면 됩니다`
+          + ` (예: 플래너가 며칠치뿐이라 무엇을 확인하지 못했는지).`;
+        const retry = await askOnce(note);
+        usage = { in: usage.in + retry.m.usage.input_tokens,
+                  out: usage.out + retry.m.usage.output_tokens, retried: true };
+        // 덜 빈 쪽을 고른다 — 재시도가 또 비면 첫 결과를 그대로 둔다
+        if (reportOpinionEmptyKeys(retry.o).length < missing.length) { msg = retry.m; out = retry.o; }
+        missing = reportOpinionEmptyKeys(out);
+        if (missing.length) logger.error('reportAiOpinion — 재시도 후에도 빈 항목이 남았다', { key, missing });
+      }
 
       await ref.set({
         key, uid: req.uid || null, seat: req.seat || null, name: req.name || null,
@@ -1886,9 +1922,9 @@ exports.reportAiOpinion = onDocumentCreated(
         opinion: out, status: 'done', model,
         editedAt: null,
         doneAt: new Date().toISOString(),
-        usage: { in: msg.usage.input_tokens, out: msg.usage.output_tokens }
+        usage
       }, { merge: true });
-      logger.info('reportAiOpinion 완료', { key, out: msg.usage.output_tokens });
+      logger.info('reportAiOpinion 완료', { key, out: usage.out, retried: !!usage.retried });
     } catch (e) {
       logger.error('reportAiOpinion', { key, message: e.message });
       await ref.set({ key, status: 'error', error: e.message, doneAt: new Date().toISOString() }, { merge: true });
