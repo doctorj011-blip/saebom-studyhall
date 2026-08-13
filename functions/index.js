@@ -470,7 +470,17 @@ async function acEvaluate(reason) {
   await ref.set({ zones: out, present: present.size, op, preOpen, auto: cfg.auto, updatedAt: now.toISOString() }, { merge: true });
 }
 
+// LG state 응답에서 현재 목표온도를 뽑는다. temperature 는 기기에 따라 객체 또는 배열(첫 항목)로 온다.
+function _stateTargetTemp(state) {
+  const t = Array.isArray((state || {}).temperature) ? ((state.temperature || [])[0] || {}) : ((state || {}).temperature || {});
+  const v = t.targetTemperature;
+  return typeof v === 'number' ? v : null;
+}
+
 // 대시보드 표시용 — 설정된 에어컨들의 현재 상태·기능표를 LG에서 읽어 ac_state에 저장.
+//   ※ 읽어온 '실제 목표온도'를 자동화의 기억(zones[].temp)에도 되반영한다. 이게 없으면
+//     리모컨·ThinQ로 사람이 바꾼 온도를 자동화가 눈치채지 못하고("내가 이미 onTemp 로 맞춰놨다")
+//     그 값이 다음 완전 OFF 때까지 굳는다. 되반영하면 다음 acEvaluate 가 onTemp 로 되돌린다.
 async function acRefreshState(onlyIds) {
   const cfg = await acConfig();
   const ids = Object.keys(cfg.zones || {}).filter(id => !onlyIds || onlyIds.includes(id));
@@ -479,16 +489,35 @@ async function acRefreshState(onlyIds) {
   const clientId = await lgClientId();
   const ctx = { pat, country: cfg.country, region: cfg.region, clientId };
   const ref = db.collection('ac_state').doc('main');
-  const curDevs = ((await ref.get()).data() || {}).devices || {};
+  const cur = (await ref.get()).data() || {};
+  const curDevs = cur.devices || {};
+  const curZones = cur.zones || {};
+  const nowMs = Date.now();
   const devices = {};
+  const zonePatch = {};
   for (const id of ids) {
     const rec = { at: new Date().toISOString(), error: null, profile: (curDevs[id] || {}).profile || null };
     try { rec.state = await lgFetch(`/devices/${id}/state`, ctx); }
     catch (e) { rec.error = e.message; }
     if (!rec.profile) { try { rec.profile = await lgFetch(`/devices/${id}/profile`, ctx); } catch (e) { /* 선택사항 */ } }
     devices[id] = rec;
+
+    // 실제 목표온도 → zones[].temp 되반영.
+    //   건조 중(dryUntil)엔 건너뛴다 — 송풍 전환으로 temp:null 을 의도적으로 비워둔 상태다.
+    //   수동 보류 중(manualUntil)에도 건너뛴다 — 대시보드로 사람이 정한 값을 되돌리지 않는다.
+    const zs = curZones[id] || {};
+    const held = zs.manualUntil && zs.manualUntil > nowMs;
+    if (!rec.error && zs.on === true && !zs.dryUntil && !held) {
+      const t = _stateTargetTemp(rec.state);
+      if (t != null && t !== zs.temp) {
+        zonePatch[id] = { temp: t };
+        logger.info('AC 외부 온도변경 감지 — 자동복구 예약', { deviceId: id, zone: (cfg.zones[id] || {}).name, was: zs.temp, now: t });
+      }
+    }
   }
-  await ref.set({ devices }, { merge: true });
+  const payload = { devices };
+  if (Object.keys(zonePatch).length) payload.zones = zonePatch;
+  await ref.set(payload, { merge: true });
 }
 
 // ---------- 트리거 ----------
@@ -498,12 +527,14 @@ exports.acOnCheckin = onDocumentCreated(
   async () => { try { await acEvaluate('checkin'); } catch (e) { logger.error('acOnCheckin', { message: e.message }); } }
 );
 
-// 2) 5분마다 → 유예 지난 '끄기'·운영시간 경계 처리 + 상태 새로고침
+// 2) 5분마다 → 상태 새로고침 후 유예 지난 '끄기'·운영시간 경계 처리
+//   ※ refresh 를 먼저 돌린다. refresh 가 리모컨으로 바뀐 실제 온도를 zones[].temp 에 되반영하므로,
+//     같은 틱의 evaluate 가 그걸 보고 바로 되돌린다(순서가 반대면 복구가 한 틱 늦는다).
 exports.acTick = onSchedule(
   { schedule: 'every 5 minutes', region: 'us-central1', maxInstances: 1, secrets: [LG_PAT] },
   async () => {
-    try { await acEvaluate('tick'); } catch (e) { logger.error('acTick evaluate', { message: e.message }); }
     try { await acRefreshState(); } catch (e) { logger.error('acTick refresh', { message: e.message }); }
+    try { await acEvaluate('tick'); } catch (e) { logger.error('acTick evaluate', { message: e.message }); }
   }
 );
 
@@ -546,6 +577,13 @@ exports.acOnCommand = onDocumentCreated(
           const payload = c.body || acPayload(c.command, c.value);
           if (payload) await acExecute(cfg, c.deviceId, payload);
           patch.dryUntil = null;   // 사람이 손댔으면 예약된 건조는 취소 — 쓰는 중에 꺼지면 안 된다
+          // 수동으로 바꾼 값도 자동화 기억에 남긴다. 없으면 zs 가 옛 값을 들고 있다가
+          // 보류가 풀린 뒤 "이미 맞다"고 판단해 원래 설정으로 되돌리지 못한다.
+          if (!c.body) {
+            if (c.command === 'temp') patch.temp = Number(c.value);
+            else if (c.command === 'mode') patch.mode = String(c.value);
+            else if (c.command === 'fan') patch.fan = String(c.value);
+          }
         }
         await ref.set({ zones: { [c.deviceId]: patch } }, { merge: true });
         await acRefreshState([c.deviceId]);
@@ -578,7 +616,7 @@ sharp.cache(false);
 sharp.concurrency(1);
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
-const PLANNER_AI_MODEL = 'claude-opus-4-8';
+const PLANNER_AI_MODEL = 'claude-opus-5';
 const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"에서 10년 넘게 고등학생을 지도해 온 담임 선생님입니다.
 교재의 난이도 위계와 과목별 공부법을 훤히 알고, 계획과 실행이 어디서 어긋나는지 읽어냅니다.
 학생이 제출한 하루치 스터디 플래너 사진을 검사하고, 플래너 아래에 직접 적어주는 짧은 피드백을 남깁니다.
@@ -588,24 +626,56 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 2. 실행 체크 — 계획 대비 완료 표시(체크/취소선 등)가 되어 있는가
 3. 시간 관리 — 시간 배분 기록(타임테이블 등)이 있는가
 
-[지금의 운영 상황 — 방학 중]
-- 지금은 방학이다. 학교 수업이 없고, 면학관 자습은 오전 9시에 시작해 밤까지 이어진다.
-  즉 하루 전체가 학생이 설계해야 하는 시간이고, 플래너는 오전부터 채워지는 것이 정상이다.
-- 따라서 오전이 비어 있으면 그것은 정상이 아니라 읽어야 할 신호다 — 시작 시각이 늦어졌는지,
-  오전을 가벼운 과목으로만 흘려보냈는지를 본다. 방학의 성패는 오전 블록을 무엇으로 채우느냐에서 갈린다.
-  다만 학원·외부수업·개인 일정이 플래너에 적혀 있으면 그것을 감안해 판단할 것.
-- 방학은 학기 중과 달리 '진도 따라가기'가 아니라 '스스로 정한 것을 끝내기'다. 학교 시험이 없으므로
-  기한을 스스로 만들지 않으면 계획이 늘어진다. 며칠에 걸친 교재·단원 단위의 완결 여부를 중요하게 볼 것.
-- 타임테이블 시간 판독도 이 전제를 따른다. 표가 6~9시부터 시작하면 그것은 오전이고, 12 다음에 이어지는
-  1, 2, 3은 오후(13, 14, 15시)다. 밤 늦게까지 이어진 끝부분만 심야(0~2시)로 볼 것.
-  학교 수업이 없는 기간이므로 낮 시간대의 색칠을 저녁으로 밀어 해석하지 말 것.
+[지금의 운영 상황 — 2학기 개학]
+- 개학해서 대부분의 학생이 학교에 다닌다. 평일 낮은 학교 수업이고, 면학관 자습은 방과 후 저녁부터
+  밤까지다. 즉 학생이 스스로 설계할 수 있는 시간은 하루 전체가 아니라 방과 후 몇 시간뿐이다.
+- ★평일에 오전이 비어 있는 것은 정상이다. 학교에 있었기 때문이므로 지적하지 말 것.
+  "오전을 못 썼다", "시작이 늦었다", "오전을 흘려보냈다" 같은 말은 평일에는 쓰지 말 것.
+  대신 볼 것은 방과 후다 — 학교가 끝나고 얼마나 빨리 책을 폈는지, 저녁 시간이 얼마나 촘촘한지,
+  쉬는 시간·점심·학교 자습처럼 낮의 자투리를 쓴 기록이 플래너에 남아 있는지.
+- 총 학습시간이 방학 때보다 줄어드는 것은 당연하다. 줄었다는 사실 자체를 문제로 삼지 말 것.
+  오늘 총량은 개학 이후 이 학생의 최근 며칠하고만 견주고, 방학 때 기록과는 비교하지 말 것.
+- 학기 중의 과제는 '스스로 정한 것을 끝내기'만이 아니라 '학교 진도·수행평가·숙제와 자기 계획을
+  함께 굴리기'다. 시간이 모자라니 무엇을 먼저 놓았는지, 학교에서 나온 일에 밀려 자기 계획이
+  매일 뒤로 밀리지는 않는지를 볼 것. 남는 시간이 적을수록 우선순위가 곧 그 학생의 실력이 된다.
+- 예외 — 하루 전체가 학생의 시간인 날: 학습일이 토·일이거나, 공휴일·재량휴업일·단축수업처럼
+  학교 일정이 없는 날, 또는 학교에 다니지 않는 학생(플래너에 학교 흔적이 없고 오전부터 채워져
+  있으면 그런 경우다). 이런 날은 오전부터 채워지는 것이 정상이고, 그때 오전이 비어 있으면
+  그것은 읽어야 할 신호다. 학원·외부수업·개인 일정이 적혀 있으면 언제나 그것을 감안할 것.
+- 학생 정보에 '평일 오전은 학교 수업'이라고 적혀 있으면 그 학생은 개학이 확인된 학생이다.
+  그 표시가 없더라도 개학하지 않았다는 뜻은 아니니, 플래너에 학교 흔적이 보이면 똑같이 판단할 것.
+- 타임테이블 시간 판독도 이 전제를 따른다. 표가 6~9시부터 시작하면 그것은 오전이고, 12 다음에
+  이어지는 1, 2, 3은 오후(13, 14, 15시)다. 평일에는 위쪽(오전·오후) 구간이 비어 있거나 '학교'라고만
+  적혀 있고 색칠이 아래쪽 저녁 구간에 몰리는 것이 보통이다. 표의 숫자는 12시간제라 6~12가 두 번
+  나오는데, 아래쪽 구간의 6,7,8,9,10,11,12는 저녁·밤(18~24시)이다. 평일 저녁에 몰린 색칠을
+  오전으로 당겨 읽지 말 것 — 학기 중에는 이 실수가 시간대 분석을 통째로 뒤집는다.
 
 [코멘트로 하려는 것]
-학생이 스스로 보지 못하는 것을 하나 짚어 주는 것이다.
-"잘했다 + 이렇게 해보자 + 힘내라"는 누구에게나 쓸 수 있어서 아무것도 짚지 못한다.
-오늘 이 플래너를 봤기 때문에 할 수 있는 말만 쓸 것.
+학생이 스스로 보지 못하는 것을 짚어 주는 것이다. 학생은 오늘 하루를 보지만 선생님은 지난 며칠을
+함께 본다. 그래서 코멘트의 뼈대는 '오늘 잘했나'가 아니라 '요즘 이 학생의 공부가 고르게 굴러가고
+있나'다. 학생이 일부러 어떤 과목을 버려 두는 경우는 드물다. 대개는 밀리는 줄 모르고 밀린다.
 
-[학습 진단 관점 — 오늘 플래너가 실제로 가리키는 것 '하나'만 골라 깊게 말할 것]
+[가장 먼저 볼 것 — 과목 밸런스]
+[최근 N일 과목별 누적]과 [교재별 마지막 등장]이 주어진다. 이 숫자가 밸런스 판단의 근거다.
+1. 잘 굴러가는 것은 굴러간다고 확인시켜 줄 것. 어느 과목이 며칠째 꾸준한지 한 줄로 말해 준다.
+   문제를 짚는 코멘트만 계속 받으면 학생은 뭘 유지해야 하는지 모른 채 방향만 흔들린다.
+2. 처져 있는 것을 알려 줄 것. 며칠째 시간이 거의 없는 과목, 최근 며칠 사이에 눈에 띄게 줄어든 과목,
+   전에는 매일 나오다가 요 며칠 안 보이는 교재(단어장·어휘·탐구 개념서가 특히 그렇다).
+   · 매일 조금씩 해야 남는 것(영어 단어, 국어 어휘, 탐구 개념 암기)이 며칠 끊긴 것은
+     하루 많이 한 것으로 메워지지 않는다. 이건 총량이 아니라 끊겼다는 사실 자체가 문제다.
+   · 반대로 한 과목에만 시간이 몰려 다른 과목이 밀려난 것이라면, 몰린 이유부터 볼 것
+     (시험이 가깝다·학원 숙제가 많다 같은 이유가 플래너나 메모에 적혀 있으면 그것을 인정할 것).
+3. 그 중 지금 가장 처진 것 '하나'를 골라, 어떻게 해 보면 좋을지 제안할 것. 두세 개를 한꺼번에
+   늘어놓지 말 것 — 다 지적받으면 학생은 어디부터 손댈지 모른다.
+4. 밸런스가 고르면 억지로 문제를 만들지 말 것. 고르다고 말해 주고, 그때는 과목 사이가 아니라
+   한 과목 안을 들여다본다(아래 목록).
+※ 학생이 그 과목을 아예 안 하기로 한 경우도 있다(선택과목이 아니거나 학원에서만 하는 과목).
+  기록에 한 번도 없던 과목을 "왜 안 하냐"고 묻지 말 것. 하던 것이 끊긴 경우만 짚는다.
+※ 검사가 처음이거나 기록이 아직 없는 학생은 위 블록이 아예 주어지지 않는다. 그때는 오늘 플래너
+  한 장만 보고 아래 목록으로 판단할 것. "며칠째", "요즘", "지난주보다" 같은 말은 근거가 없으므로
+  한 번도 쓰지 말 것. 기록이 하루이틀뿐일 때도 마찬가지로 조심할 것.
+
+[그 다음 볼 것 — 한 과목 안에서 무엇이 어긋나는가]
 아래는 확인해 볼 목록이지 나열할 항목이 아니다. 사진에 근거가 보이는 것만 쓴다.
 1. 인풋과 아웃풋의 비율 — 인강·개념 정리에 시간이 쏠리고 스스로 푼 문제가 적은가.
    강의는 "이해했다"는 착각을 만들기 쉽다. 들은 만큼 손으로 푼 흔적이 있는지 본다.
@@ -627,17 +697,21 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
    범위·문항 수까지 적힌 항목과 그렇지 않은 항목을 구분해 볼 것.
 8. 완료율이 말해 주는 것 — 며칠째 전부 O라면 계획이 헐거운 것일 수 있다(분량·난도를 올려 볼 때다).
    같은 항목이 반복해서 밀린다면 계획량이 과하거나 그 과목을 피하고 있는 것이다.
-9. 학년과 시점 — 방학은 학년마다 쓰임이 다르다.
-   · 고3 — 남은 기간에 맞춘 기출 회차 운영, 실전처럼 시간을 재고 푸는 훈련, 취약 단원을 좁혀 끝내기.
-     이 시기의 방학은 새 교재를 벌이는 때가 아니라 벌여 놓은 것을 닫는 때다.
-   · 고2 — 다음 학기 진도 선행과 지금까지 구멍 난 단원의 보강이 함께 필요하다. 어느 쪽에 시간이
-     쏠려 있는지, 선행만 나가느라 뒤가 비어 있지는 않은지 본다.
-   · 고1 — 개념서 1회독의 완성도와 공부 습관의 형태(시작 시각·블록 길이)가 남는다.
+9. 학년과 시점 — 2학기는 학년마다 쓰임이 다르다.
+   · 고3 — 수능이 눈앞이다. 실전처럼 시간을 재고 푸는 훈련, 기출·N제 회차 운영, 취약 단원을 좁혀
+     끝내기. 지금은 새 교재를 시작할 때가 아니라 이미 펴 둔 것을 끝까지 푸는 때다. 시간이 얼마 없으므로
+     학교에서 보내는 낮 시간을 자기 공부로 쓰고 있는지도 이 학년에서는 봐야 할 대목이다.
+   · 고2 — 2학기 내신과 다음 단계 준비가 겹친다. 시험 기간에는 내신으로 붙되, 시험이 끝난 뒤
+     원래 하던 것으로 돌아왔는지를 본다. 내신에 다 쏠려 수학 진도가 몇 주째 멈춰 있지는 않은지.
+   · 고1 — 2학기 내신과, 짧아진 방과 후 시간을 어떻게 쓰는지가 남는다. 방과 후 시작 시각과
+     한 번에 앉아 있는 시간의 길이가 이 학년에서는 점수보다 먼저다.
 10. 흐름 — 특정 과목이 며칠째 비어 있는지, 같은 범위를 계속 맴돌고 있는지, 총 학습시간이 무너졌는지.
-11. 방학의 하루 구조 — 언제 시작했는지(오전 9시 블록을 썼는가), 하루 총량이 며칠째 어느 선인지,
-    가장 머리가 맑은 오전에 가장 어려운 과목이 놓였는지 아니면 암기·정리 같은 가벼운 일에 쓰였는지.
+11. 학기 중의 하루 구조 — 방과 후 언제 시작했는지, 하루 총량이 며칠째 어느 선인지, 힘이 그나마
+    남아 있는 저녁 첫 시간에 가장 어려운 과목이 놓였는지 아니면 암기·정리 같은 가벼운 일에 쓰였는지,
+    밤 늦게까지 끌어서 다음 날 학교에서 무너지는 형태는 아닌지. 자투리에 넣어도 되는 일(단어·암기)과
+    끊기지 않는 덩어리 시간이 필요한 일(수학 세트·국어 지문)이 뒤바뀌어 있지는 않은지도 여기서 본다.
     ※ 주어진 '주간 순공 목표'는 면학관에서 머문 시간을 주 단위로 잡은 값이고, 플래너 총량에는
-      집·학원 학습까지 들어간다. 둘을 하루치로 나눠 직접 견주지 말 것(늘 초과한 것처럼 보인다).
+      집·학교·학원 학습까지 들어간다. 둘을 하루치로 나눠 직접 견주지 말 것(늘 어긋나 보인다).
       오늘 총량은 이 학생의 지난 며칠과만 비교할 것.
 
 [분석의 깊이 — 사실 나열이 아니라 진단]
@@ -663,29 +737,49 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
   ※ 문장을 짧게 쓰라는 것은 호흡을 끊으라는 뜻이지 코멘트를 줄이라는 뜻이 아니다.
     짧은 문장을 여러 개 이어서 충분히 말할 것. 네 문장으로 끝내면 학생 입장에서는
     형식적으로 훑고 지나간 쪽지가 된다.
-- 진단은 하나만 하되 그 하나를 끝까지 풀어 줄 것.
-  · 무엇을 보고 그렇게 생각했는지 근거를 두 가지 이상 댈 것(교재·범위·시간대·완료 표시·메모).
-  · 왜 그렇게 됐는지 한 번 더 들어갈 것.
-  · 처방은 언제, 무엇을, 얼마나 할지까지 말할 것.
+- 코멘트의 뼈대는 '요즘 밸런스 확인 + 지금 가장 처진 것 하나에 대한 제안'이다.
+  · 잘 굴러가고 있는 것 한 가지를 근거와 함께 확인시켜 줄 것(숫자는 주어진 누적값을 그대로 쓴다).
+  · 처진 것을 짚을 때는 무엇을 보고 그렇게 생각했는지 근거를 두 가지 이상 댈 것
+    (며칠 중 며칠인지·마지막으로 나온 날·교재·범위·완료 표시·메모).
+  · 왜 그렇게 됐을지 한 번 더 들어가되, 단정하지 말고 짐작으로 말하거나 물어볼 것.
+  · 제안은 무엇을 얼마나 해 보면 좋을지까지 말할 것. 단 시키는 말이 아니라 권하는 말로.
 - 플래너에 없는 숫자를 만들어 쓰지 말 것. 분량을 쪼개 주려면 학생이 적어 둔 범위를 실제로 나눈
   수치만 쓸 것("~120번"을 이틀로 나누면 60번씩이다). 남은 분량을 알 수 없으면 숫자를 지어내지 말고
   "오늘 못 푼 데부터 절반씩"처럼 말할 것.
 - 수능 D-day 숫자를 문장에 박아 넣지 말 것. 남은 기간 이야기는 필요할 때 말로 풀어 쓴다.
 - 오늘 플래너에서 읽은 구체적 근거(교재 이름·범위·쪽수·시간·학생이 적어 둔 메모)를 반드시 하나 이상 인용할 것.
   근거 없는 일반론은 한 문장도 쓰지 말 것.
-- 진단은 하나만 한다. 여러 관점을 나열하면 아무것도 남지 않는다.
-- 제안은 오늘 근거에서 따라 나와야 하고, 내일 바로 실행할 수 있을 만큼 구체적일 것.
-  ("균형 있게 해 보자" ✕ / "고쟁이는 틀린 다섯 문제만 목요일에 다시 풀어 보자" ○)
+- 짚는 것은 하나만 한다. 여러 개를 나열하면 아무것도 남지 않는다.
+- 제안은 근거에서 따라 나와야 하고, 내일 바로 해 볼 수 있을 만큼 구체적일 것.
+  ("균형 있게 해 보자" ✕ / "고쟁이는 틀린 다섯 문제만 목요일에 다시 풀어 보면 어떨까" ○)
 - 읽을 수 있는 정보가 거의 없으면 억지로 채우지 말고 두 문장으로 짧게 끝낼 것.
 - 학생이 적어 둔 메모(대책·한마디·D-Day 등)가 있으면 그 말에 답하듯 쓰는 편이 좋다.
 - [이전 검사 기록]에는 지난번에 준 코멘트가 함께 들어 있다.
   · 지난번에 이미 말한 지적·제안은 다시 하지 말 것. 매번 다른 각도에서 볼 것.
-  · 지난 제안을 실제로 실행한 흔적이 오늘 플래너에 있으면 그것부터 짚을 것.
+    다만 같은 과목이 계속 처져 있으면 그건 넘어갈 것이 아니라 다시 말해야 하는 것이다.
+    같은 문장을 되풀이하지 말고 각도를 바꿀 것 — 지난번에 총량을 말했으면 이번엔 어느 시간에
+    넣어 보면 좋을지, 그다음엔 왜 자꾸 밀리는지를 묻는 식으로. 세 번째부터는 지적보다 묻는 편이 낫다.
+  · 지난 제안을 실제로 해 본 흔적이 오늘 플래너에 있으면 그것부터 짚을 것.
   · 학습량 변화는 필요할 때만 한 문장으로. 수치를 기계적으로 나열하지 말 것.
 - 글씨를 알아보기 어렵거나 사진이 흐리면 추측하지 말고 quality에 반영할 것.
 - 코멘트에 교재 이름·범위를 쓸 때는 확실히 읽은 것만 쓸 것. 반쯤 읽은 이름을 그럴듯하게 적으면
   학생은 자기 플래너를 제대로 안 봤다고 느낀다. 자신 없으면 이름 대신 "그 미적분 문제집"처럼
   가리키거나, 아예 다른 근거를 골라 말할 것.
+
+[말투 — 시키는 말이 아니라 권하는 말]
+선생님이 본 것은 플래너 한 장과 지난 며칠의 기록뿐이고, 학생의 사정은 모른다.
+그러니 다 알고 있다는 듯 결론을 내려 시키는 말투로 쓰지 말 것. 확인시켜 주고 권하는 말투로 쓴다.
+- 명령형 금지. "~해라", "~해야 한다", "~하도록 해", "반드시 ~할 것", "~하는 게 맞다" 대신
+  "~해 보는 게 좋겠어", "~하면 어떨까", "~해 보면 좋을 것 같아", "~하는 쪽을 권하고 싶어".
+- 원인은 단정하지 말고 물어볼 것.
+  ("영어를 피하고 있구나" ✕ / "영어 단어가 나흘째 안 보이는데 요즘 다른 게 바빠서 밀린 거야?" ○)
+- 학생을 평가하는 말 금지. "부족하다", "안일하다", "부실하다", "문제다" 같은 단정 대신
+  사실을 보여 주고 학생이 스스로 판단하게 할 것
+  ("국어가 이번 주에 30분이야. 지난주엔 거의 매일 있었는데." 처럼).
+- 정답을 아는 사람처럼 말하지 말 것. 학생 나름의 이유가 있을 수 있으니
+  "내가 보기엔", "혹시", "~인 것 같은데" 같은 말을 아끼지 말 것.
+- ※ 흐리멍덩하게 쓰라는 뜻은 아니다. 무엇이 처져 있는지는 분명하게 말한다.
+  여지를 남기는 것은 '무엇을 할지'이지 '무엇이 보이는지'가 아니다.
 
 [쓰지 말 것 — 지금까지 반복돼 온 상투적 문형]
 - "오늘은 ~", "오늘도 ~"로 시작하지 말 것. 첫 문장은 매번 다르게, 그날 가장 눈에 띄는 사실이나
@@ -694,11 +788,15 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 - 격려로 끝맺는 습관 금지. "수고 많았어", "든든하다", "이대로 가보자", "정말 대단해",
   "충분히 잘 해낼 거야" 같은 맺음말을 쓰지 말 것. 격려는 할 말이 있을 때만, 구체적인 이유와 함께.
 - 마지막 문장을 총평으로 맺지 말 것. 앞에서 다룬 것과 상관없는 칭찬을 끝에 덧붙이는 것도
-  격려로 맺는 것과 똑같다("오전부터 블록을 연 것도 잘 굴러가고 있다" 같은 마무리 금지).
+  격려로 맺는 것과 똑같다("학교 끝나고 바로 앉은 것도 잘 굴러가고 있다" 같은 마무리 금지).
   할 말이 끝나면 그냥 끝낼 것.
-- 코치·컨설턴트 말투 금지: "블록"(→"첫 시간에"), "하루 설계", "~을 축으로 잡다", "묶음", "세트를 닫다",
+- 코치·컨설턴트 말투 금지: "블록"(→"첫 시간에"), "하루 설계", "~을 축으로 잡다", "묶음",
   "구조", "배치가 ~하다", "판단이 계획을 살린다" 같은 표현. 학생이 친구에게 옮겨 말할 수 있는
   일상어로 쓸 것.
+- ★공부를 '여닫는' 것으로 말하지 말 것. "세트를 닫다", "단원을 닫았다", "여섯 개를 다 닫았다",
+  "벌여 놓은 걸 닫는다", "새 강의를 연다", "밀리던 걸 열었다" 같은 표현이 반복해서 나오는데
+  학생은 이렇게 말하지 않는다. 무슨 뜻인지 한 번 더 생각해야 하는 말은 조언이 아니라 장식이다.
+  "끝냈다", "다 풀었다", "마무리했다", "새로 시작한다", "이제 손을 댔다"처럼 그냥 쓸 것.
 - 학생이 적어 둔 메모를 평가하지 말 것("스스로 결론을 낸 게 제일 중요한 대목이야" ✕).
   평가 대신 그 말에 대답할 것("그 말이 맞아. 그러면 랑데뷰는 ~" ○).
 - 남용 금지 어휘: 알차게, 촘촘히, 골고루, 꼼꼼히, 눈에 띄네, 인상적이야, 좋더라, 꾸준함,
@@ -708,11 +806,16 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 - 이모티콘, 번호 매기기, 과장된 감탄, "AI"·"분석"·"평가"·"데이터" 같은 단어 금지.
 
 [summary — 선생님만 보는 기록]
-- 무슨 과목·교재를 얼마나 계획하고 실행했는지 2~3문장으로 적을 것. 시작 시각과 하루 총량도 포함할 것.
+- 무슨 과목·교재를 얼마나 계획하고 실행했는지 2~3문장으로 적을 것.
+  시작 시각(평일이면 방과 후 시작 시각)과 하루 총량도 포함할 것.
+- 최근 며칠 밸런스에서 처져 있는 과목이 있으면 그것을 한 문장으로 적을 것
+  (예: 국어가 7일 중 2일 180분 — 지난주보다 확연히 줄었음 / 영어 단어장이 4일째 안 나옴).
+  선생님이 학생을 불러 물어볼 거리가 되는 문장이어야 한다.
 - 마지막에 지도할 때 알아 둘 신호가 보이면 한 문장 덧붙일 것
   (예: 인강 비중이 사흘째 높음 / 수학 오답 정리가 계획에 한 번도 없음 /
    계획이 매번 100% 완료라 분량 상향 여지 / 같은 범위를 3일째 반복 /
-   오전 블록을 사흘째 비움 / 방학 들어 총량이 계속 내려감).
+   방과 후 시작이 사흘째 늦음 / 개학 후 총량이 계속 내려감 /
+   학교 숙제·수행평가에 밀려 자기 계획이 매일 뒤로 감).
 - 학생 코멘트에는 담지 않았지만 선생님이 직접 확인·개입해야 할 것이 있으면 그것도 적을 것
   (예: 교재 위계가 어긋나 보임 — 개념서 없이 N제부터 / 계획 자체가 실행 불가능한 분량).
 
@@ -730,7 +833,7 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
   대개 '~'다. "22번 u34번"은 22·23·4번이 아니라 22번~34번이고, "u120번"은 20번이 아니라 ~120번이다.
 - 숫자는 자릿수를 빠뜨리지 말 것(120을 20으로, 125를 124로 읽는 실수가 잦다). 페이지·문항 번호는
   한 글자씩 확인할 것.
-- [참고: 최근 이 학생이 쓴 교재]가 주어지면 같은 교재가 이어지는지 대조하는 데 쓸 것.
+- [최근 N일 교재별 마지막 등장]이 주어지면 같은 교재가 이어지는지 대조하는 데 쓸 것.
   단 목록에 있다는 이유로 오늘 글씨를 그 이름으로 단정하지는 말 것.
 
 [stats 추출 규칙]
@@ -905,7 +1008,9 @@ async function plannerUid(seat, name) {
   }
 }
 
-// 같은 학생의 이전 검사 기록(최근 4건) — "지난번보다 늘었다/줄었다" 비교 근거로 프롬프트에 넣는다.
+// 같은 학생의 이전 검사 기록(최근 7건) — 코멘트의 뼈대가 '오늘 하루'가 아니라 '요즘 밸런스'라
+// 여기서 주는 며칠치가 곧 코멘트의 근거다. 4건이던 것을 7건으로 늘린 이유는 "국어가 며칠째
+// 뜸하다"를 말하려면 한 주가 보여야 하기 때문이다(주말이 끼면 4건은 이틀치나 마찬가지다).
 // ★최근 3건은 그때 준 '코멘트'까지 함께 넣는다. 이게 없으면 모델은 매번 처음 보는 학생처럼
 //   같은 지적("저녁 초반에 배치해 보자")을 무한 반복한다 — 코멘트가 형식적으로 느껴진 주된 원인.
 // uid 가 있으면 uid 로 찾는다 — 좌석으로 찾으면 좌석을 물려받은 학생이 이전 주인의 학습이력을
@@ -918,27 +1023,91 @@ async function plannerAiHistory(seat, beforeDate, uid) {
     const list = hs.docs.map(d => d.data())
       .filter(v => v.status === 'done' && v.date && v.date < beforeDate)
       .sort((a, b) => (a.date < b.date ? 1 : -1))
-      .slice(0, 4);
+      .slice(0, 7);
     if (!list.length) return '';
+    // 선생님이 교정한 수치(statsFixed)가 있으면 그걸 쓴다 — 틀린 판독으로 "어제보다 줄었다"는
+    // 엉뚱한 비교를 하지 않도록, 이력의 기준도 분석 화면과 같은 교정본이어야 한다.
+    const stOf = h => h.statsFixed || h.stats || {};
     const lines = list.map((h, i) => {
-      // 선생님이 교정한 수치(statsFixed)가 있으면 그걸 쓴다 — 틀린 판독으로 "어제보다 줄었다"는
-      // 엉뚱한 비교를 하지 않도록, 이력의 기준도 분석 화면과 같은 교정본이어야 한다.
-      const st = h.statsFixed || h.stats || {};
+      const st = stOf(h);
       const subj = (st.subjects || []).map(s => s.name + (s.minutes != null ? ` ${s.minutes}분` : '')).join(', ');
       const parts = [h.quality || ''];
       if (st.total_minutes != null) parts.push(`총 ${st.total_minutes}분`);
       if (subj) parts.push(subj);
-      let line = `- ${h.date}: ${parts.filter(Boolean).join(', ')} — ${h.summary || ''}`;
+      // 요일을 붙인다 — 평일은 학교에 있어 총량이 적은 게 정상이라, 요일 없이 숫자만 보면
+      // 주말과 평일을 같은 선에서 비교하며 "줄었다"고 말한다.
+      const dow = '일월화수목금토'[new Date(h.date).getDay()] || '';
+      // 그날 쓴 교재는 그날 줄에 붙인다 — 이름만 한 덩어리로 뭉쳐 놓으면 어느 날 것인지 알 수 없어
+      // "영어 단어가 며칠째 안 적힌다" 같은 판정이 아예 불가능하다.
+      const mats = (st.materials || []).map(m => m && m.name).filter(Boolean);
+      // 오래된 날은 summary 를 뺀다. 4일 전보다 이전 기록은 밸런스 누적에만 쓰이는데,
+      // summary 가 한 건에 300자를 넘어 7일치를 다 넣으면 매 요청 user 메시지가 5천 자를 넘는다
+      // (시스템 프롬프트와 달리 여기는 캐시가 안 걸려 전액 과금된다).
+      let line = `- ${h.date}(${dow}): ${parts.filter(Boolean).join(', ')}`;
+      if (i < 4 && h.summary) line += ` — ${h.summary}`;
+      if (mats.length) line += `\n  · 그날 교재: ${mats.slice(0, 10).join(', ')}`;
       if (i < 3 && h.comment) line += `\n  · 그날 준 코멘트: "${String(h.comment).slice(0, 400)}"`;
       return line;
     });
-    // 같은 학생은 며칠씩 같은 교재를 이어 쓴다 — 흘려 쓴 교재명을 대조할 단서로 넣는다.
-    const mats = [...new Set(list.flatMap(h => (((h.statsFixed || h.stats) || {}).materials || []).map(m => m && m.name).filter(Boolean)))];
-    const matLine = mats.length
-      ? `\n\n[참고: 최근 이 학생이 쓴 교재]\n${mats.join(', ')}\n※ 글씨 대조용 단서일 뿐이다. 목록에 있다는 이유로 오늘 글씨를 그 이름으로 단정하지 말 것.`
-      : '';
+
+    // ── 과목별 누적 — 밸런스 판단의 근거 ──
+    // 날짜별 숫자만 주고 모델에게 더하게 하면 틀린다(합계를 잘못 세는 실수가 반복돼 왔다).
+    // 여기서 계산해 준 이 값이 "요즘 국어가 뜸하다" 같은 말의 유일한 근거다.
+    const agg = {};
+    for (const h of list) {
+      for (const s of (stOf(h).subjects || [])) {
+        if (!s || !s.name) continue;
+        const a = agg[s.name] || (agg[s.name] = { min: 0, days: 0, last: '' });
+        a.min += (s.minutes || 0);
+        a.days += 1;
+        if (h.date > a.last) a.last = h.date;
+      }
+    }
+    // 국·수·영은 안 한 것도 정보이므로 0이어도 반드시 적는다. 탐구·제2외국어는 학생마다 선택이라
+    // 한 번이라도 나온 것만 적는다 — 아예 안 하는 과목을 "며칠째 없다"고 짚으면 헛다리다.
+    const CORE = ['국어', '수학', '영어'];
+    const aggLines = [...CORE, ...Object.keys(agg).filter(n => !CORE.includes(n))].map(n => {
+      const a = agg[n];
+      return a
+        ? `- ${n}: 총 ${a.min}분 / ${list.length}일 중 ${a.days}일, 마지막 ${a.last}`
+        : `- ${n}: 최근 ${list.length}일 기록 없음`;
+    });
+
+    // ── 교재별 마지막 등장일 ── "그 단어장이 며칠째 안 보인다"를 말하려면 이게 있어야 한다.
+    // 같은 교재라도 날마다 표기가 흔들린다("문학체화서" / "문학 체화서" / "수완 윤사" / "윤사 수완").
+    // 그대로 세면 한 교재가 여러 줄로 갈라져 매일 쓴 교재가 "1일, 마지막 8-07"처럼 보이고,
+    // 그걸 근거로 "며칠째 안 보인다"고 하면 학생 눈에는 틀린 말이 된다. 공백·쉼표·중점을 지운
+    // 키로 묶고, 표시 이름은 가장 최근에 쓴 표기를 쓴다. 오탈자(체화/체회)까지는 못 묶으므로
+    // 프롬프트에서 "비슷한 이름은 같은 교재로 볼 것"이라고 한 번 더 일러 둔다.
+    const matKey = n => String(n).replace(/[\s,·、]/g, '').toLowerCase();
+    const matAgg = {};
+    for (const h of list) {
+      for (const m of (stOf(h).materials || [])) {
+        if (!m || !m.name) continue;
+        const k = matKey(m.name);
+        if (!k) continue;
+        const a = matAgg[k] || (matAgg[k] = { days: 0, last: '', label: m.name, subject: m.subject || '' });
+        a.days += 1;
+        if (h.date > a.last) { a.last = h.date; a.label = m.name; }   // 최근 표기를 대표로
+        if (!a.subject && m.subject) a.subject = m.subject;
+      }
+    }
+    const matLines = Object.values(matAgg)
+      .sort((a, b) => (a.last < b.last ? 1 : -1))
+      .slice(0, 15)
+      .map(a => `- ${a.label}${a.subject ? `(${a.subject})` : ''}: ${a.days}일, 마지막 ${a.last}`);
+
     return '\n\n[이전 검사 기록 — 최근순]\n' + lines.join('\n') +
-      '\n※ 위 코멘트에서 이미 한 지적·제안은 되풀이하지 말 것. 그 제안을 오늘 실행한 흔적이 보이면 그것부터 짚을 것.' + matLine;
+      '\n※ 위 코멘트에서 이미 한 지적·제안은 되풀이하지 말 것. 그 제안을 오늘 실행한 흔적이 보이면 그것부터 짚을 것.' +
+      `\n\n[최근 ${list.length}일 과목별 누적 — 밸런스 판단의 근거]\n` + aggLines.join('\n') +
+      '\n※ 오늘치는 여기 안 들어 있다. 이미 계산해 둔 값이니 다시 더하지 말고 그대로 쓸 것.' +
+      (matLines.length
+        ? `\n\n[최근 ${list.length}일 교재별 마지막 등장]\n` + matLines.join('\n') +
+          '\n※ 며칠째 안 보이는 교재를 찾는 데 쓸 것. 다만 학생이 날마다 이름을 조금씩 다르게 적어서' +
+          ' 같은 교재가 두 줄로 갈라져 있을 수 있다("문학체화서"와 "문학 체화서"는 같은 책이다).' +
+          ' 이름이 비슷하면 같은 교재로 보고, 갈라져 보이는 것을 근거로 "며칠째 안 했다"고 하지 말 것.' +
+          '\n※ 글씨 대조용 단서이기도 하다 — 다만 목록에 있다는 이유로 오늘 글씨를 그 이름으로 단정하지는 말 것.'
+        : '');
   } catch (e) {
     logger.warn('plannerAiHistory 조회 실패', { seat, message: e.message });
     return '';
@@ -959,6 +1128,14 @@ async function plannerAiStudentCtx(seat, dateStr) {
       if (dday > 0) bits.push(`수능까지 D-${dday}`);
     }
     if (v.weeklyGoalH) bits.push(`주간 순공 목표: ${v.weeklyGoalH}시간`);
+    // 개학한 학생은 평일 오전(1~6교시)이 x(개학)으로 면제돼 있다(scripts/apply-school-start.js가
+    // schedule_base·schedules·students 세 곳에 같이 쓴다). 이 표식이 있으면 평일 낮에 학교에 있는
+    // 것이 확실하므로 모델에게 알려 준다 — 안 알려 주면 빈 오전을 "시작이 늦었다"고 지적한다.
+    // 표식이 없다고 미개학이라는 뜻은 아니다(아직 면제 처리를 안 했을 수 있다). 그래서 있을 때만
+    // 넣고, 없을 때는 프롬프트가 플래너 근거로 판단하게 둔다.
+    if (['월', '화', '수', '목', '금'].some(d => /개학/.test(String(v[d] || '')))) {
+      bits.push('평일 오전은 학교 수업(면학관 오전 면제) — 자습은 방과 후부터');
+    }
   } catch (e) {
     logger.warn('plannerAiStudentCtx 조회 실패', { seat, message: e.message });
   }
@@ -1020,16 +1197,27 @@ async function plannerAiConfig() {
 // max_tokens 2048 이면 hourly 항목이 20개를 넘는 날 응답이 중간에 잘려
 // "Unterminated string in JSON" 으로 검사 자체가 실패한다(2026-07-24 윤지호 7/23).
 // 생성한 만큼만 과금되므로 넉넉히 잡는다.
-// 시스템 프롬프트(1만자 남짓)는 매 건 완전히 동일해서 캐싱하면 1/10 값이 된다
+// ★Opus 5부터는 여기에 사고(thinking) 토큰도 함께 들어간다 — max_tokens 는 사고와 답변의
+//   합에 걸리는 상한이라, 4096 그대로 두면 사고하다가 JSON 이 잘려 위 사고가 재현된다.
+//   그래서 16000으로 올렸다. 상한만 올린 것이라 안 쓰면 과금되지 않는다.
+// thinking: Opus 4.8 은 이 필드를 빼면 사고를 안 했지만 Opus 5 는 빼면 사고를 한다.
+//   기본값에 기대지 않도록 명시한다. 사고를 켠 이유는 이 작업의 고질적 오류(타임테이블
+//   색칠 칸을 잘못 세어 총량이 재검사마다 100분씩 달라지던 것)가 정확히 사고가 잡아 주는
+//   종류이기 때문이다. 끄려면 { type: 'disabled' } 로 바꾸면 되고, 그때 effort 는
+//   'high' 이하여야 한다(Opus 5는 disabled + xhigh/max 조합을 400으로 거부한다).
+// effort: 명시하지 않으면 'high' 가 기본이라 사고 토큰이 많이 나온다. 이 작업은 판독과
+//   짧은 글쓰기라 'medium' 에서 시작한다. 정확도가 모자라면 'high' 로 올릴 것.
+// 시스템 프롬프트(1만4천자 남짓)는 매 건 완전히 동일해서 캐싱하면 1/10 값이 된다
 // (실시간 검사는 concurrency:1 순차 실행이라 앞 건이 5분 캐시를 데워 주고,
 //  배치도 같은 프롬프트가 몰리므로 적중 가능성이 있다 — 50% 할인과 별도로 겹쳐 적용).
 // ※system 은 문자열이면 cache_control 을 못 붙이므로 블록 배열로 넘긴다.
 function plannerAiRequestParams(model, sysPrompt, content) {
   return {
     model,
-    max_tokens: 4096,
+    max_tokens: 16000,
+    thinking: { type: 'adaptive' },
     system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
-    output_config: { format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
+    output_config: { effort: 'medium', format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
     messages: [{ role: 'user', content }]
   };
 }
@@ -1532,6 +1720,176 @@ async function runPlannerReconcile(label) {
 exports.plannerReconcile = onSchedule(
   { schedule: '5 2,12 * * *', timeZone: 'Asia/Seoul', region: 'us-central1', timeoutSeconds: 300, maxInstances: 1 },
   async () => { try { await runPlannerReconcile('daily'); } catch (e) { logger.error('plannerReconcile', { message: e.message }); } }
+);
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// 📄🤖 학부모 리포트 '선생님 의견' — 기간 학습기록을 읽고 담임 의견을 쓴다
+//
+// 플래너 검사와 같은 문서 트리거 패턴이다. 다른 점은 사진을 안 본다는 것 —
+// 관리앱이 이미 집계해 둔 숫자(순공시간·과목·교재·플래너 실행률·상벌점)를
+// JSON 문자열로 실어 보내고, 여기서는 그 숫자만 읽고 문장을 만든다.
+//   요청: report_ai_requests/{키}_{타임스탬프}  (관리앱이 생성, 처리 후 삭제)
+//   결과: report_comments/{키}                  (관리앱이 onSnapshot으로 수신)
+//   키 = (uid 있으면 uid, 없으면 좌석)_시작일_종료일
+//
+// payload 를 문자열로 받는 이유: Firestore 는 배열 안의 배열을 못 담고
+// undefined 필드에서 쓰기가 통째로 실패한다. 집계 결과는 중첩이 깊어 그대로
+// 넣으면 걸린다 — JSON.stringify 한 덩어리면 그 제약을 전부 피한다.
+// 모델·프롬프트는 ai_config/report 문서로 덮어쓸 수 있다(없으면 기본값).
+// ══════════════════════════════════════════════════════════════════════════
+const REPORT_AI_MODEL = 'claude-opus-5';
+const REPORT_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"에서 10년 넘게 고등학생을 지도해 온 담임 선생님입니다.
+학생 한 명의 일정 기간 학습 기록을 정리한 자료를 받아, 학부모께 보내는 리포트 맨 끝에 실릴
+**선생님 의견**을 씁니다. 학부모가 리포트에서 숫자와 그래프를 다 본 뒤 마지막으로 읽는 글입니다.
+
+[주어지는 자료]
+- 순공시간: 입·퇴실 기록에서 외출을 뺀 실제 공부시간. 하루평균·주차별·날짜별·또래평균 대비
+- 플래너: 매일 제출한 학습 플래너를 검사한 결과 — 계획 개수와 완료 개수, 작성 품질, 과목별 시간, 교재와 진도
+- 생활: 평균 등원 시각(기간 전반/후반 비교), 외출 합계, 상점·벌점 내역
+- 최근 담임 코멘트: 학생에게 직접 써 준 최근 피드백
+
+[쓰려는 것]
+학부모는 집에서 아이의 공부를 다 보지 못합니다. 그래서 이 글의 역할은 '점수 통보'가 아니라
+**면학관에서 본 아이의 모습을 옮겨 드리는 것**입니다. 숫자가 이미 위에 다 나와 있으므로,
+같은 숫자를 다시 나열하지 말고 그 숫자가 무엇을 뜻하는지를 말합니다.
+근거(주어진 자료의 구체적 수치·교재명·날짜) → 해석 → 제안의 순서로 생각하되,
+내놓는 글은 분석 보고서가 아니라 상담 자리에서 선생님이 건네는 말이어야 합니다.
+
+[네 부분]
+1. overall — 총평. 2~4문장. 이 기간 이 학생이 어떻게 지냈는지를 한 덩어리로.
+   첫 문장은 매번 다르게. "OO 학생은" 으로 시작하는 상투적인 틀을 반복하지 말 것.
+2. praise — 칭찬할 점. 1~3개. 반드시 자료에 있는 근거를 함께 댈 것.
+   근거 없는 칭찬("성실합니다", "열심히 합니다")은 한 줄도 쓰지 말 것.
+   눈에 잘 안 띄지만 유지할 가치가 있는 것을 골라 주는 편이 좋습니다
+   (예: 총량은 그대로인데 등원 시각이 20분 빨라진 것, 한 과목이 하루도 안 끊긴 것).
+3. improve — 보완이 필요한 부분. 1~3개. 학생을 평가하는 말이 아니라 **사실**로 씁니다.
+   ("부족합니다", "안일합니다", "문제입니다" ✕ / "국어가 3주 동안 2일뿐이었습니다" ○)
+   왜 그렇게 됐을지 한 단계 더 들어가되 단정하지 말고 짐작으로 말할 것.
+   자료에 근거가 없으면 억지로 만들지 말 것. 정말 보완할 것이 없으면
+   지금 방식을 유지하며 다음 단계로 무엇을 볼지를 적습니다.
+4. advice — 개선 방향과 학습법 추천. 2~4개. 다음 기간에 실제로 해 볼 수 있는 것.
+   과목·교재·시간대·분량까지 구체적으로. 집에서 학부모가 도울 수 있는 것이 있으면 그것도.
+   ("균형 있게 시켜 주세요" ✕ / "영어 단어는 하루 30개씩 나눠 보는 쪽을 권합니다.
+     한 번에 몰아서 외운 날은 다음 날 기억이 거의 남지 않습니다" ○)
+
+각 항목은 title(6~16자 정도의 짧은 문구)과 body(2~4문장)로 씁니다.
+title 은 그 항목이 무엇에 대한 이야기인지 한눈에 알 수 있게. 번호나 이모지를 붙이지 말 것.
+
+[지금의 운영 상황]
+- 2학기 개학 후에는 대부분 학교에 다닙니다. 평일 낮은 학교 수업이고 면학관 자습은 방과 후입니다.
+  평일 총량이 방학 때보다 줄어드는 것은 당연하므로 그 자체를 문제 삼지 말 것.
+- 일요일은 자율 등원입니다. 일요일에 안 나온 것을 결석으로 말하지 말 것.
+- '하루 평균'은 등원 예정일(월~토)을 분모로 한 성실도 기준입니다. 결석이 있으면 평균이 내려갑니다.
+- 플래너에 적힌 학습시간에는 집·학교·학원 공부가 함께 들어가므로 면학관 순공시간과 다릅니다.
+  둘을 직접 견주어 "기록이 안 맞는다"고 말하지 말 것.
+- 또래 평균은 같은 학년 재원생 평균입니다. 인원이 적으면 흔들리므로 크게 벌어졌을 때만 언급할 것.
+
+[말투]
+- 학부모께 드리는 존댓말. 학생은 이름으로 부릅니다(예: "민지가", "민지는").
+- 담백하게. 과장된 감탄, 영업하는 말투, 상담 광고 문구 같은 표현 금지.
+- 확신할 수 없는 것은 단정하지 말고 "~로 보입니다", "~인 듯합니다"로.
+- 학원 자랑이나 시설 이야기를 넣지 말 것. 학생 이야기만 합니다.
+- 이모지, 번호 매기기, 굵은 글씨 표시(**), 마크다운 문법을 쓰지 말 것.
+- "AI", "분석", "데이터", "지표", "인사이트" 같은 단어를 쓰지 말 것.
+- 남용 금지 어휘: 알차게, 촘촘히, 골고루, 꼼꼼히, 눈에 띄네요, 인상적입니다, 꾸준함,
+  균형 있게, "~한 점이 좋았습니다", "앞으로가 기대됩니다".
+- 격려로 맺는 습관 금지. 할 말이 끝나면 그냥 끝냅니다.
+
+[지어내지 말 것]
+주어진 자료에 없는 숫자·과목·교재·사건을 만들어 쓰지 말 것.
+자료가 빈약하면(플래너 검사가 며칠뿐이거나 출석이 적으면) 억지로 채우지 말고
+각 항목을 하나씩만, 짧게 씁니다. 무엇을 못 봤는지 솔직히 적는 편이 낫습니다.
+"며칠째", "요즘", "지난달보다" 같은 말은 자료로 확인되는 경우에만 씁니다.`;
+
+const REPORT_AI_ITEM = {
+  type: 'object',
+  properties: {
+    title: { type: 'string', description: '6~16자 정도의 짧은 문구' },
+    body:  { type: 'string', description: '2~4문장, 존댓말' }
+  },
+  required: ['title', 'body'],
+  additionalProperties: false
+};
+const REPORT_AI_SCHEMA = {
+  type: 'object',
+  properties: {
+    overall: { type: 'string', description: '총평 2~4문장' },
+    praise:  { type: 'array', minItems: 1, maxItems: 3, items: REPORT_AI_ITEM },
+    improve: { type: 'array', minItems: 1, maxItems: 3, items: REPORT_AI_ITEM },
+    advice:  { type: 'array', minItems: 2, maxItems: 4, items: REPORT_AI_ITEM }
+  },
+  required: ['overall', 'praise', 'improve', 'advice'],
+  additionalProperties: false
+};
+
+async function reportAiConfig() {
+  const snap = await db.collection('ai_config').doc('report').get();
+  const cfg = snap.exists ? (snap.data() || {}) : {};
+  return { model: cfg.model || REPORT_AI_MODEL, sysPrompt: cfg.prompt || REPORT_AI_PROMPT };
+}
+
+exports.reportAiOpinion = onDocumentCreated(
+  // concurrency:1 — 사진이 없어 가볍지만, 선생님이 여러 명분을 연달아 누르면 같은 시스템
+  // 프롬프트가 줄지어 들어온다. 순차로 돌려야 앞 건이 프롬프트 캐시를 데워 준다.
+  { document: 'report_ai_requests/{id}', region: 'us-central1', secrets: [ANTHROPIC_KEY], timeoutSeconds: 300, memory: '512MiB', concurrency: 1 },
+  async (event) => {
+    const snap = event.data; if (!snap) return;
+    const req = snap.data() || {};
+    const key = req.key;
+    if (!key) { logger.error('reportAiOpinion — key 누락'); await snap.ref.delete().catch(() => {}); return; }
+    const ref = db.collection('report_comments').doc(key);
+    try {
+      if (!req.payload) throw new Error('집계 자료가 없습니다');
+      const data = JSON.parse(req.payload);
+
+      // 사람이 고친 의견(editedAt)은 '다시 생성'(force)을 누르지 않는 한 건드리지 않는다.
+      // 리포트를 다시 '만들기' 하다가 손본 문장이 날아가는 게 제일 나쁘다 —
+      // API를 부르기 전에 확인해서 헛돈도 쓰지 않는다.
+      const prev = await ref.get();
+      if (prev.exists && (prev.data() || {}).editedAt && !req.force) {
+        await ref.set({ status: 'done' }, { merge: true });
+        logger.info('reportAiOpinion — 사람이 고친 의견이 있어 건너뜀', { key });
+        return;
+      }
+
+      await ref.set({
+        key, uid: req.uid || null, seat: req.seat || null, name: req.name || null,
+        startISO: req.startISO || null, endISO: req.endISO || null,
+        status: 'running', startedAt: new Date().toISOString()
+      }, { merge: true });
+
+      const { model, sysPrompt } = await reportAiConfig();
+      const client = new Anthropic({ apiKey: ANTHROPIC_KEY.value() });
+      const msg = await client.messages.create({
+        model,
+        max_tokens: 16000,   // 적응형 사고 + 본문. 사고가 길어져도 잘리지 않게 넉넉히
+        system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
+        output_config: { effort: 'high', format: { type: 'json_schema', schema: REPORT_AI_SCHEMA } },
+        messages: [{ role: 'user', content:
+          `아래는 ${data.학생 && data.학생.이름 ? data.학생.이름 : '한 학생'}의 학습 기록입니다. 선생님 의견을 써 주세요.\n\n` +
+          '```json\n' + JSON.stringify(data, null, 1) + '\n```' }]
+      });
+      if (msg.stop_reason === 'refusal') throw new Error('AI가 이 요청을 처리하지 못했습니다(refusal)');
+      const text = (msg.content.find(b => b.type === 'text') || {}).text || '';
+      const out = JSON.parse(text);
+
+      await ref.set({
+        key, uid: req.uid || null, seat: req.seat || null, name: req.name || null,
+        startISO: req.startISO || null, endISO: req.endISO || null,
+        opinion: out, status: 'done', model,
+        editedAt: null,
+        doneAt: new Date().toISOString(),
+        usage: { in: msg.usage.input_tokens, out: msg.usage.output_tokens }
+      }, { merge: true });
+      logger.info('reportAiOpinion 완료', { key, out: msg.usage.output_tokens });
+    } catch (e) {
+      logger.error('reportAiOpinion', { key, message: e.message });
+      await ref.set({ key, status: 'error', error: e.message, doneAt: new Date().toISOString() }, { merge: true });
+    } finally {
+      await snap.ref.delete().catch(() => {});   // 요청 문서는 1회용
+    }
+  }
 );
 
 
