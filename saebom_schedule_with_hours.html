@@ -900,6 +900,11 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
 .rp-kind.et{border-color:var(--rp-rule); color:var(--rp-ink3); background:transparent}
 .rp-mname{font-weight:700}
 .rp-msub{color:var(--rp-ink3); font-size:11px; margin-left:5px; font-weight:500}
+/* ✏️ 교재명 고치기 — 화면에서만 보이는 도구다(인쇄·PNG에서는 아래 규칙으로 숨는다).
+   평소엔 흐리게 두고 행에 손을 얹으면 진해진다 — 학부모께 보여주며 넘길 때 눈에 안 걸리게. */
+.rp-mfix{border:0; background:none; cursor:pointer; padding:0 3px; margin-left:6px;
+  font-size:11px; line-height:1; opacity:.25; transition:opacity .12s}
+.rp-sheet tr:hover .rp-mfix, .rp-mfix:focus-visible{opacity:.9}
 .rp-prog{color:var(--rp-ink2); font-size:12px}
 .rp-prog .arw{color:var(--rp-ink3); margin:0 5px}
 .rp-dcount{text-align:right; white-space:nowrap; font-weight:700}
@@ -982,7 +987,8 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   body.rp-printing .rp-tblwrap{break-inside:avoid; page-break-inside:avoid}
   body.rp-printing .rp-tblwrap{overflow:visible}
   body.rp-printing .rp-sheet table{min-width:0}
-  body.rp-printing .rp-op-tools{display:none !important}
+  body.rp-printing .rp-op-tools,
+  body.rp-printing .rp-mfix{display:none !important}
   .rp-sheet{-webkit-print-color-adjust:exact; print-color-adjust:exact}
 }
 
@@ -997,7 +1003,8 @@ body.rp-capturing .rp-sheet{width:860px !important; max-width:860px !important; 
 body.rp-capturing .rp-tiles{grid-template-columns:repeat(4,1fr) !important}
 body.rp-capturing .rp-cols{grid-template-columns:1fr 1fr !important}
 body.rp-capturing .rp-tblwrap{overflow:visible !important}
-body.rp-capturing .rp-op-tools{display:none !important}
+body.rp-capturing .rp-op-tools,
+body.rp-capturing .rp-mfix{display:none !important}
 body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important; box-shadow:none !important}
 </style>
 
@@ -19544,6 +19551,9 @@ window.reportRender = async function() {
       const v = d.data();
       if (!v || v.status !== 'done' || !v.date || v.date < startISO || v.date > endISO || !isMine(v)) return;
       if (v.statsFixed) v.stats = v.statsFixed;   // 사람이 교정한 수치가 기준
+      // 문서 id 를 들고 다닌다 — 교재명 고치기가 좌석_날짜를 다시 조립하지 않고 여기로 되쓴다
+      // (좌석은 학기 중에 교환되므로 지금 좌석으로 조립하면 옛 문서를 못 찾는다)
+      v.__id = d.id;
       reviews.push(v);
     });
     mSnap.forEach(d => { const v = d.data();
@@ -19606,7 +19616,8 @@ function _rpAggregate(o) {
   // 진도는 숫자 자동추출이 부정확해("고쟁이 1~345") 플래너에 적힌 문구를 그대로 쓴다
   const materials = Object.keys(matAgg).map(k => {
     const g = matAgg[k], rs = g.raws.sort((a, b) => a.d < b.d ? -1 : 1);
-    return { name: g.name, subject: g.subject, kind: g.kind, days: g.days.size,
+    // key 는 이름 고치기(reportMatRename)가 원본 문서를 되짚을 때 쓴다 — 이름이 바뀌면 이 키도 바뀐다
+    return { key: k, name: g.name, subject: g.subject, kind: g.kind, days: g.days.size,
              first: rs.length ? rs[0].raw : null, last: rs.length ? rs[rs.length - 1].raw : null };
   }).sort((a, b) => b.days - a.days || String(a.subject).localeCompare(String(b.subject)));
 
@@ -19658,6 +19669,7 @@ function _rpAggregate(o) {
     arriveAvg: avgIn(arrive),
     arriveEarly: avgIn(arrive.slice(0, half)), arriveLate: avgIn(arrive.slice(half)),
     comments: reviews.filter(r => r.comment && r.comment.trim()).slice(-2).map(r => ({ date: r.date, text: r.comment })),
+    reviews,   // 교재명 고치기가 원본 문서(statsFixed)를 되짚어 쓰려면 검사 문서 자체가 필요하다
   };
 }
 
@@ -19756,7 +19768,9 @@ function _rpSheet(d) {
     <div class="rp-tblwrap"><table>
       <thead><tr><th>교재 · 강의</th><th>종류</th><th>진도 (처음 → 마지막 기록)</th><th style="text-align:right">학습일</th></tr></thead>
       <tbody>${mats.map(m => `<tr>
-        <td><span class="rp-mname">${_apcEsc(m.name)}</span><span class="rp-msub">${_apcEsc(m.subject)}</span></td>
+        <td><span class="rp-mname">${_apcEsc(m.name)}</span><span class="rp-msub">${_apcEsc(m.subject)}</span><button
+          class="rp-mfix" onclick="window.reportMatRename(${d.materials.indexOf(m)})"
+          title="교재명 고치기 — 이 기간 기록에 함께 반영됩니다">✏️</button></td>
         <td><span class="rp-kind ${_rpKind(m.kind)}">${_apcEsc(m.kind)}</span></td>
         <td class="rp-prog">${_apcEsc(m.first)}${m.last && m.last !== m.first ? `<span class="arw">→</span>${_apcEsc(m.last)}` : ''}</td>
         <td class="rp-dcount num">${m.days}<i>일</i></td></tr>`).join('')}</tbody>
@@ -19825,6 +19839,80 @@ function _rpSheet(d) {
   </div>
 </div>`;
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// ✏️ 교재명 고치기 — 손글씨 판독이라 같은 교재가 '설맞이/쌀맛이/선맞이'처럼 여러 이름으로
+//   흩어진다. 표에서 한 줄만 고치면 이 기간의 검사 문서 전부에 같은 교정을 밀어 넣는다.
+//
+//   원본(stats)은 서버 전용이라 손대지 않고, 관리앱 '수치 수정'과 똑같이 statsFixed 에 쓴다.
+//   고치는 곳은 세 군데다 — materials[].name 은 표의 교재명, materials[].raw 는 '진도' 칸,
+//   subjects[].detail 은 학습분석의 과목별 설명. name 만 고치면 진도 칸에 옛 이름이 남는다.
+//   raw·detail 은 옛 이름이 문장 안에 섞여 있으므로 그 부분만 문자열 치환한다.
+// ══════════════════════════════════════════════════════════════════════════
+const _rpMatKey = n => String(n == null ? '' : n).replace(/\s+/g, '').toLowerCase();
+
+window.reportMatRename = async function(idx) {
+  const d = _rpLast;
+  const m = d && d.materials && d.materials[idx];
+  if (!m) { showAdminToast('⚠️ 먼저 리포트를 만드세요'); return; }
+
+  const oldName = String(m.name);
+  const input = prompt(`교재명을 고칩니다.\n\n"${oldName}" 이(가) 적힌 이 기간 기록을 모두 새 이름으로 바꿉니다.\n진도 칸 문구와 과목 설명 안의 같은 이름도 함께 고쳐집니다.`, oldName);
+  if (input == null) return;
+  const newName = input.trim();
+  if (!newName || newName === oldName) return;
+
+  // 이 이름이 실제로 들어 있는 검사 문서만 고른다(집계 키가 같은 것 = 이 표의 한 줄)
+  const targets = [];
+  (d.reviews || []).forEach(r => {
+    const base = r.stats || {};
+    const hitMat = (base.materials || []).some(x => x && _rpMatKey(x.name) === m.key);
+    if (!hitMat) return;
+    targets.push(r);
+  });
+  if (!targets.length) { showAdminToast('⚠️ 고칠 기록을 찾지 못했습니다'); return; }
+
+  const dates = targets.map(r => r.date).sort();
+  if (!confirm(`"${oldName}" → "${newName}"\n\n${dates.length}일치 기록을 고칩니다 (${_rpMd(dates[0])}~${_rpMd(dates[dates.length - 1])}).\n계속할까요?`)) return;
+
+  const swap = s => String(s == null ? '' : s).split(oldName).join(newName);
+  let ok = 0, fail = 0;
+  for (const r of targets) {
+    const base = r.stats || {};
+    const subjects = (base.subjects || []).map(s => {
+      const o = { ...s };
+      if (o.detail != null) o.detail = swap(o.detail);
+      return o;
+    });
+    // 관리앱 '수치 수정'이 저장하는 모양 그대로 맞춘다 — 두 경로가 같은 문서를 쓰므로
+    // 모양이 어긋나면 한쪽에서 고친 뒤 다른 쪽에서 필드가 사라진다
+    const materials = (base.materials || []).filter(x => x && x.name).map(x => {
+      const hit = _rpMatKey(x.name) === m.key;
+      const raw = x.raw || x.name;
+      return { raw: hit ? swap(raw) : raw, name: hit ? newName : x.name, kind: x.kind, subject: x.subject };
+    });
+    const subjSum = subjects.reduce((a, s) => a + (s.minutes || 0), 0);
+    const statsFixed = {
+      total_minutes: base.total_minutes != null ? base.total_minutes : (subjSum || null),
+      planned_count: base.planned_count || 0,
+      completed_count: base.completed_count || 0,
+      subjects,
+      hourly: base.hourly || [],
+      materials
+    };
+    try {
+      await updateDoc(doc(db, 'planner_ai_reviews', r.__id), { statsFixed, statsFixedAt: serverTimestamp() });
+      ok++;
+    } catch (e) {
+      fail++;
+      console.warn('교재명 저장 실패', r.__id, e);
+    }
+  }
+
+  if (fail) showAdminToast(`⚠️ ${ok}일치 저장, ${fail}일치 실패 — 콘솔을 확인하세요`);
+  else showAdminToast(`✏️ ${ok}일치를 "${newName}"(으)로 고쳤습니다`);
+  if (ok) await window.reportRender();   // 집계를 다시 잡는다(같은 이름끼리 한 줄로 합쳐진다)
+};
 
 // 인쇄 = PDF 저장. body에 표식을 달아 @media print 규칙이 리포트만 남기게 한다.
 window.reportPrint = function() {
