@@ -56,6 +56,10 @@ rules_version = '2';
 //                 받아둔 연간 일정 캐시가 들어간다. _config 문서에는 나이스 인증키.
 //                 ⚠️ 무료 공공데이터 키지만 read 가 열려 있어 사실상 공개다. 호출 한도가
 //                 문제되면 solapi 처럼 서버 중개로 옮길 것
+//   - 2026-08-13  planner_ai_reviews 의 comment·commentEditedAt 수정 허용(관리앱 ✏️ 버튼).
+//                 summary 를 연 것과 같은 이유다 — 최근 3건의 코멘트가 다음 검사
+//                 프롬프트로 들어가므로(plannerAiHistory) 틀린 코멘트를 두면 며칠치가
+//                 오염된다. quality·stats 는 여전히 서버 전용
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -372,17 +376,25 @@ service cloud.firestore {
     // 플래너 AI 검사 — 관리앱이 요청 생성(create만), 결과는 서버(Cloud Function)만 쓴다
     match /planner_ai_requests/{id} { allow read, create: if true; }
     // 결과는 서버가 쓰되, 요약 문장이 틀렸을 때 관리앱에서 고칠 수 있게 summary만 예외로 연다
-    // (다시 검사는 API 재호출이라 비용이 든다). quality·stats·comment는 여전히 서버 전용.
+    // (다시 검사는 API 재호출이라 비용이 든다). quality·stats는 여전히 서버 전용.
     match /planner_ai_reviews/{id}  {
       allow read: if true;
       allow update: if request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['summary', 'summaryEditedAt'])
                     && request.resource.data.summary is string
                     && request.resource.data.summary.size() <= 1000;
+      // 코멘트도 같은 이유로 연다. 이 글은 학생앱에 나가지 않고 선생님이 코멘트 입력란으로
+      // 옮겨 쓰는 초안이지만, plannerAiHistory 가 최근 3건의 코멘트를 다음 검사 프롬프트에
+      // 그대로 실어 보낸다 — 틀린 채 두면 그 전제가 사흘치 코멘트에 이어서 번진다.
+      // 2026-08-12 개학 전 프롬프트로 나간 22건이 "오전이 비었다"고 지적한 게 계기다.
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['comment', 'commentEditedAt'])
+                    && request.resource.data.comment is string
+                    && request.resource.data.comment.size() <= 2000;
       // 검사 수치 교정(statsFixed) — 손글씨 판독이라 교재명 오타·시간 오독이 생기는데,
       // 학습분석이 이 수치로 그려지므로 관리앱에서 사람이 바로잡을 수 있어야 한다.
       // AI 원본(stats)은 그대로 두고 statsFixed만 쓴다 — 분석·다음 검사 이력이 이걸 우선하고,
-      // 재검사가 와도 서버가 이 필드를 보존한다. quality·comment·stats는 여전히 서버 전용.
+      // 재검사가 와도 서버가 이 필드를 보존한다. quality·stats는 여전히 서버 전용.
       allow update: if request.resource.data.diff(resource.data).affectedKeys()
                        .hasOnly(['statsFixed', 'statsFixedAt'])
                     && request.resource.data.statsFixed is map;

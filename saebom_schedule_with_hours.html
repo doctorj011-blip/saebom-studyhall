@@ -18217,7 +18217,14 @@ function _apcAiRenderPanel(v) {
         <button onclick="window.apcAiStatsEdit()" title="수치 수정 — 학습분석에 반영"
           style="background:none;border:none;color:#9CA3AF;font-size:11px;cursor:pointer;padding:0 2px">✏️</button>
       </div>
-      <div style="background:#fff;border:1px solid #C7D2FE;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#333;line-height:1.6;white-space:pre-wrap">${_apcEsc(v.comment || '')}</div>
+      <div id="apc-ai-comment">
+        <div style="display:flex;align-items:center;gap:3px;margin-bottom:4px">
+          <b style="font-size:12px;color:#1E1B4B">코멘트</b>${v.commentEditedAt ? '<span style="font-size:11px;color:#9CA3AF">(수정됨)</span>' : ''}
+          <button onclick="window.apcAiCommentEdit()" title="코멘트 수정 — 다음 검사의 프롬프트로도 들어갑니다"
+            style="background:none;border:none;color:#9CA3AF;font-size:11px;cursor:pointer;padding:0 2px">✏️</button>
+        </div>
+        <div style="background:#fff;border:1px solid #C7D2FE;border-radius:8px;padding:8px 10px;font-size:12.5px;color:#333;line-height:1.6;white-space:pre-wrap">${_apcEsc(v.comment || '')}</div>
+      </div>
       <button onclick="window.apcAiCopy()"
         style="background:#EEF2FF;color:#4C3FB8;border:1px solid #C7D2FE;border-radius:7px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer;align-self:flex-end">↓ 코멘트 입력란에 복사</button>
     </div>`;
@@ -18285,6 +18292,50 @@ window.apcAiSummarySave = async function() {
     showAdminToast('✅ 요약을 수정했습니다');
     // 화면은 onSnapshot이 갱신하지만, 규칙 오류 등으로 못 받는 경우를 대비해 로컬도 맞춰 둔다.
     if (_apcAi[_apcSeat]) { _apcAi[_apcSeat].summary = text; _apcAi[_apcSeat].summaryEditedAt = Date.now(); }
+    _apcAiRenderPanel(_apcAi[_apcSeat]);
+  } catch(e) {
+    showAdminToast('❌ 저장 실패: ' + e.message);
+  }
+};
+
+// 코멘트 수정 — 요약과 같은 이유로 연 기능이다. 이 글은 학생앱에 나가지 않지만,
+// plannerAiHistory 가 최근 3건의 코멘트를 다음 검사 프롬프트에 그대로 넣기 때문에
+// 틀린 코멘트를 두면 이후 며칠 코멘트가 그 전제를 이어받는다.
+// (2026-08-12: 개학 전 프롬프트로 나간 22건이 평일 오전 공백을 지적한 게 계기)
+window.apcAiCommentEdit = function() {
+  const wrap = document.getElementById('apc-ai-comment');
+  const v = _apcAi[_apcSeat];
+  if (!wrap || !v) return;
+  wrap.innerHTML = `
+    <textarea id="apc-ai-comment-input"
+      style="width:100%;box-sizing:border-box;border:1px solid #C7D2FE;border-radius:7px;padding:8px 10px;font-size:12.5px;line-height:1.6;font-family:inherit;resize:vertical"
+      rows="9">${_apcEsc(v.comment || '')}</textarea>
+    <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:5px">
+      <button onclick="window.apcAiCommentCancel()"
+        style="background:#F3F4F6;color:#6B7280;border:1px solid #E5E7EB;border-radius:7px;padding:5px 10px;font-size:12px;cursor:pointer">취소</button>
+      <button onclick="window.apcAiCommentSave()"
+        style="background:#4C3FB8;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">코멘트 저장</button>
+    </div>`;
+  const ta = document.getElementById('apc-ai-comment-input');
+  if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+};
+
+window.apcAiCommentCancel = function() { _apcAiRenderPanel(_apcAi[_apcSeat] || null); };
+
+window.apcAiCommentSave = async function() {
+  const ta = document.getElementById('apc-ai-comment-input');
+  if (!ta || !_apcSeat || !_apcCurrentDate) return;
+  const text = ta.value.trim();
+  if (!text) { showAdminToast('⚠️ 코멘트가 비어 있습니다'); return; }
+  // 규칙(firestore.rules)의 상한과 같은 값 — 넘으면 저장이 거부되므로 여기서 먼저 막는다
+  if (text.length > 2000) { showAdminToast(`⚠️ 코멘트가 너무 깁니다 (${text.length}자 / 2000자)`); return; }
+  try {
+    await updateDoc(doc(db, 'planner_ai_reviews', `${_apcSeat}_${_apcCurrentDate}`),
+      { comment: text, commentEditedAt: serverTimestamp() });
+    showAdminToast('✅ 코멘트를 수정했습니다');
+    // 요약 수정과 같은 이유로 로컬도 맞춘다(onSnapshot을 못 받는 경우 대비).
+    // _apcAiLastComment 는 _apcAiRenderPanel 이 다시 세팅하므로 '입력란에 복사'도 새 글을 집는다.
+    if (_apcAi[_apcSeat]) { _apcAi[_apcSeat].comment = text; _apcAi[_apcSeat].commentEditedAt = Date.now(); }
     _apcAiRenderPanel(_apcAi[_apcSeat]);
   } catch(e) {
     showAdminToast('❌ 저장 실패: ' + e.message);
