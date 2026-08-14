@@ -1995,6 +1995,39 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </div>
     </div>
 
+    <!-- 날씨 (기상청 관측 연동) -->
+    <div class="card">
+      <div class="card-title" style="margin-bottom:4px">
+        <i class="ti ti-cloud-rain" style="font-size:15px;color:#6C5DD3"></i> 날씨 — 기상청 관측 연동
+      </div>
+      <div style="font-size:12px;color:#4A3FA8;margin-bottom:12px;line-height:1.6">
+        키오스크(입·퇴실 화면) 배경은 기본적으로 Open-Meteo <b>예보</b>를 씁니다. 예보는 격자가 넓어
+        <b>소나기를 통째로 놓칩니다</b> — 밖에 비가 오는데 화면에 해가 떠 있는 이유입니다.<br>
+        기상청 <b>초단기실황(관측)</b> 인증키를 넣으면 <b>지금 비/눈이 오는지</b>와 기온을 관측값으로 덮어씁니다.
+        키는 공공데이터포털에서 무료로 발급합니다(단기예보 조회서비스).
+        <a href="https://www.data.go.kr/data/15084084/openapi.do" target="_blank" style="color:#6C5DD3;font-weight:600;margin-left:2px">발급 페이지 →</a><br>
+        ⚠️ 키는 Firestore(<code>settings/weather</code>)에 저장돼 <b>모든 키오스크가 함께</b> 씁니다. 소스에는 넣지 마세요.
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div>
+          <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:5px">기상청 인증키 (일반 인증키 · Decoding)</div>
+          <input id="wx-kma-key" type="text" autocomplete="off" placeholder="붙여넣기"
+            style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;background:#F8FAFF;outline:none">
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <button onclick="saveWeatherKey()"
+            style="padding:10px 24px;background:#6C5DD3;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(108,93,211,0.3)">
+            저장
+          </button>
+          <button onclick="testWeatherKey()"
+            style="padding:10px 18px;background:#fff;color:#4A3FA8;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer">
+            🔍 연결 확인
+          </button>
+          <span id="wx-kma-status" style="font-size:12px;color:#4A3FA8"></span>
+        </div>
+      </div>
+    </div>
+
     <!-- 관리자 로그인 · 기기 등록 -->
     <div class="card">
       <div class="card-title" style="margin-bottom:4px">
@@ -3218,7 +3251,8 @@ document.addEventListener('visibilitychange', () => {
   function scene(code, isDay){
     const d = isDay!==0;
     if (code===0)            return d ? ['sky-clear-day','☀️','맑음','clear-day']       : ['sky-clear-night','🌙','맑음','clear-night'];
-    if (code===1)            return d ? ['sky-clear-day','🌤️','대체로 맑음','clear-day'] : ['sky-clear-night','🌙','대체로 맑음','clear-night'];
+    // '대체로 맑음'은 구름이 조금 있는 상태다 — 구름 한 점 없는 하늘로 그리면 칩의 🌤️와 어긋난다.
+    if (code===1)            return d ? ['sky-clear-day','🌤️','대체로 맑음','partly-day'] : ['sky-clear-night','🌙','대체로 맑음','partly-night'];
     if (code===2)            return d ? ['sky-clear-day','⛅','구름 조금','partly-day']  : ['sky-clear-night','☁️','구름 조금','partly-night'];
     if (code===3)            return d ? ['sky-clouds','☁️','흐림','clouds']          : ['sky-clouds-night','☁️','흐림','clouds-night'];
     if (code===45||code===48) return ['sky-fog','🌫️','안개','fog'];
@@ -3351,7 +3385,75 @@ document.addEventListener('visibilitychange', () => {
     setChip(day?'☀️':'🌙', null, '오프라인', null, null);
   }
 
+  // ── 🌧 기상청 초단기실황(관측)으로 '지금 비/눈이 오는가'를 덮어쓴다 ──
+  // Open-Meteo의 current는 관측이 아니라 전지구 예보모델(격자 9~25km)의 보간값이라,
+  // 여름 소나기처럼 몇 km 단위로 오는 비를 통째로 놓친다. 2026-08-14 실측: 밖에 비가
+  // 오는데 강수확률 61% · weather_code 1(대체로 맑음) · 강수량 0.0mm 를 돌려줬고,
+  // 키오스크에는 해가 떠 있었다. 레이더 기반 나우캐스트는 유럽·북미에만 제공돼
+  // 한국은 해당이 없다. 그래서 강수 여부와 기온만 기상청 관측으로 갈아끼우고,
+  // 나머지(최고·최저기온, 일출·일몰, 구름 낀 정도)는 Open-Meteo를 그대로 쓴다.
+  //
+  // 🔴 PTY===0(관측상 강수 없음)일 때 Open-Meteo의 비를 지우지는 않는다. 관측은 격자
+  //    대표점 값이라 정말 여기만 오는 비를 0으로 줄 수 있고, '오는데 안 보이는' 쪽이
+  //    '안 오는데 보이는' 쪽보다 훨씬 성가시다. 덮어쓰기는 한 방향(맑음→비)만이다.
+  let KMA_KEY = '';   // settings/weather.kmaKey — 비어 있으면 이 보정을 통째로 건너뛴다
+
+  // 위경도 → 기상청 격자(nx, ny). 기상청 배포 공식(Lambert Conformal Conic) 그대로다.
+  // 서울시청 60,127 · 부산시청 98,76 · 제주시 53,38 · 영통구청 61,120 — 4곳 공식값과 일치 확인.
+  function dfsXy(lat, lon){
+    const RE=6371.00877, GRID=5.0, SLAT1=30.0, SLAT2=60.0, OLON=126.0, OLAT=38.0, XO=43, YO=136;
+    const D=Math.PI/180, re=RE/GRID, s1=SLAT1*D, s2=SLAT2*D, ol=OLON*D, oa=OLAT*D;
+    const sn=Math.log(Math.cos(s1)/Math.cos(s2))/Math.log(Math.tan(Math.PI*0.25+s2*0.5)/Math.tan(Math.PI*0.25+s1*0.5));
+    const sf=Math.pow(Math.tan(Math.PI*0.25+s1*0.5),sn)*Math.cos(s1)/sn;
+    const ro=re*sf/Math.pow(Math.tan(Math.PI*0.25+oa*0.5),sn);
+    const ra=re*sf/Math.pow(Math.tan(Math.PI*0.25+lat*D*0.5),sn);
+    let th=lon*D-ol;
+    if(th>Math.PI)  th-=2*Math.PI;
+    if(th<-Math.PI) th+=2*Math.PI;
+    th*=sn;
+    return { nx: Math.floor(ra*Math.sin(th)+XO+0.5), ny: Math.floor(ro-ra*Math.cos(th)+YO+0.5) };
+  }
+
+  // 초단기실황은 매시 정시 관측을 40분 뒤에 낸다. 40분을 빼고 시각을 내림하면 항상
+  // '이미 나와 있는' 가장 최근 회차를 가리킨다. (기기 시계 기준 — 태블릿이 KST라 맞다)
+  function kmaBase(){
+    const d=new Date(Date.now()-40*60*1000), p=n=>String(n).padStart(2,'0');
+    return { date: d.getFullYear()+p(d.getMonth()+1)+p(d.getDate()), time: p(d.getHours())+'00' };
+  }
+
+  // PTY(강수형태) → 씬. 초단기실황에는 뇌우 구분이 없어 storm은 여기서 나오지 않는다.
+  const PTY_SCENE = {
+    1: ['sky-rain','🌧️','비','rain'],
+    2: ['sky-snow','🌨️','비/눈','snow'],
+    3: ['sky-snow','🌨️','눈','snow'],
+    5: ['sky-rain','🌦️','빗방울','drizzle'],
+    6: ['sky-snow','🌨️','진눈깨비','snow'],
+    7: ['sky-snow','🌨️','눈날림','snow']
+  };
+
+  // 관측값 {pty, rn1, t1h} 또는 null(키 없음). 실패는 throw — 호출부가 삼킨다.
+  async function kmaNowcast(){
+    if (!KMA_KEY) return null;
+    const g=dfsXy(CFG.lat, CFG.lon), b=kmaBase();
+    const url='https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
+      +'?serviceKey='+encodeURIComponent(KMA_KEY)
+      +'&numOfRows=10&pageNo=1&dataType=JSON'
+      +'&base_date='+b.date+'&base_time='+b.time+'&nx='+g.nx+'&ny='+g.ny;
+    const res=await fetch(url,{cache:'no-store'});
+    if(!res.ok) throw new Error('http '+res.status);
+    const j=await res.json();
+    // 키가 틀리면 응답 JSON의 모양 자체가 다르다(OpenAPI_ServiceResponse). 그쪽 메시지도 함께 본다.
+    if (j?.response?.header?.resultCode !== '00')
+      throw new Error(j?.response?.header?.resultMsg
+        || j?.OpenAPI_ServiceResponse?.cmmMsgHeader?.returnAuthMsg || '알 수 없는 응답');
+    const v={};
+    (j.response.body?.items?.item || []).forEach(it => { v[it.category]=parseFloat(it.obsrValue); });
+    return { pty: v.PTY, rn1: v.RN1, t1h: v.T1H, base: b, grid: g };
+  }
+
+  let lastLoad = 0;
   async function load(){
+    lastLoad = Date.now();
     try{
       const url='https://api.open-meteo.com/v1/forecast?latitude='+CFG.lat+'&longitude='+CFG.lon
         +'&current=temperature_2m,weather_code,is_day'
@@ -3360,12 +3462,24 @@ document.addEventListener('visibilitychange', () => {
       if(!res.ok) throw new Error('http '+res.status);
       const j=await res.json();
       const cur=j.current||{}; const dl=j.daily||{};
-      const [cls,emoji,cond] = scene(cur.weather_code, cur.is_day);
-      const kind = cls.replace('sky-','');
+      // ★ scene()의 네 번째 값이 진짜 종류다. cls에서 역산하면 'partly-*'가 'clear-*'로
+      //   뭉개져(둘 다 sky-clear-day) 구름이 하나도 안 그려진다.
+      let [cls,emoji,cond,kind] = scene(cur.weather_code, cur.is_day);
+      let temp = cur.temperature_2m;
+      // 기상청 관측으로 보정 — 실패해도 Open-Meteo 값으로 계속 간다.
+      try{
+        const ob = await kmaNowcast();
+        if (ob){
+          // Open-Meteo가 뇌우라 했고 관측도 비면 번개 연출을 유지한다(실황에 뇌우 항목이 없다).
+          if (ob.pty > 0 && PTY_SCENE[ob.pty] && !(kind==='storm' && ob.pty===1))
+            [cls,emoji,cond,kind] = PTY_SCENE[ob.pty];
+          if (Number.isFinite(ob.t1h)) temp = ob.t1h;   // 관측 기온이 모델 보간값보다 정확
+        }
+      }catch(e){ console.warn('기상청 초단기실황 실패 — Open-Meteo 값 그대로 사용:', e.message); }
       if(kind!==curKind) render(kind);
       sky.className = cls;
       const tmax=(dl.temperature_2m_max||[])[0], tmin=(dl.temperature_2m_min||[])[0];
-      setChip(emoji, cur.temperature_2m, cond, tmax, tmin);
+      setChip(emoji, temp, cond, tmax, tmin);
       // 일출·일몰 저장 후 태양/달 위치 갱신
       const rise=(dl.sunrise||[])[0], set=(dl.sunset||[])[0];
       if(rise) SUN.rise=new Date(rise).getTime();
@@ -3379,6 +3493,34 @@ document.addEventListener('visibilitychange', () => {
   load();
   setInterval(load, 15*60*1000);
   setInterval(positionSun, 60*1000); // 1분마다 태양·달 위치 갱신(동→서)
+
+  // 기상청 키는 Firestore(settings/weather)에 둔다 — 소스에 박으면 안 된다(이 저장소는
+  // GitHub Pages로 공개돼 있다). onSnapshot이라 사무실 PC에서 키를 넣으면 키오스크가
+  // 새로고침 없이 받아 즉시 다시 판정한다.
+  (async ()=>{
+    const db = await window.waitDb();
+    if (!db) return;
+    try{
+      window._fs.onSnapshot(window._fs.doc(db,'settings','weather'), s => {
+        const k = (s.exists() && s.data().kmaKey) || '';
+        if (k === KMA_KEY) return;
+        KMA_KEY = k;
+        load();
+      }, e => console.warn('날씨 설정 구독 실패:', e));
+    }catch(e){ console.warn('날씨 설정 구독 실패:', e); }
+  })();
+
+  // 태블릿이 절전에서 깨어나면 15분 인터벌이 밀려 몇 시간 전 화면이 그대로 남는다.
+  // 깨어날 때 한 번 더 부르되, 화면 전환 연타로 API를 두들기지 않게 2분 안에는 넘긴다.
+  document.addEventListener('visibilitychange', ()=>{
+    if (document.hidden) return;
+    if (Date.now() - lastLoad < 2*60*1000) return;
+    load();
+  });
+
+  // 설정 탭의 '연결 확인' 버튼이 쓰는 통로 (키오스크 화면을 열지 않고 검증하기 위한 것)
+  window._wxDebug = { grid: ()=>dfsXy(CFG.lat, CFG.lon), nowcast: kmaNowcast, reload: load,
+                      setKey: k => { KMA_KEY = k; } };
 
   // 리사이즈 시 파티클 재배치(디바운스)
   let rt; window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(curKind) render(curKind); }, 400); });
@@ -3772,6 +3914,66 @@ window.saveSettingsFromTab = function() {
   window.applySolapiConfig({ apiKey, apiSecret, sender });
   if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(()=>st.textContent='', 2000); }
 };
+
+// ── 🌧 기상청 인증키 (settings/weather.kmaKey) ──
+// 키오스크 배경의 강수 보정에만 쓴다. 키가 없으면 Open-Meteo 예보만으로 동작한다.
+function _wxStatus(msg, color){
+  const st = document.getElementById('wx-kma-status');
+  if (!st) return;
+  st.textContent = msg;
+  st.style.color = color || '#4A3FA8';
+}
+
+window.saveWeatherKey = async function(){
+  const inp = document.getElementById('wx-kma-key');
+  const key = (inp?.value || '').trim();
+  _wxStatus('저장 중…');
+  try{
+    const db = await window.waitDb();
+    if (!db) { _wxStatus('❌ Firebase 연결이 필요합니다', '#DC2626'); return; }
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'weather'),
+      { kmaKey: key, updatedAt: window._fsServerTimestamp() }, { merge: true });
+    // 구독(onSnapshot)이 키오스크 쪽 KMA_KEY를 갱신하고 다시 판정한다 — 여기서는 알리기만 한다.
+    _wxStatus(key ? '✅ 저장됐습니다 — 키오스크에 바로 반영됩니다' : '✅ 키를 지웠습니다 (예보만 사용)', '#16A34A');
+    setTimeout(()=>_wxStatus(''), 4000);
+  }catch(e){ _wxStatus('❌ 저장 실패: ' + e.message, '#DC2626'); }
+};
+
+// 입력칸의 키로 실제 호출을 해본다. 저장 전에도 눌러볼 수 있게 임시로 키를 꽂았다가 되돌린다.
+window.testWeatherKey = async function(){
+  const key = (document.getElementById('wx-kma-key')?.value || '').trim();
+  if (!key) { _wxStatus('키를 먼저 붙여넣으세요', '#DC2626'); return; }
+  if (!window._wxDebug) { _wxStatus('❌ 키오스크 화면(입·퇴실)이 로드되지 않았습니다', '#DC2626'); return; }
+  _wxStatus('기상청 호출 중…');
+  const PTY = {0:'없음',1:'비',2:'비/눈',3:'눈',5:'빗방울',6:'진눈깨비',7:'눈날림'};
+  try{
+    window._wxDebug.setKey(key);
+    const ob = await window._wxDebug.nowcast();
+    const g = ob.grid, b = ob.base;
+    _wxStatus('✅ 정상 — 격자 ' + g.nx + ',' + g.ny + ' · ' + b.time.slice(0,2) + '시 관측 · 강수 '
+      + (PTY[ob.pty] ?? ob.pty) + ' · 기온 ' + ob.t1h + '° · 1시간 강수량 ' + ob.rn1 + 'mm', '#16A34A');
+  }catch(e){
+    _wxStatus('❌ ' + e.message, '#DC2626');
+  }finally{
+    // 저장하지 않고 확인만 했을 수 있으니, 실제 저장값(구독)이 다시 덮도록 되돌린다.
+    const db = await window.waitDb().catch(()=>null);
+    if (db) { try{
+      const s = await window._fsGetDoc(window._fsDoc(db, 'settings', 'weather'));
+      window._wxDebug.setKey((s.exists() && s.data().kmaKey) || '');
+    }catch(e){} }
+  }
+};
+
+// 설정 탭을 열 때 저장된 키를 입력칸에 채운다.
+(async function(){
+  const db = await window.waitDb();
+  if (!db) return;
+  try{
+    const s = await window._fsGetDoc(window._fsDoc(db, 'settings', 'weather'));
+    const inp = document.getElementById('wx-kma-key');
+    if (inp && s.exists() && s.data().kmaKey) inp.value = s.data().kmaKey;
+  }catch(e){ console.warn('날씨 키 로드 실패:', e); }
+})();
 
 // ── SUMMER(여름특강) 기간 ──
 // 시간 탭의 ☀️SUMMER 탭이 조회하는 고정 기간. 특강 일정이 바뀌면 여기만 고치면 된다.
