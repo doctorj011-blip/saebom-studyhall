@@ -10293,6 +10293,7 @@ function showAdminToast(msg) {
 //   - 교시가 시작되면 10~15분 정도의 랜덤 간격으로, 교시가 끝날 때까지 반복해서 띄운다.
 //   - 교시가 끝나면 멈추고, 다음 교시가 시작되면 다시 반복한다. (쉬는 시간·교시 외 시간엔 안 뜸)
 //   - 어느 탭/화면을 보고 있든 화면 상단 중앙에 고정 표시된다.
+//   - 원장 기기(👑)에서는 뜨지 않는다 — 관리 동선을 도는 건 조교 몫이라 원장 화면에선 방해만 된다.
 // ══════════════════════════════════════
 (function(){
   const REMINDER_MSG = '알림창을 닫고 관리 동선을 따라<br>학생들을 관리해 주세요~<br>조는 학생, 딴짓하는 학생 기록해 주세요';
@@ -10307,6 +10308,9 @@ function showAdminToast(msg) {
   function showRoundReminder() {
     // 입실·퇴실 키오스크(전체화면) 모드에서는 알림을 띄우지 않는다.
     if (document.body.classList.contains('kiosk-mode')) return;
+    // 원장 기기에서도 띄우지 않는다. 등록·해제가 실행 중에 바뀔 수 있으니 예약이 아니라
+    // 띄우는 시점에 판정한다.
+    try { if (typeof isDirectorDevice === 'function' && isDirectorDevice()) return; } catch(e) {}
     // 이미 떠 있으면 중복 생성 방지
     const old = document.getElementById('round-reminder');
     if (old) old.remove();
