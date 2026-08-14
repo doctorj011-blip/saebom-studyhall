@@ -807,10 +807,20 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   .stat-label{font-size:10px;letter-spacing:0}
 
   /* ── 배치도 : 사이드패널을 좌석표 아래로 ── */
+  /* 폰에서는 JS 패닝(initFpDrag)을 끄고 브라우저 기본 터치 스크롤에 맡긴다.
+     JS 패닝은 "좌석표 높이 − wrap 높이"로 세로 이동 범위를 잡는데, 폰에서는 min-height가
+     풀려 wrap이 좌석표만큼 늘어나므로 그 값이 0이 된다 → 아래쪽 좌석으로 못 내려간다.
+     게다가 touchmove에서 preventDefault를 불러 페이지 스크롤까지 막혀, 손가락으로 끌면
+     아무 일도 안 일어나는 상태였다(2026-08-14 지적).
+     ★height를 줘서 wrap 자체를 가로·세로 스크롤 상자로 만든다 — 높이가 auto면 좌석표가
+       통째로 펼쳐져 화면을 다 잡아먹고, 아래 입실현황까지 800px을 넘겨야 닿는다.
+     ★align-items는 반드시 flex-start. center로 두면 넘치는 위쪽이 스크롤로도 안 잡힌다. */
   #fp-drag-wrap{
     margin-right:0!important;min-height:0!important;
+    height:72vh;
     overflow:auto!important;-webkit-overflow-scrolling:touch;
-    justify-content:flex-start;padding:8px;
+    touch-action:pan-x pan-y;
+    justify-content:flex-start;align-items:flex-start;padding:8px;
   }
   #fp-side-panel{position:static!important;width:auto!important;margin-top:12px;max-height:60vh}
   .fp-side-drag-hint{display:none}      /* 터치에선 드래그&드롭이 안 되므로 숨김 */
@@ -8737,8 +8747,18 @@ function initFpDrag() {
     setTimeout(() => { _fpDragDist = 0; }, 50);
   });
 
-  // 터치 지원
+  // ── 터치 지원 ──
+  // 폰(≤600px)에서는 CSS가 wrap을 스크롤 상자로 바꿔 브라우저 기본 터치 스크롤을 쓴다.
+  // 그때 아래 핸들러가 같이 돌면 preventDefault로 그 스크롤을 죽이므로 통째로 쉰다.
+  const _fpNativeScroll = window.matchMedia('(max-width:600px)');
+  const _fpTouchPan = () => !_fpNativeScroll.matches;
+  // 넓은 화면에서 끌어 놓은 위치가 남아 있으면 좁은 화면에서 좌석표가 밀린 채 굳는다
+  const _fpResetPan = () => { posX = 0; posY = 0; room.style.transform = 'translate(0px, 0px)'; };
+  if (_fpNativeScroll.addEventListener) _fpNativeScroll.addEventListener('change', e => { if (e.matches) _fpResetPan(); });
+  if (_fpNativeScroll.matches) _fpResetPan();
+
   wrap.addEventListener('touchstart', e => {
+    if (!_fpTouchPan()) return;
     const t = e.touches[0];
     isDragging = true;
     dragDist = 0;
@@ -8749,7 +8769,7 @@ function initFpDrag() {
   }, {passive: true});
 
   wrap.addEventListener('touchmove', e => {
-    if (!isDragging) return;
+    if (!_fpTouchPan() || !isDragging) return;
     const t = e.touches[0];
     const dx = t.clientX - startX;
     const dy = t.clientY - startY;
@@ -8759,6 +8779,7 @@ function initFpDrag() {
   }, {passive: false});
 
   wrap.addEventListener('touchend', () => {
+    if (!_fpTouchPan()) return;
     if (dragDist > 8) {
       window._fpLastDragged = true;
       setTimeout(() => { window._fpLastDragged = false; }, 700);
