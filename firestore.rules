@@ -335,8 +335,6 @@ service cloud.firestore {
     //              2026-08-07 부로 **클라이언트는 읽지도 쓰지도 않는다** — 서버 전용.
     // vacation_mode = 방학 시간표(평일도 1~11교시). 3개 앱이 read, 관리자앱 설정 탭이 write.
     // meal_away_sms = 점심·저녁 식사시간 외출/복귀 학부모 알림 on/off. 관리자앱만 read/write.
-    // bell_schedule = 쉬는시간 타종(요일×교시·종소리·음량). 관리자앱만 read/write.
-    //                 소리를 실제로 내는 기기 지정은 여기 없다 — 기기별 localStorage 다.
     //
     // ── 2026-08-04: read 도 화이트리스트로 전환 ──
     // 예전에는 `allow read: if true` 라 **settings 에 새로 만드는 문서가 자동으로 전세계
@@ -368,8 +366,8 @@ service cloud.firestore {
       allow read: if id in ['solapi', 'billing',
                             'seatSelection', 'vacation_mode', 'schedule_edit',
                             'meal_away_sms', 'summerInvites', 'alimtalk_server',
-                            'day_break_door', 'bell_schedule'];
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule'];
+                            'day_break_door'];
+      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door'];
     }
 
     // 문자 발송 로그
