@@ -8,6 +8,10 @@ rules_version = '2';
 //         firebase deploy --only firestore:rules      (또는  scripts/deploy-rules.sh)
 //   · Firebase 콘솔에서 직접 수정하지 마세요 — 다음 배포 때 이 파일로 덮어써집니다.
 //   · 변경할 때마다 아래 [배포 이력]에 날짜·요약을 남겨 주세요(무엇이 바뀌었는지 추적).
+//   · 배포는 수동입니다. push 시 자동배포하는 GitHub Actions 워크플로가 있었지만 시크릿
+//     (FIREBASE_SERVICE_ACCOUNT)을 넣은 적이 없어 한 번도 성공하지 못했고, 매 푸시마다
+//     실패 알림만 남겨 2026-08-14 에 지웠습니다. 운영 DB 접근 규칙이라 diff 확인 → y/N →
+//     배포 이력 기록 단계를 일부러 거치게 둔 것이니, 되살릴 거면 그 점을 감안하세요.
 //
 //   [배포 이력]
 //   - 2026-07-14  통합본을 파일로 이관 + 냉방 컬렉션 3개 추가(ac_config·ac_commands·ac_state)
