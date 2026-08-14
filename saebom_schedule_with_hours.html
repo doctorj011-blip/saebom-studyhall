@@ -19630,12 +19630,19 @@ function _rpAggregate(o) {
   const peerAvgH = peerH.length ? peerH.reduce((a, b) => a + b, 0) / peerH.length : null;
 
   // 벌점: penalties 문서는 하루 한 건이고 periods 가 비어 있으면 벌점 없는 날
+  //
+  // ⚠️ points 가 없는 항목은 0점이 아니라 '늦은 변경' 1점이다(관리앱 벌점 모달과 같은 규칙).
+  //    학생앱은 마감(교시 시작 5시간 전) 이후의 출석 취소만 이 컬렉션에 적으므로, 여기 있는
+  //    옛 형식 기록은 전부 벌점이다 — 실제로 121건 모두 changedAt > deadline 이었다.
+  //    0 으로 읽던 동안 리포트에 '−0 무단결석' 줄이 찍혔고 벌점합계도 절반으로 나갔다.
   const penRows = [];
   penalties.forEach(p => Object.keys(p.periods || {}).forEach(pd => {
     const v = p.periods[pd];
     if (!v || v.canceled) return;
-    penRows.push({ date: p.date, period: pd, type: v.type, pt: v.points || 0, lateMin: v.lateMin });
+    penRows.push({ date: p.date, period: pd, type: v.type, pt: v.points || 1,
+                   lateMin: v.lateMin, to: v.to, reason: v.reason });
   }));
+  penRows.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (+a.period || 0) - (+b.period || 0));
   const meritRows = merits.map(m => ({ date: m.date, reason: m.reason || '', pt: m.points || m.point || 0 }))
     .sort((a, b) => a.date < b.date ? -1 : 1);
 
@@ -19679,6 +19686,20 @@ const _rpMd = d => (+d.slice(5,7)) + '/' + (+d.slice(8,10));
 const _rpDow = d => _RP_DOW[new Date(d + 'T00:00:00').getDay()];
 const _rpClock = m => m == null ? '—' : String(Math.floor(m/60)).padStart(2,'0') + ':' + String(Math.round(m%60)).padStart(2,'0');
 const _rpKind = k => k === '인강' ? 'lc' : (k === '문제집' ? '' : 'et');
+
+// 벌점 한 줄의 설명 — 관리앱 벌점 모달(_penalty 목록)과 같은 규칙으로 읽는다.
+// type 으로만 갈라내면 type 이 없는 옛 기록(늦은 변경)이 전부 '무단결석'으로 찍힌다.
+// 학부모께 나가는 문서라 그 오표기가 특히 위험하다 — 사전에 신고한 불참이 무단결석이 된다.
+// _rpPenWhat 은 교시를 뺀 사유만 — 교시를 따로 싣는 곳(AI 의견 payload)에서 쓴다.
+function _rpPenWhat(p) {
+  if (p.type === 'manual' || p.type === 'weekly_short') return p.reason || (p.type === 'manual' ? '수기 벌점' : '자동 벌점');
+  return p.type === 'noshow' ? '무단결석'
+    : p.type === 'late' ? '지각' + (p.lateMin != null ? ` ${p.lateMin}분` : '')
+    : `늦은 변경 (${p.to === 'early' ? '중간퇴실' : p.to === 'absent' ? '불참' : '해제'})`;
+}
+// 수기·자동 벌점은 교시가 없는 사유 기반이라 '몇 교시'를 붙이지 않는다.
+const _rpPenLabel = p => (p.type === 'manual' || p.type === 'weekly_short')
+  ? _rpPenWhat(p) : `${p.period}교시 ${_rpPenWhat(p)}`;
 
 function _rpSheet(d) {
   const maxDay = Math.max(...d.span.map(x => (d.att.mins[x] || 0) / 60), 1);
@@ -19810,7 +19831,7 @@ function _rpSheet(d) {
         <div class="rp-kv"><span class="k">상점 · 벌점</span><span class="v num"><span class="rp-up">+${d.meritPt}점</span> · <span style="color:#A2402F">−${d.penPt}점</span></span></div>
         ${(d.merits.length || d.penalties.length) ? `<div class="rp-merit">
           ${d.merits.map(m => `<div class="rp-mrow"><span class="pt">+${m.pt}</span><span class="rs">${_apcEsc(m.reason)}</span><span class="dt num">${_rpMd(m.date)}</span></div>`).join('')}
-          ${d.penalties.map(p => `<div class="rp-mrow neg"><span class="pt">−${p.pt}</span><span class="rs">${p.period}교시 ${p.type === 'late' ? '지각' + (p.lateMin != null ? ' ' + p.lateMin + '분' : '') : '무단결석'}</span><span class="dt num">${_rpMd(p.date)}</span></div>`).join('')}
+          ${d.penalties.map(p => `<div class="rp-mrow neg"><span class="pt">−${p.pt}</span><span class="rs">${_apcEsc(_rpPenLabel(p))}</span><span class="dt num">${_rpMd(p.date)}</span></div>`).join('')}
         </div>` : ''}
       </div>
     </div>
@@ -19970,7 +19991,7 @@ function _rpAiPayload(d) {
             상점합계: d.meritPt, 벌점합계: d.penPt,
             상점내역: d.merits.map(m => ({ 날짜: _rpMd(m.date), 사유: m.reason, 점수: m.pt })),
             벌점내역: d.penalties.map(p => ({ 날짜: _rpMd(p.date), 교시: p.period,
-                                             종류: p.type === 'late' ? '지각' : '무단결석', 점수: p.pt })) },
+                                             종류: _rpPenWhat(p), 점수: p.pt })) },
     최근담임코멘트: d.comments.map(c => ({ 날짜: _rpMd(c.date), 내용: c.text }))
   };
 }
