@@ -8,11 +8,18 @@
 <!--
   새봄 면학관 쉬는시간 타종 — 독립 실행 페이지
 
-  ⚠️ 이 파일은 면학관 관리앱(saebom_schedule_with_hours.html)과 **완전히 분리**되어 있다.
-     Firebase 도, 학생 데이터도, 관리자 인증도 쓰지 않는다. 설정은 이 브라우저의
-     localStorage 에만 저장된다. 관리앱에 넣었다가 뺀 이유가 이것이다 —
-     조교가 업무 중에 누른 버튼 하나가 진짜 종소리를 내보내 면학관에 혼선을 일으켰다.
-     여기서는 무엇을 눌러도 학생에게 들리는 종은 나가지 않는다(아래 '시험' 규칙 참고).
+  ⚠️ 이 파일은 면학관 관리앱(saebom_schedule_with_hours.html)의 화면·동선과 **완전히 분리**되어
+     있다. 관리앱에 넣었다가 뺀 이유가 이것이다 — 조교가 업무 중에 누른 버튼 하나가 진짜
+     종소리를 내보내 면학관에 혼선을 일으켰다. 여기서는 무엇을 눌러도 학생에게 들리는 종은
+     나가지 않는다(아래 '시험' 규칙 참고).
+
+  🔑 이 페이지의 핵심 규칙: **설정은 어디서나, 소리는 지정한 한 대에서만.**
+     - 설정(요일×교시·종소리·음량)은 Firestore `settings/bell_schedule` 에 있어, 원장이 폰에서
+       고치면 데스크톱이 새로고침 없이 받는다.
+     - '소리를 내는 기기'는 Firestore 에 **없다.** 기기별 localStorage(saebomBellSpeaker) 다.
+       이게 서버에 있으면 원장이 폰으로 설정을 열어보는 순간 폰에서도 종이 울린다.
+     - 네트워크가 끊겨도 마지막 설정이 localStorage 에 남아 있어 종은 계속 울린다.
+       Firebase 로딩 자체가 실패해도 이 기기 설정만으로 동작한다.
 
   🔊 소리 시험 규칙
      - 잠금 해제, 종소리 고르기, 음량 조절 → **아주 작은 확인음(삑)** 만 난다. 종이 아니다.
@@ -44,6 +51,11 @@ h1{font-size:19px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
 .next{font-size:15px;margin-top:8px;font-weight:600}
 .next.ok{color:var(--on)} .next.none{color:var(--accent-ink)} .next.off{color:var(--muted)}
 .lastrang{font-size:12px;color:var(--muted);margin-top:6px;min-height:16px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.badge{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px;
+  background:#F2ECE0;color:var(--muted);white-space:nowrap}
+.badge.good{background:#E7F6EC;color:#15803D}
+.badge.warn{background:#FDECEC;color:var(--warn)}
 
 /* ── 잠김 배너 ── */
 #lock{display:none;background:var(--warn);color:#fff;border-radius:12px;padding:16px 18px;
@@ -83,7 +95,7 @@ button.quiet{color:var(--muted)}
 <body>
 <div class="wrap">
   <h1>🔔 새봄 면학관 타종</h1>
-  <p class="sub">이 페이지를 띄워 둔 컴퓨터에서만 소리가 납니다. 관리앱과는 아무 관계가 없습니다.</p>
+  <p class="sub">설정은 어느 기기에서나 바꿀 수 있고, 소리는 <b>스피커로 지정한 한 대</b>에서만 납니다.</p>
 
   <button id="lock">🔇 소리가 잠겨 있습니다 — 여기를 눌러 주세요
     <small>브라우저를 새로 켜면 한 번 눌러야 합니다. 눌러도 종은 울리지 않습니다.</small></button>
@@ -92,6 +104,10 @@ button.quiet{color:var(--muted)}
     <div class="clock" id="clock">--:--:--<small id="today"></small></div>
     <div class="next off" id="next">타종이 꺼져 있습니다</div>
     <div class="lastrang" id="lastrang"></div>
+    <div class="badges">
+      <span class="badge" id="b-speaker"></span>
+      <span class="badge" id="b-sync"></span>
+    </div>
   </div>
 
   <div class="gridbox">
@@ -113,13 +129,16 @@ button.quiet{color:var(--muted)}
 
   <div class="row">
     <button class="primary" id="power">🔔 타종</button>
+    <button id="speaker">🔇 이 기기에서 소리 내기</button>
     <button class="quiet" id="demo">실제 종소리 듣기</button>
   </div>
 
   <div class="foot">
-    <b>매일 확인할 것</b> — 위 시계가 움직이고 있고, 빨간 줄이 안 보이면 정상입니다.<br>
+    <b>스피커 기기는 한 대만</b> — 위 <b>「이 기기에서 소리 내기」</b>는 스피커가 물린 컴퓨터에서만 켜세요.
+    폰이나 다른 컴퓨터에서는 꺼 두면, 그 기기는 설정만 바꾸고 소리는 내지 않습니다.<br>
+    <b>매일 확인할 것</b> — 스피커 기기에서 시계가 움직이고 빨간 줄이 안 보이면 정상입니다.<br>
     <b>소리가 안 나면</b> ① 빨간 줄이 있나 → 누르기 ② 컴퓨터 볼륨·스피커 전원 ③ 이 탭을 새로고침한 뒤 화면 한 번 누르기<br>
-    <b>이 페이지를 닫으면 종이 울리지 않습니다.</b> 늘 띄워 두세요.
+    <b>스피커 기기에서 이 페이지를 닫으면 종이 울리지 않습니다.</b> 늘 띄워 두세요.
   </div>
 </div>
 
@@ -153,20 +172,35 @@ const TONES = {
 };
 
 const STORE = 'saebomBell';
+const SPEAKER_KEY = 'saebomBellSpeaker';
 const DEFAULT = { on:false, tone:'chime', volume:0.6, ringStart:true, ringEnd:true, days:{} };
+
+function normalize(raw) {
+  const c = Object.assign({}, DEFAULT, raw || {});
+  c.days = Object.assign({}, (raw && raw.days) || {});
+  for (const d of DAYS) if (!Array.isArray(c.days[d])) c.days[d] = [];
+  if (!TONES[c.tone]) c.tone = DEFAULT.tone;
+  if (typeof c.volume !== 'number' || !(c.volume >= 0 && c.volume <= 1)) c.volume = DEFAULT.volume;
+  return c;
+}
+function load() {
+  try { return normalize(JSON.parse(localStorage.getItem(STORE) || '{}')); }
+  catch (e) { return normalize(null); }
+}
 let CFG = load();
 
-function load() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORE) || '{}');
-    const c = Object.assign({}, DEFAULT, raw);
-    c.days = Object.assign({}, raw.days || {});
-    for (const d of DAYS) if (!Array.isArray(c.days[d])) c.days[d] = [];
-    if (!TONES[c.tone]) c.tone = DEFAULT.tone;
-    return c;
-  } catch (e) { return Object.assign({}, DEFAULT, {days:Object.fromEntries(DAYS.map(d=>[d,[]]))}); }
+// ── 이 기기가 소리를 내는가 (기기별, 서버에 없다) ──
+// 서버에 두면 원장이 폰으로 설정을 열어보는 순간 폰에서도 종이 울린다.
+// 이 스위치가 생기기 전부터 쓰던 기기(=이미 설정을 저장해 둔 기기)는 계속 울려야 한다.
+// 새 기기(폰 등)는 꺼진 채로 열려 설정만 바꾼다.
+let SPEAKER;
+{
+  const saved = localStorage.getItem(SPEAKER_KEY);
+  SPEAKER = saved === null ? localStorage.getItem(STORE) !== null : saved === '1';
+  localStorage.setItem(SPEAKER_KEY, SPEAKER ? '1' : '0');
 }
-function save() { localStorage.setItem(STORE, JSON.stringify(CFG)); }
+
+function saveLocal() { localStorage.setItem(STORE, JSON.stringify(CFG)); }
 
 // ── 시각 계산 ──
 // 11교시가 자정을 넘기므로, 새벽 3시 전은 '전날' 시간표로 친다.
@@ -297,7 +331,7 @@ function cancelArmed() {
 function tick() {
   const ms = Date.now(), prev = lastCheck;
   lastCheck = ms;
-  if (!CFG.on) return;
+  if (!SPEAKER || !CFG.on) return;   // 스피커로 지정되지 않은 기기는 설정만 바꾼다
   const d = new Date(ms), base = dayMidnight(d);
   const woke = prev && (ms - prev) <= RESYNC_GAP;
   for (const t of targetsFor(now(d).day)) {
@@ -329,11 +363,22 @@ function paint() {
   document.getElementById('today').textContent =
     `${d.getMonth()+1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일`;
 
-  const locked = !ctx || ctx.state !== 'running';
+  // 잠김 경고는 소리를 낼 기기에서만 의미가 있다 — 폰에서 설정만 볼 때 빨간 줄이 뜨면 잔소리다
+  const locked = SPEAKER && (!ctx || ctx.state !== 'running');
   document.getElementById('lock').classList.toggle('show', locked);
+
+  const bs = document.getElementById('b-speaker');
+  bs.textContent = SPEAKER ? '🔊 이 기기에서 소리 남' : '🔇 이 기기는 설정만 — 소리 안 남';
+  bs.className = 'badge' + (SPEAKER ? ' good' : '');
+  const by = document.getElementById('b-sync');
+  by.textContent = sync.state === 'on' ? '☁️ 원격 설정 연결됨'
+                 : sync.state === 'off' ? '⚠️ 원격 연결 안 됨 — 이 기기 설정으로만'
+                 : '⏳ 원격 설정 연결 중…';
+  by.className = 'badge' + (sync.state === 'on' ? ' good' : sync.state === 'off' ? ' warn' : '');
 
   const nx = document.getElementById('next');
   if (!CFG.on) { nx.textContent = '타종이 꺼져 있습니다'; nx.className = 'next off'; }
+  else if (!SPEAKER) { nx.textContent = '켜져 있습니다 — 소리는 스피커 기기에서 납니다'; nx.className = 'next off'; }
   else if (locked) { nx.textContent = '소리가 잠겨 있어 울릴 수 없습니다'; nx.className = 'next none'; }
   else {
     const n = nextInfo();
@@ -349,6 +394,26 @@ function paint() {
   const p = document.getElementById('power');
   p.textContent = CFG.on ? '🔔 타종 켜짐' : '🔕 타종 꺼짐';
   p.classList.toggle('on', CFG.on);
+
+  // 원격에서 바뀐 값을 폼에도 반영한다. 격자만 갱신하고 여기를 빠뜨리면, 폰에서 음량을
+  // 올려도 데스크톱 슬라이더는 옛 값을 보여 준다 — 실제 동작(CFG)과 화면이 어긋난다.
+  // 지금 만지고 있는 컨트롤은 건드리지 않는다(끌던 슬라이더가 튄다).
+  const ae = document.activeElement;
+  const tn = document.getElementById('tone');       if (ae !== tn) tn.value = CFG.tone;
+  const rs = document.getElementById('ringStart');  if (ae !== rs) rs.checked = CFG.ringStart;
+  const re = document.getElementById('ringEnd');    if (ae !== re) re.checked = CFG.ringEnd;
+  const vl = document.getElementById('volume');
+  if (ae !== vl) {
+    vl.value = Math.round(CFG.volume * 100);
+    document.getElementById('vol-num').textContent = vl.value + '%';
+  }
+
+  const sp = document.getElementById('speaker');
+  sp.textContent = SPEAKER ? '🔊 이 기기에서 소리 냄' : '🔇 이 기기에서 소리 내기';
+  const dm = document.getElementById('demo');
+  dm.disabled = !SPEAKER;                       // 소리 안 내는 기기에서 눌러도 아무 일 없다
+  dm.style.opacity = SPEAKER ? '' : '.4';
+  dm.style.cursor = SPEAKER ? '' : 'not-allowed';
 }
 
 function paintGrid() {
@@ -364,8 +429,62 @@ function paintGrid() {
   document.getElementById('grid').innerHTML = h;
 }
 
+// ── 원격 설정 동기화 (Firestore settings/bell_schedule) ──
+// 설정만 서버에 둔다. '어느 기기가 소리를 내는가'는 절대 올리지 않는다(SPEAKER 주석 참고).
+// 서버가 안 되더라도 종은 울려야 하므로, localStorage 를 캐시로 두고 Firebase 는 얹기만 한다.
+const FB = {
+  apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
+  authDomain: "saebom-studyhall.firebaseapp.com",
+  projectId: "saebom-studyhall",
+  storageBucket: "saebom-studyhall.firebasestorage.app",
+  messagingSenderId: "273169263882",
+  appId: "1:273169263882:web:cb3c2abe45f76602d99ef3"
+};
+let sync = { state:'connecting', push:null };   // state: connecting | on | off
+
+(async () => {
+  try {
+    const V = 'https://www.gstatic.com/firebasejs/11.9.0/';
+    const [{ initializeApp }, fs] = await Promise.all([
+      import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js')
+    ]);
+    const db = fs.getFirestore(initializeApp(FB));
+    const ref = fs.doc(db, 'settings', 'bell_schedule');
+
+    fs.onSnapshot(ref, snap => {
+      sync.state = 'on';
+      if (snap.exists()) {
+        const remote = normalize(snap.data());
+        // 서버 설정을 그대로 따른다. 편집 중이어도 마찬가지 — 이 페이지는 누를 때마다
+        // 곧바로 올리므로 '저장 안 한 편집'이라는 상태 자체가 없다.
+        CFG = remote;
+        saveLocal();
+        cancelArmed();   // 옛 설정으로 걸어 둔 예약은 버린다
+        paintGrid();
+      }
+      paint();
+    }, err => {
+      console.warn('원격 설정 구독 실패 — 이 기기 설정으로만 동작합니다', err);
+      sync.state = 'off';
+      paint();
+    });
+
+    sync.push = () => fs.setDoc(ref, Object.assign({}, CFG, { updatedAt: fs.serverTimestamp() }))
+      .catch(e => { console.warn('원격 설정 저장 실패', e); sync.state = 'off'; paint(); });
+  } catch (e) {
+    // CDN 차단·오프라인 등 — 원격 없이도 이 기기 설정만으로 정상 동작한다
+    console.warn('원격 설정을 쓸 수 없습니다 — 이 기기 설정으로만 동작합니다', e);
+    sync.state = 'off';
+    paint();
+  }
+})();
+
 // 설정이 바뀌면 걸어 둔 예약은 옛 설정이다 — 버리고 다음 점검에서 다시 건다
-function changed() { save(); cancelArmed(); paintGrid(); paint(); }
+function changed() {
+  saveLocal();
+  if (sync.push) sync.push();
+  cancelArmed(); paintGrid(); paint();
+}
 
 document.getElementById('grid').addEventListener('click', e => {
   const td = e.target.closest('td');
@@ -414,8 +533,18 @@ $('power').onclick = () => {
   changed();
 };
 
+// 이 기기를 스피커로 쓸지. 서버에 올리지 않는다 — 올리면 폰에서도 종이 울린다.
+$('speaker').onclick = () => {
+  SPEAKER = !SPEAKER;
+  localStorage.setItem(SPEAKER_KEY, SPEAKER ? '1' : '0');
+  cancelArmed();                 // 껐는데 미리 걸어 둔 종이 울리면 안 된다
+  if (SPEAKER) { audio(); blip(); }   // 이 클릭이 자동재생 정책이 요구하는 제스처다
+  paint();
+};
+
 // 진짜 종소리는 여기서만 난다 — 지금이 수업 중인지 알려주고, 한 번 더 동의를 받는다.
 $('demo').onclick = () => {
+  if (!SPEAKER) return;
   audio();
   const w = whatNow();
   const msg = `실제 종소리를 스피커로 내보냅니다.\n\n지금은 ${w.text}입니다.\n` +
@@ -425,9 +554,12 @@ $('demo').onclick = () => {
   ring(CFG.tone, CFG.volume);
 };
 
-// 화면 아무 데나 눌러도 소리가 깨어나게 — 잠긴 줄 모르고 헤매지 않도록
+// 화면 아무 데나 눌러도 소리가 깨어나게 — 잠긴 줄 모르고 헤매지 않도록.
+// 소리를 안 내는 기기(폰)에서는 오디오를 깨울 이유가 없다.
 $('lock').onclick = () => { audio(); blip(); paint(); };
-document.addEventListener('click', () => { if (!ctx || ctx.state !== 'running') { audio(); paint(); } });
+document.addEventListener('click', () => {
+  if (SPEAKER && (!ctx || ctx.state !== 'running')) { audio(); paint(); }
+});
 
 // 초기화
 $('tone').innerHTML = Object.entries(TONES).map(([k,t]) => `<option value="${k}">${t.label}</option>`).join('');
