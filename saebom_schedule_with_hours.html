@@ -2010,7 +2010,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <div>
-          <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:5px">기상청 인증키 (일반 인증키 · Decoding)</div>
+          <div style="font-size:11px;font-weight:600;color:#4A3FA8;margin-bottom:5px">기상청 인증키 (일반 인증키 — Encoding·Decoding 어느 쪽이든 됩니다)</div>
           <input id="wx-kma-key" type="text" autocomplete="off" placeholder="붙여넣기"
             style="width:100%;padding:9px 12px;border:1.5px solid #8F82E4;border-radius:10px;font-size:13px;background:#F8FAFF;outline:none">
         </div>
@@ -3431,12 +3431,20 @@ document.addEventListener('visibilitychange', () => {
     7: ['sky-snow','🌨️','눈날림','snow']
   };
 
+  // 공공데이터포털은 같은 키를 Encoding(%2F·%2B·%3D가 이미 들어간 것)과 Decoding 두 형태로
+  // 준다. 어느 쪽이 되는지는 호출 조건마다 달라서 포털 안내조차 "되는 걸 쓰라"고만 한다.
+  // 이미 인코딩된 키를 또 인코딩하면 %2F가 %252F가 돼 '등록되지 않은 서비스키'로 튕기므로,
+  // %XX 패턴이 보이면 인코딩 완료본으로 보고 그대로 쓴다. 둘 다 붙여넣을 수 있다.
+  function skParam(k){
+    return /%[0-9A-Fa-f]{2}/.test(k) ? k : encodeURIComponent(k);
+  }
+
   // 관측값 {pty, rn1, t1h} 또는 null(키 없음). 실패는 throw — 호출부가 삼킨다.
   async function kmaNowcast(){
     if (!KMA_KEY) return null;
     const g=dfsXy(CFG.lat, CFG.lon), b=kmaBase();
     const url='https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getUltraSrtNcst'
-      +'?serviceKey='+encodeURIComponent(KMA_KEY)
+      +'?serviceKey='+skParam(KMA_KEY)
       +'&numOfRows=10&pageNo=1&dataType=JSON'
       +'&base_date='+b.date+'&base_time='+b.time+'&nx='+g.nx+'&ny='+g.ny;
     const res=await fetch(url,{cache:'no-store'});
