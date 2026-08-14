@@ -3502,6 +3502,23 @@ document.addEventListener('visibilitychange', () => {
   setInterval(load, 15*60*1000);
   setInterval(positionSun, 60*1000); // 1분마다 태양·달 위치 갱신(동→서)
 
+  // ── 정각 41분에 한 번 더 ──
+  // 초단기실황은 매시 정시 관측을 HH:40에 공개한다. 15분 주기만 두면 그 시점과 어긋나
+  // 새 관측을 최대 15분 늦게 받는다(화면이 그만큼 더 과거를 보여준다). 매시 HH:41에
+  // 맞춰 한 번 더 불러 그 15분을 없앤다. 1분 여유를 두는 건 공개가 초 단위로 밀릴 때
+  // 빈 응답(NO_DATA)을 받지 않기 위해서다.
+  // 절전에서 늦게 깨어 타이머가 밀려 발화해도, 발화 직후 다음 HH:41을 다시 계산한다.
+  let nextObsAt = 0;
+  function scheduleHourlyObs(){
+    const now = new Date();
+    const next = new Date(now);
+    next.setMinutes(41, 0, 0);
+    if (next <= now) next.setHours(next.getHours() + 1);
+    nextObsAt = next.getTime();
+    setTimeout(()=>{ load(); scheduleHourlyObs(); }, nextObsAt - now.getTime());
+  }
+  scheduleHourlyObs();
+
   // 기상청 키는 Firestore(settings/weather)에 둔다 — 소스에 박으면 안 된다(이 저장소는
   // GitHub Pages로 공개돼 있다). onSnapshot이라 사무실 PC에서 키를 넣으면 키오스크가
   // 새로고침 없이 받아 즉시 다시 판정한다.
@@ -3528,7 +3545,7 @@ document.addEventListener('visibilitychange', () => {
 
   // 설정 탭의 '연결 확인' 버튼이 쓰는 통로 (키오스크 화면을 열지 않고 검증하기 위한 것)
   window._wxDebug = { grid: ()=>dfsXy(CFG.lat, CFG.lon), nowcast: kmaNowcast, reload: load,
-                      setKey: k => { KMA_KEY = k; } };
+                      setKey: k => { KMA_KEY = k; }, nextObs: ()=>nextObsAt, base: kmaBase };
 
   // 리사이즈 시 파티클 재배치(디바운스)
   let rt; window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(curKind) render(curKind); }, 400); });
