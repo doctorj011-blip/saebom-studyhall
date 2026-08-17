@@ -40,6 +40,391 @@ window._computeOffset = function(M, P) {
            netMerit: M - rounds * 3, netDemerit: P - rounds * 2, rawMerit: M, rawDemerit: P };
 };
 
+// ══════════════════════════════════════════════════════════════════
+// 월별 이용 조사 (9월 사용 희망/비희망) — 3앱 공통 로직
+// ══════════════════════════════════════════════════════════════════
+// 학생앱·학부모앱은 로그인 직후 이 조사를 전면으로 띄우고, 응답 전에는 앱을 쓸 수 없다.
+// 컬렉션은 usage_surveys 하나이고 설정 문서도 그 안에 둔다(_config) — settings 컬렉션은
+// read 화이트리스트라 문서를 새로 만들 때마다 규칙을 고쳐야 하기 때문(school_calendars 선례).
+//
+//   usage_surveys/_config                  설정 1개
+//   usage_surveys/{surveyId}__{학생키}      응답 1인 1개
+//
+// ⚠️ 기본값은 active:false 다. 설정 문서가 없으면 게이트는 뜨지 않는다 —
+//    배포하는 순간 전교생이 막히는 사고를 막으려고 일부러 이렇게 뒀다.
+//    관리자앱 '이용조사' 탭의 [조사 시작] 이 이 문서를 만든다.
+window._SURVEY_COL = 'usage_surveys';
+window._SURVEY_CONFIG_ID = '_config';
+
+window._surveyConfig = function(raw) {
+  const d = raw || {};
+  const num = (v, def) => (v == null || isNaN(Number(v))) ? def : Number(v);
+  return {
+    surveyId:  String(d.surveyId || '2026-09'),
+    title:     String(d.title || '9월 면학관 이용 조사'),
+    closeAt:   String(d.closeAt || '2026-08-20T23:59'),   // 로컬(KST) 'YYYY-MM-DDTHH:mm'
+    active:    d.active === true,
+    meritWon:  num(d.meritWon, 1000),   // 잔여 상점 1점당 할인액
+    meritCap:  num(d.meritCap, 20000),  // 할인 상한(0이면 무제한)
+    blockAfterClose: d.blockAfterClose === true,  // 마감 후에도 막을지(기본은 통과+배너)
+    exclude: Array.isArray(d.exclude) ? d.exclude.map(String) : [],  // 조사 대상에서 뺄 학생 이름
+    finalizedAt: d.finalizedAt || null
+  };
+};
+
+// 조사 대상에서 빼는 학생 — 게이트도 안 뜨고 관리앱 대상 수에도 안 들어간다.
+//   1) withdrawAt(예약 퇴원일)이 잡힌 학생 — 나가기로 확정된 사람에게 "9월에도 오실래요?"를
+//      물으면 안 된다. 매달 이름을 다시 적지 않아도 되도록 이 조건을 먼저 둔다.
+//   2) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생.
+// 이름 비교는 _sameStudentName 으로 한다("박지윤(9557)"·"박지윤A" 같은 표기 편차를 흡수).
+window._surveyExcluded = function(cfg, student) {
+  if (!student) return false;
+  if (student.withdrawAt) return true;
+  const list = window._surveyConfig(cfg).exclude;
+  return list.some(n => window._sameStudentName(n, student.name));
+};
+
+// 'YYYY-MM-DDTHH:mm' 을 로컬 시각으로 읽는다. new Date(문자열)은 브라우저에 따라
+// UTC로 해석해 9시간이 밀리므로 직접 조립한다.
+window._surveyCloseMs = function(cfg) {
+  const m = String((cfg && cfg.closeAt) || '').match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if (!m) return NaN;
+  return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], 59).getTime();
+};
+window._surveyIsClosed = function(cfg, nowMs) {
+  const ms = window._surveyCloseMs(cfg);
+  return !isNaN(ms) && (nowMs || Date.now()) > ms;
+};
+
+// 응답 문서 ID. 좌석은 교환·재배정되므로 불변 uid 를 우선한다(uid 가 없는 옛 학생만 좌석).
+window._surveyDocId = function(surveyId, student) {
+  const uid = student && student.uid;
+  const seat = String((student && student.seat) || '').replace(/[^0-9]/g, '');
+  return String(surveyId) + '__' + (uid ? uid : ('seat' + (seat || '0')));
+};
+
+// 상벌점 상계 → 재등록 할인액.
+// 상계 규칙 자체는 _computeOffset(상점3 → 벌점2 소거)을 그대로 쓴다.
+// 상계하고도 벌점이 남으면(netDemerit > 0) 할인은 0원이다 — 남은 벌점만큼 더 받지는 않는다.
+window._surveyDiscount = function(cfg, M, P) {
+  const c = window._surveyConfig(cfg);
+  const off = window._computeOffset(M, P);
+  let won = 0;
+  if (off.netDemerit <= 0) {
+    won = off.netMerit * c.meritWon;
+    if (c.meritCap > 0) won = Math.min(won, c.meritCap);
+  }
+  return { rawMerit: off.rawMerit, rawDemerit: off.rawDemerit,
+           cleared: off.cleared, netMerit: off.netMerit, netDemerit: off.netDemerit,
+           won: won, capped: c.meritCap > 0 && off.netDemerit <= 0 && off.netMerit * c.meritWon > c.meritCap };
+};
+
+// 응답 병합 — "먼저 낸 쪽 우선(first-wins)".
+// 정본(want)은 처음 응답한 주체(firstBy)의 값이고, 뒤에 다른 쪽이 다르게 답해도 값은 바뀌지 않는다.
+// 다만 conflict 를 세워 관리자앱이 따로 뽑아볼 수 있게 한다(전화로 확정할 명단).
+// 같은 주체가 마감 전에 마음을 바꾸면 그건 불일치가 아니라 '변경'이므로 정본이 따라 바뀐다.
+window._surveyApply = function(existing, role, want, nowISO) {
+  const prev = existing || {};
+  const r = (role === 'parent') ? 'parent' : 'student';
+  const out = {
+    student: prev.student ? { want: prev.student.want === true, at: prev.student.at || '' } : null,
+    parent:  prev.parent  ? { want: prev.parent.want  === true, at: prev.parent.at  || '' } : null
+  };
+  out[r] = { want: want === true, at: nowISO };
+
+  const firstBy = (prev.firstBy === 'student' || prev.firstBy === 'parent') ? prev.firstBy : r;
+  const src = out[firstBy] || out[r];
+  const both = !!(out.student && out.parent);
+  return {
+    want: src.want,
+    firstBy: firstBy,
+    student: out.student,
+    parent: out.parent,
+    conflict: both && out.student.want !== out.parent.want
+  };
+};
+
+// ── 이번 주기 상점·벌점 합계 (조사 화면의 할인 계산용) ──
+// 상벌점 카드와 같은 규칙으로 센다: 취소된 건 빼고, penalties 는 periods 맵을 펼쳐 교시별로,
+// merits 는 문서의 points 를 더한다. docs 는 이미 '내 것'만 걸러진 배열이어야 한다.
+window._surveyCycleTotals = function(meritDocs, penaltyDocs) {
+  const cyc = window._meritCycle();
+  let M = 0, P = 0;
+  (meritDocs || []).forEach(d => {
+    if (!d || d.canceled) return;
+    const pts = Number(d.points) || 0;
+    if (pts > 0 && window._inMeritCycle(d.date, cyc)) M += pts;
+  });
+  (penaltyDocs || []).forEach(d => {
+    if (!d || !window._inMeritCycle(d.date, cyc)) return;
+    Object.keys(d.periods || {}).forEach(k => {
+      const p = d.periods[k];
+      if (p && !p.canceled) P += (p.points || 1);
+    });
+  });
+  return { M: M, P: P, cycle: cyc };
+};
+
+// ══════════════════════════════════════════════════════════════════
+// 이용 조사 게이트 UI — 학생앱·학부모앱 공용
+// ══════════════════════════════════════════════════════════════════
+// 두 앱이 같은 화면을 쓰도록 UI까지 여기 둔다. 문구·색만 role 로 갈린다.
+//
+// 호출: window._surveyGate.start({ role, student, db, fs, fetchMine })
+//   role      'student' | 'parent'
+//   student   { name, seat, uid }
+//   db        Firestore 인스턴스
+//   fs        { doc, getDoc, setDoc }        — 앱마다 이름이 달라 어댑터로 받는다
+//   fetchMine async (col, seatField) => [data...]  — 좌석/uid 폴백과 이름 검증까지 끝난 배열
+//
+// 게이트가 뜨는 조건: 설정이 active 이고, **아무도(학생·학부모 누구도) 응답하지 않았을 때**.
+// 한쪽이 이미 응답했으면 그 값이 정본으로 반영된 상태이므로 막지 않고 배너로만 알린다.
+window._surveyGate = (function() {
+  const S = { cfg: null, resp: null, opt: null, busy: false };
+
+  const PALETTE = {
+    student: { grad: 'linear-gradient(150deg,#1E1B4B 0%,#4338A8 45%,#6C5DD3 100%)', key: '#6C5DD3' },
+    parent:  { grad: 'linear-gradient(150deg,#7A5610 0%,#C8900A 45%,#E0B020 100%)', key: '#C8900A' }
+  };
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const won = n => Number(n || 0).toLocaleString('ko-KR');
+  const roleLabel = r => (r === 'parent' ? '학부모님' : '학생');
+
+  function nowISO() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+           ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function closeLabel(cfg) {
+    const m = String(cfg.closeAt || '').match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+    return m ? `${+m[1]}월 ${+m[2]}일 ${m[3]}:${m[4]}` : cfg.closeAt;
+  }
+
+  async function start(opt) {
+    S.opt = opt;
+    try {
+      const snap = await opt.fs.getDoc(opt.fs.doc(opt.db, window._SURVEY_COL, window._SURVEY_CONFIG_ID));
+      if (!snap || !snap.exists || !snap.exists()) return;      // 설정 없음 = 조사 안 함
+      S.cfg = window._surveyConfig(snap.data());
+      if (!S.cfg.active) return;
+      if (window._surveyExcluded(S.cfg, opt.student)) return;   // 퇴원예정·제외 명단
+      const id = window._surveyDocId(S.cfg.surveyId, opt.student);
+      const rs = await opt.fs.getDoc(opt.fs.doc(opt.db, window._SURVEY_COL, id));
+      S.resp = (rs && rs.exists && rs.exists()) ? rs.data() : null;
+    } catch (e) {
+      // 조사 때문에 앱 자체가 막히면 안 된다 — 실패하면 조용히 넘어간다(fail-open).
+      console.warn('이용 조사 확인 실패:', e);
+      return;
+    }
+    const answered = !!(S.resp && (S.resp.student || S.resp.parent));
+    const closed = window._surveyIsClosed(S.cfg);
+    if (!answered && (!closed || S.cfg.blockAfterClose)) { open(true); return; }
+    renderBanner();
+  }
+
+  // 배너 — 응답 후(변경 가능), 또는 마감 후 미응답자에게.
+  function renderBanner() {
+    document.getElementById('survey-banner')?.remove();
+    if (!S.cfg || !S.cfg.active) return;
+    const closed = window._surveyIsClosed(S.cfg);
+    const mine = S.resp && S.resp[S.opt.role];
+    const other = S.resp && S.resp[S.opt.role === 'parent' ? 'student' : 'parent'];
+    const pal = PALETTE[S.opt.role] || PALETTE.student;
+
+    let text, tone = pal.key;
+    if (!S.resp) {
+      if (!closed) return;                                    // 미응답인데 마감 전이면 게이트가 떠 있다
+      text = `📋 ${esc(S.cfg.title)} 회수가 끝났어요. 아직 응답하지 않으셨습니다 — 면학관으로 연락 주세요.`;
+      tone = '#C62828';
+    } else if (mine) {
+      text = `📋 ${esc(S.cfg.title)} — <b>${S.resp.want ? '이용 희망' : '이용 안 함'}</b>으로 접수됐어요.`;
+    } else {
+      text = `📋 ${esc(S.cfg.title)} — ${roleLabel(S.resp.firstBy)}이 <b>${S.resp.want ? '이용 희망' : '이용 안 함'}</b>으로 응답하셨어요.`;
+    }
+    const canEdit = !closed;
+    const bar = document.createElement('div');
+    bar.id = 'survey-banner';
+    bar.style.cssText = `position:sticky;top:0;z-index:900;background:${tone}12;border-bottom:1px solid ${tone}40;` +
+      'padding:9px 14px;font-size:12px;line-height:1.5;color:#333;display:flex;gap:10px;align-items:center';
+    bar.innerHTML = `<span style="flex:1">${text}</span>` +
+      (canEdit ? `<button type="button" id="survey-banner-btn" style="flex:0 0 auto;padding:6px 12px;border:none;border-radius:8px;background:${tone};color:#fff;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer">${S.resp && S.resp[S.opt.role] ? '변경' : '응답'}</button>` : '');
+    document.body.insertBefore(bar, document.body.firstChild);
+    document.getElementById('survey-banner-btn')?.addEventListener('click', () => open(false));
+  }
+
+  // blocking=true 면 닫기 버튼이 없다(응답해야 앱으로 들어간다).
+  function open(blocking) {
+    document.getElementById('survey-gate')?.remove();
+    const pal = PALETTE[S.opt.role] || PALETTE.student;
+    const ov = document.createElement('div');
+    ov.id = 'survey-gate';
+    ov.dataset.blocking = blocking ? '1' : '0';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:20000;background:' + pal.grad +
+      ';display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto';
+    ov.innerHTML = '<div id="survey-gate-card" style="background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:380px;box-shadow:0 18px 50px rgba(0,0,0,0.28);color:#1F2937"></div>';
+    document.body.appendChild(ov);
+    render();
+    loadDiscount();
+  }
+  function close() {
+    document.getElementById('survey-gate')?.remove();
+    renderBanner();
+  }
+
+  let _pick = null;      // 이번에 고른 값(저장 전)
+  let _disc = null;      // 할인 계산 결과(비동기로 채워짐)
+
+  function render() {
+    const card = document.getElementById('survey-gate-card');
+    if (!card) return;
+    const cfg = S.cfg, pal = PALETTE[S.opt.role] || PALETTE.student;
+    const st = S.opt.student || {};
+    const blocking = document.getElementById('survey-gate')?.dataset.blocking === '1';
+    const mine = S.resp && S.resp[S.opt.role];
+    const other = S.resp && S.resp[S.opt.role === 'parent' ? 'student' : 'parent'];
+    if (_pick === null && mine) _pick = mine.want === true;
+
+    const btn = (val, emoji, title, desc) => {
+      const on = _pick === val;
+      return `<button type="button" data-want="${val}" style="width:100%;text-align:left;display:flex;gap:11px;align-items:flex-start;
+        padding:14px 15px;margin-bottom:9px;border-radius:13px;cursor:pointer;font-family:inherit;
+        border:2px solid ${on ? pal.key : '#E5E7EB'};background:${on ? pal.key + '10' : '#fff'}">
+        <span style="font-size:20px;line-height:1.1">${emoji}</span>
+        <span style="flex:1">
+          <span style="display:block;font-size:14.5px;font-weight:800;color:${on ? pal.key : '#1F2937'}">${title}</span>
+          <span style="display:block;font-size:11.5px;color:#6B7280;margin-top:2px;line-height:1.5">${desc}</span>
+        </span>
+        <span style="font-size:15px;color:${on ? pal.key : '#D1D5DB'}">${on ? '●' : '○'}</span>
+      </button>`;
+    };
+
+    card.innerHTML = `
+      <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">${esc(cfg.title)}</div>
+      <div style="font-size:12.5px;color:#6B7280;margin-top:5px;line-height:1.6">
+        ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}<br>
+        회수 마감 <b style="color:#374151">${closeLabel(cfg)}</b>
+      </div>
+      ${blocking ? `<div style="margin-top:12px;background:#FEF3C7;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400E;line-height:1.6">
+        9월 좌석과 시간표를 짜기 위한 조사예요. <b>응답하셔야 앱을 이용할 수 있어요.</b>
+      </div>` : ''}
+      ${other ? `<div style="margin-top:12px;background:#EFF6FF;border-radius:10px;padding:10px 12px;font-size:12px;color:#1D4ED8;line-height:1.6">
+        ${roleLabel(S.opt.role === 'parent' ? 'student' : 'parent')}은 <b>${other.want ? '이용 희망' : '이용 안 함'}</b>으로 응답하셨어요.
+      </div>` : ''}
+      <div style="margin:16px 0 4px;font-size:13px;font-weight:800">9월에도 면학관을 이용하시겠어요?</div>
+      <div id="survey-opts" style="margin-top:9px">
+        ${btn(true,  '🙋', '네, 계속 이용할게요', '지금 자리와 시간표가 9월에도 그대로 이어집니다.')}
+        ${btn(false, '👋', '아니요, 이용하지 않을게요', '8월까지만 이용하고 9월에는 나갑니다.')}
+      </div>
+      <div id="survey-discount" style="margin-top:6px"></div>
+      <button type="button" id="survey-submit" ${_pick === null ? 'disabled' : ''}
+        style="width:100%;margin-top:14px;padding:14px;border:none;border-radius:12px;font-family:inherit;
+        font-size:14.5px;font-weight:800;color:#fff;cursor:${_pick === null ? 'default' : 'pointer'};
+        background:${_pick === null ? '#D1D5DB' : pal.key}">${mine ? '변경 저장' : '제출하기'}</button>
+      ${blocking ? '' : `<button type="button" id="survey-close" style="width:100%;margin-top:8px;padding:11px;border:1px solid #E5E7EB;border-radius:12px;background:#fff;color:#6B7280;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">닫기</button>`}
+      <div style="margin-top:12px;font-size:11px;color:#9CA3AF;line-height:1.6">
+        마감 전까지는 언제든 바꿀 수 있어요. 학생과 학부모님 응답이 다를 경우 <b>먼저 하신 응답</b>이 반영되고,
+        면학관에서 따로 확인 전화를 드립니다.
+      </div>`;
+
+    card.querySelectorAll('[data-want]').forEach(b => b.addEventListener('click', () => {
+      _pick = b.dataset.want === 'true';
+      render(); paintDiscount();
+    }));
+    document.getElementById('survey-submit')?.addEventListener('click', submit);
+    document.getElementById('survey-close')?.addEventListener('click', close);
+    paintDiscount();
+  }
+
+  async function loadDiscount() {
+    try {
+      const [merits, penalties] = await Promise.all([
+        S.opt.fetchMine('merits', 'seatKey'),
+        S.opt.fetchMine('penalties', 'seatKey')
+      ]);
+      const t = window._surveyCycleTotals(merits, penalties);
+      _disc = window._surveyDiscount(S.cfg, t.M, t.P);
+      paintDiscount();
+    } catch (e) { console.warn('상벌점 조회 실패(할인 안내 생략):', e); }
+  }
+
+  // 할인 안내는 '희망'을 골랐을 때만 보여준다 — 나가는 학생에게 띄우면 붙잡는 것처럼 읽힌다.
+  function paintDiscount() {
+    const el = document.getElementById('survey-discount');
+    if (!el) return;
+    if (!_disc || _pick !== true) { el.innerHTML = ''; return; }
+    const d = _disc;
+    if (d.rawMerit === 0 && d.rawDemerit === 0) { el.innerHTML = ''; return; }
+    const line = (l, r, c) => `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px"><span style="color:#6B7280">${l}</span><span style="font-weight:700;color:${c || '#374151'}">${r}</span></div>`;
+    el.innerHTML = `
+      <div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:12px;padding:12px 14px;margin-top:8px">
+        <div style="font-size:12.5px;font-weight:800;color:#047857">🎁 재등록 할인 (이번 주기 상벌점)</div>
+        ${line('상점', d.rawMerit + '점', '#059669')}
+        ${line('벌점', d.rawDemerit + '점', '#C62828')}
+        ${d.cleared ? line('상점으로 상쇄', '벌점 −' + d.cleared + '점', '#6B7280') : ''}
+        ${line('잔여', '상점 ' + d.netMerit + '점 · 벌점 ' + d.netDemerit + '점')}
+        <div style="border-top:1px dashed #BBF7D0;margin-top:8px;padding-top:8px">
+          ${d.netDemerit > 0
+            ? `<div style="font-size:12px;color:#92400E;line-height:1.6">벌점이 <b>${d.netDemerit}점</b> 남아 이번 할인은 없어요. 8월 31일까지 상점 3점을 모으면 벌점 2점이 지워집니다.</div>`
+            : `<div style="display:flex;justify-content:space-between;align-items:center">
+                 <span style="font-size:12.5px;color:#047857;font-weight:700">9월 이용료 할인</span>
+                 <span style="font-size:17px;font-weight:900;color:#047857">${won(d.won)}원</span>
+               </div>${d.capped ? '<div style="font-size:11px;color:#6B7280;margin-top:3px">할인 상한이 적용된 금액이에요.</div>' : ''}`}
+        </div>
+        <div style="font-size:11px;color:#6B7280;margin-top:8px;line-height:1.6">
+          지금 기준 <b>예상 금액</b>이에요. 8월 31일까지의 상벌점으로 최종 확정됩니다.
+        </div>
+      </div>`;
+  }
+
+  async function submit() {
+    if (S.busy || _pick === null) return;
+    const btn = document.getElementById('survey-submit');
+    S.busy = true;
+    if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+    try {
+      const opt = S.opt, st = opt.student || {};
+      const id = window._surveyDocId(S.cfg.surveyId, st);
+      const ref = opt.fs.doc(opt.db, window._SURVEY_COL, id);
+      // 저장 직전에 한 번 더 읽는다 — 게이트가 열려 있는 동안 반대쪽에서 답했을 수 있다.
+      let cur = null;
+      try {
+        const s = await opt.fs.getDoc(ref);
+        if (s && s.exists && s.exists()) cur = s.data();
+      } catch (e) {}
+      const merged = window._surveyApply(cur, opt.role, _pick, nowISO());
+      const payload = {
+        surveyId: S.cfg.surveyId,
+        name: st.name || '', seat: String(st.seat || ''), uid: st.uid || '',
+        want: merged.want, firstBy: merged.firstBy, conflict: merged.conflict,
+        student: merged.student, parent: merged.parent,
+        updatedAt: nowISO()
+      };
+      if (_disc) payload.snapshot = {
+        merit: _disc.rawMerit, demerit: _disc.rawDemerit,
+        netMerit: _disc.netMerit, netDemerit: _disc.netDemerit, won: _disc.won, at: nowISO()
+      };
+      await opt.fs.setDoc(ref, payload, { merge: true });
+      S.resp = Object.assign({}, cur || {}, payload);
+      close();
+    } catch (e) {
+      console.error('이용 조사 저장 실패:', e);
+      alert('저장에 실패했어요. 잠시 후 다시 눌러 주세요.');
+      if (btn) { btn.disabled = false; btn.textContent = '제출하기'; }
+    } finally { S.busy = false; }
+  }
+
+  // 로그아웃 때 흔적을 지운다(다른 자녀로 로그인하면 앞 아이 응답이 남으면 안 된다).
+  function reset() {
+    document.getElementById('survey-gate')?.remove();
+    document.getElementById('survey-banner')?.remove();
+    S.cfg = null; S.resp = null; S.opt = null; _pick = null; _disc = null;
+  }
+
+  return { start, reset, open };
+})();
+
 // 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)
 window._normalizeHours = function(hours) {
   if (!hours || typeof hours !== 'object') return {};

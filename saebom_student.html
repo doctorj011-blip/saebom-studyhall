@@ -2344,6 +2344,25 @@ function renderOffsetNote() {
     </div>`;
 }
 
+// ── 9월 이용 조사 게이트 ──
+// 화면과 규칙은 saebom-common.js 한 곳에 있다(학부모앱과 같은 화면을 써야 하므로).
+// 여기서는 이 앱의 Firestore 헬퍼만 어댑터로 넘긴다.
+// 설정 문서(usage_surveys/_config)가 없거나 active 가 아니면 아무것도 뜨지 않는다.
+function startUsageSurvey() {
+  if (!window._surveyGate || !window._db || !currentStudent) return;
+  window._surveyGate.start({
+    role: 'student',
+    student: currentStudent,
+    db: window._db,
+    fs: { doc: window._fsDoc, getDoc: window._fsGetDoc, setDoc: window._fsSetDoc },
+    fetchMine: async (col, seatField) => {
+      const snap = await _byStudent(col, seatField);
+      const docs = []; snap.forEach(d => docs.push(d.data()));
+      return _mineOnly(docs);
+    }
+  });
+}
+
 // ── 로그인 ──
 let pinBuffer = '';
 
@@ -2803,6 +2822,7 @@ function logout() {
   currentStudent = null; pinBuffer = ''; draftSchedule = {}; isDirty = false; baseScheduleRaw = null;
   ACTUAL_MIN = null; ACTUAL_IN = null; actualBestSession = 0;
   try { paReset(); } catch(e) {}   // 다른 학생으로 로그인할 때 이전 학생의 검사 결과가 남지 않도록
+  try { window._surveyGate?.reset(); } catch(e) {}   // 앞 학생의 조사 응답·배너가 남지 않도록
   try { sessionStorage.removeItem('saebom_student'); sessionStorage.removeItem('saebom_active_tab_student'); } catch(e) {}
   updatePinDisplay();
   document.getElementById('login-screen').style.display='flex';
@@ -2851,6 +2871,7 @@ function enterApp() {
     loadMyPenalties();
     loadMyMerits();
     restoreStandDeskWait();
+    startUsageSurvey();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
@@ -2864,6 +2885,7 @@ function enterApp() {
       loadMyPenalties();
       loadMyMerits();
       restoreStandDeskWait();
+      startUsageSurvey();
     }, { once: true });
   }
 }
@@ -2880,6 +2902,8 @@ async function refreshStudentData() {
       // uid 도입(2026-08-04) 전에 로그인한 세션 캐시엔 uid가 없다 — 여기서 채우면
       // 재로그인 없이 좌석 폴백에서 uid 조회로 올라온다.
       if (snap.data().uid) currentStudent.uid = snap.data().uid;
+      // 예약 퇴원일 — 이용 조사 대상에서 빼는 근거라 세션 캐시가 아니라 문서 값을 따른다.
+      currentStudent.withdrawAt = snap.data().withdrawAt || '';
       // 옛 세션 캐시엔 gender가 없다 — 여기서 채운다.
       const g = snap.data().gender === 'm' ? 'm' : 'f';
       currentStudent.gender = g;

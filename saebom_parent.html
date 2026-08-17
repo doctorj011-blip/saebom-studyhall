@@ -913,6 +913,7 @@ function enterApp() {
   renderLiveStatus();   // 세션 구독이 붙기 전에도 '불러오는 중' 카드를 먼저 띄운다
   showTab('home');      // 로그아웃 전에 열려 있던 화면이 남지 않게 항상 홈에서 시작
   loadAllData();
+  startUsageSurvey();
   if (window.seeReqStart) window.seeReqStart();
 }
 
@@ -932,6 +933,7 @@ function doLogout() {
   const _live = document.getElementById('live-status'); if (_live) _live.innerHTML = '';
   ACTUAL_MIN = null; ACTUAL_IN = null;
   paReset();                       // 다른 자녀로 로그인해도 앞 학생 분석이 남지 않게
+  try { window._surveyGate?.reset(); } catch(e) {}   // 앞 자녀의 조사 응답·배너가 남지 않게
   currentStudent = null;
   try { sessionStorage.removeItem('saebom_parent'); } catch(e) {}
   document.getElementById('app-screen').classList.remove('visible');
@@ -963,6 +965,8 @@ async function refreshParentData() {
       const prevOptIn = currentStudent.mealAwaySms;
       currentStudent.mealAwaySms = (typeof d.mealAwaySms === 'boolean') ? d.mealAwaySms : null;
       if (currentStudent.mealAwaySms !== prevOptIn) renderMealAwayOptIn();
+      // 예약 퇴원일 — 이용 조사 대상에서 빼는 근거라 세션 캐시가 아니라 문서 값을 따른다.
+      currentStudent.withdrawAt = d.withdrawAt || '';
       const prevTablet = currentStudent.tabletConsent;
       currentStudent.tabletConsent = (typeof d.tabletConsent === 'boolean') ? d.tabletConsent : null;
       if (currentStudent.tabletConsent !== prevTablet) renderTabletConsent();
@@ -1133,6 +1137,32 @@ function _pByStudent(col, seatField) {
 function _pMineOnly(docs) {
   if (currentStudent && currentStudent.uid) return docs.filter(d => d.uid === currentStudent.uid);
   return window._onlyMine(docs, currentStudent);
+}
+
+// ── 9월 이용 조사 게이트 ──
+// 화면과 규칙은 saebom-common.js 한 곳에 있다(학생앱과 같은 화면). 여기서는 어댑터만 넘긴다.
+// 설정 문서(usage_surveys/_config)가 없거나 active 가 아니면 아무것도 뜨지 않는다.
+// 새로고침 복원 경로는 Firebase 모듈보다 먼저 도니(module 은 defer), 다른 로더와 같은
+// 방식으로 준비될 때까지 최대 3초 기다린다.
+async function startUsageSurvey() {
+  let waited = 0;
+  while (!window._db || !window._getDoc || !window._setDoc) {
+    if (waited >= 3000) return;
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+  if (!window._surveyGate || !currentStudent) return;
+  window._surveyGate.start({
+    role: 'parent',
+    student: currentStudent,
+    db: window._db,
+    fs: { doc: window._doc, getDoc: window._getDoc, setDoc: window._setDoc },
+    fetchMine: async (col, seatField) => {
+      const snap = await _pByStudent(col, seatField);
+      const docs = []; snap.forEach(d => docs.push(d.data()));
+      return _pMineOnly(docs);
+    }
+  });
 }
 
 async function loadParentPenalties() {

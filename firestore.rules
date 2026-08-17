@@ -70,6 +70,10 @@ rules_version = '2';
 //                 summary 를 연 것과 같은 이유다 — 최근 3건의 코멘트가 다음 검사
 //                 프롬프트로 들어가므로(plannerAiHistory) 틀린 코멘트를 두면 며칠치가
 //                 오염된다. quality·stats 는 여전히 서버 전용
+//   - 2026-08-17  usage_surveys 추가 — 월별 이용 조사(9월 희망/비희망). 학생앱·학부모앱
+//                 로그인 게이트가 쓰고 관리앱이 집계한다. 설정 문서를 settings 가 아니라
+//                 같은 컬렉션의 _config 에 둔 건 settings read 화이트리스트를 안 건드리려는 것.
+//                 delete 는 막았다(응답 소실 = 미응답과 구분 불가)
 //   - 2026-08-14  settings 에 weather 추가 — 키오스크 날씨 배경의 강수 보정용 기상청
 //                 초단기실황 인증키. 보정 주체가 키오스크(관리자 토큰 없음)라 solapi 와
 //                 같은 이유로 read 가 열려 있다. 키가 없으면 예보만으로 동작한다
@@ -467,6 +471,25 @@ service cloud.firestore {
 
     // 학사일정: 학교별 나이스 코드 매핑 + 받아둔 연간 일정(캐시)
     match /school_calendars/{id} { allow read, write: if true; }
+
+    // 월별 이용 조사(9월 사용 희망/비희망): 학생앱·학부모앱이 로그인 직후 응답하고,
+    // 관리앱 '이용조사' 탭이 집계·확정한다. 설정도 같은 컬렉션의 _config 문서에 둔다
+    // (settings 는 read 화이트리스트라 문서마다 규칙을 고쳐야 한다 — school_calendars 선례).
+    // 다른 컬렉션과 같은 개방 정책이되(웹앱 3개가 미인증) 형식은 검증한다.
+    // delete 는 막는다 — 응답이 사라지면 미응답자와 구분이 안 되고, 재조사 대상이 틀어진다.
+    match /usage_surveys/{id} {
+      allow read: if true;
+      allow delete: if false;
+      allow create, update: if id == '_config'
+        ? (request.resource.data.surveyId is string
+           && request.resource.data.active is bool)
+        : (request.resource.data.keys().hasAll(['surveyId', 'want', 'firstBy'])
+           && request.resource.data.surveyId is string
+           && request.resource.data.want is bool
+           && request.resource.data.firstBy in ['student', 'parent']
+           && request.resource.data.name is string
+           && request.resource.data.name.size() <= 30);
+    }
 
     // 학생관리앱: sm_ 접두사 컬렉션 (프로토타입 단계: 로그인 필요)
     match /{coll}/{docId} {
