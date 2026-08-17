@@ -259,7 +259,11 @@ function audio() {
     ctx = new AC();
   }
   // resume() 은 비동기다. 바로 뒤에서 state 를 보면 아직 'suspended' 라 화면이 안 바뀐다.
-  if (ctx.state === 'suspended') ctx.resume().then(paint).catch(()=>{});
+  // 잠겨 있던 오디오가 풀리면, 멈춘 시계에 기대어 걸어 둔 예약은 전부 버린다.
+  // 다음 점검에서 살아 있는 시계로 다시 건다.
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(() => { cancelArmed(); paint(); }).catch(()=>{});
+  }
   return ctx;
 }
 
@@ -290,8 +294,14 @@ function ring(toneKey, volume, delaySec) {
       nodes.push(osc);
     });
   }
-  return nodes;
+  // audioAt = 이 종이 울릴 '오디오 시계' 시각. 벽시계와 어긋났는지 판정하는 데 쓴다.
+  return { nodes, audioAt: t0 };
 }
+
+// 오디오 시계가 실제로 흐르고 있는가.
+// suspended 면 currentTime 이 멈춰 있어, 여기에 대고 "120초 뒤"를 예약해 봐야
+// 그 120초가 언제 올지 알 수 없다 — 2026-08-17 09:03 사고의 원인이 이것이다.
+function audioRunning() { return !!ctx && ctx.state === 'running'; }
 
 // 확인음 — **종이 아니다.** 아주 짧고 작은 삑 소리.
 // 관리앱 시절, 잠금 해제 버튼이 진짜 종소리를 그대로 내보내 면학관에 혼선이 났다.
@@ -321,10 +331,23 @@ let lastRang = null;
 
 function cancelArmed() {
   const t = Date.now();
-  for (const [at, oscs] of armed) {
+  for (const [at, a] of armed) {
     if (at <= t) continue;
-    for (const o of oscs) { try { o.stop(); } catch (e) {} }
+    for (const o of a.nodes) { try { o.stop(); } catch (e) {} }
     armed.delete(at);
+  }
+}
+
+// 오디오 시계가 멈춰 있던 탓에 '울려야 할 시각'을 이미 지나쳐 버린 예약을 버린다.
+// 이게 없으면, 잠겨 있던 오디오가 풀리는 순간 밀려 있던 종이 엉뚱한 때 울린다.
+function dropStaleArmed() {
+  const t = Date.now();
+  for (const [at, a] of armed) {
+    if (t <= at + LATE_OK) continue;              // 아직 늦지 않았다
+    if (!ctx || ctx.currentTime >= a.audioAt) continue; // 이미 울렸다 — 놔둔다
+    for (const o of a.nodes) { try { o.stop(); } catch (e) {} }
+    armed.delete(at);
+    console.warn('오디오 시계가 멈춰 있어 놓친 타종을 버립니다:', new Date(at).toTimeString().slice(0,8));
   }
 }
 
@@ -332,6 +355,13 @@ function tick() {
   const ms = Date.now(), prev = lastCheck;
   lastCheck = ms;
   if (!SPEAKER || !CFG.on) return;   // 스피커로 지정되지 않은 기기는 설정만 바꾼다
+  dropStaleArmed();
+  // 🔴 오디오가 잠겨 있으면(빨간 줄이 뜬 상태) 아무것도 예약하지 않는다.
+  //    예약하면 '걸어 뒀다'고 기록만 되고 실제로는 울리지 않다가, 나중에 사람이 잠금을
+  //    푸는 순간 멈춰 있던 오디오 시계가 다시 흐르면서 밀려 있던 종이 엉뚱한 때 울린다.
+  //    2026-08-17 09:03 사고가 정확히 이것이다 — 원장이 빨간 줄을 눌러 잠금을 풀자
+  //    09:00 에 울렸어야 할 1교시 시작종이 그제서야 울렸다.
+  if (!audioRunning()) return;
   const d = new Date(ms), base = dayMidnight(d);
   const woke = prev && (ms - prev) <= RESYNC_GAP;
   for (const t of targetsFor(now(d).day)) {
