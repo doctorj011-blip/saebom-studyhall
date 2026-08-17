@@ -30,14 +30,16 @@ window._inMeritCycle = function(dateISO, cyc) { return !!dateISO && dateISO >= c
 
 // ── 벌점 자동 상쇄(계산식) ──
 // 주기 상점총합 M, 벌점총합 P(둘 다 미취소 기준)로 상쇄를 그때그때 계산(원장 없음, 멱등).
-// 규칙: 벌점 잔여 2점 이상 + 상점 3점 모이면 상점3→벌점2 소거, 무제한 반복. 오래된 벌점부터(표시는 미구현).
-//   rounds = min(⌊M/3⌋, ⌊P/2⌋). netMerit=보상·순위용 잔여 상점, netDemerit=잔여 벌점.
+// 규칙(2026-08-17 개정): 상점 1점이 벌점 1점을 지운다. 오래된 벌점부터(표시는 미구현).
+//   rounds = min(M, P). netMerit=보상·순위용 잔여 상점, netDemerit=잔여 벌점.
+//   개정 전은 상점3→벌점2 였다. 상계값은 저장하지 않고 원누계에서 매번 계산하므로,
+//   식만 바꾸면 과거 기록도 이 자리에서 새 기준으로 다시 계산된다(소급 마이그레이션 불필요).
 //   ⚠️ 단계별 조치(10/18/30)는 rawDemerit(P, 상쇄 무관 원누계)로 판단할 것.
 window._computeOffset = function(M, P) {
   M = Math.max(0, Math.round(M || 0)); P = Math.max(0, Math.round(P || 0));
-  const rounds = Math.min(Math.floor(M / 3), Math.floor(P / 2));
-  return { rounds, spent: rounds * 3, cleared: rounds * 2,
-           netMerit: M - rounds * 3, netDemerit: P - rounds * 2, rawMerit: M, rawDemerit: P };
+  const rounds = Math.min(M, P);
+  return { rounds, spent: rounds, cleared: rounds,
+           netMerit: M - rounds, netDemerit: P - rounds, rawMerit: M, rawDemerit: P };
 };
 
 // ══════════════════════════════════════════════════════════════════
@@ -117,7 +119,7 @@ window._surveyDocId = function(surveyId, student) {
 };
 
 // 상벌점 상계 → 재등록 할인액.
-// 상계 규칙 자체는 _computeOffset(상점3 → 벌점2 소거)을 그대로 쓴다.
+// 상계 규칙 자체는 _computeOffset(상점1 → 벌점1 소거)을 그대로 쓴다.
 // 상계하고도 벌점이 남으면(netDemerit > 0) 할인은 0원이다 — 남은 벌점만큼 더 받지는 않는다.
 window._surveyDiscount = function(cfg, M, P) {
   const c = window._surveyConfig(cfg);
@@ -382,7 +384,7 @@ window._surveyGate = (function() {
         ${line('잔여', '상점 ' + d.netMerit + '점 · 벌점 ' + d.netDemerit + '점')}
         <div style="border-top:1px dashed #BBF7D0;margin-top:8px;padding-top:8px">
           ${d.netDemerit > 0
-            ? `<div style="font-size:12px;color:#92400E;line-height:1.6">벌점이 <b>${d.netDemerit}점</b> 남아 이번 할인은 없어요. 8월 31일까지 상점 3점을 모으면 벌점 2점이 지워집니다.</div>`
+            ? `<div style="font-size:12px;color:#92400E;line-height:1.6">벌점이 <b>${d.netDemerit}점</b> 남아 이번 할인은 없어요. 8월 31일까지 상점을 받으면 1점당 벌점 1점이 지워집니다.</div>`
             : `<div style="display:flex;justify-content:space-between;align-items:center">
                  <span style="font-size:12.5px;color:#047857;font-weight:700">9월 이용료 할인</span>
                  <span style="font-size:17px;font-weight:900;color:#047857">${won(d.won)}원</span>
