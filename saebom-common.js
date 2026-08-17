@@ -72,13 +72,26 @@ window._surveyConfig = function(raw) {
   };
 };
 
+// 앱스토어 심사용 계정(좌석 9999 · uid s_00000000, saebom-app tool/seed_review_account.mjs).
+// 실제 학생이 아니라 명단·집계에서 빠져야 하고, 무엇보다 **심사자가 이 화면에 갇히면 안 된다** —
+// 조사에 갇힌 채로는 앱을 못 보므로 그대로 반려 사유가 된다. 지금 게이트는 웹앱에만 있어
+// 심사자와 만날 일이 없지만, 심사 통과 후 네이티브 앱에 옮길 때 이 조건이 없으면 그때 터진다.
+// 설정의 exclude 명단이 아니라 코드에 두는 이유 — 매달 새 조사를 만들 때 잊으면 그만이라서.
+window._surveyIsReviewAccount = function(student) {
+  if (!student) return false;
+  if (student.uid === 's_00000000') return true;
+  return String(student.seat == null ? '' : student.seat).replace(/[^0-9]/g, '') === '9999';
+};
+
 // 조사 대상에서 빼는 학생 — 게이트도 안 뜨고 관리앱 대상 수에도 안 들어간다.
-//   1) withdrawAt(예약 퇴원일)이 잡힌 학생 — 나가기로 확정된 사람에게 "9월에도 오실래요?"를
+//   1) 심사용 계정 — 위 참조.
+//   2) withdrawAt(예약 퇴원일)이 잡힌 학생 — 나가기로 확정된 사람에게 "9월에도 오실래요?"를
 //      물으면 안 된다. 매달 이름을 다시 적지 않아도 되도록 이 조건을 먼저 둔다.
-//   2) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생.
+//   3) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생.
 // 이름 비교는 _sameStudentName 으로 한다("박지윤(9557)"·"박지윤A" 같은 표기 편차를 흡수).
 window._surveyExcluded = function(cfg, student) {
   if (!student) return false;
+  if (window._surveyIsReviewAccount(student)) return true;
   if (student.withdrawAt) return true;
   const list = window._surveyConfig(cfg).exclude;
   return list.some(n => window._sameStudentName(n, student.name));

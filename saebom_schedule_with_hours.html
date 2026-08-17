@@ -20721,7 +20721,9 @@ document.addEventListener('DOMContentLoaded', function() {
     EXCLUDED = (window.STUDENTS || [])
       .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name))
       .filter(s => window._surveyExcluded(CFG || {}, s))
-      .map(s => ({ seat: seatNum(s.seat), name: s.name, why: s.withdrawAt ? ('퇴원예정 ' + s.withdrawAt) : '제외 명단' }))
+      .map(s => ({ seat: seatNum(s.seat), name: s.name,
+        why: window._surveyIsReviewAccount(s) ? '앱스토어 심사용'
+           : s.withdrawAt ? ('퇴원예정 ' + s.withdrawAt) : '제외 명단' }))
       .sort((a, b) => a.seat - b.seat);
 
     ROWS = (window.STUDENTS || [])
