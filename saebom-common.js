@@ -312,12 +312,12 @@ window._surveyGate = (function() {
       ${other ? `<div style="margin-top:12px;background:#EFF6FF;border-radius:10px;padding:10px 12px;font-size:12px;color:#1D4ED8;line-height:1.6">
         ${roleLabel(S.opt.role === 'parent' ? 'student' : 'parent')}은 <b>${other.want ? '이용 희망' : '이용 안 함'}</b>으로 응답하셨어요.
       </div>` : ''}
+      <div id="survey-discount"></div>
       <div style="margin:16px 0 4px;font-size:13px;font-weight:800">9월에도 면학관을 이용하시겠어요?</div>
       <div id="survey-opts" style="margin-top:9px">
-        ${btn(true,  '🙋', '네, 계속 이용할게요', '지금 자리와 시간표가 9월에도 그대로 이어집니다.')}
-        ${btn(false, '👋', '아니요, 이용하지 않을게요', '8월까지만 이용하고 9월에는 나갑니다.')}
+        ${btn(true,  '🙋', '네, 계속 이용할게요', '지금 자리와 시간표 그대로 다닐게요~')}
+        ${btn(false, '👋', '아니요, 이용하지 않을게요', '8월까지만 이용하고 9월엔 쉴게요~')}
       </div>
-      <div id="survey-discount" style="margin-top:6px"></div>
       <button type="button" id="survey-submit" ${_pick === null ? 'disabled' : ''}
         style="width:100%;margin-top:14px;padding:14px;border:none;border-radius:12px;font-family:inherit;
         font-size:14.5px;font-weight:800;color:#fff;cursor:${_pick === null ? 'default' : 'pointer'};
@@ -349,17 +349,20 @@ window._surveyGate = (function() {
     } catch (e) { console.warn('상벌점 조회 실패(할인 안내 생략):', e); }
   }
 
-  // 할인 안내는 '희망'을 골랐을 때만 보여준다 — 나가는 학생에게 띄우면 붙잡는 것처럼 읽힌다.
+  // 할인 안내는 **고르기 전부터** 보여준다 — 재등록 유인이라 결정한 뒤에 보여주면 늦다.
+  // 상벌점 기록이 아예 없는 학생에게는 띄우지 않는다(0원은 유인이 아니라 역효과).
+  // '이용 안 함'을 고른 뒤에도 지우지 않고 문구만 바꾼다 — 사라지면 뺏는 것처럼 읽힌다.
   function paintDiscount() {
     const el = document.getElementById('survey-discount');
     if (!el) return;
-    if (!_disc || _pick !== true) { el.innerHTML = ''; return; }
+    if (!_disc) { el.innerHTML = ''; return; }
     const d = _disc;
     if (d.rawMerit === 0 && d.rawDemerit === 0) { el.innerHTML = ''; return; }
+    const leaving = _pick === false;
     const line = (l, r, c) => `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px"><span style="color:#6B7280">${l}</span><span style="font-weight:700;color:${c || '#374151'}">${r}</span></div>`;
     el.innerHTML = `
-      <div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:12px;padding:12px 14px;margin-top:8px">
-        <div style="font-size:12.5px;font-weight:800;color:#047857">🎁 재등록 할인 (이번 주기 상벌점)</div>
+      <div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:12px;padding:12px 14px;margin-top:8px;${leaving ? 'opacity:.62' : ''}">
+        <div style="font-size:12.5px;font-weight:800;color:#047857">🎁 9월에 계속 다니면 받는 할인</div>
         ${line('상점', d.rawMerit + '점', '#059669')}
         ${line('벌점', d.rawDemerit + '점', '#C62828')}
         ${d.cleared ? line('상점으로 상쇄', '벌점 −' + d.cleared + '점', '#6B7280') : ''}
@@ -373,7 +376,9 @@ window._surveyGate = (function() {
                </div>${d.capped ? '<div style="font-size:11px;color:#6B7280;margin-top:3px">할인 상한이 적용된 금액이에요.</div>' : ''}`}
         </div>
         <div style="font-size:11px;color:#6B7280;margin-top:8px;line-height:1.6">
-          지금 기준 <b>예상 금액</b>이에요. 8월 31일까지의 상벌점으로 최종 확정됩니다.
+          ${leaving
+            ? '9월에도 계속 다니시면 받을 수 있는 할인이에요.'
+            : '지금 기준 <b>예상 금액</b>이에요. 8월 31일까지의 상벌점으로 최종 확정됩니다.'}
         </div>
       </div>`;
   }
