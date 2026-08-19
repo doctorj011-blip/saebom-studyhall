@@ -194,8 +194,13 @@ window._surveyCycleTotals = function(meritDocs, penaltyDocs) {
 //
 // 게이트가 뜨는 조건: 설정이 active 이고, **아무도(학생·학부모 누구도) 응답하지 않았을 때**.
 // 한쪽이 이미 응답했으면 그 값이 정본으로 반영된 상태이므로 막지 않고 배너로만 알린다.
+//
+// 확인 시점은 셋이다(하나만으로는 새는 자리가 있었다 — recheck 주석 참조):
+//   ① start()   로그인·새로고침
+//   ② recheck() 화면 복귀(각 앱 visibilitychange) + 10분 주기
+//   ③ guard()   저장 직전 — true 면 호출부가 쓰기를 중단한다
 window._surveyGate = (function() {
-  const S = { cfg: null, resp: null, opt: null, busy: false };
+  const S = { cfg: null, resp: null, opt: null, busy: false, timer: null };
 
   const PALETTE = {
     student: { grad: 'linear-gradient(150deg,#1E1B4B 0%,#4338A8 45%,#6C5DD3 100%)', key: '#6C5DD3' },
@@ -217,26 +222,81 @@ window._surveyGate = (function() {
     return m ? `${+m[1]}월 ${+m[2]}일 ${m[3]}:${m[4]}` : cfg.closeAt;
   }
 
-  async function start(opt) {
-    S.opt = opt;
+  // 설정·응답을 다시 읽어 S 를 갱신한다.
+  // 반환: 'block'(막아야 함) | 'pass'(통과·배너) | 'idle'(조사 없음/대상 아님) | 'error'(상태 유지)
+  async function load() {
+    const opt = S.opt;
+    if (!opt) return 'idle';
+    let cfg = null, resp = null;
     try {
       const snap = await opt.fs.getDoc(opt.fs.doc(opt.db, window._SURVEY_COL, window._SURVEY_CONFIG_ID));
-      if (!snap || !snap.exists || !snap.exists()) return;      // 설정 없음 = 조사 안 함
-      S.cfg = window._surveyConfig(snap.data());
-      if (!S.cfg.active) return;
-      if (window._surveyExcluded(S.cfg, opt.student)) return;   // 퇴원예정·제외 명단
-      const id = window._surveyDocId(S.cfg.surveyId, opt.student);
+      if (!snap || !snap.exists || !snap.exists()) { S.cfg = null; S.resp = null; return 'idle'; }
+      cfg = window._surveyConfig(snap.data());
+      if (!cfg.active) { S.cfg = null; S.resp = null; return 'idle'; }
+      if (window._surveyExcluded(cfg, opt.student)) { S.cfg = null; S.resp = null; return 'idle'; }
+      const id = window._surveyDocId(cfg.surveyId, opt.student);
       const rs = await opt.fs.getDoc(opt.fs.doc(opt.db, window._SURVEY_COL, id));
-      S.resp = (rs && rs.exists && rs.exists()) ? rs.data() : null;
+      resp = (rs && rs.exists && rs.exists()) ? rs.data() : null;
     } catch (e) {
-      // 조사 때문에 앱 자체가 막히면 안 된다 — 실패하면 조용히 넘어간다(fail-open).
+      // 읽기 실패로 이미 떠 있는 게이트를 내리지는 않는다(호출부가 'error'를 보고 상태를 유지한다).
+      // 단 한 번도 읽지 못한 상태에서의 실패는 그대로 통과시킨다 — 조사 때문에 앱 전체가
+      // 막히는 사고를 막으려는 원래 방침(fail-open)은 유지.
       console.warn('이용 조사 확인 실패:', e);
-      return;
+      return 'error';
     }
+    S.cfg = cfg; S.resp = resp;
+    const answered = !!(resp && (resp.student || resp.parent));
+    const closed = window._surveyIsClosed(cfg);
+    return (!answered && (!closed || cfg.blockAfterClose)) ? 'block' : 'pass';
+  }
+
+  function isBlocking() {
+    return document.getElementById('survey-gate')?.dataset.blocking === '1';
+  }
+
+  async function start(opt) {
+    S.opt = opt;
+    const r = await load();
+    if (r === 'block') open(true);
+    else if (r === 'pass') renderBanner();
+    watch();
+    return r;
+  }
+
+  // ── 복귀·주기 재확인 ──
+  // 게이트는 원래 로그인·새로고침(enterApp) 때 한 번만 검사했다. 그래서 조사를 켜기 전에
+  // 열어 둔 탭·홈화면 앱은 세션이 살아있는 한 게이트를 한 번도 만나지 않았다
+  // (2026-08-19 확인: 좌석 6 김태현이 미응답 상태로 8/17~8/18 시간표를 계속 저장했다.
+  //  같은 세션이 8/18 17:48 에 꺼진 '주간 시간표 수정 허용'도 22:06 까지 켜진 줄 알고 있었다).
+  // → 화면 복귀 때(각 앱의 visibilitychange)와 10분마다 다시 확인한다.
+  async function recheck() {
+    if (!S.opt || S.busy) return;
+    const r = await load();
+    if (r === 'error') return;                                  // 상태 유지
+    if (r === 'block') { if (!isBlocking()) open(true); return; }
+    if (isBlocking()) document.getElementById('survey-gate')?.remove();  // 반대쪽이 응답함 등
+    if (r === 'pass') renderBanner();
+    else document.getElementById('survey-banner')?.remove();
+  }
+
+  function watch() {
+    if (S.timer) return;
+    S.timer = setInterval(() => { if (!document.hidden) recheck(); }, 10 * 60 * 1000);
+  }
+
+  // 저장 직전 방어선 — 화면은 오버레이로 막지만, 오버레이가 뜨기 전에 눌린 쓰기까지
+  // 흘려보내지 않는다. true 를 돌려주면 호출부는 저장을 중단한다.
+  async function guard() {
+    if (!S.opt) return false;
+    if (!S.cfg) await recheck();          // 조사를 아직 모르는(=오래된) 세션이면 지금 확인한다
+    if (isBlocking()) return true;
+    if (!S.cfg || !S.cfg.active) return false;
+    if (window._surveyExcluded(S.cfg, S.opt.student)) return false;
     const answered = !!(S.resp && (S.resp.student || S.resp.parent));
-    const closed = window._surveyIsClosed(S.cfg);
-    if (!answered && (!closed || S.cfg.blockAfterClose)) { open(true); return; }
-    renderBanner();
+    if (answered) return false;
+    if (window._surveyIsClosed(S.cfg) && !S.cfg.blockAfterClose) return false;
+    open(true);
+    return true;
   }
 
   // 배너 — 응답 후(변경 가능), 또는 마감 후 미응답자에게.
@@ -439,10 +499,11 @@ window._surveyGate = (function() {
   function reset() {
     document.getElementById('survey-gate')?.remove();
     document.getElementById('survey-banner')?.remove();
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
     S.cfg = null; S.resp = null; S.opt = null; _pick = null; _disc = null;
   }
 
-  return { start, reset, open };
+  return { start, reset, open, recheck, guard };
 })();
 
 // 구형식 숫자키(1~12, 2026년 데이터)를 신형식 "2026-MM"으로 정규화(로드 시 1회 적용, 폴백 대체)

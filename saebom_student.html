@@ -3588,6 +3588,9 @@ function _recheckTodayDay() {
 }
 
 async function saveSchedule() {
+  // 이용 조사 미응답이면 저장 자체를 막는다. 오래 열어 둔 세션은 게이트를 못 본 채로
+  // 여기까지 올 수 있어서(2026-08-19 좌석 6 건), 쓰기 직전에 한 번 더 확인한다.
+  if (window._surveyGate && await window._surveyGate.guard()) return;
   // 날짜가 바뀐 채(밤새 열린 탭) 저장하면 어제 칸에 기록된다 — 저장 중단하고 오늘 기준으로 재로드
   if (_recheckTodayDay()) {
     showToast('📅 날짜가 바뀌어 오늘 일정을 새로 불러왔습니다 — 확인 후 다시 저장해 주세요');
@@ -5488,6 +5491,9 @@ document.addEventListener('visibilitychange', function() {
   // 밤새 열려 있던 탭이면 '오늘'이 어제 요일로 굳어 있다 — 오늘 기준으로 재로드
   if (_recheckTodayDay()) showToast('📅 날짜가 바뀌어 오늘 일정을 새로 불러왔습니다');
   refreshStudentData();
+  // 이용 조사도 다시 확인한다 — 앱을 열어 둔 채 지내면 로그인 때 본 게 전부라
+  // 조사를 켠 뒤에도 게이트를 만나지 않는다(2026-08-19 좌석 6 건)
+  try { window._surveyGate?.recheck(); } catch(e) {}
   // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
   if (activeTab === 'seatmap') buildStudentSeatmap();

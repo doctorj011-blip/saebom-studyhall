@@ -2987,6 +2987,9 @@ document.addEventListener('visibilitychange', function() {
   startStatusRealtime();
   startScheduleRealtime();
   loadNotices();
+  // 이용 조사 재확인 — 앱을 열어 둔 채 지내면 로그인 때 본 게 전부라 조사를 켠 뒤에도
+  // 게이트를 만나지 않는다(학생앱 좌석 6 건과 같은 구멍)
+  try { window._surveyGate?.recheck(); } catch(e) {}
   if (currentTab === 'planner') { _ppRenderCal(); _ppLoadMonth(); }
   if (currentTab === 'notice') loadNotices();
 });
