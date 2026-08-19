@@ -1758,6 +1758,10 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       <button id="rp-img-btn" onclick="window.reportImage()" disabled title="리포트 전체를 그림 파일(PNG) 한 장으로 저장합니다"
         style="background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖼 이미지로 저장</button>
     </div>
+    <div id="rp-priv-note" style="display:none;background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12px;color:#B45309;line-height:1.6">
+      🔒 <b>이 학생은 플래너를 학부모에게 비공개로 설정했습니다.</b>
+      리포트에는 플래너 검사에서 뽑은 과목·시간이 그대로 들어갑니다 — 보내실지 확인해 주세요.
+    </div>
     <div style="font-size:11px;color:#9CA3AF">입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다. <b>이미지로 저장</b>은 카카오톡으로 바로 보내기 좋은 그림 파일(PNG)로 내려받습니다.</div>
   </div>
   <div id="rp-content"><div style="color:#aaa;font-size:13px;text-align:center;padding:40px 0">학생과 기간을 고르고 <b>만들기</b>를 누르세요</div></div>
@@ -11828,6 +11832,10 @@ async function saveStudentToFirebase(student) {
     ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
     // 태블릿 보관 관리 동의(학부모앱) — 같은 이유로 보존
     ...(typeof student.tabletConsent === 'boolean' ? { tabletConsent: student.tabletConsent } : {}),
+    // 플래너 학부모 비공개(학생앱에서 학생 본인이 켠 값) — 관리자 저장으로 지워지면
+    // 학생은 가려 뒀다고 믿는데 학부모앱에는 다시 보이게 된다. 반드시 보존한다.
+    ...(student.plannerHidden === true ? { plannerHidden: true } : {}),
+    ...(student.plannerHidden === true && student.plannerHiddenAt ? { plannerHiddenAt: String(student.plannerHiddenAt) } : {}),
     updatedAt: serverTimestamp()
   });
 }
@@ -12119,7 +12127,11 @@ async function loadStudentsFromFirebase() {
           // null = 아직 응답 안 함(= 발송 안 함). true/false 만 응답으로 본다.
           mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
           // 태블릿 보관 관리 동의(학부모앱) — true인 학생만 태블릿 보관함 카드에 표시
-          tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null)
+          tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null),
+          // 플래너 학부모 비공개(학생앱에서 학생 본인이 켠다) — ★여기서 안 읽으면 관리자가
+          // 학생 정보를 한 번 저장하는 순간 설정이 지워져 학생 몰래 학부모에게 다시 공개된다.
+          plannerHidden: v.plannerHidden === true,
+          plannerHiddenAt: v.plannerHiddenAt || ''
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -12225,7 +12237,10 @@ async function loadStudentsFromFirebase() {
         // ★학부모앱이 이 필드를 쓰면 이 스냅샷으로 키오스크에 즉시 반영된다.
         mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
         // 태블릿 보관 관리 동의 — 학부모가 토글하면 이 스냅샷으로 보관함 카드에 즉시 반영
-        tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null)
+        tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null),
+        // 플래너 학부모 비공개 — 학생이 학생앱에서 켜면 이 스냅샷으로 플래너 현황판 배지에 즉시 반영
+        plannerHidden: v.plannerHidden === true,
+        plannerHiddenAt: v.plannerHiddenAt || ''
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영.
       // ★ 원본은 세션 문서의 awayStartTs 다(= _awayStartTs 에 이름이 있으면 세션 기준 외출).
@@ -18199,6 +18214,11 @@ function _apcRender() {
     if (sub && ai && ai.status === 'running') aiRunning++;
     if (sub && ai && ai.status === 'error') aiError++;
     const name = _apcEsc(s.name);
+    // 학부모 비공개 배지 — 학부모가 "플래너가 안 보인다"고 문의했을 때 선생님이 이유를 바로 알도록.
+    // 선생님이 보는 화면과 검사는 이 설정과 무관하게 그대로다(가려지는 건 학부모앱뿐).
+    const privBadge = (s.plannerHidden === true)
+      ? `<div style="position:absolute;top:5px;left:5px;background:#B45309;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px" title="학생이 학부모에게 비공개로 설정했습니다">🔒 학부모 비공개</div>`
+      : '';
     const badge = n
       ? `<div style="position:absolute;top:5px;right:5px;background:#6C5DD3;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px">💬 ${n}</div>`
       : '';
@@ -18210,7 +18230,7 @@ function _apcRender() {
         <div style="aspect-ratio:3/4;background:#F3F4F6;position:relative">
           <img src="${_apcEsc(sub.url)}" loading="lazy" alt=""
             style="width:100%;height:100%;object-fit:cover;display:block">
-          ${badge}${aiBadge}
+          ${badge}${aiBadge}${privBadge}
         </div>
         <div style="padding:6px 8px;font-size:12px;font-weight:700;color:#1E1B4B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
           ${name} <span style="font-weight:500;color:#9CA3AF">${_apcEsc(s.seat)}</span>
@@ -18220,7 +18240,7 @@ function _apcRender() {
     return `<div onclick="window.apcOpen('${key}')" title="${name}"
       style="border:1.5px dashed #E5E7EB;border-radius:12px;overflow:hidden;cursor:pointer;background:#FAFAFA">
       <div style="aspect-ratio:3/4;position:relative;display:flex;align-items:center;justify-content:center;color:#C9CDD4;font-size:12px;font-weight:600">
-        미제출${badge}
+        미제출${badge}${privBadge}
       </div>
       <div style="padding:6px 8px;font-size:12px;font-weight:600;color:#9CA3AF;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
         ${name} <span style="font-weight:500;color:#C9CDD4">${_apcEsc(s.seat)}</span>
@@ -18271,7 +18291,8 @@ window.apcOpen = function(seatKey) {
   _apcCurrentDate = _apcDate;   // 코멘트는 지금 보고 있는 학습일에 달린다
   const s = _apcStudents().find(x => _apcSeatKey(x.seat) === seatKey);
   const [y, m, d] = _apcDate.split('-').map(Number);
-  titleEl.textContent = (s ? `${s.name} (${s.seat}번)` : seatKey) + ` — ${m}월 ${d}일`;
+  titleEl.textContent = (s ? `${s.name} (${s.seat}번)` : seatKey) + ` — ${m}월 ${d}일`
+    + ((s && s.plannerHidden === true) ? '  🔒 학부모 비공개' : '');
   const sub = _apcSubs[seatKey];
   if (sub && sub.url) {
     img.src = sub.url; img.style.display = 'block'; nophoto.style.display = 'none';
@@ -19810,6 +19831,8 @@ async function _rpAttendance(studentName, startISO, endISO) {
 window.reportRender = async function() {
   const box = document.getElementById('rp-content');
   const stu = _rpStudent();
+  const privNote = document.getElementById('rp-priv-note');
+  if (privNote) privNote.style.display = (stu && stu.plannerHidden === true) ? 'block' : 'none';
   const startISO = (document.getElementById('rp-start') || {}).value;
   const endISO   = (document.getElementById('rp-end')   || {}).value;
   const btn = document.getElementById('rp-print-btn');

@@ -1471,6 +1471,17 @@ body{
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
 
+      <!-- ── 학부모 공개 설정 ── 학생 본인이 정한다.
+           선생님·관리앱·AI 검사는 이 설정과 무관하게 항상 전부 본다(검사가 멈추면 안 되므로). -->
+      <div id="pl-privacy" style="display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:18px;box-shadow:var(--shadow-sm)">
+        <div id="pl-privacy-ico" style="font-size:19px;line-height:1"></div>
+        <div style="flex:1;min-width:0">
+          <div id="pl-privacy-title" style="font-size:13.5px;font-weight:800;color:var(--text)"></div>
+          <div id="pl-privacy-sub" style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.5"></div>
+        </div>
+        <button id="pl-privacy-btn" onclick="plannerTogglePrivacy()" style="border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:9px 13px;border-radius:20px;white-space:nowrap"></button>
+      </div>
+
       <!-- ── 오늘의 제출 ── 업로드는 여기서만 하고, 대상 날짜는 시계가 정한다(학생이 못 고름) -->
       <div class="section-label">TODAY · 오늘의 제출</div>
       <div id="planner-today" style="background:var(--surface);border:1.5px solid var(--amber-light);border-radius:var(--r-md);padding:14px;margin-bottom:20px;box-shadow:var(--shadow-sm)">
@@ -2910,6 +2921,9 @@ async function refreshStudentData() {
       // 태블릿 보관 관리 동의(학부모앱에서 설정) — 동의 학생만 홈에 태블릿 카드가 열린다
       currentStudent.tabletConsent = snap.data().tabletConsent === true;
       try { updateTabletCard(); } catch(e) {}
+      // 플래너 학부모 공개 설정 — 다른 기기에서 바꿨을 수 있으니 문서 값을 따른다
+      currentStudent.plannerHidden = snap.data().plannerHidden === true;
+      try { renderPlannerPrivacy(); } catch(e) {}
       try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
       buildMyStats();
       // 잔소리 팝업이 성별을 모른 채 떠 있었다면 지금 알아낸 성별로 다시 그린다.
@@ -5583,8 +5597,78 @@ async function getPlannerStorage() {
   return plannerStorageRef;
 }
 
+// ── 학부모 공개 설정 ──
+// 학생이 자기 플래너를 학부모앱에서 가릴 수 있다. 근거값은 students/{좌석}.plannerHidden 하나다.
+//  · students 문서에 둔 이유: 학부모앱 refreshParentData() 가 앱을 열 때마다 이미 그 문서를 다시
+//    읽으므로 조회가 하나도 늘지 않고, 좌석 교환(_swapSeatDocs)이 students 문서를 통째로 옮기므로
+//    설정이 학생을 따라간다. 좌석키 별도 컬렉션으로 두면 좌석이 바뀔 때 남의 설정이 된다.
+//  · ⚠️ 가려지는 건 학부모앱 화면뿐이다. 선생님·관리앱과 AI 검사는 그대로 전부 본다.
+//    Storage 사진 주소를 직접 아는 사람까지 막지는 못한다(planners 는 아직 공개 읽기 — storage.rules 참고).
+const _plStudentDocId = () => String((currentStudent && currentStudent.seat) || '').replace('번', '');
+const _plHidden = () => !!(currentStudent && currentStudent.plannerHidden === true);
+
+function renderPlannerPrivacy() {
+  const box = document.getElementById('pl-privacy');
+  if (!box) return;
+  const ico = document.getElementById('pl-privacy-ico');
+  const title = document.getElementById('pl-privacy-title');
+  const sub = document.getElementById('pl-privacy-sub');
+  const btn = document.getElementById('pl-privacy-btn');
+  const hidden = _plHidden();
+  if (hidden) {
+    box.style.borderColor = 'var(--amber-light)';
+    box.style.background = 'var(--amber-pale)';
+    ico.textContent = '🔒';
+    title.textContent = '부모님에게 비공개';
+    sub.textContent = '부모님 앱에는 낸 날·안 낸 날만 보여요. 선생님은 그대로 보십니다.';
+    btn.textContent = '공개로';
+    btn.style.background = 'var(--amber)';
+    btn.style.color = '#fff';
+  } else {
+    box.style.borderColor = 'var(--border)';
+    box.style.background = 'var(--card)';
+    ico.textContent = '👪';
+    title.textContent = '부모님에게 공개 중';
+    sub.textContent = '부모님이 플래너 사진과 선생님 코멘트를 볼 수 있어요.';
+    btn.textContent = '비공개로';
+    btn.style.background = 'var(--surface)';
+    btn.style.color = 'var(--text2)';
+    btn.style.border = '1.5px solid var(--border)';
+  }
+  if (hidden) btn.style.border = 'none';
+}
+
+async function plannerTogglePrivacy() {
+  if (!currentStudent) return;
+  const want = !_plHidden();   // want=true 면 '비공개로 바꾼다'
+  if (want && !confirm('플래너를 부모님에게 비공개로 바꿀까요?\n\n· 부모님 앱에는 낸 날·안 낸 날만 보이고 사진과 선생님 코멘트는 잠깁니다\n· 선생님은 지금처럼 그대로 보십니다\n· 언제든 다시 공개로 바꿀 수 있어요')) return;
+  const btn = document.getElementById('pl-privacy-btn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
+  try {
+    const { doc, setDoc } = window._fs;
+    const db = window._db || window._fs.getFirestore();
+    const id = _plStudentDocId();
+    if (!id) throw new Error('좌석 없음');
+    // 저장이 안 됐는데 화면만 바뀌면 학생은 가려진 줄 알고 부모님은 계속 본다 — 그래서 성공한 뒤에만 반영한다.
+    await _plWithTimeout(setDoc(doc(db, 'students', id), {
+      plannerHidden: want,
+      plannerHiddenAt: new Date().toISOString()
+    }, { merge: true }), 10000);
+    currentStudent.plannerHidden = want;
+    try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+    showToast(want ? '🔒 부모님에게 비공개로 바꿨어요' : '👪 부모님에게 공개로 바꿨어요');
+  } catch(e) {
+    console.warn('[Planner] 공개 설정 저장 실패:', e && (e.message || e));
+    showToast('설정을 저장하지 못했어요 — 잠시 후 다시 시도해 주세요');
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
+    renderPlannerPrivacy();
+  }
+}
+
 // 플래너 탭 초기화
 async function initPlannerCalendar() {
+  renderPlannerPrivacy();  // 세션 캐시값으로 먼저 그린다(refreshStudentData 가 서버값으로 다시 맞춘다)
   renderPlannerToday();    // 카드 뼈대 먼저(로딩 중에도 빈 화면 안 보이게)
   renderPlannerCalendar(); // 즉시 달력 표시
   await Promise.all([loadPlannerToday(), loadPlannerMonthData()]);
