@@ -168,6 +168,12 @@ function _inLateTail(cfg, date) {
   const e = _hhmm(cfg.lateHardOff) || 24 * 60;
   return _inWrapRange(s, e, date.getHours() * 60 + date.getMinutes());
 }
+// 운영일(오늘 KST 03:00 시작) 기준 경과 분 — 자정을 넘겨도 단조 증가한다(03:00→0, 23:40→1240, 01:00→1320).
+//   마감 시각을 '자정 이전(23:40)'으로도 '자정 이후(01:00)'로도 설정할 수 있어야 해서 필요하다.
+function _opMinOf(hhmm) { const v = _hhmm(hhmm); return v >= 180 ? v - 180 : v + 1260; }
+function _opMinNow(date) { const v = date.getHours() * 60 + date.getMinutes(); return v >= 180 ? v - 180 : v + 1260; }
+// 마감 강제 OFF 시각(lateHardOff)을 지났는가 — 그 운영일에 한 번만 쓰인다(아래 hardOffDay 래치).
+function _pastHardOff(cfg, date) { return _opMinNow(date) >= _opMinOf(cfg.lateHardOff); }
 // 실제 완전 종료(lateHardOff)까지 남은 분 — 여열 coast 판정용. 운영 시작~lateHardOff를 연속으로 봄.
 function _minsToHardOff(cfg, date) {
   const now = date.getHours() * 60 + date.getMinutes();
@@ -369,6 +375,13 @@ async function acEvaluate(reason) {
   const stSnap = await ref.get();
   const zoneState = (stSnap.exists && stSnap.data().zones) || {};
   const out = {};
+  // 마감 강제 OFF — lateHardOff 를 지나면 그 운영일에 '한 번' 모든 구역을 끈다.
+  //   수동 보류(manualUntil)와 srAuto:false 를 무시한다 — 스터디룸을 켜 두고 퇴근하거나 마감 직전에
+  //   대시보드를 만졌을 때 밤새 도는 것을 막는 최후 방어선이다.
+  //   ★ '한 번'인 이유: 계속 강제하면 마감 후 조교가 일부러 켠 것까지 5분 뒤 꺼 버린다.
+  //     반대로 함수가 그 시각에 죽어 있었어도, 살아난 첫 틱에서 래치가 안 찍혀 있으므로 그때 실행된다.
+  const dayKey = _srDayKey(now);
+  const hardOffAll = (stSnap.exists && stSnap.data().hardOffDay) !== dayKey && _pastHardOff(cfg, now);
 
   for (const deviceId of zoneIds) {
     const z = cfg.zones[deviceId] || {};
@@ -386,7 +399,7 @@ async function acEvaluate(reason) {
     //   srAuto:false면 스터디룸도 같은 경로 — 예약 인원(count)은 대시보드용으로 계속 기록하되 제어는 안 한다.
     const held = zs.manualUntil && zs.manualUntil > nowMs;
     const srOff = isSr && !cfg.srAuto;
-    if (cfg.auto === false || held || srOff) {
+    if (!hardOffAll && (cfg.auto === false || held || srOff)) {
       if (zs.on === true && zs.dryUntil && nowMs >= zs.dryUntil) {
         try {
           await acSetPower(cfg, deviceId, false);
@@ -401,7 +414,11 @@ async function acEvaluate(reason) {
     //   [스터디룸] 예약 교시 기반: 진행중 교시=인원별 냉방 / 빈 교시(뒤 예약 있음)=브리지 / 남은 예약 없음=OFF
     //   [열람실]  정식 종료 후 tail=재실 최다 1대만 · 재실 → 냉방 · 무인 2단(offGrace→setback→hardOff)
     let profile;   // { power, mode?, temp?, fan? }
-    if (!op) {
+    if (hardOffAll) {
+      // 마감 강제 OFF — 열람실·스터디룸 구분 없이 끈다(건조 dryOffMin 은 그대로 거친다).
+      zs.emptySince = null; profile = { power: false };
+    }
+    else if (!op) {
       // 운영시간 밖.
       if (preOpen && occupied) {
         // 정식 시작 전 조기 가동: 입실 구역만 먼저 냉방(빈 구역은 대기).
@@ -467,7 +484,9 @@ async function acEvaluate(reason) {
     }
     out[deviceId] = zs;
   }
-  await ref.set({ zones: out, present: present.size, op, preOpen, auto: cfg.auto, updatedAt: now.toISOString() }, { merge: true });
+  const payload = { zones: out, present: present.size, op, preOpen, auto: cfg.auto, updatedAt: now.toISOString() };
+  if (hardOffAll) { payload.hardOffDay = dayKey; logger.info('AC 마감 강제 OFF', { at: cfg.lateHardOff, zones: zoneIds.length, reason }); }
+  await ref.set(payload, { merge: true });
 }
 
 // LG state 응답에서 현재 목표온도를 뽑는다. temperature 는 기기에 따라 객체 또는 배열(첫 항목)로 온다.
