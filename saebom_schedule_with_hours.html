@@ -9307,9 +9307,15 @@ function renderScheduleModal() {
 
     html += `</div>`;
 
+    // 칩은 이 요일에 실제로 운영하는 교시만 보여준다. 학기 중 평일 화면에 7~11교시 버튼만
+    // 뜨는데 방학 때 찍힌 1~6교시 x(개학)까지 칩으로 나오면, 만질 수도 없는 교시의 사유가
+    // 화면을 덮는다. draftToStr도 allPeriodsBySat 범위만 저장하므로 어차피 사라질 값이다.
+    const inAvail = p => availPeriods.includes(p);
+
     // 결석사유는 우클릭 팝업으로 입력 (교시별 개별 처리)
-    if (draft.absentPeriods && draft.absentPeriods.size > 0) {
-      const reasons = [...draft.absentPeriods].map(p => {
+    const absentShown = draft.absentPeriods ? [...draft.absentPeriods].filter(inAvail).sort((a,b)=>a-b) : [];
+    if (absentShown.length > 0) {
+      const reasons = absentShown.map(p => {
         const r = draft.absentReasons && draft.absentReasons[p];
         return `<span style="font-size:10px;color:#A81E1E;background:#FBD5D5;padding:2px 6px;border-radius:4px">${p}교시${r?': '+r:''}</span>`;
       }).join(' ');
@@ -9317,8 +9323,9 @@ function renderScheduleModal() {
     }
 
     // 중간입실 교시 칩 (시간 표시, 클릭하면 시간 수정)
-    if (draft.partials && draft.partials.size > 0) {
-      const mids = [...draft.partials].sort((a,b)=>a-b).map(p => {
+    const partialsShown = draft.partials ? [...draft.partials].filter(inAvail).sort((a,b)=>a-b) : [];
+    if (partialsShown.length > 0) {
+      const mids = partialsShown.map(p => {
         const t = draft.partialTimes && draft.partialTimes[p];
         return `<span onclick="showPartialTimePopup('${day}',${p},event)" style="font-size:10px;color:#8A4B00;background:#FFE9C2;padding:2px 6px;border-radius:4px;cursor:pointer" title="클릭해서 입실시간 수정">${p}교시 ${t ? t + '~ 입실' : '중간입실'}</span>`;
       }).join(' ');
@@ -9326,8 +9333,9 @@ function renderScheduleModal() {
     }
 
     // 중간퇴실 교시 칩 (시간 표시, 클릭하면 시간 수정)
-    if (draft.earlies && draft.earlies.size > 0) {
-      const outs = [...draft.earlies].sort((a,b)=>a-b).map(p => {
+    const earliesShown = draft.earlies ? [...draft.earlies].filter(inAvail).sort((a,b)=>a-b) : [];
+    if (earliesShown.length > 0) {
+      const outs = earliesShown.map(p => {
         const t = draft.earlyTimes && draft.earlyTimes[p];
         return `<span onclick="showEarlyTimePopup('${day}',${p},event)" style="font-size:10px;color:#0B4A9B;background:#D6E8FF;padding:2px 6px;border-radius:4px;cursor:pointer" title="클릭해서 퇴실시간 수정">${p}교시 ${t ? '~' + t + ' 퇴실' : '중간퇴실'}</span>`;
       }).join(' ');
