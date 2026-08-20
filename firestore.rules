@@ -77,6 +77,11 @@ rules_version = '2';
 //   - 2026-08-14  settings 에 weather 추가 — 키오스크 날씨 배경의 강수 보정용 기상청
 //                 초단기실황 인증키. 보정 주체가 키오스크(관리자 토큰 없음)라 solapi 와
 //                 같은 이유로 read 가 열려 있다. 키가 없으면 예보만으로 동작한다
+//   - 2026-08-20  settings 에 planner_privacy 추가 — 플래너 학부모 비공개 기능의 전체
+//                 스위치(원장 전용). 학생앱·학부모앱이 구독하므로 read 도 함께 열었다.
+//                 ★이 규칙 없이는 스위치가 조용히 무력화된다 — 세 앱 모두 '못 읽으면
+//                 기능 켜짐'으로 넘어지게 해 뒀기 때문이다(학생이 걸어 둔 잠금을 존중하는
+//                 방향). 그래서 앱보다 규칙을 먼저 배포할 것
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -388,8 +393,12 @@ service cloud.firestore {
       allow read: if id in ['solapi', 'billing',
                             'seatSelection', 'vacation_mode', 'schedule_edit',
                             'meal_away_sms', 'summerInvites', 'alimtalk_server',
-                            'day_break_door', 'bell_schedule', 'weather'];
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather'];
+                            'day_break_door', 'bell_schedule', 'weather',
+                            'planner_privacy'];
+      // planner_privacy — 플래너 학부모 비공개 기능의 전체 스위치(원장 전용, 관리앱에서만 쓴다).
+      // ★읽기를 못 하면 학생·학부모앱은 '기능 켜짐'으로 간주한다(학생이 걸어 둔 잠금을 존중하는 쪽).
+      //   그래서 이 규칙을 배포하지 않으면 스위치를 꺼도 아무 일도 일어나지 않는다.
+      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather', 'planner_privacy'];
     }
 
     // 문자 발송 로그

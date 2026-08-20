@@ -2201,6 +2201,25 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         </div>
       </div>
 
+      <!-- 플래너 학부모 비공개 기능 -->
+      <div style="background:#FFFBEB;border:1.5px solid #FDE68A;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:#7C2D12;margin-bottom:6px">🔒 플래너 학부모 비공개 기능</div>
+        <div style="font-size:11px;color:#9A3412;margin-bottom:10px">
+          학생앱에서 학생이 <b>자기 플래너를 학부모앱에 안 보이게</b> 잠글 수 있는 기능입니다.
+          잠가도 선생님·관리앱·AI 검사는 설정과 무관하게 전부 봅니다 — 가려지는 건 학부모 화면뿐입니다.
+          <br><b>여기서 끄면</b> 학생은 새로 잠글 수 없고, <b>이미 잠가 둔 학생의 플래너도 학부모앱에 즉시 다시 보입니다.</b>
+          학생 쪽 설정값은 지워지지 않으니 다시 켜면 그대로 복원됩니다.
+          <br>※ 학부모 항의가 커졌을 때 학생을 한 명씩 설득하지 않고 한 번에 되돌리기 위한 스위치입니다. 평소에는 켜 두세요.
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button id="planner-privacy-toggle-btn" onclick="togglePlannerPrivacy()"
+            style="padding:8px 18px;background:#bdc1c6;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
+            불러오는 중...
+          </button>
+          <span id="planner-privacy-status" style="font-size:11px;color:#888"></span>
+        </div>
+      </div>
+
       <!-- 낮 쉬는시간 자동문 -->
       <div style="background:#EEF2FF;border:1.5px solid #6C5DD3;border-radius:10px;padding:12px 14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:#312E81;margin-bottom:6px">🚪 낮 쉬는시간 자동문</div>
@@ -3709,6 +3728,7 @@ function loadSettingsTab() {
   loadSeatSelectionStatus();
   loadScheduleEditStatus();
   loadVacationModeStatus();
+  loadPlannerPrivacyStatus();
   loadMealAwaySmsStatus();
   // 낮 자동문은 module 쪽에 있다(문을 여는 코드와 같이 둬야 판단이 한 곳에 모인다).
   // 실시간 구독이 이미 버튼을 채우지만, 구독 전에 탭을 열었을 때를 위해 한 번 더 읽는다.
@@ -3865,6 +3885,91 @@ window.toggleVacationMode = async function() {
     });
     applyVacationMode(next);
     showAdminToast(next ? '🌞 방학 시간표로 전환됨 (평일 1~10교시)' : '📚 학기 시간표로 전환됨 (평일 7~11교시)');
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
+
+// ── 플래너 학부모 비공개 기능 전체 스위치 (settings/planner_privacy) ──
+// 학생앱·학부모앱이 같은 문서를 구독한다. 끄면 학생이 걸어 둔 잠금이 전부 무시된다.
+// ★문서가 없으면 '켜짐'이다. 못 읽었다고 꺼짐으로 보면 규칙·네트워크 문제 하나로
+//   학생들이 걸어 둔 잠금이 통째로 풀린다 — 세 앱 모두 같은 기본값을 쓴다.
+window.PLANNER_PRIVACY_ON = true;
+function applyPlannerPrivacy(enabled) {
+  window.PLANNER_PRIVACY_ON = enabled !== false;
+  updatePlannerPrivacyBtn(enabled === null ? null : window.PLANNER_PRIVACY_ON);
+  // 플래너 현황판 배지 문구가 이 값에 달려 있다(잠긴 학생인데 스위치가 꺼져 있으면 실제로는 공개 중)
+  try { if (window._apcRefresh) window._apcRefresh(); } catch(e) {}
+}
+window.applyPlannerPrivacy = applyPlannerPrivacy;
+
+// 지금 잠금을 켜 둔 학생 수 — 끄기 전 확인창에서 "몇 명이 영향받는지"를 보여주는 데 쓴다
+function _plannerHiddenCount() {
+  return (window.STUDENTS || []).filter(s => s.plannerHidden === true).length;
+}
+
+function updatePlannerPrivacyBtn(enabled) {
+  const btn = document.getElementById('planner-privacy-toggle-btn');
+  const status = document.getElementById('planner-privacy-status');
+  if (!btn) return;
+  if (enabled === null) {
+    btn.textContent = '⚠️ 상태 확인 실패';
+    btn.style.background = '#E0A800';
+    if (status) { status.textContent = '새로고침 후 다시 확인하세요'; status.style.color = '#B45309'; }
+    btn.dataset.enabled = '';
+    return;
+  }
+  const n = _plannerHiddenCount();
+  if (enabled) {
+    btn.textContent = '🔒 기능 켜짐';
+    btn.style.background = '#B45309';
+    if (status) { status.textContent = n ? `지금 ${n}명이 잠가 두었습니다` : '잠가 둔 학생이 아직 없습니다'; status.style.color = '#9A3412'; }
+  } else {
+    btn.textContent = '🔓 기능 꺼짐';
+    btn.style.background = '#bdc1c6';
+    if (status) { status.textContent = n ? `${n}명의 잠금이 무시되어 학부모에게 보이는 중` : '학생이 잠글 수 없습니다'; status.style.color = '#888'; }
+  }
+  btn.dataset.enabled = enabled ? '1' : '0';
+}
+
+async function loadPlannerPrivacyStatus() {
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('DB 연결 대기 시간 초과');
+    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'planner_privacy'));
+    applyPlannerPrivacy(snap.exists() ? snap.data().enabled !== false : true);
+  } catch(e) {
+    console.error('플래너 비공개 기능 상태 조회 실패:', e);
+    updatePlannerPrivacyBtn(null);
+  }
+}
+window.loadPlannerPrivacyStatus = loadPlannerPrivacyStatus;
+
+window.togglePlannerPrivacy = async function() {
+  try {
+    const db = await window.waitDb();
+    if (!db) { showAdminToast('❌ DB 연결 실패 — 잠시 후 다시 시도하세요'); return; }
+    const btn = document.getElementById('planner-privacy-toggle-btn');
+    // 상태 조회에 실패했으면(dataset 비어 있음) 화면값을 믿지 않고 실제 값을 다시 읽는다
+    if (btn.dataset.enabled !== '0' && btn.dataset.enabled !== '1') {
+      await loadPlannerPrivacyStatus();
+      showAdminToast('🔄 현재 상태를 불러왔습니다 — 다시 눌러 변경하세요');
+      return;
+    }
+    const next = btn.dataset.enabled !== '1';
+    const n = _plannerHiddenCount();
+    // 끄는 쪽만 무겁게 묻는다 — 학생이 가려 둔 것을 학생 동의 없이 여는 동작이라서.
+    if (!next && !confirm(
+      `플래너 비공개 기능을 끌까요?\n\n`
+      + (n ? `· 지금 ${n}명이 잠가 두었습니다. 그 학생들의 플래너 사진·코멘트·학습분석이 학부모앱에 즉시 다시 보입니다\n`
+           : `· 지금 잠가 둔 학생은 없습니다\n`)
+      + `· 학생앱에는 "기능이 꺼져 있다"고 표시되지만, 학생이 앱을 열어보기 전에는 모릅니다\n`
+      + `· 학생 설정값은 지워지지 않아 다시 켜면 그대로 복원됩니다`)) return;
+    if (next && !confirm('플래너 비공개 기능을 다시 켤까요?\n\n전에 잠가 두었던 학생들의 잠금이 그대로 복원되어 학부모앱에서 다시 가려집니다.')) return;
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'planner_privacy'), {
+      enabled: next,
+      updatedAt: window._fsServerTimestamp()
+    });
+    applyPlannerPrivacy(next);
+    showAdminToast(next ? '🔒 플래너 비공개 기능 켜짐' : '🔓 플래너 비공개 기능 꺼짐 — 전원 공개 상태입니다');
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 
@@ -12499,6 +12604,16 @@ onSnapshot(doc(db, 'settings', 'vacation_mode'), (snap) => {
   console.error('❌ 방학 시간표 구독 에러:', error);
 });
 
+// ── 플래너 학부모 비공개 기능(settings/planner_privacy) 실시간 구독 ──
+// 설정 탭을 열지 않아도 플래너 현황판 배지가 실제 상태를 말해야 한다.
+// 문서가 없으면 켜진 것으로 본다(학생이 걸어 둔 잠금을 존중하는 쪽).
+onSnapshot(doc(db, 'settings', 'planner_privacy'), (snap) => {
+  const enabled = snap.exists() ? snap.data().enabled !== false : true;
+  if (window.applyPlannerPrivacy) window.applyPlannerPrivacy(enabled);
+}, (error) => {
+  console.error('❌ 플래너 비공개 기능 구독 에러:', error);
+});
+
 // ── 식사시간 외출 알림(settings/meal_away_sms) 실시간 구독 ──
 // 설정 탭을 열지 않아도 반영되어야 하고(발송 판단이 키오스크에서 일어난다),
 // 키오스크 2대가 같은 값을 보게 실시간으로 받는다. 문서가 없으면 켜진 것으로 본다.
@@ -18216,8 +18331,13 @@ function _apcRender() {
     const name = _apcEsc(s.name);
     // 학부모 비공개 배지 — 학부모가 "플래너가 안 보인다"고 문의했을 때 선생님이 이유를 바로 알도록.
     // 선생님이 보는 화면과 검사는 이 설정과 무관하게 그대로다(가려지는 건 학부모앱뿐).
+    // 전체 스위치가 꺼져 있으면 학생이 잠가 뒀어도 실제로는 학부모에게 보이는 중이다 —
+    // 그때 '🔒 비공개'라고 띄우면 선생님이 반대로 안다.
+    const privOn = window.PLANNER_PRIVACY_ON !== false;
     const privBadge = (s.plannerHidden === true)
-      ? `<div style="position:absolute;top:5px;left:5px;background:#B45309;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px" title="학생이 학부모에게 비공개로 설정했습니다">🔒 학부모 비공개</div>`
+      ? (privOn
+          ? `<div style="position:absolute;top:5px;left:5px;background:#B45309;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px" title="학생이 학부모에게 비공개로 설정했습니다">🔒 학부모 비공개</div>`
+          : `<div style="position:absolute;top:5px;left:5px;background:#6B7280;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px" title="학생은 비공개로 뒀지만 전체 스위치가 꺼져 있어 지금은 학부모에게 보입니다">🔓 잠금 정지 중</div>`)
       : '';
     const badge = n
       ? `<div style="position:absolute;top:5px;right:5px;background:#6C5DD3;color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px">💬 ${n}</div>`
@@ -18249,6 +18369,7 @@ function _apcRender() {
   });
 
   gridEl.innerHTML = cards.join('');
+  window._apcRefresh = _apcRender;   // 전체 스위치가 바뀌면 배지를 다시 그려야 한다
   if (sumEl) {
     sumEl.innerHTML = `제출 <b style="color:#6C5DD3">${done}</b> · 미제출 <b style="color:#C62828">${students.length - done}</b> · 코멘트 <b>${cmted}</b> · 검사 <b style="color:#4C3FB8">${aied}</b> <span style="color:#C9CDD4">/ 전체 ${students.length}명</span>`;
   }
@@ -18292,7 +18413,9 @@ window.apcOpen = function(seatKey) {
   const s = _apcStudents().find(x => _apcSeatKey(x.seat) === seatKey);
   const [y, m, d] = _apcDate.split('-').map(Number);
   titleEl.textContent = (s ? `${s.name} (${s.seat}번)` : seatKey) + ` — ${m}월 ${d}일`
-    + ((s && s.plannerHidden === true) ? '  🔒 학부모 비공개' : '');
+    + ((s && s.plannerHidden === true)
+        ? (window.PLANNER_PRIVACY_ON !== false ? '  🔒 학부모 비공개' : '  🔓 잠금 정지 중(전체 스위치 꺼짐)')
+        : '');
   const sub = _apcSubs[seatKey];
   if (sub && sub.url) {
     img.src = sub.url; img.style.display = 'block'; nophoto.style.display = 'none';
@@ -19832,7 +19955,8 @@ window.reportRender = async function() {
   const box = document.getElementById('rp-content');
   const stu = _rpStudent();
   const privNote = document.getElementById('rp-priv-note');
-  if (privNote) privNote.style.display = (stu && stu.plannerHidden === true) ? 'block' : 'none';
+  if (privNote) privNote.style.display =
+    (stu && stu.plannerHidden === true && window.PLANNER_PRIVACY_ON !== false) ? 'block' : 'none';
   const startISO = (document.getElementById('rp-start') || {}).value;
   const endISO   = (document.getElementById('rp-end')   || {}).value;
   const btn = document.getElementById('rp-print-btn');

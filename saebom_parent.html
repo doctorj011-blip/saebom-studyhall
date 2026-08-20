@@ -957,7 +957,32 @@ function doLogout() {
 // 플래너 사진·선생님 코멘트·플래너 기반 학습분석을 가리고, 낸 날/안 낸 날만 남긴다.
 // '아무것도 없는 것처럼' 감추지 않는 이유 — 그러면 "왜 안 냈냐"는 오해가 생기고 그 해명이
 // 원장님께 전화로 온다. 잠겼다는 사실 자체는 밝히고, 내용만 잠근다.
-const _pPlannerHidden = () => !!(currentStudent && currentStudent.plannerHidden === true);
+// 전체 스위치(settings/planner_privacy) — 원장이 관리앱에서 끄면 학생 설정을 무시하고 전부 보인다.
+// ★기본값은 켜짐이다. 못 읽었다고 공개로 열리면 규칙·네트워크 문제 하나로 학생들이
+//   걸어 둔 잠금이 통째로 풀린다 — 모르면 가리는 쪽으로 넘어진다.
+let PLANNER_PRIVACY_ON = true;
+const _pPlannerHidden = () => PLANNER_PRIVACY_ON && !!(currentStudent && currentStudent.plannerHidden === true);
+
+// 공개/비공개가 뒤집혔을 때 화면을 다시 맞춘다 — 캐시가 이전 설정으로 채워져 있으므로 비운다.
+function _pPlannerVisibilityChanged() {
+  _ppDates = {}; _ppMetaAll = null; _paLoaded = false;
+  try { renderHomeTiles(); } catch(e) {}
+  if (currentTab === 'planner') { _ppRenderPrivacy(); _ppRenderCal(); _ppLoadMonth(); }
+  if (currentTab === 'status') { try { paInit(); } catch(e) {} }
+}
+
+// 전체 스위치 구독 — 원장이 끄면 학부모 화면에 즉시 반영된다(앱을 다시 열지 않아도).
+function startPlannerPrivacyRealtime() {
+  if (!window._onSnapshot || !window._db) return;
+  try {
+    window._onSnapshot(window._doc(window._db, 'settings', 'planner_privacy'), snap => {
+      const next = snap.exists() ? snap.data().enabled !== false : true;
+      if (next === PLANNER_PRIVACY_ON) return;
+      PLANNER_PRIVACY_ON = next;
+      _pPlannerVisibilityChanged();
+    }, e => console.warn('[플래너] 비공개 기능 스위치 구독 실패 — 켜짐으로 진행:', e && e.code));
+  } catch(e) { /* 실패해도 학생 설정을 존중한 채로 동작한다 */ }
+}
 
 // ── 데이터 로드 ──
 // ── 최신 학생 데이터 갱신 (sessionStorage 캐시 stale 방지) ──
@@ -988,12 +1013,7 @@ async function refreshParentData() {
       // 플래너 공개 설정 — 학생이 방금 바꿨을 수 있다. 바뀌면 홈 타일·플래너·학습분석을 다시 그린다
       const prevPH = currentStudent.plannerHidden === true;
       currentStudent.plannerHidden = d.plannerHidden === true;
-      if (currentStudent.plannerHidden !== prevPH) {
-        _ppDates = {}; _ppMetaAll = null; _paLoaded = false;   // 캐시가 이전 설정으로 채워져 있다
-        try { renderHomeTiles(); } catch(e) {}
-        if (currentTab === 'planner') { _ppRenderPrivacy(); _ppRenderCal(); _ppLoadMonth(); }
-        if (currentTab === 'status') { try { paInit(); } catch(e) {} }
-      }
+      if (currentStudent.plannerHidden !== prevPH) _pPlannerVisibilityChanged();
       try { sessionStorage.setItem('saebom_parent', JSON.stringify(currentStudent)); } catch(e) {}
     }
   } catch(e) { console.error('학부모 데이터 갱신 실패:', e); }
@@ -1016,6 +1036,7 @@ async function loadAllData() {
   await startStatusRealtime();  // 실시간 먼저
   startScheduleRealtime();      // 스케줄도 실시간 구독
   startVacationModeRealtime();  // 방학/학기 교시 구성
+  startPlannerPrivacyRealtime();// 플래너 비공개 기능 전체 스위치
   loadNotices();
   renderMealAwayOptIn();        // 식사 외출 알림 수신 조사(캐시값으로 먼저 그림)
   renderTabletConsent();        // 태블릿 보관 관리 동의(캐시값으로 먼저 그림)

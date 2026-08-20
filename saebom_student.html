@@ -2876,6 +2876,7 @@ function enterApp() {
     loadNoticesFromFirebase();
     subscribeScheduleEdit();
     subscribeVacationMode();
+    subscribePlannerPrivacy();
     refreshStudentData();
     loadActualStudyData();
     loadEventsList();
@@ -2890,6 +2891,7 @@ function enterApp() {
       loadNoticesFromFirebase();
       subscribeScheduleEdit();
       subscribeVacationMode();
+      subscribePlannerPrivacy();
       refreshStudentData();
       loadActualStudyData();
       loadEventsList();
@@ -2945,6 +2947,25 @@ function subscribeScheduleEdit() {
       updateScheduleEditBanner();
       buildWeeklyTable();
     });
+  } catch(e) {}
+}
+
+// ── 플래너 비공개 기능 전체 스위치(settings/planner_privacy) ──
+// 원장이 관리앱에서 끈다. 꺼지면 학생은 새로 잠글 수 없고, 이미 잠가 둔 학생의 플래너도
+// 학부모앱에 다시 보인다. 그래서 카드에 '지금 꺼져 있다'를 반드시 띄운다 —
+// 학생이 잠긴 줄 알고 있는데 실제로는 열려 있는 상태가 제일 나쁘다.
+// ★기본값은 켜짐이다. 문서가 없거나 못 읽었을 때 꺼짐으로 보면, 규칙·네트워크 문제 하나로
+//   학생들이 걸어 둔 잠금이 통째로 풀린다. 못 읽으면 학생 설정을 존중하는 쪽으로 넘어진다.
+let PLANNER_PRIVACY_ON = true;
+function subscribePlannerPrivacy() {
+  if (!window._firebaseReady) return;
+  try {
+    window._fsOnSnapshot(window._fsDoc(window._db, 'settings', 'planner_privacy'), snap => {
+      const next = snap.exists() ? snap.data().enabled !== false : true;
+      if (next === PLANNER_PRIVACY_ON) return;
+      PLANNER_PRIVACY_ON = next;
+      try { renderPlannerPrivacy(); } catch(e) {}
+    }, e => console.warn('[Planner] 비공개 기능 스위치 구독 실패 — 켜짐으로 진행:', e && e.code));
   } catch(e) {}
 }
 
@@ -5621,6 +5642,19 @@ function renderPlannerPrivacy() {
   const sub = document.getElementById('pl-privacy-sub');
   const btn = document.getElementById('pl-privacy-btn');
   const hidden = _plHidden();
+  // 원장이 기능을 껐다 — 학생이 잠가 뒀더라도 지금은 학부모에게 보이고 있다. 그 사실을 그대로 알린다.
+  if (!PLANNER_PRIVACY_ON) {
+    box.style.borderColor = 'var(--red-border)';
+    box.style.background = 'var(--red-pale)';
+    ico.textContent = '🚫';
+    title.textContent = '비공개 기능이 지금 꺼져 있어요';
+    sub.textContent = hidden
+      ? '내가 걸어 둔 잠금도 지금은 풀려 있어 부모님이 볼 수 있어요. 궁금하면 선생님께 물어보세요.'
+      : '지금은 플래너를 비공개로 바꿀 수 없어요. 궁금하면 선생님께 물어보세요.';
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
   if (hidden) {
     box.style.borderColor = 'var(--amber-light)';
     box.style.background = 'var(--amber-pale)';
@@ -5646,6 +5680,7 @@ function renderPlannerPrivacy() {
 
 async function plannerTogglePrivacy() {
   if (!currentStudent) return;
+  if (!PLANNER_PRIVACY_ON) { showToast('지금은 이 기능이 꺼져 있어요'); renderPlannerPrivacy(); return; }
   const want = !_plHidden();   // want=true 면 '비공개로 바꾼다'
   if (want && !confirm('플래너를 부모님에게 비공개로 바꿀까요?\n\n· 부모님 앱에는 낸 날·안 낸 날만 보이고 사진과 선생님 코멘트는 잠깁니다\n· 선생님은 지금처럼 그대로 보십니다\n· 언제든 다시 공개로 바꿀 수 있어요')) return;
   const btn = document.getElementById('pl-privacy-btn');
