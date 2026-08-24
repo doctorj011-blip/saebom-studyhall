@@ -109,11 +109,6 @@
     },
     {
       "@type": "Question",
-      "name": "SEE EYES는 아이를 촬영하는 건가요?",
-      "acceptedAnswer": { "@type": "Answer", "text": "아닙니다. 영상을 저장하거나 외부로 전송하지 않습니다. 기기에서 즉시 분석한 뒤 집중·졸음·이탈 판정값만 전달됩니다. 학생 본인과 보호자가 모두 동의해야 켜지는 선택 기능이며 언제든 철회할 수 있습니다." }
-    },
-    {
-      "@type": "Question",
       "name": "결제와 환불은 어떻게 되나요?",
       "acceptedAnswer": { "@type": "Answer", "text": "신용·체크카드와 계좌이체로 결제하는 월 단위 이용권입니다. 별도의 입회비나 관리비는 없습니다." }
     },
@@ -204,6 +199,75 @@
     .hero-art::after { background: linear-gradient(180deg, transparent 40%, var(--ink) 100%); }
   }
   @media (max-width: 560px) { .ticks { gap: 2px; } }
+
+  /* ── 실제 사례(코멘트·리포트) 전용 ──────────
+     .mask — 학생을 특정할 수 있는 자리를 가리는 처리. 실제 이름을 넣고 흐리면
+     글자가 HTML에 그대로 남으므로, 자리표(◯◯)를 넣고 시각적으로만 흐린다. */
+  .mask { filter: blur(3.5px); opacity: .65; user-select: none; }
+
+  .cmt-card {
+    background: #fff; border: 1px solid var(--parchment-2);
+    border-left: 3px solid var(--gold-warm); border-radius: 4px;
+    padding: 22px 24px; margin-bottom: 14px;
+  }
+  .cmt-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+  .cmt-tag {
+    font-size: 12px; font-weight: 700; letter-spacing: .1em;
+    background: rgba(46,125,83,.12); color: var(--good);
+    border-radius: 3px; padding: 4px 9px;
+  }
+  .cmt-who { font-size: 12.5px; color: var(--on-light-mute); }
+  .cmt-note { font-size: 13px; font-weight: 600; color: var(--umber); margin-bottom: 10px; }
+  .cmt-body { font-size: 14.5px; line-height: 1.9; color: var(--on-light); }
+
+  /* 리포트 견본 — 어두운 띠 위에 놓인 종이 한 장 */
+  .rpx {
+    background: #FDFBF4; color: var(--on-light); border-radius: 6px;
+    max-width: 780px; margin: 0 auto; padding: 34px 36px 28px;
+    box-shadow: 0 22px 60px rgba(0,0,0,.4);
+  }
+  .rpx-org {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
+    font-size: 12px; letter-spacing: .14em; font-weight: 700; color: var(--umber);
+    padding-bottom: 10px; border-bottom: 2px solid var(--on-light); margin-bottom: 14px;
+  }
+  .rpx-org i { font-style: normal; letter-spacing: .02em; color: var(--on-light-mute); font-weight: 600; }
+  .rpx h3 {
+    font-family: var(--display); font-size: clamp(19px, 3vw, 24px);
+    font-weight: 800; letter-spacing: -0.02em; margin-bottom: 4px;
+  }
+  .rpx-lede { font-size: 13px; color: var(--on-light-mute); margin-bottom: 18px; }
+  .rpx-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--parchment-2); margin-bottom: 18px; }
+  .rpx-tile { background: #fff; padding: 13px 14px; }
+  .rpx-tile .k { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--umber); margin-bottom: 4px; }
+  .rpx-tile .v { font-family: var(--display); font-size: 21px; font-weight: 800; }
+  .rpx-tile .v small { font-size: 12px; font-weight: 600; margin-left: 1px; }
+  .rpx-tile .s { font-size: 11.5px; color: var(--on-light-mute); margin-top: 3px; }
+  .rpx-in { font-size: 12.5px; color: var(--on-light-mute); line-height: 2; margin-bottom: 20px; }
+  .rpx-in b { color: var(--on-light); font-weight: 600; }
+  .rpx-op h4 {
+    font-family: var(--display); font-size: 15px; font-weight: 800;
+    padding-top: 14px; border-top: 1px solid var(--parchment-2); margin-bottom: 10px;
+  }
+  .rpx-op > p { font-size: 14px; line-height: 1.9; margin-bottom: 14px; }
+  .rpx-item { margin-bottom: 13px; }
+  .rpx-kind {
+    display: inline-block; font-size: 11px; font-weight: 700; letter-spacing: .08em;
+    border-radius: 3px; padding: 3px 7px; margin-right: 7px; vertical-align: 1px;
+  }
+  .rpx-kind.good { background: rgba(46,125,83,.12); color: var(--good); }
+  .rpx-kind.warn { background: rgba(224,123,44,.14); color: #A85510; }
+  .rpx-kind.next { background: rgba(31,138,138,.12); color: #146969; }
+  .rpx-item b { font-size: 14px; font-weight: 700; }
+  .rpx-item p { font-size: 13.5px; line-height: 1.85; color: var(--on-light-mute); margin-top: 4px; }
+  .rpx-foot {
+    font-size: 12px; color: var(--on-light-mute);
+    margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--parchment-2);
+  }
+  @media (max-width: 700px) {
+    .rpx { padding: 24px 20px 20px; }
+    .rpx-tiles { grid-template-columns: 1fr 1fr; }
+  }
 </style>
 </head>
 <body>
@@ -460,6 +524,182 @@
     <div class="cta-row" style="margin-top:34px">
       <a class="btn btn--ghost" href="planner.html#review">검사 결과 예시 보기 →</a>
     </div>
+  </div>
+</section>
+
+<!-- ── 실제 사례: 플래너 코멘트 ─────────────
+     아래 코멘트들은 실제 발송분에서 옮긴 것. 이름·좌석 등 학생을 특정할 수 있는
+     정보는 넣지 않는다(.mask 는 자리표 ◯를 흐리는 표시일 뿐 실제 데이터가 아님). -->
+<section class="band band--day" id="comments">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:26px">
+      <span class="eyebrow">실제 사례</span>
+      <h2 class="sec-title">코멘트는 이렇게 돌아옵니다</h2>
+      <p class="sec-lead">
+        아래 세 편은 학생들에게 실제로 나간 코멘트에서 옮겼습니다. 학생이 드러나는 부분은 가렸습니다.
+        학생에게 직접 건네는 글이라 말투가 반말입니다.
+        읽어보시면 저희가 매일 무엇을 보는지가 그대로 보입니다 — 어제 한 말을 오늘 지켰는지,
+        같은 항목이 며칠째 밀리는지, 하루 중 어느 시간에 무엇을 놓는지입니다.
+      </p>
+    </div>
+
+    <div class="cmt-card">
+      <div class="cmt-head">
+        <span class="cmt-tag">실제 코멘트</span>
+        <span class="cmt-who"><span class="mask">◯◯◯</span> 학생 · 7월 25일 플래너</span>
+      </div>
+      <p class="cmt-note">전날 코멘트에서 권한 것을 실행했는지, 다음 날 바로 확인합니다.</p>
+      <p class="cmt-body">
+        "어제 말한 순서 바꾸기, 오늘 진짜로 해냈네. 국어 워크북 45문항 실전 과제를 오전 9시에 시간 재고
+        먼저 풀고, 수학 복습은 점심 뒤로 미뤘어. 밥 먹고 나른한 시간에 국어를 앉혔던 어제까지랑 완전히
+        반대야. 그래서 메모에도 '생각보다 빨리 끝나 국어 과제를 완료했다'고 적을 수 있었던
+        거고. 머리 맑은 시간에 가장 힘든 걸 놓으니까 결과가 바로 달라졌지. 다만 한마디 칸에 '컨디션이
+        안 좋아 잠이 온다'고 또 적은 게 걸려. 사흘째 잠 얘기가 나오거든. 이건 배치 문제가 아니라 밤
+        컨디션 문제일 수 있으니, 내일 학원 다녀와서 몇 시에 눕는지 나한테 한번 말해줘."
+      </p>
+    </div>
+
+    <div class="cmt-card">
+      <div class="cmt-head">
+        <span class="cmt-tag">실제 코멘트</span>
+        <span class="cmt-who"><span class="mask">◯◯◯</span> 학생 · 8월 4일 플래너</span>
+      </div>
+      <p class="cmt-note">하루치가 아니라 며칠의 흐름을 이어서 봅니다.</p>
+      <p class="cmt-body">
+        "나흘 내내 X·△로 맴돌던 영어 단어장 day12에 드디어 O가 찍혔네. 어제 밤 자기 전에 그 자리에서
+        외워버리라고 했던 걸 실제로 한 모양이야. 게다가 오늘은 아예 계획표 맨 첫 줄에 영어를 올려놨더라.
+        남는 시간에 하는 게 아니라 먼저 닫는 걸로 자리를 바꾼 거지. 그런데 이번엔 수2 문제집이 X로
+        완전히 빠졌어. 지난 며칠은 그래도 △였는데 오늘은 손도 못 댄 거야. 영어를 위로 올린 대신 수2가
+        맨 아래로 밀려 똑같은 자리에서 또 잘려나간 거지. 미루는 항목이 영어에서 수2로 바뀐 것뿐이야.
+        내일은 오후 첫 시간에 수2부터 절반만 딱 정해놓고 앉아. 남은 절반은 그날 밤이 아니라
+        모레 같은 시간에 이어서 하고."
+      </p>
+    </div>
+
+    <div class="cmt-card">
+      <div class="cmt-head">
+        <span class="cmt-tag">실제 코멘트</span>
+        <span class="cmt-who"><span class="mask">◯◯◯</span> 학생 · 7월 27일 플래너</span>
+      </div>
+      <p class="cmt-note">잘한 것은 짚어주고, 다음에 볼 것을 한 가지 정해줍니다.</p>
+      <p class="cmt-body">
+        "아침 7시부터 주황이 칠해졌네. 지난 며칠 9시 시작을 오늘은 두 시간 더 당긴 거야. 그 덕에 오전
+        세 시간을 영어에 통으로 쓰고 11시부터 밤 9시까지 수학을 이어붙였어. 눈에 걸리는 건 메모칸에
+        적은 '논술 문제 더 풀 p16, p17'이야. 오늘 모의논술 두 개를 O로 끝냈는데도 스스로
+        다음에 더 풀 범위를 남겨둔 거지. 그 판단이 맞아. 논술은 한 학교 문제만 풀고 넘어가면 답안 쓰는
+        감각이 안 쌓이니까. 그런데 나흘째 계획이 전부 O로 닫히고 있어. 문제집도 인강도 한
+        번에 다 O가 됐는데, 틀린 문제를 다시 푼 칸이 계획에 한 번도 안 보여. 내일은 논술 p16, p17
+        옆에 '이번 주 틀린 것 다시 풀기'를 한 줄 넣어봐. 새 진도만 O로 채우면 틀린 게
+        그대로 남아."
+      </p>
+    </div>
+
+    <p style="font-size:14px;color:var(--on-light-mute);margin-top:18px">
+      이 코멘트는 검사 등급과 함께 학생앱·학부모앱에 그대로 올라갑니다.
+      학생이 읽는 글을 학부모님도 같은 화면으로 보십니다.
+    </p>
+  </div>
+</section>
+
+<!-- ── 실제 사례: 학습리포트 ────────────────
+     실제 발송된 리포트에서 옮긴 견본. 학생을 특정할 수 있는 정보는 싣지 않는다. -->
+<section class="band band--ink" id="report">
+  <div class="wrap--narrow">
+    <div class="sec-head" style="margin-bottom:30px">
+      <span class="eyebrow">학습리포트</span>
+      <h2 class="sec-title">쌓인 기록은 리포트로 정리해 보내드립니다</h2>
+      <p class="sec-lead">
+        입·퇴실 기록과 매일의 플래너 검사가 쌓이면, 기간을 정해 한 장짜리 학습리포트로 정리합니다.
+        순공시간 그래프부터 교재별 진도, 그리고 맨 끝에 담임 선생님이 쓰는 '선생님 의견'까지 담아
+        학부모님 카카오톡으로 보내드립니다. 아래는 이번 여름방학에 실제로 발송된 리포트에서
+        옮긴 것입니다. 학생이 드러나는 부분은 가렸습니다.
+      </p>
+    </div>
+
+    <div class="rpx">
+      <div class="rpx-org">새봄면학관 <i>2026. 07. 20 — 2026. 08. 12</i></div>
+      <h3><span class="mask">◯◯◯</span> 학생 학습 리포트</h3>
+      <p class="rpx-lede">24일간의 기록입니다. 실제 입·퇴실 시각과 매일 제출한 플래너에서 자동으로 집계했습니다.</p>
+
+      <div class="rpx-tiles">
+        <div class="rpx-tile">
+          <div class="k">플래너 제출</div>
+          <div class="v">24<small>일</small></div>
+          <div class="s">검사한 24일 중 미제출 없음</div>
+        </div>
+        <div class="rpx-tile">
+          <div class="k">계획 실행률</div>
+          <div class="v">78<small>%</small></div>
+          <div class="s">계획 161개 중 125개 완료</div>
+        </div>
+        <div class="rpx-tile">
+          <div class="k">작성 '우수'</div>
+          <div class="v">10<small>일</small></div>
+          <div class="s">플래너 검사 등급 기준</div>
+        </div>
+        <div class="rpx-tile">
+          <div class="k">플래너 성실 상점</div>
+          <div class="v">3<small>회</small></div>
+          <div class="s">주 6일 제출, 3주 연속</div>
+        </div>
+      </div>
+
+      <p class="rpx-in">
+        실제 리포트에는 이 위에 <b>주차별·날짜별 순공시간 그래프</b>, <b>과목별 시간 배분</b>,
+        <b>교재별 진도(처음 → 마지막 기록)</b>, <b>등원 시각의 변화와 외출 합계</b>,
+        <b>상·벌점 내역</b>, <b>담임 코멘트 모음</b>이 함께 실립니다.
+      </p>
+
+      <div class="rpx-op">
+        <h4>선생님 의견</h4>
+        <p>
+          "7월 말과 8월 초 두 주 동안 <span class="mask">◯◯</span>는 하루 10시간을 넘긴 날이 여러 번
+          있었고, 주간 순공 챌린지도 넉넉히 넘겼습니다. 다만 세 주가 지나면서 등원 시각이 조금씩 뒤로
+          밀리고 마지막 주에는 결석 없이 나오면서도 앉아 있는 시간이 짧아졌습니다. 총량은 같은 학년
+          평균보다 앞서 있지만, 지금 <span class="mask">◯◯</span>에게 남은 과제는 시간을 더 늘리는
+          쪽이 아니라 하루 안에서 어느 과목을 먼저 놓을지 정하는 쪽으로 보입니다. 본인도 플래너
+          한마디에 시간 분배가 어렵다고 적어 두었습니다."
+        </p>
+
+        <div class="rpx-item">
+          <span class="rpx-kind good">칭찬할 점</span><b>수학 한 권을 16일 이어감</b>
+          <p>
+            수학 문제집 한 권을 16일에 걸쳐 붙잡았고, 마지막 기록은 오답 정리로 넘어가
+            있었습니다. 새 교재를 자꾸 꺼내지 않고 한 권을 앞에서 뒤까지 끌고 간 뒤 틀린 문제로 돌아온
+            흐름입니다. 수학이 이 기간 가장 많은 시간을 차지한 것도 이 한 권 덕입니다.
+          </p>
+        </div>
+        <div class="rpx-item">
+          <span class="rpx-kind warn">보완이 필요한 부분</span><b>범위가 빠진 국어 기록</b>
+          <p>
+            국어 교재 기록을 보면 처음에는 'Day1 P10~P17'처럼 범위가 있었는데, 뒤로 갈수록
+            교재 이름만 남았습니다. 오래 앉아 있던 과목이라 분량이
+            적었을 리는 없고, 급하게 적다 보니 범위를 생략한 것으로 보입니다. 다음에 어디서부터
+            이어야 할지 본인도 찾기 어려워집니다.
+          </p>
+        </div>
+        <div class="rpx-item">
+          <span class="rpx-kind next">다음 기간 제안</span><b>집에서는 아침 시간만</b>
+          <p>
+            학기가 시작되면 낮 시간을 학교가 쓰기 때문에 <span class="mask">◯◯</span>가 스스로 발견한
+            점심시간 30분과 등교 전 아침이 중요해집니다. 집에서는 공부 내용을 묻기보다 잠자리에 드는
+            시각만 일정하게 잡아 주시면 좋겠습니다. 방학 후반에 등원이 늦어진 것도 아침 리듬에서
+            시작된 것으로 보입니다.
+          </p>
+        </div>
+      </div>
+
+      <div class="rpx-foot">
+        실제 발송된 리포트의 일부입니다. 학생이 드러나는 부분을 가리고 줄인 것 외에는 발송된 내용
+        그대로이며, 칭찬·보완·제안이 각각 2~4개씩 실린 전체 의견 중 일부만 옮겼습니다.
+      </div>
+    </div>
+
+    <p class="sec-lead" style="text-align:center;margin-top:26px">
+      리포트는 한 장짜리 이미지로 저장되어 학부모님 카카오톡으로 발송되고, 상담 때는 이 리포트를
+      같이 펴놓고 이야기합니다. 숫자는 시스템이 집계하지만, 의견은 아이를 실제로 지켜본 선생님이
+      확인하고 고쳐서 내보냅니다.
+    </p>
   </div>
 </section>
 
@@ -795,7 +1035,7 @@
         학부모님은 같은 기록을 그대로 보십니다. 설치할 필요 없이 링크로 바로 열립니다.
       </p>
     </div>
-    <div class="app-row app-row--3">
+    <div class="app-row">
       <a class="app-card" href="apps.html#student">
         <h3>학생앱</h3>
         <p>오늘 일정, 주간 시간표, 학습현황, 플래너 제출, 스터디룸 신청, 자리 선택.</p>
@@ -804,11 +1044,6 @@
       <a class="app-card" href="apps.html#parent">
         <h3>학부모앱</h3>
         <p>입퇴실 기록, 이번 달 공부 시간, 플래너와 선생님 피드백, 상·벌점.</p>
-        <span class="go">자세히 보기 →</span>
-      </a>
-      <a class="app-card" href="apps.html#seeeyes">
-        <h3>SEE EYES</h3>
-        <p>카메라로 집중 상태만 확인하는 선택 기능. 영상은 저장도 전송도 하지 않습니다.</p>
         <span class="go">자세히 보기 →</span>
       </a>
     </div>
@@ -908,14 +1143,6 @@
       </details>
 
       <details>
-        <summary>SEE EYES는 아이를 촬영하는 건가요?</summary>
-        <div class="faq-a">
-          <p>아닙니다. 영상을 저장하지도, 밖으로 보내지도 않습니다. 학생이 쓰는 기기 안에서 즉시 분석한 뒤 '집중 / 졸음 / 이탈' 판정값만 전달되며, 녹화 파일 자체가 만들어지지 않습니다.</p>
-          <p>학생 본인과 보호자가 모두 동의해야만 켜지는 선택 기능이고, 쓰지 않아도 아무 불이익이 없습니다. 언제든 철회할 수 있습니다. 자세한 내용은 <a href="apps.html#seeeyes">앱 안내</a>를 봐주세요.</p>
-        </div>
-      </details>
-
-      <details>
         <summary>결제와 환불은 어떻게 되나요?</summary>
         <div class="faq-a"><p>신용·체크카드와 계좌이체로 결제하시며, 월 단위 이용권입니다. 별도의 입회비나 관리비는 없습니다. 환불 기준은 아래 <a href="#refund">환불 규정</a>에 그대로 적어두었습니다.</p></div>
       </details>
@@ -973,16 +1200,14 @@
         <summary>개인정보처리방침</summary>
         <div class="terms-body">
           <h4>1. 수집 항목</h4>
-          <p>학생 이름, 학생·보호자 연락처, 이용 기간 정보를 수집합니다. SEE EYES 기능에 동의한 경우 카메라 영상을 실시간 분석해 산출한 상태값(집중/졸음/이탈)을 함께 처리합니다.</p>
+          <p>학생 이름, 학생·보호자 연락처, 이용 기간 정보를 수집합니다.</p>
           <h4>2. 수집 목적</h4>
           <p>좌석 배정 및 이용 관리, 입퇴실·미입실 알림 발송, 이용료 수납 관리, 학습 관리 목적으로만 이용합니다.</p>
           <h4>3. 보유 기간</h4>
           <p>이용 종료(퇴원) 후 1년까지 보관하며 이후 지체 없이 파기합니다. 다만 관계 법령에 따라 보존이 필요한 결제 기록은 해당 법령이 정한 기간 동안 보관합니다.</p>
-          <h4>4. 영상 정보</h4>
-          <p>SEE EYES는 카메라 영상을 저장하거나 외부로 전송하지 않습니다. 기기에서 즉시 분석한 뒤 상태값만 관리 화면으로 전달되며, 동의는 언제든지 철회할 수 있습니다.</p>
-          <h4>5. 제3자 제공</h4>
+          <h4>4. 제3자 제공</h4>
           <p>알림톡 발송을 위한 메시지 발송 대행사 외에는 개인정보를 제3자에게 제공하지 않습니다.</p>
-          <h4>6. 문의</h4>
+          <h4>5. 문의</h4>
           <p>개인정보 관련 문의는 031-273-0982 또는 doctorj011@gmail.com으로 해주시기 바랍니다.</p>
         </div>
       </details>

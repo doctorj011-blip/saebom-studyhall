@@ -8,6 +8,8 @@ rules_version = '2';
 //         firebase deploy --only firestore:rules      (또는  scripts/deploy-rules.sh)
 //   · Firebase 콘솔에서 직접 수정하지 마세요 — 다음 배포 때 이 파일로 덮어써집니다.
 //   · 변경할 때마다 아래 [배포 이력]에 날짜·요약을 남겨 주세요(무엇이 바뀌었는지 추적).
+//   - 2026-08-24  android_testers 추가 — 플레이 비공개 테스터 12명 모집 게이트.
+//                 get만 열고 list 차단(미성년자 이름+지메일이라 전수 조회 방지)
 //   · 배포는 수동입니다. push 시 자동배포하는 GitHub Actions 워크플로가 있었지만 시크릿
 //     (FIREBASE_SERVICE_ACCOUNT)을 넣은 적이 없어 한 번도 성공하지 못했고, 매 푸시마다
 //     실패 알림만 남겨 2026-08-14 에 지웠습니다. 운영 DB 접근 규칙이라 diff 확인 → y/N →
@@ -486,6 +488,31 @@ service cloud.firestore {
     // (settings 는 read 화이트리스트라 문서마다 규칙을 고쳐야 한다 — school_calendars 선례).
     // 다른 컬렉션과 같은 개방 정책이되(웹앱 3개가 미인증) 형식은 검증한다.
     // delete 는 막는다 — 응답이 사라지면 미응답자와 구분이 안 되고, 재조사 대상이 틀어진다.
+    // ── 안드로이드 테스터 등록 (2026-08-24) ──
+    // 플레이 비공개 테스트 12명을 채우기 위해 학생앱·학부모앱에 전면 게이트를
+    // 띄우고 구글 계정을 받는다(saebom-common.js _testerGate).
+    //
+    // 🔒 **list 를 막고 get 만 연다.** 이 컬렉션에는 미성년자 이름과 지메일
+    //    주소가 들어간다 — 다른 컬렉션처럼 read 를 통째로 열면 프로젝트를 아는
+    //    사람이 전교생 이메일을 한 번에 긁을 수 있다. 게이트는 자기 문서
+    //    하나만 getDoc 하므로 get 만으로 충분하고, 명단은 관리자가 소유자
+    //    권한(gcloud)으로 뽑는다.
+    // delete 도 막는다 — 등록을 지우면 게이트가 다시 떠서 이미 낸 학생을
+    //    또 막는다.
+    match /android_testers/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow delete: if false;
+      allow create, update: if id == '_config'
+        ? request.resource.data.active is bool
+        : (request.resource.data.platform in ['android', 'ios']
+           && request.resource.data.name is string
+           && request.resource.data.name.size() <= 30
+           && (!('gmail' in request.resource.data.keys())
+               || (request.resource.data.gmail is string
+                   && request.resource.data.gmail.size() <= 100)));
+    }
+
     match /usage_surveys/{id} {
       allow read: if true;
       allow delete: if false;

@@ -611,3 +611,273 @@ window._onlyMine = function(docs, student) {
     return window._sameStudentName(d && (d.name || d.studentName), me);
   });
 };
+
+// ══════════════════════════════════════════════════════════════════
+// 안드로이드 테스터 등록 게이트 (2026-08-24)
+// ══════════════════════════════════════════════════════════════════
+// 왜 필요한가: 플레이스토어 개인 계정은 **비공개 테스터 12명이 14일 연속**
+// 유지돼야 프로덕션 출시를 신청할 수 있다. "테스트 좀 해줘"로는 안 모여서
+// (실제로 8/15~8/24 사이 7명에서 멈췄다) 9월 이용 조사가 통했던 방식 —
+// 로그인 전면 게이트 — 을 그대로 쓴다(원장 지시).
+//
+// ⚠️ **이용 조사(_surveyGate)와 별개 모듈이다.** 그쪽은 운영 중이라 렌더를
+//    분기시키면 9월 조사가 깨질 위험이 있다. 수명주기(start/recheck/watch)만
+//    같은 모양으로 맞췄다. 조사 게이트가 떠 있으면 이 게이트는 나중에 뜬다.
+//
+// ⚠️ **아이폰 학생에게 지메일을 묻지 않는다.** 테스터는 안드로이드만 가능하다.
+//    아이폰은 앱스토어에 이미 출시돼 있으니(1.0, 2026-08-19) 링크를 주고
+//    통과시킨다 — 게이트가 "쓸데없이 막는 것"이 아니라 양쪽을 앱으로 보내는
+//    장치가 되게.
+//
+//   android_testers/_config              설정 1개
+//   android_testers/{uid|seatN}          응답 1인 1개
+//
+// 기본은 active:false — 설정 문서가 없으면 아무것도 뜨지 않는다(조사 게이트와
+// 같은 방침. 배포하는 순간 전교생이 막히는 사고 방지).
+window._TESTER_COL = 'android_testers';
+
+window._testerConfig = function(raw) {
+  const d = raw || {};
+  return {
+    active:  d.active === true,
+    title:   String(d.title || '앱 설치 안내'),
+    // 옵트인 링크 — 콘솔에 등록되기 **전에** 누르면 "테스터가 아닙니다"가 뜨므로,
+    // 등록을 마친 뒤에 이 값을 채운다. 비어 있으면 "곧 안내" 문구만 보여 준다.
+    playLink: String(d.playLink || ''),
+    iosLink:  String(d.iosLink || 'https://apps.apple.com/kr/app/id6800415075'),
+    exclude:  Array.isArray(d.exclude) ? d.exclude.map(String) : []
+  };
+};
+
+window._testerExcluded = function(cfg, student) {
+  if (!student) return false;
+  // 심사용 계정은 어떤 게이트에도 갇히면 안 된다(_surveyIsReviewAccount 주석 참조).
+  if (window._surveyIsReviewAccount(student)) return true;
+  if (student.withdrawAt) return true;
+  const list = window._testerConfig(cfg).exclude;
+  return list.some(n => window._sameStudentName(n, student.name));
+};
+
+// 역할을 문서 ID 에 넣는다. 학부모와 학생은 **각자 등록해야 한다** — 플레이
+// 테스터는 계정(이메일) 단위이고, 학부모 폰과 학생 폰은 다른 기기다.
+// 자녀가 둘인 학부모는 어느 자녀로 로그인해도 같은 문서가 되게(번호가 신원)
+// 좌석·uid 가 아니라 로그인 번호를 쓰면 좋겠지만, 웹앱 학부모 로그인은 자녀를
+// 골라 들어오는 구조라 여기서는 자녀 기준으로 둔다 — 중복 등록돼도 이메일이
+// 같으면 콘솔에서 한 명으로 합쳐진다(무해).
+window._testerDocId = function(student, role) {
+  const uid = student && student.uid;
+  const seat = String((student && student.seat) || '').replace(/[^0-9]/g, '');
+  const base = uid ? uid : ('seat' + (seat || '0'));
+  return (role === 'parent' ? 'p__' : '') + base;
+};
+
+window._testerGate = (function() {
+  const S = { cfg: null, resp: null, opt: null, busy: false, timer: null };
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const KEY = '#1E9E5A';   // 플레이스토어 초록 — 조사 게이트(보라·금색)와 구분된다
+
+  let _platform = null;    // 이번에 고른 값(저장 전)
+
+  async function load() {
+    const opt = S.opt;
+    if (!opt) return 'idle';
+    try {
+      const snap = await opt.fs.getDoc(opt.fs.doc(opt.db, window._TESTER_COL, '_config'));
+      if (!snap || !snap.exists || !snap.exists()) { S.cfg = null; return 'idle'; }
+      const cfg = window._testerConfig(snap.data());
+      if (!cfg.active) { S.cfg = null; return 'idle'; }
+      if (window._testerExcluded(cfg, opt.student)) { S.cfg = null; return 'idle'; }
+      const rs = await opt.fs.getDoc(
+        opt.fs.doc(opt.db, window._TESTER_COL,
+                   window._testerDocId(opt.student, opt.role)));
+      S.cfg = cfg;
+      S.resp = (rs && rs.exists && rs.exists()) ? rs.data() : null;
+    } catch (e) {
+      console.warn('테스터 등록 확인 실패:', e);
+      return 'error';                       // 이미 떠 있는 게이트를 내리지 않는다
+    }
+    return S.resp ? 'pass' : 'block';
+  }
+
+  function isBlocking() {
+    return document.getElementById('tester-gate')?.dataset.blocking === '1';
+  }
+
+  async function start(opt) {
+    S.opt = opt;
+    const r = await load();
+    if (r === 'block') open();
+    watch();
+    return r;
+  }
+
+  async function recheck() {
+    if (!S.opt || S.busy) return;
+    const r = await load();
+    if (r === 'error') return;
+    if (r === 'block') { if (!isBlocking()) open(); return; }
+    if (isBlocking()) document.getElementById('tester-gate')?.remove();
+  }
+
+  function watch() {
+    if (S.timer) return;
+    S.timer = setInterval(() => { if (!document.hidden) recheck(); }, 10 * 60 * 1000);
+  }
+
+  function open() {
+    // 이용 조사가 떠 있으면 그쪽을 먼저 끝내게 둔다 — 게이트 두 장이 겹치면
+    // 어느 쪽을 답해야 하는지 알 수 없다. 조사가 내려가는 순간 이어서 뜨도록
+    // 몇 초 간격으로 다시 본다(10분 주기만 믿으면 조사 답한 학생이 이 게이트를
+    // 다음 접속에서야 만난다).
+    if (document.getElementById('survey-gate')) {
+      setTimeout(() => { if (S.cfg && !S.resp) open(); }, 3000);
+      return;
+    }
+    document.getElementById('tester-gate')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'tester-gate';
+    ov.dataset.blocking = '1';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:20000;padding:20px;overflow-y:auto' +
+      ';background:linear-gradient(150deg,#0B3D22 0%,#12703E 45%,#1E9E5A 100%)' +
+      ';display:flex;align-items:center;justify-content:center';
+    // 색은 역할과 무관하게 플레이스토어 초록으로 둔다 — 이용 조사(보라·금색)와
+    // 다른 성격의 게이트라는 걸 색으로 구분하는 편이 낫다.
+    ov.innerHTML = '<div id="tester-gate-card" style="background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:380px;box-shadow:0 18px 50px rgba(0,0,0,0.28);color:#1F2937"></div>';
+    document.body.appendChild(ov);
+    render();
+  }
+
+  function render() {
+    const card = document.getElementById('tester-gate-card');
+    if (!card) return;
+    const st = S.opt.student || {};
+    const cfg = S.cfg;
+
+    const btn = (val, emoji, title, desc) => {
+      const on = _platform === val;
+      return `<button type="button" data-plat="${val}" style="width:100%;text-align:left;display:flex;gap:11px;align-items:flex-start;
+        padding:14px 15px;margin-bottom:9px;border-radius:13px;cursor:pointer;font-family:inherit;
+        border:2px solid ${on ? KEY : '#E5E7EB'};background:${on ? KEY + '10' : '#fff'}">
+        <span style="font-size:20px;line-height:1.1">${emoji}</span>
+        <span style="flex:1">
+          <span style="display:block;font-size:14.5px;font-weight:800;color:${on ? KEY : '#1F2937'}">${title}</span>
+          <span style="display:block;font-size:11.5px;color:#6B7280;margin-top:2px;line-height:1.5">${desc}</span>
+        </span>
+        <span style="font-size:15px;color:${on ? KEY : '#D1D5DB'}">${on ? '●' : '○'}</span>
+      </button>`;
+    };
+
+    card.innerHTML = `
+      <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">📱 ${esc(cfg.title)}</div>
+      <div style="font-size:12.5px;color:#6B7280;margin-top:5px;line-height:1.6">
+        ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}
+      </div>
+      <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:11px 13px;font-size:12px;color:#065F46;line-height:1.7">
+        ${S.opt.role === 'parent'
+          ? '이제 면학관은 <b>앱</b>으로 안내드립니다. 자녀의 등·하원과 학습현황을 앱에서 보세요.<br><b>쓰시는 기기를 알려주시면 설치 방법을 안내해 드려요.</b>'
+          : '이제 면학관은 <b>앱</b>으로 이용합니다. 시간표·플래너·상벌점을 앱에서 보세요.<br><b>쓰는 기기를 알려주시면 설치 방법을 안내해 드려요.</b>'}
+      </div>
+      <div style="margin:16px 0 4px;font-size:13px;font-weight:800">${S.opt.role === 'parent' ? '어떤 폰을 쓰시나요?' : '어떤 폰을 쓰세요?'}</div>
+      <div id="tester-opts" style="margin-top:9px">
+        ${btn('android', '🤖', '안드로이드', '삼성·LG 등. 구글 계정이 필요해요')}
+        ${btn('ios', '🍎', '아이폰', '앱스토어에서 바로 설치할 수 있어요')}
+      </div>
+      <div id="tester-detail"></div>`;
+
+    card.querySelectorAll('[data-plat]').forEach(b => {
+      b.onclick = () => { _platform = b.dataset.plat; render(); };
+    });
+    if (_platform) renderDetail();
+  }
+
+  function renderDetail() {
+    const box = document.getElementById('tester-detail');
+    if (!box) return;
+    const cfg = S.cfg;
+
+    if (_platform === 'ios') {
+      box.innerHTML = `
+        <div style="margin-top:6px;background:#F9FAFB;border-radius:12px;padding:13px 14px;font-size:12.5px;color:#374151;line-height:1.7">
+          앱스토어에서 <b>새봄 면학관</b>을 검색하거나 아래 버튼으로 설치하세요.
+        </div>
+        <a href="${esc(cfg.iosLink)}" target="_blank" rel="noopener"
+           style="display:block;margin-top:9px;padding:13px;border-radius:12px;background:#111827;color:#fff;
+                  text-align:center;font-size:14px;font-weight:800;text-decoration:none">앱스토어에서 설치하기</a>
+        <button type="button" id="tester-save" style="width:100%;margin-top:9px;padding:14px;border:0;border-radius:12px;
+          background:${KEY};color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">설치했어요 · 계속</button>
+        <div id="tester-err" style="margin-top:9px;font-size:12px;color:#B91C1C"></div>`;
+      document.getElementById('tester-save').onclick = () => save({ platform: 'ios' });
+      return;
+    }
+
+    // 안드로이드 — 구글 계정 이메일을 받는다. 플레이 테스터 목록은 **이메일**로
+    // 등록되므로 전화번호로는 아무것도 못 한다.
+    box.innerHTML = `
+      <div style="margin-top:6px;background:#FFFBEB;border-radius:12px;padding:13px 14px;font-size:12.5px;color:#92400E;line-height:1.7">
+        안드로이드는 <b>구글 계정(지메일)</b>을 등록해야 설치할 수 있어요.<br>
+        폰의 <b>플레이스토어에 로그인된 계정</b>을 적어 주세요.
+        <span style="color:#B45309">학교 계정(@goedu.kr)은 안 됩니다.</span>
+      </div>
+      <input id="tester-gmail" type="email" inputmode="email" autocomplete="email"
+        placeholder="예: hong@gmail.com"
+        style="width:100%;margin-top:10px;padding:13px 14px;border:2px solid #E5E7EB;border-radius:12px;
+               font-size:15px;font-family:inherit;box-sizing:border-box">
+      ${cfg.playLink ? `<a href="${esc(cfg.playLink)}" target="_blank" rel="noopener"
+          style="display:block;margin-top:9px;padding:12px;border-radius:12px;background:#F3F4F6;color:#374151;
+                 text-align:center;font-size:13px;font-weight:700;text-decoration:none">등록을 마쳤다면 여기서 설치</a>` : ''}
+      <button type="button" id="tester-save" style="width:100%;margin-top:9px;padding:14px;border:0;border-radius:12px;
+        background:${KEY};color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">제출하기</button>
+      <div id="tester-err" style="margin-top:9px;font-size:12px;color:#B91C1C"></div>`;
+
+    const input = document.getElementById('tester-gmail');
+    input.oninput = () => { document.getElementById('tester-err').textContent = ''; };
+    document.getElementById('tester-save').onclick = () => {
+      const gmail = String(input.value || '').trim().toLowerCase();
+      const err = document.getElementById('tester-err');
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmail)) {
+        err.textContent = '이메일 형식을 확인해 주세요.'; return;
+      }
+      if (/@goedu\.kr$/i.test(gmail)) {
+        err.textContent = '학교 계정은 등록할 수 없어요. 개인 지메일을 적어 주세요.'; return;
+      }
+      save({ platform: 'android', gmail });
+    };
+  }
+
+  async function save(extra) {
+    if (S.busy) return;
+    S.busy = true;
+    const err = document.getElementById('tester-err');
+    const btn = document.getElementById('tester-save');
+    if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+    try {
+      const st = S.opt.student || {};
+      const now = new Date();
+      const p = n => String(n).padStart(2, '0');
+      await S.opt.fs.setDoc(
+        S.opt.fs.doc(S.opt.db, window._TESTER_COL,
+                     window._testerDocId(st, S.opt.role)),
+        Object.assign({
+          role: S.opt.role || 'student',
+          name: st.name || '',
+          seat: String(st.seat == null ? '' : st.seat),
+          uid: st.uid || '',
+          at: now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate()) +
+              ' ' + p(now.getHours()) + ':' + p(now.getMinutes())
+        }, extra),
+        { merge: true }
+      );
+      S.resp = extra;
+      document.getElementById('tester-gate')?.remove();
+    } catch (e) {
+      console.error('테스터 등록 저장 실패:', e);
+      if (err) err.textContent = '저장에 실패했어요. 잠시 후 다시 시도해 주세요.';
+      if (btn) { btn.disabled = false; btn.textContent = '제출하기'; }
+    } finally {
+      S.busy = false;
+    }
+  }
+
+  return { start, recheck, isBlocking };
+})();

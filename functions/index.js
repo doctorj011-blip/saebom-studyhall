@@ -375,6 +375,12 @@ async function acEvaluate(reason) {
   const stSnap = await ref.get();
   const zoneState = (stSnap.exists && stSnap.data().zones) || {};
   const out = {};
+  // 제어 성공분을 대시보드용 LG 스냅샷(devices[].state)에도 겹쳐 쓴다 — 틱이 refresh→evaluate
+  //   순서라 여기서 바꾼 전원·모드는 다음 refresh(최대 5분)까지 옛 스냅샷으로 남는다.
+  //   마감 직후 대시보드가 '가동중·송풍'으로 굳어 보이던 원인. 온도·풍량은 기기마다
+  //   응답 형태가 달라(배열/객체, windStrengthDetail) 건드리지 않고 refresh에 맡긴다.
+  const devPatch = {};
+  const _devMark = (id, p) => { devPatch[id] = Object.assign(devPatch[id] || {}, p); };
   // 마감 강제 OFF — lateHardOff 를 지나면 그 운영일에 '한 번' 모든 구역을 끈다.
   //   수동 보류(manualUntil)와 srAuto:false 를 무시한다 — 스터디룸을 켜 두고 퇴근하거나 마감 직전에
   //   대시보드를 만졌을 때 밤새 도는 것을 막는 최후 방어선이다.
@@ -404,6 +410,7 @@ async function acEvaluate(reason) {
         try {
           await acSetPower(cfg, deviceId, false);
           zs.on = false; zs.mode = null; zs.temp = null; zs.fan = null; zs.dryUntil = null; zs.error = null;
+          _devMark(deviceId, { operation: { airConOperationMode: 'POWER_OFF' } });
           logger.info('AC 건조 완료 → OFF', { deviceId, zone: z.name, reason });
         } catch (e) { logger.error('AC 건조 후 OFF 실패', { deviceId, err: e.message }); zs.error = e.message; }
       }
@@ -456,12 +463,13 @@ async function acEvaluate(reason) {
           if (cfg.dryOffMin > 0) {
             if (!zs.dryUntil) { zs.dryUntil = nowMs + cfg.dryOffMin * 60000; logger.info('AC 건조 시작', { deviceId, zone: z.name, minutes: cfg.dryOffMin, reason }); }
             if (nowMs < zs.dryUntil) {
-              if (zs.mode !== 'FAN') { await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: 'FAN' } }); zs.mode = 'FAN'; zs.temp = null; }
+              if (zs.mode !== 'FAN') { await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: 'FAN' } }); zs.mode = 'FAN'; zs.temp = null; _devMark(deviceId, { airConJobMode: { currentJobMode: 'FAN' } }); }
               zs.error = null; out[deviceId] = zs; continue;   // 건조 중 — 전원 차단은 다음 틱 이후
             }
           }
           await acSetPower(cfg, deviceId, false);
           zs.on = false; zs.mode = null; zs.temp = null; zs.fan = null; zs.dryUntil = null;
+          _devMark(deviceId, { operation: { airConOperationMode: 'POWER_OFF' } });
           logger.info('AC 자동 OFF', { deviceId, zone: z.name, occupied, reason });
         }
       } else {
@@ -470,9 +478,10 @@ async function acEvaluate(reason) {
         if (zs.on !== true) {   // 켜기: 전원 ON 후 잠깐 대기(반영) → 모드 → 온도 → 풍량
           await acSetPower(cfg, deviceId, true);
           zs.on = true; zs.lastOnTs = nowMs; changed = true;
+          _devMark(deviceId, { operation: { airConOperationMode: 'POWER_ON' } });
           await new Promise(r => setTimeout(r, 4000));
         }
-        if (zs.mode !== profile.mode) { try { await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: profile.mode } }); zs.mode = profile.mode; changed = true; } catch (e) { logger.warn('AC 모드 설정 보류', { deviceId, err: e.message }); } }
+        if (zs.mode !== profile.mode) { try { await acExecute(cfg, deviceId, { airConJobMode: { currentJobMode: profile.mode } }); zs.mode = profile.mode; changed = true; _devMark(deviceId, { airConJobMode: { currentJobMode: profile.mode } }); } catch (e) { logger.warn('AC 모드 설정 보류', { deviceId, err: e.message }); } }
         if (profile.temp != null && zs.temp !== profile.temp) { try { await acExecute(cfg, deviceId, { temperature: { targetTemperature: profile.temp } }); zs.temp = profile.temp; changed = true; } catch (e) { logger.warn('AC 온도 설정 보류', { deviceId, err: e.message }); } }
         if (profile.fan != null && zs.fan !== profile.fan) { try { await acExecute(cfg, deviceId, { airFlow: { windStrength: profile.fan } }); zs.fan = profile.fan; changed = true; } catch (e) { logger.warn('AC 풍량 설정 보류', { deviceId, err: e.message }); } }
         if (changed) logger.info('AC 자동 설정', { deviceId, zone: z.name, mode: zs.mode, temp: zs.temp, fan: zs.fan, count, reason });
@@ -485,6 +494,7 @@ async function acEvaluate(reason) {
     out[deviceId] = zs;
   }
   const payload = { zones: out, present: present.size, op, preOpen, auto: cfg.auto, updatedAt: now.toISOString() };
+  if (Object.keys(devPatch).length) payload.devices = Object.fromEntries(Object.entries(devPatch).map(([id, st]) => [id, { state: st }]));
   if (hardOffAll) { payload.hardOffDay = dayKey; logger.info('AC 마감 강제 OFF', { at: cfg.lateHardOff, zones: zoneIds.length, reason }); }
   await ref.set(payload, { merge: true });
 }
