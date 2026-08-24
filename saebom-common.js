@@ -801,17 +801,22 @@ window._testerGate = (function() {
       <div style="font-size:12.5px;color:#6B7280;margin-top:5px;line-height:1.6">
         ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}
       </div>
-      <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:11px 13px;font-size:12px;color:#065F46;line-height:1.7">
+      <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#065F46;line-height:1.75">
+        이용 편의를 위해 웹 페이지를 <b>새봄면학관 앱</b>으로 순차 전환합니다.<br>
         ${S.opt.role === 'parent'
-          ? '이제 면학관은 <b>앱</b>으로 안내드립니다. 자녀의 등·하원과 학습현황을 앱에서 보세요.<br><b>쓰시는 기기를 알려주시면 설치 방법을 안내해 드려요.</b>'
-          : '이제 면학관은 <b>앱</b>으로 이용합니다. 시간표·플래너·상벌점을 앱에서 보세요.<br><b>쓰는 기기를 알려주시면 설치 방법을 안내해 드려요.</b>'}
+          ? '자녀의 <b>등·하원 알림</b>과 학습현황·플래너 검사 결과를 앱에서 바로 받아보실 수 있어요.'
+          : '시간표·플래너·상벌점·순공시간·공지를 앱 한곳에서 볼 수 있어요.'}<br>
+        <b>${S.opt.role === 'parent' ? '쓰시는 기기를 알려주시면 설치 방법을 안내해 드립니다.' : '쓰는 기기를 알려주면 설치 방법을 안내해 줄게요.'}</b>
       </div>
       <div style="margin:16px 0 4px;font-size:13px;font-weight:800">${S.opt.role === 'parent' ? '어떤 폰을 쓰시나요?' : '어떤 폰을 쓰세요?'}</div>
       <div id="tester-opts" style="margin-top:9px">
         ${btn('android', '🤖', '안드로이드', '삼성·LG 등. 구글 계정이 필요해요')}
         ${btn('ios', '🍎', '아이폰', '앱스토어에서 바로 설치할 수 있어요')}
       </div>
-      <div id="tester-detail"></div>`;
+      <div id="tester-detail"></div>
+      <div style="margin-top:10px;font-size:11px;color:#9CA3AF;line-height:1.6;text-align:center">
+        스터디룸 신청 등 일부 기능은 당분간 웹 페이지를 함께 이용합니다 · 문의 031-273-0982
+      </div>`;
 
     card.querySelectorAll('[data-plat]').forEach(b => {
       b.onclick = () => { _platform = b.dataset.plat; render(); };
@@ -844,9 +849,11 @@ window._testerGate = (function() {
     // 등록되므로 전화번호로는 아무것도 못 한다.
     box.innerHTML = `
       <div style="margin-top:6px;background:#FFFBEB;border-radius:12px;padding:13px 14px;font-size:12.5px;color:#92400E;line-height:1.7">
-        안드로이드는 <b>구글 계정(지메일)</b>을 등록해야 설치할 수 있어요.<br>
+        안드로이드는 <b>구글 정책상</b> 출시 전 사전 등록 절차가 있어,
+        면학관이 <b>구글 계정(지메일)</b>을 미리 등록해 드려야 설치할 수 있어요.<br>
         폰의 <b>플레이스토어에 로그인된 계정</b>을 적어 주세요.
-        <span style="color:#B45309">학교 계정(@goedu.kr)은 안 됩니다.</span>
+        등록이 끝나면 설치 안내가 이 화면으로 다시 와요.<br>
+        <span style="color:#B45309">학교 계정(@goedu.kr)은 등록되지 않아요 — 개인 지메일로 부탁해요.</span>
       </div>
       <input id="tester-gmail" type="email" inputmode="email" autocomplete="email"
         placeholder="예: hong@gmail.com"
