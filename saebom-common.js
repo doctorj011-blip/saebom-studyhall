@@ -874,8 +874,17 @@ window._testerGate = (function() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmail)) {
         err.textContent = '이메일 형식을 확인해 주세요.'; return;
       }
-      if (/@goedu\.kr$/i.test(gmail)) {
-        err.textContent = '학교 계정은 등록할 수 없어요. 개인 지메일을 적어 주세요.'; return;
+      // ⚠️ **구글 계정만 등록된다.** 플레이 테스터 명단은 구글 계정 기준이라
+      // 한메일·네이버 주소를 넣으면 콘솔에서 거부되거나 등록돼도 무효다
+      // (2026-08-24 실제로 hanmail·naver 2건이 들어와 걸러내야 했다).
+      // 회사·학교 도메인의 구글 워크스페이스 계정도 폰 플레이스토어에
+      // 로그인돼 있지 않으면 무용지물이라 gmail.com 만 받는다.
+      if (!/@gmail\.com$/i.test(gmail)) {
+        const host = gmail.split('@')[1] || '';
+        err.innerHTML = /naver|hanmail|daum|kakao|nate/i.test(host)
+          ? '플레이스토어는 <b>구글 계정</b>만 사용해요.<br>@gmail.com 으로 끝나는 주소를 적어 주세요.'
+          : '@gmail.com 으로 끝나는 <b>구글 계정</b>을 적어 주세요.<br>폰의 플레이스토어에 로그인된 계정이에요.';
+        return;
       }
       save({ platform: 'android', gmail });
     };
