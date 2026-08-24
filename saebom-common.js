@@ -850,13 +850,20 @@ window._testerGate = (function() {
     box.innerHTML = `
       <div style="margin-top:6px;background:#FFFBEB;border-radius:12px;padding:13px 14px;font-size:12.5px;color:#92400E;line-height:1.7">
         안드로이드는 <b>구글 정책상</b> 출시 전 사전 등록 절차가 있어,
-        면학관이 <b>구글 계정(지메일)</b>을 미리 등록해 드려야 설치할 수 있어요.<br>
-        폰의 <b>플레이스토어에 로그인된 계정</b>을 적어 주세요.
-        등록이 끝나면 설치 안내가 이 화면으로 다시 와요.<br>
-        <span style="color:#B45309">학교 계정(@goedu.kr)은 등록되지 않아요 — 개인 지메일로 부탁해요.</span>
+        면학관이 <b>구글 계정</b>을 미리 등록해 드려야 설치할 수 있어요.<br>
+        등록이 끝나면 설치 안내가 이 화면으로 다시 와요.
+      </div>
+      <div style="margin-top:8px;background:#EFF6FF;border-radius:12px;padding:12px 14px;font-size:12.5px;color:#1D4ED8;line-height:1.75">
+        <b>내 계정 확인하는 법</b><br>
+        폰에서 <b>플레이스토어</b> 앱 열기 → 오른쪽 위 <b>동그란 프로필</b> 누르기
+        → 이름 아래 보이는 <b>그 주소</b>를 그대로 적어 주세요.
+        <div style="margin-top:7px;color:#B91C1C">
+          ⚠️ 실제로 <b>폰에 로그인돼 있는 계정</b>이어야 해요.
+          쓰지 않는 주소를 지어서 적으면 설치가 안 됩니다.
+        </div>
       </div>
       <input id="tester-gmail" type="email" inputmode="email" autocomplete="email"
-        placeholder="예: hong@gmail.com"
+        placeholder="플레이스토어에 로그인된 주소"
         style="width:100%;margin-top:10px;padding:13px 14px;border:2px solid #E5E7EB;border-radius:12px;
                font-size:15px;font-family:inherit;box-sizing:border-box">
       ${cfg.playLink ? `<a href="${esc(cfg.playLink)}" target="_blank" rel="noopener"
