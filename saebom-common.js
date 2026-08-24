@@ -697,7 +697,14 @@ window._testerGate = (function() {
       console.warn('테스터 등록 확인 실패:', e);
       return 'error';                       // 이미 떠 있는 게이트를 내리지 않는다
     }
-    return S.resp ? 'pass' : 'block';
+    if (!S.resp) return 'block';
+    // 2단계 — 지메일을 낸 안드로이드 학생에게 옵트인 링크가 준비되면 설치까지
+    // 확인한다. 여기서 통과시켜 버리면 링크를 영영 못 본다(등록만 하고 설치를
+    // 안 하면 구글 테스터 수에 안 잡혀서 게이트의 목적 자체가 무산된다).
+    if (S.resp.platform === 'android' && S.cfg.playLink && S.resp.installed !== true) {
+      return 'block';
+    }
+    return 'pass';
   }
 
   function isBlocking() {
@@ -754,6 +761,27 @@ window._testerGate = (function() {
     const st = S.opt.student || {};
     const cfg = S.cfg;
 
+    // 2단계 — 이미 지메일을 낸 학생. 링크가 열렸으니 설치만 확인한다.
+    if (S.resp && S.resp.platform === 'android' && cfg.playLink && S.resp.installed !== true) {
+      card.innerHTML = `
+        <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">📱 앱을 설치해 주세요</div>
+        <div style="font-size:12.5px;color:#6B7280;margin-top:5px;line-height:1.6">
+          ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}</div>
+        <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:11px 13px;font-size:12px;color:#065F46;line-height:1.7">
+          등록해 주신 <b>${esc(S.resp.gmail || '구글 계정')}</b>으로 설치 준비가 끝났어요.<br>
+          ① 아래 버튼에서 <b>테스터 참여 수락</b> → ② 플레이스토어에서 설치 → ③ '설치했어요'
+        </div>
+        <a href="${esc(cfg.playLink)}" target="_blank" rel="noopener"
+           style="display:block;margin-top:12px;padding:13px;border-radius:12px;background:${KEY};color:#fff;
+                  text-align:center;font-size:14px;font-weight:800;text-decoration:none">테스터 참여하고 설치하기</a>
+        <button type="button" id="tester-save" style="width:100%;margin-top:9px;padding:14px;border:2px solid ${KEY};border-radius:12px;
+          background:#fff;color:${KEY};font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">설치했어요 · 계속</button>
+        <div id="tester-err" style="margin-top:9px;font-size:12px;color:#B91C1C"></div>`;
+      document.getElementById('tester-save').onclick = () =>
+        save(Object.assign({}, S.resp, { installed: true }));
+      return;
+    }
+
     const btn = (val, emoji, title, desc) => {
       const on = _platform === val;
       return `<button type="button" data-plat="${val}" style="width:100%;text-align:left;display:flex;gap:11px;align-items:flex-start;
@@ -807,7 +835,8 @@ window._testerGate = (function() {
         <button type="button" id="tester-save" style="width:100%;margin-top:9px;padding:14px;border:0;border-radius:12px;
           background:${KEY};color:#fff;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">설치했어요 · 계속</button>
         <div id="tester-err" style="margin-top:9px;font-size:12px;color:#B91C1C"></div>`;
-      document.getElementById('tester-save').onclick = () => save({ platform: 'ios' });
+      document.getElementById('tester-save').onclick = () =>
+        save({ platform: 'ios', installed: true });
       return;
     }
 
