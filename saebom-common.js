@@ -698,10 +698,15 @@ window._testerGate = (function() {
       return 'error';                       // 이미 떠 있는 게이트를 내리지 않는다
     }
     if (!S.resp) return 'block';
-    // 2단계 — 지메일을 낸 안드로이드 학생에게 옵트인 링크가 준비되면 설치까지
-    // 확인한다. 여기서 통과시켜 버리면 링크를 영영 못 본다(등록만 하고 설치를
-    // 안 하면 구글 테스터 수에 안 잡혀서 게이트의 목적 자체가 무산된다).
-    if (S.resp.platform === 'android' && S.cfg.playLink && S.resp.installed !== true) {
+    // 2단계 — 지메일을 낸 안드로이드 학생에게 옵트인 링크가 준비되면 '테스터
+    // 되기'까지 확인한다. 여기서 통과시켜 버리면 링크를 영영 못 본다.
+    //
+    // 판정 기준이 installed 에서 optin 으로 바뀐 이유(2026-08-25) — 구글이 세는
+    // 것은 **참여를 선택한 테스터 수**지 설치 수가 아니다. 콘솔 4명 : 게이트
+    // 자가신고 10명 : 실제 앱 토큰 3명으로 갈렸다. 설치까지 요구하니 부담이
+    // 커져 '설치했어요'만 누르고 넘어간 것이다. 요구를 옵트인 하나로 낮추고,
+    // installed 는 그 뒤 실사용을 끌어올릴 때 쓴다(자가신고라 그대로는 못 믿는다).
+    if (S.resp.platform === 'android' && S.cfg.playLink && S.resp.optin !== true) {
       return 'block';
     }
     return 'pass';
@@ -761,24 +766,36 @@ window._testerGate = (function() {
     const st = S.opt.student || {};
     const cfg = S.cfg;
 
-    // 2단계 — 이미 지메일을 낸 학생. 링크가 열렸으니 설치만 확인한다.
-    if (S.resp && S.resp.platform === 'android' && cfg.playLink && S.resp.installed !== true) {
+    // 2단계 — 이미 지메일을 낸 학생. 링크가 열렸으니 '테스터 되기'만 확인한다.
+    // 설치는 여기서 요구하지 않는다(load() 의 주석 참고) — 요구가 하나로 줄면
+    // 실제로 누르는 사람이 는다. 설치 권유는 회색 글씨로만 남긴다.
+    if (S.resp && S.resp.platform === 'android' && cfg.playLink && S.resp.optin !== true) {
+      const p = S.opt.role === 'parent';
       card.innerHTML = `
-        <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">📱 앱을 설치해 주세요</div>
+        <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">👆 버튼 하나만 눌러 주세요</div>
         <div style="font-size:12.5px;color:#6B7280;margin-top:5px;line-height:1.6">
-          ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}</div>
-        <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:11px 13px;font-size:12px;color:#065F46;line-height:1.7">
-          등록해 주신 <b>${esc(S.resp.gmail || '구글 계정')}</b>으로 설치 준비가 끝났어요.<br>
-          ① 아래 버튼에서 <b>테스터 참여 수락</b> → ② 플레이스토어에서 설치 → ③ '설치했어요'
+          ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''} · 30초면 끝나요</div>
+        <div style="margin-top:12px;background:#ECFDF5;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#065F46;line-height:1.75">
+          새봄 앱을 <b>정식 출시</b>하려면 구글이 <b>테스터 12명</b>을 ${p ? '요구합니다' : '요구해요'}.<br>
+          ${p ? '지금 필요한 건 <b>딱 하나</b>입니다 — 아래 버튼을 누르면 열리는 페이지에서 <b>‘테스터 되기’</b>를 누르시는 것뿐입니다.'
+              : '지금 필요한 건 <b>딱 하나</b>예요 — 아래 버튼을 누르면 열리는 페이지에서 <b>‘테스터 되기’</b>를 누르면 끝이에요.'}<br>
+          <b>${p ? '설치는 나중에 하셔도 됩니다.' : '설치는 나중에 해도 돼요.'}</b>
+        </div>
+        <div style="margin-top:9px;background:#F9FAFB;border-radius:10px;padding:10px 13px;font-size:11.5px;color:#4B5563;line-height:1.65">
+          등록해 ${p ? '주신' : '준'} <b>${esc(S.resp.gmail || '구글 계정')}</b>으로 준비돼 ${p ? '있습니다' : '있어요'}.
+          폰 <b>플레이스토어가 이 계정으로 로그인</b>돼 있어야 ${p ? '합니다' : '해요'}.
         </div>
         <a href="${esc(cfg.playLink)}" target="_blank" rel="noopener"
            style="display:block;margin-top:12px;padding:13px;border-radius:12px;background:${KEY};color:#fff;
-                  text-align:center;font-size:14px;font-weight:800;text-decoration:none">테스터 참여하고 설치하기</a>
+                  text-align:center;font-size:15px;font-weight:800;text-decoration:none">‘테스터 되기’ 페이지 열기</a>
         <button type="button" id="tester-save" style="width:100%;margin-top:9px;padding:14px;border:2px solid ${KEY};border-radius:12px;
-          background:#fff;color:${KEY};font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">설치했어요 · 계속</button>
+          background:#fff;color:${KEY};font-size:15px;font-weight:800;cursor:pointer;font-family:inherit">눌렀어요 · 계속</button>
+        <div style="margin-top:10px;font-size:11px;color:#9CA3AF;line-height:1.6">
+          이어서 <b>앱 설치</b>까지 ${p ? '해 주시면' : '해 주면'} 가장 큰 ${p ? '도움이 됩니다' : '도움이 돼요'} — 같은 페이지에 내려받기 링크가 있어요.
+        </div>
         <div id="tester-err" style="margin-top:9px;font-size:12px;color:#B91C1C"></div>`;
       document.getElementById('tester-save').onclick = () =>
-        save(Object.assign({}, S.resp, { installed: true }));
+        save(Object.assign({}, S.resp, { optin: true }));
       return;
     }
 
