@@ -2151,6 +2151,40 @@ exports.gatewayLogs = onRequest(
   }
 );
 
+// ── 기기 감사 로그 (스케줄 무단변경 조사) ──────────────────────────────────
+// 학생앱 로그인·저장 시점의 기기ID(localStorage UUID)·IP·User-Agent 를 남긴다.
+// 목적: 누군가 남의 뒷4자리로 로그인해 스케줄을 조작하는 사건(2026-08 김태현 6번)의
+//   범인 특정. Firestore 규칙 대부분이 'if true'라 IP 같은 민감정보를 문서로 쌓으면
+//   미인증 REST 로 전교생 IP 가 새므로, 일부러 DB 에 안 쓰고 Cloud Logging 에만 남긴다.
+// 조회: firebase functions:log --only deviceAudit -n 400 --project saebom-studyhall
+//   같은 deviceId 가 서로 다른 학생 이름으로 로그인/저장했으면 그 기기가 범인이다.
+// 학생앱에 어떤 에러도 노출하지 않는다(항상 200) — 감사 중임을 눈치채지 못하게.
+exports.deviceAudit = onRequest(
+  {
+    region: 'us-central1',
+    cors: ['https://saebom-studyhall.web.app', 'https://doctorj011-blip.github.io', 'http://localhost:8961', 'http://127.0.0.1:8961'],
+    maxInstances: 5
+  },
+  async (req, res) => {
+    try {
+      const b = (req.body && typeof req.body === 'object') ? req.body : {};
+      // Cloud Run(2세대 함수)은 클라이언트 IP 를 x-forwarded-for 맨 앞에 넣는다.
+      const fwd = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+      logger.info('[DeviceAudit]', {
+        event: String(b.event || '').slice(0, 24),
+        name:  String(b.name  || '').slice(0, 40),
+        seat:  String(b.seat  || '').slice(0, 8),
+        deviceId: String(b.deviceId || '').slice(0, 64),
+        ip: fwd,
+        ua: String(req.headers['user-agent'] || '').slice(0, 300)
+      });
+    } catch (e) {
+      // 조사용 로깅이 학생앱 동작을 절대 방해하면 안 되므로 조용히 삼킨다.
+    }
+    res.status(200).json({ ok: true });
+  }
+);
+
 // ── 하루치 스냅샷 ────────────────────────────────────────────────────────
 // Cloudflare 무료 플랜은 로그를 24시간만 보관한다. 매일 밤 그날 집계를 우리
 // Firestore(net_daily/{YYYY-MM-DD})에 남겨 장기 추이를 볼 수 있게 한다.

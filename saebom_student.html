@@ -125,6 +125,44 @@ console.log('%c 학생앱 v2026-06-26 02:36 ', 'background:#E6E2F9;color:#fff;fo
     }).catch(function(){});
   };
 })();
+
+// ── 기기 감사 (스케줄 무단변경 조사 · 2026-08) ──────────────────────────
+// 남의 뒷4자리로 로그인해 남 스케줄을 조작하는 범인을 특정하기 위한 임시 로깅.
+// 기기마다 한 번 만든 UUID(localStorage)를 로그인·저장 때 서버로 보낸다. 서버는
+// 이 값을 Firestore 가 아니라 Cloud Logging(deviceAudit)에만 남긴다 — DB 규칙이
+// 대부분 'if true'라 문서로 쌓으면 기기ID·IP가 미인증 REST 로 새기 때문.
+// 같은 deviceId 가 여러 학생 이름으로 찍히면 그 기기가 범인이다.
+// ★조사 종료 후 이 블록과 각 호출부(saAudit)를 제거할 것.
+(function(){
+  var KEY = 'saebom_device_id';
+  function deviceId(){
+    try {
+      var v = localStorage.getItem(KEY);
+      if (!v) {
+        v = (crypto && crypto.randomUUID) ? crypto.randomUUID()
+            : (Date.now().toString(36) + Math.random().toString(36).slice(2));
+        localStorage.setItem(KEY, v);
+      }
+      return v;
+    } catch(e) { return 'no-storage'; }
+  }
+  window.saAudit = function(event){
+    try {
+      var name = '', seat = '';
+      try {
+        if (typeof currentStudent !== 'undefined' && currentStudent) {
+          name = currentStudent.name || '';
+          seat = currentStudent.seat != null ? String(currentStudent.seat) : '';
+        }
+      } catch(e) {}
+      var url = 'https://us-central1-saebom-studyhall.cloudfunctions.net/deviceAudit';
+      var payload = JSON.stringify({ event: event, name: name, seat: seat, deviceId: deviceId() });
+      // 실패해도 앱 동작에 영향이 없어야 하므로 조용히 흘려보낸다.
+      fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:payload, keepalive:true }).catch(function(){});
+    } catch(e) {}
+  };
+})();
+
 window.dispatchEvent(new Event('firebase-ready'));
 </script>
 <style>
@@ -2482,6 +2520,7 @@ function loginAsStudent(s) {
   // 통계 — 새로고침 복원(restoreSession)은 이 경로를 타지 않으므로 '진짜 로그인'만 잡힌다.
   // 학생을 특정할 수 있는 값은 넣지 않는다.
   if (window.saTrack) saTrack('login_success', { app_name: '학생앱' });
+  if (window.saAudit) saAudit('login');
   // 새로고침 후 자동 로그인을 위해 저장
   try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
   initDraft();
@@ -3708,6 +3747,7 @@ async function saveSchedule() {
 
 async function saveToFirebase() {
   if (!window._firebaseReady) return false;
+  if (window.saAudit) saAudit('save');
   try {
     const db = window._db;
     const seatKey = currentStudent.seat.replace(/[^0-9]/g, '') || currentStudent.seat;
@@ -5546,6 +5586,7 @@ document.addEventListener('visibilitychange', function() {
     const saved = sessionStorage.getItem('saebom_student');
     if (!saved) { document.getElementById('login-screen').style.display='flex'; return; }
     currentStudent = JSON.parse(saved);
+    if (window.saAudit) saAudit('restore');
     document.getElementById('login-screen').style.display='none';
     initDraft();
     // Firebase 준비 후 enterApp
