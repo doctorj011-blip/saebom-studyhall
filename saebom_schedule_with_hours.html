@@ -20657,6 +20657,10 @@ document.addEventListener('DOMContentLoaded', function() {
     inputBg:'#fff', onBg:'#DCFCE7', onTx:'#15803D', offBg:'#F3F4F6', offTx:'#9CA3AF', warn:'#B45309', err:'#DC2626' };
 
   let STATE = {}, CONF = {}, showHidden = false;
+  // 낙관적 반영 — 버튼을 누르면 서버 왕복(함수 트리거→LG API→ac_state 갱신)을 기다리지 않고
+  // 예상 결과를 즉시 그린다. 기기별로 { power/target/mode/fan/dryUntil, inflight, until }.
+  // 실패(명령 문서에 error)나 30초 시간초과면 걷어내고 실제 상태로 되돌린다.
+  const PENDING = {};
 
   function parseState(st){
     const s = st||{}, op = s.operation||{}, j = s.airConJobMode||{}, f = s.airFlow||{};
@@ -20675,7 +20679,30 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   const clampT = v => Math.round(v*2)/2;
 
-  async function cmd(obj){ try{ await fs.addDoc(fs.collection(db,'ac_commands'), Object.assign({ ts:Date.now(), createdAt: fs.serverTimestamp() }, obj)); }catch(e){ alert('명령 전송 실패: '+e.message); } }
+  function optimistic(id, patch){
+    const p = PENDING[id] || (PENDING[id] = { inflight: 0 });
+    Object.assign(p, patch);
+    p.until = Date.now() + 30000;
+    clearTimeout(p.timer);
+    p.timer = setTimeout(() => { if (PENDING[id] === p) { delete PENDING[id]; render(); } }, 30000);
+    render();
+  }
+  async function cmd(obj, optId){
+    let ref;
+    try { ref = await fs.addDoc(fs.collection(db,'ac_commands'), Object.assign({ ts:Date.now(), createdAt: fs.serverTimestamp() }, obj)); }
+    catch(e){ if (optId && PENDING[optId]) { delete PENDING[optId]; render(); } alert('명령 전송 실패: '+e.message); return; }
+    const p = optId && PENDING[optId]; if (!p) return;
+    p.inflight++;
+    // 서버가 명령 문서에 done/error 를 되쓴다. done 직전에 실제 상태(ac_state)를 새로 써 두므로,
+    // 그 스냅샷이 도착할 짬(2초)을 주고 낙관값을 걷어낸다. error 면 즉시 되돌리고 알린다.
+    const unsub = fs.onSnapshot(ref, s => {
+      const d = s.data() || {};
+      if (!d.done && !d.error) return;
+      unsub(); p.inflight--;
+      if (d.error) { if (PENDING[optId] === p) { delete PENDING[optId]; render(); } alert('에어컨 명령 실패: ' + d.error); return; }
+      if (p.inflight <= 0) setTimeout(() => { if (PENDING[optId] === p && p.inflight <= 0) { delete PENDING[optId]; render(); } }, 2000);
+    }, () => {});
+  }
   async function saveConf(patch){ try{ await fs.setDoc(fs.doc(db,'ac_config','main'), patch, { merge:true }); }catch(e){ alert('설정 저장 실패: '+e.message); } }
 
   const seg = (list, cur, id, kind) => `<div style="display:flex;flex-wrap:nowrap;gap:3px;max-width:100%;overflow-x:auto">` + list.map(v => {
@@ -20690,9 +20717,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const zs = ((STATE.zones||{})[id]) || {};
     const p = parseState(dev.state);
     const c = caps(dev.profile);
+    const pend = (PENDING[id] && PENDING[id].until > Date.now()) ? PENDING[id] : null;
+    if (pend) ['power','target','mode','fan'].forEach(k => { if (pend[k] !== undefined) p[k] = pend[k]; });
     const held = zs.manualUntil && zs.manualUntil > Date.now();
     const occ = zs.occupied;
-    const dryLeft = zs.dryUntil && zs.dryUntil > Date.now() ? Math.ceil((zs.dryUntil - Date.now())/60000) : 0;   // 끄기 전 송풍 건조 남은 시간
+    const dryUntil = (pend && 'dryUntil' in pend) ? pend.dryUntil : zs.dryUntil;
+    const dryLeft = dryUntil && dryUntil > Date.now() ? Math.ceil((dryUntil - Date.now())/60000) : 0;   // 끄기 전 송풍 건조 남은 시간
     const canT = p.target != null;
     return `<div style="border:1px solid ${p.power?'#BBF7D0':C.line};background:${p.power?'#F7FEF9':'#fff'};border-radius:10px;padding:10px 11px;min-width:240px;flex:1 1 240px;max-width:310px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:7px">
@@ -20707,6 +20737,7 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>
       <div style="display:flex;align-items:center;gap:5px;margin:2px 0 8px">
         <span style="font-size:10px;padding:2px 7px;border-radius:6px;background:${occ?C.onBg:C.offBg};color:${occ?C.onTx:C.offTx};font-weight:700">${occ?'사용 중':'비어 있음'}</span>
+        ${pend?`<span title="화면에는 먼저 반영했고, 에어컨에는 지금 전달하는 중입니다" style="font-size:10px;color:${C.muted}">⏳ 적용 중</span>`:''}
         ${dryLeft?`<span title="끄기 전 코일 건조 중 — 끝나면 자동으로 전원이 내려갑니다" style="font-size:10px;color:${C.accent};font-weight:700">🌬 건조중 ${dryLeft}분</span>`:''}
         ${held?`<span style="font-size:10px;color:${C.warn}">🖐 수동 보류</span>`:''}
         ${dev.error?`<span style="font-size:10px;color:${C.err}">${esc(dev.error)}</span>`:''}
@@ -20798,10 +20829,24 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   window.__ac = {
-    power:(id,on)=>cmd({ deviceId:id, command:'power', value:(on===true||on==='true') }),
-    temp:(id,v)=>cmd({ deviceId:id, command:'temp', value:Number(v) }),
-    mode:(id,v)=>cmd({ deviceId:id, command:'mode', value:v }),
-    fan:(id,v)=>cmd({ deviceId:id, body:{ airFlow:{ windStrengthDetail: v } } }),   // 미약풍(SLOW_LOW) 포함 세밀 제어
+    power:(id,on)=>{
+      on = (on===true||on==='true');
+      const cur = parseState(((STATE.devices||{})[id]||{}).state);
+      const zs = (STATE.zones||{})[id] || {};
+      const dryMin = CONF.dryOffMin != null ? CONF.dryOffMin : 15;
+      if (!on && cur.power && dryMin > 0) {
+        // 서버는 바로 끄지 않고 송풍 건조로 넘긴다 — 낙관 표시도 그 결과(가동중·건조중)를 그대로 그린다
+        optimistic(id, { power:true, mode:'FAN', dryUntil: Date.now() + dryMin*60000 });
+      } else if (on) {
+        optimistic(id, Object.assign({ power:true, dryUntil:null }, zs.dryUntil ? { mode: CONF.onMode || 'COOL' } : {}));
+      } else {
+        optimistic(id, { power:false, dryUntil:null });
+      }
+      cmd({ deviceId:id, command:'power', value:on }, id);
+    },
+    temp:(id,v)=>{ optimistic(id, { target:Number(v), dryUntil:null }); cmd({ deviceId:id, command:'temp', value:Number(v) }, id); },
+    mode:(id,v)=>{ optimistic(id, { mode:v, dryUntil:null }); cmd({ deviceId:id, command:'mode', value:v }, id); },
+    fan:(id,v)=>{ optimistic(id, { fan:v, dryUntil:null }); cmd({ deviceId:id, body:{ airFlow:{ windStrengthDetail: v } } }, id); },   // 미약풍(SLOW_LOW) 포함 세밀 제어
     search:()=>cmd({ action:'list' }),
     refresh:()=>cmd({ action:'refresh' }),
     toggleAuto:()=>saveConf({ auto: !(CONF.auto!==false) }),
