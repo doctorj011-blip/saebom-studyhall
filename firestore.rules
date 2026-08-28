@@ -72,7 +72,10 @@ rules_version = '2';
 //                 summary 를 연 것과 같은 이유다 — 최근 3건의 코멘트가 다음 검사
 //                 프롬프트로 들어가므로(plannerAiHistory) 틀린 코멘트를 두면 며칠치가
 //                 오염된다. quality·stats 는 여전히 서버 전용
-//   - 2026-08-17  usage_surveys 추가 — 월별 이용 조사(9월 희망/비희망). 학생앱·학부모앱
+//   - 2026-08-28  usage_surveys 를 매달 도는 조사로 바꿨다 — **규칙은 그대로다**(배포 불필요).
+//                 _config 에 startedAt·history[] 가 늘었지만 검사 항목은 surveyId·active 뿐이고,
+//                 회차 구분은 응답 문서 ID 접두사(surveyId__)라 컬렉션 모양이 안 바뀐다.
+//   - 2026-08-17  usage_surveys 추가 — 월별 이용 조사(첫 회차는 9월 희망/비희망). 학생앱·학부모앱
 //                 로그인 게이트가 쓰고 관리앱이 집계한다. 설정 문서를 settings 가 아니라
 //                 같은 컬렉션의 _config 에 둔 건 settings read 화이트리스트를 안 건드리려는 것.
 //                 delete 는 막았다(응답 소실 = 미응답과 구분 불가)

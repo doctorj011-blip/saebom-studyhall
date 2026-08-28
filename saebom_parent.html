@@ -1180,7 +1180,7 @@ function _pMineOnly(docs) {
   return window._onlyMine(docs, currentStudent);
 }
 
-// ── 9월 이용 조사 게이트 ──
+// ── 월별 이용 조사 게이트 ── (문구·기간은 usage_surveys/_config 의 surveyId 에서 나온다)
 // 화면과 규칙은 saebom-common.js 한 곳에 있다(학생앱과 같은 화면). 여기서는 어댑터만 넘긴다.
 // 설정 문서(usage_surveys/_config)가 없거나 active 가 아니면 아무것도 뜨지 않는다.
 // 새로고침 복원 경로는 Firebase 모듈보다 먼저 도니(module 은 defer), 다른 로더와 같은

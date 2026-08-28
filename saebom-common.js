@@ -43,34 +43,88 @@ window._computeOffset = function(M, P) {
 };
 
 // ══════════════════════════════════════════════════════════════════
-// 월별 이용 조사 (9월 사용 희망/비희망) — 3앱 공통 로직
+// 월별 이용 조사 (다음 달 이용 희망/비희망) — 3앱 공통 로직
 // ══════════════════════════════════════════════════════════════════
 // 학생앱·학부모앱은 로그인 직후 이 조사를 전면으로 띄우고, 응답 전에는 앱을 쓸 수 없다.
 // 컬렉션은 usage_surveys 하나이고 설정 문서도 그 안에 둔다(_config) — settings 컬렉션은
 // read 화이트리스트라 문서를 새로 만들 때마다 규칙을 고쳐야 하기 때문(school_calendars 선례).
 //
-//   usage_surveys/_config                  설정 1개
+//   usage_surveys/_config                  설정 1개 (현재 회차 + 지난 회차 요약 history[])
 //   usage_surveys/{surveyId}__{학생키}      응답 1인 1개
 //
 // ⚠️ 기본값은 active:false 다. 설정 문서가 없으면 게이트는 뜨지 않는다 —
 //    배포하는 순간 전교생이 막히는 사고를 막으려고 일부러 이렇게 뒀다.
 //    관리자앱 '이용조사' 탭의 [조사 시작] 이 이 문서를 만든다.
+//
+// ── 매달 반복(2026-08-28) ──
+// 원래는 2026-09 한 회차만 상정하고 화면 문구에 '9월'·'8월'을 박아 뒀었다. 지금은
+// **문구를 전부 surveyId('YYYY-MM') 에서 뽑는다** — 조사 ID 만 바꾸면 10월·11월 조사가 된다.
+// 회차 구분은 응답 문서 ID 접두사(surveyId__)라서 지난 회차 응답은 그대로 남는다.
+// 설정 문서는 하나를 계속 덮어쓰므로, 새 회차를 열 때 **회차별 상태(finalizedAt)를 반드시
+// 비운다** — 안 그러면 9월에 누른 [할인 확정] 도장이 10월 조사에 그대로 찍혀 보인다.
+// 관리앱의 [다음 달 조사] 가 이 초기화와 이월(단가·상한·제외 명단)을 한 번에 한다.
 window._SURVEY_COL = 'usage_surveys';
 window._SURVEY_CONFIG_ID = '_config';
 
+// ── 조사 ID('YYYY-MM') 유틸 ──
+// 화면 문구·기본값이 전부 여기서 나온다. 조사 대상은 '그 달'이고, 조사는 그 전달에 돈다.
+window._surveyYM = function(sid) {
+  const m = String(sid == null ? '' : sid).match(/^(\d{4})-(\d{2})$/);
+  if (!m) return null;
+  const mm = +m[2];
+  return (mm >= 1 && mm <= 12) ? { y: +m[1], m: mm } : null;
+};
+// 'YYYY-MM' 에서 delta 개월 이동. 연 넘김은 Date 에 맡긴다.
+window._surveyShiftId = function(sid, delta) {
+  const ym = window._surveyYM(sid);
+  if (!ym) return '';
+  const d = new Date(ym.y, ym.m - 1 + (Number(delta) || 0), 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+};
+window._surveyMonthLabel = function(sid) {
+  const ym = window._surveyYM(sid);
+  return ym ? (ym.m + '월') : '다음 달';
+};
+window._surveyTitleFor = function(sid) {
+  const ym = window._surveyYM(sid);
+  return (ym ? ym.m + '월 ' : '') + '면학관 이용 조사';
+};
+// 오늘 기준 '다음 달' 조사 ID — 관리앱이 새 회차의 기본값으로 쓴다.
+window._surveyNextId = function(ref) {
+  const d = (ref && typeof ref.getFullYear === 'function') ? ref : new Date();  // instanceof 는 realm 이 다르면 새므로 덕타이핑
+  const n = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
+};
+// 회수 마감 기본값 — 조사 대상 달의 '전달 20일 23:59'(9월 조사를 8/20 에 마감한 전례).
+window._surveyDefaultCloseAt = function(sid) {
+  const prev = window._surveyShiftId(sid, -1);
+  return prev ? (prev + '-20T23:59') : '';
+};
+// 'YYYY-MM-DD' → 'M월 D일'. 상벌점 주기 끝(= 할인 확정 기준일) 표시용.
+window._surveyDateLabel = function(iso) {
+  const m = String(iso == null ? '' : iso).match(/^\d{4}-(\d{2})-(\d{2})$/);
+  return m ? (+m[1] + '월 ' + +m[2] + '일') : String(iso || '');
+};
+
+// 기본값도 달을 박지 않는다 — 설정 문서에 없는 값은 '오늘 기준 다음 달' 조사로 채운다.
 window._surveyConfig = function(raw) {
   const d = raw || {};
   const num = (v, def) => (v == null || isNaN(Number(v))) ? def : Number(v);
+  const sid = String(d.surveyId || window._surveyNextId());
   return {
-    surveyId:  String(d.surveyId || '2026-09'),
-    title:     String(d.title || '9월 면학관 이용 조사'),
-    closeAt:   String(d.closeAt || '2026-08-20T23:59'),   // 로컬(KST) 'YYYY-MM-DDTHH:mm'
+    surveyId:  sid,
+    title:     String(d.title || window._surveyTitleFor(sid)),
+    closeAt:   String(d.closeAt || window._surveyDefaultCloseAt(sid)),   // 로컬(KST) 'YYYY-MM-DDTHH:mm'
     active:    d.active === true,
     meritWon:  num(d.meritWon, 1000),   // 잔여 상점 1점당 할인액
     meritCap:  num(d.meritCap, 20000),  // 할인 상한(0이면 무제한)
     blockAfterClose: d.blockAfterClose === true,  // 마감 후에도 막을지(기본은 통과+배너)
     exclude: Array.isArray(d.exclude) ? d.exclude.map(String) : [],  // 조사 대상에서 뺄 학생 이름
-    finalizedAt: d.finalizedAt || null
+    // ↓ 회차별 상태. 새 회차를 열 때 반드시 비운다(관리앱 usNext 참조).
+    finalizedAt: d.finalizedAt || null,
+    startedAt: d.startedAt || null,
+    // 지난 회차 요약(최신이 뒤). 응답 문서는 surveyId 접두사로 남아 있고 이건 목록·열람용이다.
+    history: Array.isArray(d.history) ? d.history : []
   };
 };
 
@@ -85,15 +139,31 @@ window._surveyIsReviewAccount = function(student) {
   return String(student.seat == null ? '' : student.seat).replace(/[^0-9]/g, '') === '9999';
 };
 
+// 관리자석(54~63)은 조사 대상이 아니다.
+// 2026-09 조사에서는 이 9명을 설정의 exclude 에 **이름으로** 적어 넣었는데, 이름 목록은
+// 회차마다 다시 적어야 하고 한 번 잊으면 조교·원장이 게이트에 갇힌다. 매달 도는 조사로
+// 바꾸면서 좌석 규칙으로 옮겼다 — 조교가 바뀌어도, 회차가 바뀌어도 손댈 것이 없다.
+// 관리앱은 window.isAdminSeat(ADMIN_FIXED 까지 본다)를 쓰고, 학생앱·학부모앱에는 그 함수가
+// 없으므로 같은 좌석 범위를 여기서 직접 판정한다.
+window._SURVEY_ADMIN_SEAT_MIN = 54;
+window._SURVEY_ADMIN_SEAT_MAX = 63;
+window._surveyIsAdminSeat = function(seat) {
+  if (typeof window.isAdminSeat === 'function') return !!window.isAdminSeat(seat);
+  const n = parseInt(String(seat == null ? '' : seat).replace(/[^0-9]/g, ''), 10);
+  return !!n && n >= window._SURVEY_ADMIN_SEAT_MIN && n <= window._SURVEY_ADMIN_SEAT_MAX;
+};
+
 // 조사 대상에서 빼는 학생 — 게이트도 안 뜨고 관리앱 대상 수에도 안 들어간다.
 //   1) 심사용 계정 — 위 참조.
-//   2) withdrawAt(예약 퇴원일)이 잡힌 학생 — 나가기로 확정된 사람에게 "9월에도 오실래요?"를
+//   2) 관리자석 — 바로 위 참조(코드 규칙, 회차마다 다시 적지 않는다).
+//   3) withdrawAt(예약 퇴원일)이 잡힌 학생 — 나가기로 확정된 사람에게 "다음 달에도 오실래요?"를
 //      물으면 안 된다. 매달 이름을 다시 적지 않아도 되도록 이 조건을 먼저 둔다.
-//   3) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생.
+//   4) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생. 여기만 회차마다 손댄다.
 // 이름 비교는 _sameStudentName 으로 한다("박지윤(9557)"·"박지윤A" 같은 표기 편차를 흡수).
 window._surveyExcluded = function(cfg, student) {
   if (!student) return false;
   if (window._surveyIsReviewAccount(student)) return true;
+  if (window._surveyIsAdminSeat(student.seat)) return true;
   if (student.withdrawAt) return true;
   const list = window._surveyConfig(cfg).exclude;
   return list.some(n => window._sameStudentName(n, student.name));
@@ -221,6 +291,11 @@ window._surveyGate = (function() {
     const m = String(cfg.closeAt || '').match(/^\d{4}-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
     return m ? `${+m[1]}월 ${+m[2]}일 ${m[3]}:${m[4]}` : cfg.closeAt;
   }
+  // 화면 문구의 '월'은 전부 여기서 나온다 — 조사 ID 만 바꾸면 10월·11월 조사가 된다.
+  const M = cfg => window._surveyMonthLabel(cfg && cfg.surveyId);                       // '9월'
+  const prevM = cfg => window._surveyMonthLabel(window._surveyShiftId(cfg && cfg.surveyId, -1));  // '8월'
+  // 할인 확정 기준일 = 이번 상벌점 주기의 끝(7/20~8/31 같은 예외 주기도 그대로 따라간다).
+  const cycleEndLabel = () => window._surveyDateLabel(window._meritCycle().end);
 
   // 설정·응답을 다시 읽어 S 를 갱신한다.
   // 반환: 'block'(막아야 함) | 'pass'(통과·배너) | 'idle'(조사 없음/대상 아님) | 'error'(상태 유지)
@@ -382,16 +457,16 @@ window._surveyGate = (function() {
         회수 마감 <b style="color:#374151">${closeLabel(cfg)}</b>
       </div>
       ${blocking ? `<div style="margin-top:12px;background:#FEF3C7;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400E;line-height:1.6">
-        9월 좌석과 시간표를 짜기 위한 조사예요. <b>응답하셔야 앱을 이용할 수 있어요.</b>
+        ${M(cfg)} 좌석과 시간표를 짜기 위한 조사예요. <b>응답하셔야 앱을 이용할 수 있어요.</b>
       </div>` : ''}
       ${other ? `<div style="margin-top:12px;background:#EFF6FF;border-radius:10px;padding:10px 12px;font-size:12px;color:#1D4ED8;line-height:1.6">
         ${roleLabel(S.opt.role === 'parent' ? 'student' : 'parent')}은 <b>${other.want ? '이용 희망' : '이용 안 함'}</b>으로 응답하셨어요.
       </div>` : ''}
       <div id="survey-discount"></div>
-      <div style="margin:16px 0 4px;font-size:13px;font-weight:800">9월에도 면학관을 이용하시겠어요?</div>
+      <div style="margin:16px 0 4px;font-size:13px;font-weight:800">${M(cfg)}에도 면학관을 이용하시겠어요?</div>
       <div id="survey-opts" style="margin-top:9px">
         ${btn(true,  '🙋', '네, 계속 이용할게요', '지금 자리와 시간표 그대로 다닐게요~')}
-        ${btn(false, '👋', '아니요, 이용하지 않을게요', '8월까지만 이용하고 9월엔 쉴게요~')}
+        ${btn(false, '👋', '아니요, 이용하지 않을게요', `${prevM(cfg)}까지만 이용하고 ${M(cfg)}엔 쉴게요~`)}
       </div>
       <button type="button" id="survey-submit" ${_pick === null ? 'disabled' : ''}
         style="width:100%;margin-top:14px;padding:14px;border:none;border-radius:12px;font-family:inherit;
@@ -434,26 +509,27 @@ window._surveyGate = (function() {
     const d = _disc;
     if (d.rawMerit === 0 && d.rawDemerit === 0) { el.innerHTML = ''; return; }
     const leaving = _pick === false;
+    const mLab = M(S.cfg), endLab = cycleEndLabel();
     const line = (l, r, c) => `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px"><span style="color:#6B7280">${l}</span><span style="font-weight:700;color:${c || '#374151'}">${r}</span></div>`;
     el.innerHTML = `
       <div style="background:#F0FDF4;border:1.5px solid #BBF7D0;border-radius:12px;padding:12px 14px;margin-top:8px;${leaving ? 'opacity:.62' : ''}">
-        <div style="font-size:12.5px;font-weight:800;color:#047857">🎁 9월에 계속 다니면 받는 할인</div>
+        <div style="font-size:12.5px;font-weight:800;color:#047857">🎁 ${mLab}에 계속 다니면 받는 할인</div>
         ${line('상점', d.rawMerit + '점', '#059669')}
         ${line('벌점', d.rawDemerit + '점', '#C62828')}
         ${d.cleared ? line('상점으로 상쇄', '벌점 −' + d.cleared + '점', '#6B7280') : ''}
         ${line('잔여', '상점 ' + d.netMerit + '점 · 벌점 ' + d.netDemerit + '점')}
         <div style="border-top:1px dashed #BBF7D0;margin-top:8px;padding-top:8px">
           ${d.netDemerit > 0
-            ? `<div style="font-size:12px;color:#92400E;line-height:1.6">벌점이 <b>${d.netDemerit}점</b> 남아 이번 할인은 없어요. 8월 31일까지 상점을 받으면 1점당 벌점 1점이 지워집니다.</div>`
+            ? `<div style="font-size:12px;color:#92400E;line-height:1.6">벌점이 <b>${d.netDemerit}점</b> 남아 이번 할인은 없어요. ${endLab}까지 상점을 받으면 1점당 벌점 1점이 지워집니다.</div>`
             : `<div style="display:flex;justify-content:space-between;align-items:center">
-                 <span style="font-size:12.5px;color:#047857;font-weight:700">9월 이용료 할인</span>
+                 <span style="font-size:12.5px;color:#047857;font-weight:700">${mLab} 이용료 할인</span>
                  <span style="font-size:17px;font-weight:900;color:#047857">${won(d.won)}원</span>
                </div>${d.capped ? '<div style="font-size:11px;color:#6B7280;margin-top:3px">할인 상한이 적용된 금액이에요.</div>' : ''}`}
         </div>
         <div style="font-size:11px;color:#6B7280;margin-top:8px;line-height:1.6">
           ${leaving
-            ? '9월에도 계속 다니시면 받을 수 있는 할인이에요.'
-            : '지금 기준 <b>예상 금액</b>이에요. 8월 31일까지의 상벌점으로 최종 확정됩니다.'}
+            ? `${mLab}에도 계속 다니시면 받을 수 있는 할인이에요.`
+            : `지금 기준 <b>예상 금액</b>이에요. ${endLab}까지의 상벌점으로 최종 확정됩니다.`}
         </div>
       </div>`;
   }
