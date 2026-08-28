@@ -84,6 +84,15 @@ rules_version = '2';
 //                 ★이 규칙 없이는 스위치가 조용히 무력화된다 — 세 앱 모두 '못 읽으면
 //                 기능 켜짐'으로 넘어지게 해 뒀기 때문이다(학생이 걸어 둔 잠금을 존중하는
 //                 방향). 그래서 앱보다 규칙을 먼저 배포할 것
+//   - 2026-08-25  settings 에 app_version 추가 — 모바일 앱의 업데이트 안내(스토어 최신·
+//                 최소 버전). 로그인 전에도 읽으므로 read 는 미인증 개방, write 는 막았다
+//                 (원장이 콘솔에서 직접 고친다 — 잘못 쓰면 전교생 앱이 잠긴다).
+//   - 2026-08-28  feedback_events 삭제 — 쓰던 화면(seat_monitor_dashboard.html)을 지웠다.
+//                 어디서도 링크되지 않던 대시보드였고, 거기서 만들던 model_config/current
+//                 는 감지 앱이 읽지도 않아 튜닝 기능이 이미 죽어 있었다. 규칙만 남으면
+//                 아무도 안 쓰는 read/write 개방이 되므로 같이 뺀다.
+//                 ⚠️ 기존 feedback_events 문서는 남아 있다(규칙만 막은 것). 정말 지우려면
+//                 콘솔에서 컬렉션을 직접 삭제할 것.
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -190,7 +199,8 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 좌석 상태: 태블릿 디텍터가 쓰고 대시보드가 읽음
+    // 좌석 상태: 학생앱의 내장 졸음감지가 쓴다(태블릿 디텍터도 같은 곳에 쓴다).
+    // 2026-08-28 이후 이걸 읽는 화면은 없다 — 볼 일이 있으면 Firebase 콘솔에서 본다.
     match /seat_status/{seat} { allow read, write: if true; }
 
     // CCTV 좌석 재석 감지: 면학관 PC의 새봄재석감지 엔진(로그인 없는 REST)이
@@ -203,10 +213,7 @@ service cloud.firestore {
         && request.resource.data.seats is map;
     }
 
-    // 검수 피드백: 대시보드가 사람 판정 결과 기록
-    match /feedback_events/{id} { allow read, write: if true; }
-
-    // SEE EYES 동의: 학생앱이 본인 동의 기록·철회, 대시보드/관리자가 조회
+    // SEE EYES 동의: 학생앱이 본인 동의 기록·철회, 학부모앱이 조회
     match /see_eyes_consents/{seat} { allow read, write: if true; }
 
     // 사용기록: 학생앱이 남기는 앱 사용 로그(로그인·탭 열람 등).
@@ -396,10 +403,14 @@ service cloud.firestore {
                             'seatSelection', 'vacation_mode', 'schedule_edit',
                             'meal_away_sms', 'summerInvites', 'alimtalk_server',
                             'day_break_door', 'bell_schedule', 'weather',
-                            'planner_privacy'];
+                            'planner_privacy', 'app_version'];
       // planner_privacy — 플래너 학부모 비공개 기능의 전체 스위치(원장 전용, 관리앱에서만 쓴다).
       // ★읽기를 못 하면 학생·학부모앱은 '기능 켜짐'으로 간주한다(학생이 걸어 둔 잠금을 존중하는 쪽).
       //   그래서 이 규칙을 배포하지 않으면 스위치를 꺼도 아무 일도 일어나지 않는다.
+      // app_version — 모바일 앱 업데이트 안내(iosLatest·iosMin·androidLatest·androidMin·note).
+      //   로그인 전에 읽으므로 미인증 read 다. 담긴 건 버전 문자열뿐이라 열려도 잃을 것이 없다.
+      // 🔴 write 는 일부러 뺐다 — min 을 잘못 올리면 앱이 통째로 잠기는 문서다.
+      //   값은 Firebase 콘솔에서 사람이 직접 고친다(관리앱에 스위치를 만들지 말 것).
       allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather', 'planner_privacy'];
     }
 
