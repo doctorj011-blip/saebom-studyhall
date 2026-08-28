@@ -34,7 +34,7 @@ const BASE = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/
 const REPO = path.resolve(__dirname, '..');
 
 // 규칙 파일에 안 나오지만 코드가 실제로 쓰는 컬렉션 (functions/index.js 등)
-const EXTRA_COLLECTIONS = ['planner_ai_batches', 'ai_config', 'model_config'];
+const EXTRA_COLLECTIONS = ['planner_ai_batches', 'ai_config'];
 
 // ── 컬렉션 목록: firestore.rules 의 최상위 match 에서 추출 ──
 function collectionsFromRules() {

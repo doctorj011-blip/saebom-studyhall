@@ -16,8 +16,8 @@
 // 모든 기기가 한 번씩은 접속했을 시점(2026년 말 이후)에 이 파일을 삭제해도
 // 안전하다. 그 전까지는 지우지 말 것 — 지우면 정리가 안 된 기기가 남는다.
 //
-// ⚠️ detector_sw.js 와 혼동 주의. 그쪽은 drowsiness_detector.html 이 실제로
-//    등록해 쓰는 살아있는 파일이다.
+// ⚠️ detector_sw.js 와 혼동 주의. 그쪽도 2026-08-28 부터 같은 kill switch 다
+//    (감지 앱을 걷어내면서 함께 폐기). 둘 다 같은 이유로 남겨둔 파일이다.
 
 self.addEventListener('install', () => self.skipWaiting());
 

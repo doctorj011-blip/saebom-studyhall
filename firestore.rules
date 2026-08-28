@@ -93,6 +93,13 @@ rules_version = '2';
 //                 아무도 안 쓰는 read/write 개방이 되므로 같이 뺀다.
 //                 ⚠️ 기존 feedback_events 문서는 남아 있다(규칙만 막은 것). 정말 지우려면
 //                 콘솔에서 컬렉션을 직접 삭제할 것.
+//   - 2026-08-28  seat_status·see_eyes_consents 삭제 — SEE EYES(카메라로 눈 개폐율·고개
+//                 각도를 재던 집중도 감지) 기능을 학생앱·학부모앱·태블릿 감지앱에서
+//                 통째로 걷어냈다. 학생앱 진입점은 이미 2026-07-25 에 내려가 있었다.
+//                 seat_presence 와 헷갈리지 말 것 — 그쪽은 CCTV 재석감지로 살아있다.
+//                 ⚠️ 두 컬렉션의 기존 문서는 남아 있다(규칙만 막은 것). see_eyes_consents
+//                 에는 학생·보호자 동의 기록이 들어 있으니, 지우기 전에 개인정보 보관
+//                 의무 기간이 걸리는지 먼저 확인할 것.
 // ══════════════════════════════════════════════════════════════════════════
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
@@ -199,10 +206,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 좌석 상태: 학생앱의 내장 졸음감지가 쓴다(태블릿 디텍터도 같은 곳에 쓴다).
-    // 2026-08-28 이후 이걸 읽는 화면은 없다 — 볼 일이 있으면 Firebase 콘솔에서 본다.
-    match /seat_status/{seat} { allow read, write: if true; }
-
     // CCTV 좌석 재석 감지: 면학관 PC의 새봄재석감지 엔진(로그인 없는 REST)이
     // current 문서 하나만 1분마다 통째로 갱신하고, 관리앱 대시보드가 읽는다.
     // 참고용 신호 데이터라 개방하되 문서 ID와 최소 형식만 제한한다.
@@ -212,9 +215,6 @@ service cloud.firestore {
         && request.resource.data.updated is string
         && request.resource.data.seats is map;
     }
-
-    // SEE EYES 동의: 학생앱이 본인 동의 기록·철회, 학부모앱이 조회
-    match /see_eyes_consents/{seat} { allow read, write: if true; }
 
     // 사용기록: 학생앱이 남기는 앱 사용 로그(로그인·탭 열람 등).
     // 남기기(create)와 조회·정리(read/delete)만 허용하고, 한 번 쓴 기록의 수정(update)은 막는다.

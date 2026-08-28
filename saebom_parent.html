@@ -569,9 +569,6 @@ body{
   </div>
 
   <div class="app-content">
-    <!-- SEE EYES 보호자(법정대리인) 동의 요청 배너 -->
-    <div id="see-consent-req" style="display:none;margin-bottom:14px"></div>
-
     <!-- 홈 탭 — 앱을 열면 처음 보이는 화면 -->
     <div id="tab-home">
       <!-- 지금 입실해 있는지: 학부모가 앱을 여는 가장 큰 이유라 홈 맨 위에 둔다 -->
@@ -923,13 +920,11 @@ function enterApp() {
   loadAllData();
   startUsageSurvey();
   startTesterGate();
-  if (window.seeReqStart) window.seeReqStart();
 }
 
 function doLogout() {
   if (_statusUnsub) { _statusUnsub(); _statusUnsub = null; }
   if (_scheduleUnsub) { _scheduleUnsub(); _scheduleUnsub = null; }
-  if (window.seeReqStop) window.seeReqStop();
   _changedSchedule = null;
   stopLiveTick();
   _sessDocs = []; TODAY_SESS = []; OPEN_SESS = null; _sessLoadFailed = false;
@@ -3058,75 +3053,6 @@ document.addEventListener('visibilitychange', function() {
     document.getElementById('login-screen').style.display = 'flex';
     fillRememberedName(true);
   }
-})();
-</script>
-
-<!-- ══ SEE EYES 보호자(법정대리인) 동의 요청 ══ -->
-<script>
-(function(){
-  const CONSENT_VERSION='v1';
-  let unsub=null, state=null, seat=null;
-  const $=id=>document.getElementById(id);
-
-  function childSeat(){ try{ if(currentStudent && currentStudent.seat){ const s=String(currentStudent.seat); return s.replace(/[^0-9]/g,'')||s; } }catch(e){} return ''; }
-  function docRef(s){ return window._doc(window._db,'see_eyes_consents',String(s)); }
-
-  function render(){
-    const box=$('see-consent-req'); if(!box) return;
-    // 학생이 본인 동의 후 보호자 승인 대기 중일 때만 요청 카드 노출
-    if(!state || state.studentConsent!==true || state.guardianStatus!=='pending'){ box.style.display='none'; box.innerHTML=''; return; }
-    const nm=state.studentName||(currentStudent&&currentStudent.name)||'자녀';
-    box.style.display='block';
-    box.innerHTML=
-      '<div style="border:1px solid #BBD9FF;background:#F0F7FF;border-radius:16px;padding:16px 18px;box-shadow:0 4px 16px rgba(0,0,0,0.06)">'+
-        '<div style="font-weight:800;font-size:15px;color:#0066CC;display:flex;align-items:center;gap:7px;margin-bottom:8px"><i class="ti ti-shield-check"></i> SEE EYES 개인정보 수집·이용 보호자 동의</div>'+
-        '<div style="font-size:13px;color:#5b5b5b;line-height:1.7;margin-bottom:10px"><b>'+nm+'</b> 학생이 <b>SEE EYES(학습 집중 관리)</b> 사용에 동의했습니다. 만 14세 미만 미성년자의 경우 보호자(법정대리인) 동의가 필요합니다.</div>'+
-        '<div style="font-size:12px;color:#6b6b6b;line-height:1.7;background:#fff;border:1px solid #eee;border-radius:10px;padding:11px 12px;margin-bottom:12px">'+
-          '• <b>수집 항목</b>: 카메라 영상을 실시간 분석한 특징값(눈 개폐율·고개 각도·시선)과 상태값(집중/졸음/이탈)<br>'+
-          '• <b>영상 처리</b>: 영상은 저장·전송하지 않고 상태값만 관리 대시보드로 전송<br>'+
-          '• <b>목적</b>: 학습 집중 관리 · <b>제공대상</b>: 새봄 면학관 관리자<br>'+
-          '• <b>보유기간</b>: 목적 달성 또는 동의 철회 시까지 · 동의 거부 및 철회 가능(불이익 없음)'+
-        '</div>'+
-        '<div style="display:flex;gap:8px">'+
-          '<button onclick="seeReqReject()" style="flex:1;border:1px solid #E0B4B4;background:#FDECEC;color:#C0392B;border-radius:12px;padding:12px;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">동의하지 않음</button>'+
-          '<button onclick="seeReqApprove()" style="flex:2;border:none;background:linear-gradient(135deg,#0A84FF,#5E5CE6);color:#fff;border-radius:12px;padding:12px;font-size:14px;font-weight:800;cursor:pointer;font-family:inherit">보호자로서 동의합니다</button>'+
-        '</div>'+
-      '</div>';
-  }
-
-  async function write(fields){
-    const s=childSeat(); if(!s || !window._db || !window._setDoc){ alert('연결 정보를 확인할 수 없습니다.'); return false; }
-    let gname=''; try{ gname=(currentStudent&&currentStudent.name)?(currentStudent.name+' 보호자'):''; }catch(e){}
-    try{
-      await window._setDoc(docRef(s), Object.assign({
-        guardianName:gname, updatedAt:new Date().toISOString(), version:CONSENT_VERSION, guardianSource:'parent_app'
-      }, fields), {merge:true});
-      return true;
-    }catch(e){ alert('처리 중 오류가 발생했습니다: '+(e&&e.message||e)); return false; }
-  }
-
-  window.seeReqApprove=async function(){
-    if(!confirm('보호자(법정대리인)로서 위 개인정보 수집·이용에 동의하시겠습니까?')) return;
-    if(await write({ guardianStatus:'approved', guardianConsentAt:new Date().toISOString() })){
-      alert('동의가 완료되었습니다. 자녀가 SEE EYES를 사용할 수 있습니다.');
-    }
-  };
-  window.seeReqReject=async function(){
-    if(!confirm('동의하지 않으시겠습니까? 자녀는 SEE EYES를 사용할 수 없습니다.')) return;
-    if(await write({ guardianStatus:'rejected', guardianConsentAt:new Date().toISOString() })){
-      alert('동의 거부로 처리되었습니다.');
-    }
-  };
-
-  window.seeReqStart=function(){
-    if(!window._db || !window._onSnapshot){ return; }
-    seat=childSeat(); if(!seat){ return; }
-    if(unsub){ try{unsub();}catch(e){} unsub=null; }
-    unsub=window._onSnapshot(docRef(seat),(snap)=>{
-      state=(snap && snap.exists && snap.exists())?snap.data():null; render();
-    },(err)=>{ /* 무시 */ });
-  };
-  window.seeReqStop=function(){ if(unsub){ try{unsub();}catch(e){} unsub=null; } state=null; const box=$('see-consent-req'); if(box){ box.style.display='none'; box.innerHTML=''; } };
 })();
 </script>
 
