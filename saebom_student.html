@@ -3854,9 +3854,13 @@ function _isAdminSeat(seat) {
   const n = parseInt(String(seat == null ? '' : seat).replace(/[^0-9]/g, ''), 10);
   return !!n && n >= ADMIN_SEAT_MIN && n <= ADMIN_SEAT_MAX;
 }
-const RANK_EXCLUDE = new Set(['정원혁','이새봄','이수연','김근우','손형준']);
+//   앱스토어 심사용 시드 계정(좌석 9999 · uid s_00000000)도 학생이 아니다 — 이름·좌석 둘 다로
+//   거른다. 2026-08-28 까지 새 나가고 있었다: 입퇴실을 흉내 내는 계정이라 오늘 공부시간이
+//   14시간으로 찍혀 **순위 1등**에 올라 있었다(관리앱은 isTestStudent 로 이미 빼고 있었다).
+const RANK_EXCLUDE = new Set(['정원혁','이새봄','이수연','김근우','손형준','심사용계정']);
 function _rankExcluded(name, seat) {
   if (_isAdminSeat(seat)) return true;
+  if (window._surveyIsReviewAccount && window._surveyIsReviewAccount({ seat })) return true;
   const base = String(name || '').replace(/\(.*?\)/g, '').replace(/\s/g, '').trim();
   return RANK_EXCLUDE.has(base);
 }
