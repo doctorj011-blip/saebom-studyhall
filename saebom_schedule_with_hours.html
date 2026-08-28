@@ -76,7 +76,7 @@ body{font-family:var(--font-sans);font-size:13px;color:var(--color-text-primary)
 .topbar-tabs{display:none;gap:2px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none}
 body.admin-device .topbar-tabs{display:flex}
 .topbar-tabs::-webkit-scrollbar{display:none}
-/* 원장 전용 탭(신문고·설정): 원장 기기로 등록된 기기에서만 표시 */
+/* 원장 전용 탭(설정): 원장 기기로 등록된 기기에서만 표시 */
 .tab-btn.director-only{display:none}
 body.director-device .tab-btn.director-only{display:inline-block}
 .tab-btn{padding:6px 14px;border:none;background:rgba(255,255,255,0.35);color:#1E1B4B;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.15s;white-space:nowrap;flex:0 0 auto}
@@ -1036,7 +1036,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
     <button class="tab-btn" onclick="showSection('dashboard',this)">대시보드</button>
     <button class="tab-btn" onclick="showSection('floorplan',this)">배치도</button>
     <button class="tab-btn hide-mobile" onclick="showSection('handover',this)">인수인계<span id="handover-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">!</span></button>
-    <button class="tab-btn director-only" onclick="showSection('shinmungo',this)">신문고<span id="shinmungo-badge" style="display:none;margin-left:5px;background:#E53935;color:#fff;border-radius:9px;padding:1px 6px;font-size:10px;font-weight:700">0</span></button>
     <span class="tab-divider" aria-hidden="true"></span>
     <button class="tab-btn" onclick="showSection('students',this)">학생</button>
     <button class="tab-btn" onclick="showSection('schoolcal',this)">학사일정</button>
@@ -1854,30 +1853,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   </div>
 </div>
 
-<!-- 신문고 접수함 -->
-<div id="sec-shinmungo" class="section">
-  <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
-    <div class="card">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;flex-wrap:wrap">
-        <div style="min-width:0">
-          <div style="font-size:15px;font-weight:700;color:#1E1B4B">🔔 신문고 접수함</div>
-          <div style="font-size:11px;color:#888;margin-top:3px;line-height:1.6">
-            👑 <b>원장 전용 탭</b> — 신고 확인·처리(학생앱에 그대로 회신)와 신고자 열람 모두 원장 기기에서만 됩니다.<br>
-            피신고 학생 벌점은 <b>학생 탭 학생 팝업</b>에서 부여하고,
-            <b>조치 완료</b> 처리 시 신고자 상점 1점이 <b>자동 부여</b>됩니다(건당 1점).
-          </div>
-        </div>
-        <div id="sm-filter-wrap" style="display:flex;gap:6px;flex:0 0 auto">
-          <button data-smf="open" onclick="smSetFilter('open')">처리 대기</button>
-          <button data-smf="done" onclick="smSetFilter('done')">처리 완료</button>
-          <button data-smf="all" onclick="smSetFilter('all')">전체</button>
-        </div>
-      </div>
-    </div>
-    <div id="sm-admin-list" style="display:flex;flex-direction:column;gap:10px"></div>
-  </div>
-</div>
-
 <!-- 공지사항 관리 -->
 <div id="sec-notice" class="section">
   <div style="max-width:700px;margin:0 auto;display:flex;flex-direction:column;gap:14px">
@@ -2065,7 +2040,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </div>
       <div style="border-top:1px solid #EEE;margin-top:14px;padding-top:12px">
         <div style="font-size:12px;color:#4A3FA8;margin-bottom:10px;line-height:1.6">
-          👑 <b>원장 기기</b> — 신문고·설정 탭과 상벌점 부여/취소는 원장 기기에서만 쓸 수 있습니다.<br>
+          👑 <b>원장 기기</b> — 설정 탭과 상벌점 부여/취소는 원장 기기에서만 쓸 수 있습니다.<br>
           새 원장 기기 등록: 관리자 등록된 기기에서 <b>주소 뒤에 <code>?director</code></b> → 원장 비밀번호 입력.
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -2854,8 +2829,7 @@ window.isAdminDevice = isAdminDevice;
 // 기기가 됐다** — 비밀번호를 몰라도. App Check 로도 막히지 않는다(정상 앱 컨텍스트라
 // 토큰이 정상 발급된다). 2026-08-07 에 규칙을 잠그고 이 폴백들을 전부 지웠다.
 //
-// 서버로 옮긴 경로 다섯: ① 로드 시 토큰 검사 ② 기기 등록 ③ 최초 설정 ④ 비번 변경
-//                      ⑤ 신문고 신고자 열람
+// 서버로 옮긴 경로 넷: ① 로드 시 토큰 검사 ② 기기 등록 ③ 최초 설정 ④ 비번 변경
 // ① 을 빠뜨리면 안 된다 — "비밀번호를 바꾸면 다른 기기가 자동 해제된다" 가 그 읽기에서
 // 나오므로, 서버로 안 옮기고 잠그면 해제가 **조용히** 멈춘다.
 //
@@ -3071,20 +3045,23 @@ window.showSection = function(id,btn){
   if (id !== 'checkin' && !isAdminDevice()) {
     return;
   }
-  // 신문고·설정은 원장 기기 전용 (탭 복원 경로도 이 가드를 지나므로 조용히 무시)
-  if ((id === 'shinmungo' || id === 'settings') && !isDirectorDevice()) {
+  // 설정은 원장 기기 전용 (탭 복원 경로도 이 가드를 지나므로 조용히 무시)
+  if (id === 'settings' && !isDirectorDevice()) {
     return;
   }
+  // 지워진 화면(신문고 등)이 sessionStorage 에 남아 복원되면 아래 getElementById 가
+  // null 이라 터진다 — 없는 탭이면 조용히 무시하고 저장값도 지운다
+  const _sec = document.getElementById('sec-'+id);
+  if (!_sec) { try { sessionStorage.removeItem('saebom_active_tab'); } catch(e) {} return; }
   // 서브탭·탭 복원 경로는 버튼을 안 넘긴다 → 그룹 탭이면 그룹 버튼이 켜지도록 직접 찾는다
   btn = btn || _tabBtnFor(id);
   document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('sec-'+id).classList.add('active');
+  _sec.classList.add('active');
   if (btn) btn.classList.add('active');
   renderSubtabs(id);
   if (id === 'settings') { loadSettingsTab(); }
   if (id === 'handover') { hoResetForm(); loadHandover(); }
-  if (id === 'shinmungo') { if (window.smAdminRender) window.smAdminRender(); }
   if (id === 'notice') { noticeResetForm(); loadNoticesAdmin(); }
   if (id === 'events') { eventResetForm(); loadEventsAdmin(); }
   if (id === 'smslog') { loadSmsLog(); }
@@ -5551,10 +5528,12 @@ window.toggleMeritCancel = async function(docId){
 
 // ══════════ 👑 원장 기기 등급 ══════════
 // 관리자 기기(마스터 비번) 위의 한 단계 — 조교 기기와 원장 기기를 구분한다.
-// 비밀번호는 신문고 열람용으로 만든 settings/shinmungo_auth(PBKDF2)를 그대로 쓴다.
+// 비밀번호는 settings/shinmungo_auth(PBKDF2). 원래 신문고 열람용으로 만든 문서인데
+// 신문고를 걷어낸 뒤에도 원장 비밀번호로 계속 쓴다 — 이름을 바꾸면 서버(appauth:authPassword
+// 의 AUTH_DOCS)와 등록된 원장 기기 토큰이 전부 어긋난다.
 // 등록: 주소 뒤 ?director → 원장 비밀번호 입력 → localStorage 토큰(=해시).
 // 비밀번호를 바꾸면 다른 기기의 원장 등록은 다음 로드 시 자동 해제된다(마스터 비번과 동일 원리).
-// 원장 전용: 신문고 탭·설정 탭·상점 부여/취소·벌점 수동 부여/취소/초기화.
+// 원장 전용: 설정 탭·상점 부여/취소·벌점 수동 부여/취소/초기화.
 const DIRECTOR_TOKEN_KEY = 'saebom_director_token';
 function isDirectorDevice() { return !!localStorage.getItem(DIRECTOR_TOKEN_KEY); }
 window.isDirectorDevice = isDirectorDevice;
@@ -5576,7 +5555,7 @@ async function _validateDirectorToken() {
     _applyDirectorUI();
     // 원장 전용 화면이 열려 있었다면 대시보드로 물린다
     const cur = document.querySelector('.section.active');
-    if (cur && (cur.id === 'sec-shinmungo' || cur.id === 'sec-settings')) {
+    if (cur && cur.id === 'sec-settings') {
       const b = document.querySelector('.tab-btn[onclick*="dashboard"]');
       if (b) window.showSection('dashboard', b);
     }
@@ -5606,7 +5585,7 @@ window.openDirectorLogin = async function() {
     localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
     ov.remove();
     _applyDirectorUI();
-    alert('✅ 이 기기가 원장 기기로 등록되었습니다.\n신문고·설정 탭과 상벌점 부여/취소를 쓸 수 있습니다.');
+    alert('✅ 이 기기가 원장 기기로 등록되었습니다.\n설정 탭과 상벌점 부여/취소를 쓸 수 있습니다.');
   });
 };
 
@@ -5645,129 +5624,16 @@ window.changeDirectorPassword = async function() {
   });
 };
 
-// 원장 전용 기능 가드 — 상점 부여/취소, 벌점 수동 부여/취소/초기화, 신문고 처리에서 호출
+// 원장 전용 기능 가드 — 상점 부여/취소, 벌점 수동 부여/취소/초기화에서 호출
 function _requireDirector() {
   if (isDirectorDevice()) return true;
   alert('원장 전용 기능입니다.\n원장 기기에서만 사용할 수 있습니다.');
   return false;
 }
 
-// ══════════ 🔔 신문고 접수함 ══════════
-// shinmungo_reports/{autoId} — 학생 기명 신고. 목록은 module 쪽 onSnapshot이
-// window._smApplyReports 로 밀어 넣는다. 신고자(reporterName/SeatKey)는 이 화면에서
-// 절대 기본 노출하지 않고, 원장 비밀번호(settings/shinmungo_auth, 마스터 비번과 별개 —
-// 조교 기기도 관리자 등록이 돼 있어 마스터 비번 게이트로는 원장 전용이 안 된다)로만 연다.
-const SM_ADMIN_STATUS = {
-  new:       ['접수됨',   '#4338A8', '#EEF2FF'],
-  checking:  ['확인 중',  '#B45309', '#FEF3C7'],
-  confirmed: ['조치 완료','#059669', '#ECFDF5'],
-  rejected:  ['기각',     '#6B7280', '#F3F4F6']
-};
-let _smFilter = 'open';
-let _smUnlockUntil = 0;   // 원장 비번 통과 시 10분간 열람 유지
-window._smReports = [];
-
-window._smApplyReports = function(list) {
-  list.sort((a,b) => (b.createdMs||0) - (a.createdMs||0));
-  window._smReports = list;
-  const badge = document.getElementById('shinmungo-badge');
-  if (badge) {
-    const n = list.filter(r => r.status === 'new').length;
-    badge.style.display = n ? '' : 'none';
-    badge.textContent = n;
-  }
-  const sec = document.getElementById('sec-shinmungo');
-  if (sec && sec.classList.contains('active')) smAdminRender();
-};
-
-window.smSetFilter = function(f) { _smFilter = f; smAdminRender(); };
-
-function _smSeatLabel(seats) {
-  if (!seats) return '(좌석 미지정)';
-  return String(seats).split(',').map(s => {
-    const k = s.trim(); if (!k) return '';
-    const st = (window.STUDENTS||[]).find(x => String(x.seat||'').replace(/[^0-9]/g,'') === k);
-    return st ? `${k}번 ${st.name}` : `${k}번`;
-  }).filter(Boolean).join(' · ');
-}
-
-window.smAdminRender = function() {
-  document.querySelectorAll('#sm-filter-wrap [data-smf]').forEach(b => {
-    const on = b.dataset.smf === _smFilter;
-    b.style.cssText = 'padding:5px 12px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid ' +
-      (on ? '#6C5DD3;background:#6C5DD3;color:#fff' : '#D8D4F0;background:#fff;color:#6C5DD3');
-  });
-  const el = document.getElementById('sm-admin-list');
-  if (!el) return;
-  const list = (window._smReports||[]).filter(r =>
-    _smFilter === 'all'  ? true :
-    _smFilter === 'open' ? (r.status === 'new' || r.status === 'checking') :
-                           (r.status === 'confirmed' || r.status === 'rejected'));
-  if (!list.length) {
-    el.innerHTML = '<div class="card" style="text-align:center;color:#999;font-size:12px;padding:28px">표시할 신고가 없습니다</div>';
-    return;
-  }
-  const esc = s => String(s||'').replace(/</g,'&lt;');
-  const btn = (label, fn, active, color) => `<button onclick="${fn}" style="padding:5px 11px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid ${active ? color+';background:'+color+';color:#fff' : '#DDD;background:#fff;color:#555'}">${label}</button>`;
-  el.innerHTML = list.map(r => {
-    const st = SM_ADMIN_STATUS[r.status] || SM_ADMIN_STATUS.new;
-    return `
-    <div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
-        <div style="font-size:13px;font-weight:700;color:#1E1B4B">${esc(r.category)} <span style="font-weight:500;color:#888;font-size:11px">· ${esc(String(r.date||'').slice(5).replace('-','/'))} ${esc(r.time||'')}</span></div>
-        <span style="flex:0 0 auto;font-size:11px;font-weight:700;color:${st[1]};background:${st[2]};border-radius:16px;padding:3px 10px">${st[0]}</span>
-      </div>
-      <div style="font-size:12px;color:#4A3FA8;margin-top:6px;font-weight:600">대상: ${esc(_smSeatLabel(r.targetSeats))}</div>
-      <div style="font-size:12.5px;color:#333;margin-top:8px;line-height:1.65;word-break:break-word;background:#F8F8FB;border-radius:8px;padding:9px 11px">${esc(r.body)}</div>
-      <div id="sm-rep-${r.id}" style="font-size:11.5px;color:#888;margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        신고자: 🔒 비공개
-        <button onclick="smRevealReporter('${r.id}')" style="padding:4px 10px;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid #8F82E4;background:#EEF2FF;color:#4A3FA8">원장 확인</button>
-        ${r.meritGiven ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>' : ''}
-      </div>
-      <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
-        ${btn('👀 확인 중',  `smSetStatus('${r.id}','checking')`,  r.status==='checking',  '#D97706')}
-        ${btn('✅ 조치 완료', `smSetStatus('${r.id}','confirmed')`, r.status==='confirmed', '#059669')}
-        ${btn('✖ 기각',     `smSetStatus('${r.id}','rejected')`,  r.status==='rejected',  '#6B7280')}
-      </div>
-    </div>`;
-  }).join('');
-};
-
-window.smSetStatus = async function(id, status) {
-  if (!_requireDirector()) return;
-  const r = (window._smReports||[]).find(x => x.id === id);
-  if (!r) return;
-  if (status === 'confirmed' && !confirm('이 신고를 "조치 완료"로 표시할까요?\n학생앱에 조치 완료로 회신되고, 신고자에게 상점 1점이 자동 부여됩니다(건당 1점).\n(피신고 학생 벌점은 학생 탭 학생 팝업에서 별도 부여하세요)')) return;
-  if (status === 'rejected' && !confirm('이 신고를 "기각"으로 표시할까요?\n학생앱에 기각으로 회신됩니다.' + (r.meritGiven ? '\n⚠️ 이미 부여된 상점은 자동 회수되지 않습니다(상점현황에서 취소).' : ''))) return;
-  if (status === 'checking' && r.meritGiven && !confirm('"확인 중"으로 되돌릴까요?\n⚠️ 이미 부여된 상점은 자동 회수되지 않습니다(상점현황에서 취소).')) return;
-  try {
-    const db = await window.waitDb(); if (!db) { alert('DB 준비 안 됨'); return; }
-    const { doc, setDoc } = window._fs;
-    await setDoc(doc(db, 'shinmungo_reports', id), { status, statusMs: Date.now() }, { merge: true });
-    // 조치 완료 = 신고자 상점 자동 부여(건당 1점). meritGiven 플래그로 멱등 —
-    // 부여 실패 시 플래그가 안 남으니 '조치 완료'를 다시 눌러 재시도하면 된다.
-    if (status === 'confirmed' && !r.meritGiven) await _smGrantMeritCore(id, r);
-  } catch(e) { console.error('신문고 상태 변경 실패:', e); alert('처리 실패: ' + (e.message||e)); }
-};
-
-// 신고자 상점 적립 — 화면에 신고자를 노출하지 않고 코드만 안다. 사유는 "학습 분위기 기여"로
-// 기록해 상점현황·학생 상점카드에서도 신고 사실이 안 드러나게 한다.
-async function _smGrantMeritCore(id, r) {
-  const db = await window.waitDb(); if (!db) throw new Error('db-not-ready');
-  const { collection, doc, setDoc, serverTimestamp } = window._fs;
-  const now = new Date();
-  const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-  const dayName = ['일','월','화','수','목','금','토'][now.getDay()];
-  const _ruid = _uidForSeat(r.reporterSeatKey, r.reporterName);
-  await setDoc(doc(collection(db, 'merits')), { name: r.reporterName, seatKey: String(r.reporterSeatKey), date: dateISO, day: dayName, points: 1, reason: '학습 분위기 기여', canceled: false, createdAt: serverTimestamp(), createdBy: 'shinmungo', ...(_ruid ? { uid: _ruid } : {}) });
-  await setDoc(doc(db, 'shinmungo_reports', id), { meritGiven: true }, { merge: true });
-  _meritDocsTs = 0;
-  try { applyMeritBadges(); } catch(e){}
-}
-
-// ── 원장 비밀번호 게이트 ──
-// settings/shinmungo_auth {salt, hash} — 마스터 비번과 같은 PBKDF2 방식(_hashPw 재사용).
-// 문서가 없으면 최초 1회 설정 플로우. 통과하면 10분간 열람 유지(새로고침하면 풀림).
+// ── 원장 비밀번호 입력 오버레이 ──
+// 원장 기기 등록(openDirectorLogin)과 비밀번호 변경(changeDirectorPassword)이 함께 쓴다.
+// 검증은 서버(appauth:authPassword, settings/shinmungo_auth)가 한다.
 // mode: 'setup'(최초 설정) | 'login'(확인/기기등록) | 'change'(비밀번호 변경)
 // onOk 인자: setup/login → 비밀번호 문자열, change → {cur, pw} 객체
 function _smPinOverlay(mode, onOk) {
@@ -5821,42 +5687,6 @@ function _smPinOverlay(mode, onOk) {
     if (e.key === 'Enter') document.getElementById('sm-pin-ok').click();
   });
   setTimeout(() => { const i = document.getElementById(mode==='change' ? 'sm-pin-cur' : 'sm-pin-1'); if (i) i.focus(); }, 50);
-}
-
-window.smRevealReporter = async function(id) {
-  // 원장 기기는 이미 비밀번호로 등록된 상태 — 바로 열람 (비번 재입력 불필요)
-  if (isDirectorDevice()) { _smShowReporter(id); return; }
-  if (Date.now() < _smUnlockUntil) { _smShowReporter(id); return; }
-
-  // 원장 비번 검증은 서버(authPassword)만 한다. 원장 기기 등록과 같은 경로다.
-  const configured = await _authPwConfigured('director');
-  if (configured === null) { alert('서버에 연결할 수 없습니다.\n잠시 후 다시 시도하세요.'); return; }
-
-  _smPinOverlay(configured ? 'login' : 'setup', async (pw, err, ov) => {
-    const r = await _authPwCall(configured
-      ? { kind: 'director', action: 'verify', password: pw }
-      : { kind: 'director', action: 'set',    password: pw });
-
-    if (!r.ok) {
-      if (r.denied) { err(r.message || '비밀번호가 틀렸습니다'); return; }
-      // 서버에 못 닿으면 멈춘다 — 신고자 실명은 서버가 확인해 준 사람에게만 보여준다.
-      err('서버에 연결할 수 없습니다 — 잠시 후 다시 시도하세요');
-      return;
-    }
-    ov.remove();
-    _smUnlockUntil = Date.now() + 10*60*1000;
-    _smShowReporter(id);
-  });
-};
-
-function _smShowReporter(id) {
-  const r = (window._smReports||[]).find(x => x.id === id);
-  const box = document.getElementById('sm-rep-' + id);
-  if (!r || !box) return;
-  const esc = s => String(s||'').replace(/</g,'&lt;');
-  box.innerHTML = `신고자: <b style="color:#1E1B4B">${esc(r.reporterSeatKey)}번 ${esc(r.reporterName)}</b>
-    ${isDirectorDevice() ? '' : '<span style="color:#B8B4D9;font-size:10.5px">(10분간 열람 유지)</span>'}
-    ${r.meritGiven ? '<span style="color:#059669;font-weight:600">🎁 상점 부여됨</span>' : ''}`;
 }
 
 // ── 주기 순위·상쇄 현황 모달 ──
@@ -12735,13 +12565,6 @@ setInterval(() => {
   if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
   if (window.renderStudyroomBoard) window.renderStudyroomBoard();
 }, 60000);
-
-// 🔔 신문고 — 실시간 수신(탭 배지 + 접수함 렌더는 classic 쪽 _smApplyReports가 담당)
-onSnapshot(collection(db, 'shinmungo_reports'), (snap) => {
-  const list = [];
-  snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-  if (window._smApplyReports) window._smApplyReports(list);
-});
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
   let changed = false;

@@ -93,6 +93,9 @@ rules_version = '2';
 //                 아무도 안 쓰는 read/write 개방이 되므로 같이 뺀다.
 //                 ⚠️ 기존 feedback_events 문서는 남아 있다(규칙만 막은 것). 정말 지우려면
 //                 콘솔에서 컬렉션을 직접 삭제할 것.
+//   - 2026-08-28  shinmungo_reports 전면 차단 — 신문고 폐지(활용도 저조). 학생앱 접수
+//                 화면과 관리앱 접수함 탭을 양쪽에서 지웠다. 문서는 남겨 뒀다(콘솔에서만
+//                 열람). settings/shinmungo_auth 는 원장 비밀번호로 계속 쓰이므로 그대로.
 //   - 2026-08-28  seat_status·see_eyes_consents 삭제 — SEE EYES(카메라로 눈 개폐율·고개
 //                 각도를 재던 집중도 감지) 기능을 학생앱·학부모앱·태블릿 감지앱에서
 //                 통째로 걷어냈다. 학생앱 진입점은 이미 2026-07-25 에 내려가 있었다.
@@ -188,22 +191,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // 신문고: 학생 기명 신고(학생앱 접수, 관리앱 처리). 신고자는 UI에서 원장 비밀번호로만
-    // 열람한다(규칙 수준 차단은 미인증 앱 구조상 불가 — 다른 컬렉션과 같은 개방 정책).
-    // 기록 보존을 위해 delete 는 막는다(허위신고 추적·분쟁 대비).
+    // 신문고: 2026-08-28 폐지 — 활용도가 낮아 학생앱 접수 화면과 관리앱 접수함 탭을
+    // 양쪽에서 걷어냈다. 읽는 코드도 쓰는 코드도 이제 없으므로 전면 차단한다.
+    // 캐치올로도 막히지만, 지운 기능이라는 사실이 규칙에 남도록 명시해 둔다(otp_codes 선례).
+    // ⚠️ 기존 문서는 지우지 않았다 — 남은 신고는 Firebase 콘솔에서만 볼 수 있다.
+    //    (원장 비밀번호 문서 settings/shinmungo_auth 는 이름만 신문고일 뿐 원장 기기
+    //     등급에 계속 쓰인다. 서버 AUTH_DOCS 와 짝이라 건드리지 말 것.)
     match /shinmungo_reports/{id} {
-      allow read: if true;
-      allow create, update: if request.resource.data.keys().hasAll(['reporterName', 'reporterSeatKey', 'category', 'body', 'date', 'status'])
-        && request.resource.data.reporterName is string
-        && request.resource.data.reporterName.size() <= 30
-        && request.resource.data.reporterSeatKey is string
-        && request.resource.data.category is string
-        && request.resource.data.category.size() <= 40
-        && request.resource.data.body is string
-        && request.resource.data.body.size() <= 1200
-        && request.resource.data.date is string
-        && request.resource.data.status in ['new', 'checking', 'confirmed', 'rejected'];
-      allow delete: if false;
+      allow read, write: if false;
     }
 
     // CCTV 좌석 재석 감지: 면학관 PC의 새봄재석감지 엔진(로그인 없는 REST)이

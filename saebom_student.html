@@ -1279,12 +1279,6 @@ body{
         <div class="quick-card-sub">새봄 면학관 공지</div>
         <div class="quick-card-bg">📢</div>
       </div>
-      <div class="quick-card" onclick="openSection('shinmungo','#6C5DD3')">
-        <div class="quick-card-icon">🔔</div>
-        <div class="quick-card-title">신문고</div>
-        <div class="quick-card-sub">면학 방해 행동 신고</div>
-        <div class="quick-card-bg">🔔</div>
-      </div>
       <div class="quick-card" onclick="openSection('daily','#6C5DD3')">
         <div class="quick-card-icon">📅</div>
         <div class="quick-card-title">오늘 일정</div>
@@ -1550,24 +1544,6 @@ body{
           <div id="planner-comments-list" style="display:flex;flex-direction:column;gap:8px"></div>
         </div>
       </div>
-    </div>
-
-    <!-- 신문고 -->
-    <div id="tab-shinmungo" style="display:none;padding:16px">
-      <div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:11.5px;color:#4338A8;line-height:1.7">
-        <b>🔔 신문고</b> — 조교 선생님이 미처 못 본 면학 방해 행동을 알려주세요.<br>
-        · 신고자는 <b>원장 선생님만</b> 확인할 수 있어요. 조교·다른 학생에게는 절대 공개되지 않아요.<br>
-        · 조치된 신고는 <b>1건당 상점 1점</b>이 부여돼요.<br>
-        · 허위·장난 신고는 벌점 대상이 될 수 있어요. (하루 3건까지)
-      </div>
-      <div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px">어떤 행동인가요?</div>
-      <div id="sm-cat-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px"></div>
-      <div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px">누구인가요? <span style="font-weight:500;color:var(--text2)">(좌석번호)</span></div>
-      <input id="sm-seats" type="text" autocomplete="off" placeholder="예: 12  또는  12, 27 (모르면 비워두세요)" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;margin-bottom:14px;background:var(--card);color:var(--text)">
-      <div style="font-size:12.5px;font-weight:700;color:var(--text);margin-bottom:6px">무슨 일이 있었나요?</div>
-      <textarea id="sm-body" rows="5" autocomplete="off" placeholder="언제, 어떤 행동이 있었는지 구체적으로 적어주세요.&#10;예) 8교시 내내 12번 학생이 옆자리와 계속 이야기했어요." style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:10px;font-size:13px;resize:vertical;font-family:inherit;line-height:1.6;background:var(--card);color:var(--text)"></textarea>
-      <button id="sm-submit" onclick="smSubmit()" style="width:100%;margin-top:12px;padding:13px;background:#6C5DD3;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">신고 접수하기</button>
-      <div id="sm-my-list" style="margin-top:22px"></div>
     </div>
 
   </div>
@@ -2099,132 +2075,6 @@ function renderScoreEmpty() {
   const hasMerit = !!(document.getElementById('merit-card')   || {}).innerHTML;
   const hasPen   = !!(document.getElementById('penalty-card') || {}).innerHTML;
   empty.style.display = (hasMerit || hasPen) ? 'none' : 'block';
-}
-
-// ══════════ 신문고 ══════════
-// shinmungo_reports/{autoId} — 학생 기명 신고. 신고자(reporterName/SeatKey)는 화면에 절대
-// 노출하지 않고, 관리자앱에서 원장 비밀번호로만 열람한다.
-// status: new(접수됨) → checking(확인 중) → confirmed(조치 완료) | rejected(기각)
-const SM_CATEGORIES = ['🗣️ 떠들기 · 잡담','📱 휴대폰 · 전자기기','🚶 자리 이탈 · 배회','🍫 취식','🔊 소음','⚠️ 기타'];
-const SM_DAILY_LIMIT = 3;
-let _smCat = null;
-let _smMyDocs = null;
-
-function smOpen() {
-  smBuildCats();
-  smLoadMyReports();
-}
-
-function smBuildCats() {
-  const wrap = document.getElementById('sm-cat-wrap');
-  if (!wrap) return;
-  if (!wrap.childElementCount) {
-    wrap.innerHTML = SM_CATEGORIES.map((c,i) => `<button type="button" class="toggle-btn" data-smcat="${i}" onclick="smPickCat(${i})">${c}</button>`).join('');
-  }
-  smPaintCats();
-}
-function smPickCat(i){ _smCat = (_smCat === i) ? null : i; smPaintCats(); }
-function smPaintCats(){
-  document.querySelectorAll('#sm-cat-wrap [data-smcat]').forEach(b => {
-    const on = Number(b.dataset.smcat) === _smCat;
-    b.style.background = on ? '#6C5DD3' : '';
-    b.style.color = on ? '#fff' : '';
-    b.style.borderColor = on ? '#6C5DD3' : '';
-  });
-}
-
-async function smSubmit() {
-  if (!window._firebaseReady || !currentStudent) { alert('로그인 정보가 없어요. 다시 로그인해 주세요.'); return; }
-  if (_smCat === null) { alert('어떤 행동인지 유형을 먼저 선택해 주세요.'); return; }
-  const body = (document.getElementById('sm-body').value || '').trim();
-  if (body.length < 10) { alert('무슨 일이 있었는지 10자 이상 구체적으로 적어주세요.'); return; }
-  const seatsRaw = (document.getElementById('sm-seats').value || '').trim();
-  if (seatsRaw && !/^[0-9\s,]+$/.test(seatsRaw)) { alert('좌석번호는 숫자만 적어주세요. 여러 명이면 쉼표(,)로 구분해요.'); return; }
-  const targetSeats = seatsRaw ? seatsRaw.split(',').map(s=>s.trim()).filter(Boolean).join(', ') : '';
-  const btn = document.getElementById('sm-submit');
-  try {
-    btn.disabled = true; btn.textContent = '접수 중...';
-    const { collection, query, where, getDocs, addDoc, serverTimestamp } = window._fs;
-    const seatKey = currentStudent.seat.replace(/[^0-9]/g,'') || currentStudent.seat;
-    const now = new Date();
-    const dateISO = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    // 하루 접수 제한 — 오늘 내 신고 건수를 세어 초과면 접수하지 않는다
-    const todaySnap = await getDocs(query(collection(window._db,'shinmungo_reports'),
-      where('reporterSeatKey','==',seatKey), where('date','==',dateISO)));
-    if (todaySnap.size >= SM_DAILY_LIMIT) {
-      alert(`신고는 하루 ${SM_DAILY_LIMIT}건까지 접수할 수 있어요.\n내일 다시 접수해 주세요.`);
-      return;
-    }
-    if (!confirm(`신고를 접수할까요?\n\n· 유형: ${SM_CATEGORIES[_smCat]}\n· 대상 좌석: ${targetSeats ? targetSeats + '번' : '(미지정)'}\n\n허위·장난 신고는 벌점 대상이 될 수 있어요.`)) return;
-    await addDoc(collection(window._db,'shinmungo_reports'), {
-      reporterName: currentStudent.name,
-      reporterSeatKey: seatKey,
-      category: SM_CATEGORIES[_smCat],
-      targetSeats,
-      body,
-      date: dateISO,
-      time: `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`,
-      createdMs: Date.now(),
-      createdAt: serverTimestamp(),
-      status: 'new',
-      statusMs: Date.now(),
-      meritGiven: false
-    });
-    document.getElementById('sm-body').value = '';
-    document.getElementById('sm-seats').value = '';
-    _smCat = null; smPaintCats();
-    alert('신고가 접수되었어요.\n확인 후 처리 결과를 아래 내역에서 알려드릴게요.');
-    smLoadMyReports();
-  } catch(e) {
-    console.error('신문고 접수 실패:', e);
-    alert('접수에 실패했어요. 잠시 후 다시 시도해 주세요.');
-  } finally {
-    btn.disabled = false; btn.textContent = '신고 접수하기';
-  }
-}
-
-const SM_STATUS = {
-  new:       { label: '접수됨',    bg:'#EEF2FF', fg:'#4338A8' },
-  checking:  { label: '확인 중',   bg:'#FEF3C7', fg:'#B45309' },
-  confirmed: { label: '조치 완료', bg:'#ECFDF5', fg:'#059669' },
-  rejected:  { label: '기각',      bg:'#F3F4F6', fg:'#6B7280' }
-};
-
-async function smLoadMyReports() {
-  const el = document.getElementById('sm-my-list');
-  if (!el) return;
-  if (!window._firebaseReady || !currentStudent) { el.innerHTML = ''; return; }
-  try {
-    const { collection, query, where, getDocs } = window._fs;
-    const seatKey = currentStudent.seat.replace(/[^0-9]/g,'') || currentStudent.seat;
-    const snap = await getDocs(query(collection(window._db,'shinmungo_reports'), where('reporterSeatKey','==',seatKey)));
-    const docs = [];
-    snap.forEach(d => docs.push(d.data()));
-    docs.sort((a,b) => (b.createdMs||0) - (a.createdMs||0));
-    _smMyDocs = docs.slice(0, 20);
-    smRenderMyReports();
-  } catch(e) { console.warn('신문고 내역 조회 실패:', e); }
-}
-
-function smRenderMyReports() {
-  const el = document.getElementById('sm-my-list');
-  if (!el || !_smMyDocs) return;
-  if (!_smMyDocs.length) { el.innerHTML = ''; return; }
-  const rows = _smMyDocs.map(d => {
-    const st = SM_STATUS[d.status] || SM_STATUS.new;
-    const when = `${String(d.date||'').slice(5).replace('-','/')} ${d.time||''}`;
-    return `
-    <div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-        <span style="font-size:12px;font-weight:700;color:var(--text)">${d.category||''}</span>
-        <span style="flex:0 0 auto;font-size:11px;font-weight:700;color:${st.fg};background:${st.bg};border-radius:20px;padding:3px 10px">${st.label}</span>
-      </div>
-      <div style="font-size:11px;color:var(--text2);margin-top:4px">${when}${d.targetSeats ? ` · ${d.targetSeats}번` : ''}</div>
-      <div style="font-size:12px;color:var(--text);margin-top:6px;line-height:1.6;word-break:break-word">${String(d.body||'').replace(/</g,'&lt;')}</div>
-      ${d.status==='confirmed' ? `<div style="font-size:11px;color:#059669;margin-top:6px;font-weight:600">확인되어 조치했어요. 알려줘서 고마워요!${d.meritGiven ? ' 🎁 상점이 부여되었어요.' : ''}</div>` : ''}
-    </div>`;
-  }).join('');
-  el.innerHTML = `<div class="section-label">MY REPORTS · 내 신고 내역</div>${rows}`;
 }
 
 // ── 주간 목표순공 카드 (관리자가 설정, 학생은 조회만) ──
@@ -3096,8 +2946,7 @@ const SECTION_NAMES = {
   planner: '플래너',
   studyroom: '스터디룸 신청',
   seatmap: '자리 선택',
-  score: '상점 · 벌점',
-  shinmungo: '신문고'
+  score: '상점 · 벌점'
 };
 
 function openSection(id, color) {
@@ -3154,13 +3003,11 @@ function showTab(id, btn) {
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','score','shinmungo'].forEach(t => {
+  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','score'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   // 상벌점 화면: 열 때마다 최신으로 다시 읽는다(관리자가 방금 준 상점도 바로 보이게)
   if (id === 'score') { loadMyMerits(); loadMyPenalties(); }
-  // 신문고: 열 때마다 내 신고 목록을 새로 읽는다(처리 상태 회신이 바로 보이게)
-  if (id === 'shinmungo') { smOpen(); }
   if (id === 'planner') { initPlannerCalendar(); }
   if (id === 'mystats') { buildMyStats(); loadActualStudyData(true); if (statsView === 'rank') loadRankData(true); paInit(); } // 탭 열 때마다 최신 기록으로 갱신
   if (id === 'quest') { buildQuest(); loadActualStudyData(); }
@@ -5521,8 +5368,12 @@ document.addEventListener('visibilitychange', function() {
 function restoreTab() {
   try {
     const tab = sessionStorage.getItem('saebom_active_tab_student');
-    if (tab) {
+    // 지워진 화면(신문고 등)이 세션에 남아 있으면 빈 화면이 열린다 — SECTION_NAMES 에
+    // 없는 이름이면 홈에 머문다. 앱을 열어 둔 채 새로고침한 학생용 안전장치.
+    if (tab && SECTION_NAMES[tab]) {
         setTimeout(() => openSection(tab, '#6C5DD3'), 500);
+    } else if (tab) {
+        try { sessionStorage.removeItem('saebom_active_tab_student'); } catch(e) {}
     }
   } catch(e) {}
 }
