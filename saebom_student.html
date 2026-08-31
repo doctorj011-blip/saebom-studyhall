@@ -2091,7 +2091,7 @@ function renderWeeklyGoalCard() {
   const chal = CHAL_WEEKS[_monIso];
   const g = chal ? chal.goalH : (Number(currentStudent.weeklyGoalH) || 0);
   const sub = g
-    ? (chal ? `주 ${g}시간 · 🔥 챌린지 주간! 달성하면 상점 ${chal.points}점 (일요일 순공도 포함)` : `주 ${g}시간 · 달성하면 상점 2점 (미달 벌점 없음)`)
+    ? (chal ? `주 ${g}시간 · 🔥 챌린지 주간! 달성하면 상점 ${chal.points}점 (일요일 순공도 포함)` : `주 ${g}시간 · 일요일 순공 포함 · 달성하면 상점 2점 (미달 벌점 없음)`)
     : '관리자가 설정한 목표가 여기에 표시됩니다';
   el.innerHTML = `
     <div style="background:#EEF2FF;border:1.5px solid #C7D2FE;border-radius:10px;padding:12px 14px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:10px">
@@ -4017,17 +4017,22 @@ function buildMyStats() {
   const dayMins = days.map(d => _dateMinutes(d));
   const dailyAvg = (dayMins[0]+dayMins[1]+dayMins[2]) / 3;
 
-  // 주간: 지난주(월~토) vs 이번주(월~오늘) — 실제 날짜 기준으로 집계
+  // 주간: 지난주(월~일) vs 이번주(월~오늘) — 실제 날짜 기준으로 집계
+  // 일요일은 자율등원이라 교시가 없지만 그날 앉아 있던 시간은 순공 총합에 들어간다.
+  // 다만 하루 평균 분모에는 '실제로 나온 일요일'만 넣는다 — 안 나온 일요일까지 세면
+  // 아무 잘못 없이 평균이 1/7만큼 깎여 지난주보다 떨어진 것처럼 보인다.
   const dowIdx = (now.getDay()+6) % 7; // 월=0 … 일=6
   const monThis = new Date(now); monThis.setDate(now.getDate() - dowIdx); // 이번주 월요일
   const _offDate = (base, off) => { const d = new Date(base); d.setDate(d.getDate()+off); return d; };
   let lastWeekTotal = 0;
-  for (let i = 0; i < 6; i++) lastWeekTotal += _dateMinutes(_offDate(monThis, i-7));
-  const elapsedCnt = Math.min(dowIdx+1, 6);
+  for (let i = 0; i < 7; i++) lastWeekTotal += _dateMinutes(_offDate(monThis, i-7));
+  const lastSunMin = _dateMinutes(_offDate(monThis, -1));          // 지난주 일요일 = 이번주 월요일 하루 전
+  const elapsedCnt = Math.min(dowIdx+1, 7);
   let thisWeekTotal = 0;
   for (let i = 0; i < elapsedCnt; i++) thisWeekTotal += _dateMinutes(_offDate(monThis, i));
-  const lastWeekAvg = lastWeekTotal / 6;
-  const thisWeekAvg = thisWeekTotal / Math.max(1, elapsedCnt);
+  const thisSunMin = dowIdx === 6 ? _dateMinutes(_offDate(monThis, 6)) : 0;  // 오늘이 일요일일 때만 존재
+  const lastWeekAvg = lastWeekTotal / (6 + (lastSunMin > 0 ? 1 : 0));
+  const thisWeekAvg = thisWeekTotal / Math.max(1, Math.min(elapsedCnt, 6) + (thisSunMin > 0 ? 1 : 0));
 
   // 월간
   const curKey = _curYm(), prevKey = _prevYm(curKey);

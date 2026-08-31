@@ -9715,7 +9715,7 @@ setInterval(() => {
     if (window.renderStudyroomBoard) window.renderStudyroomBoard();
     // 어제(및 놓친 날짜) 무단결석 벌점 판정 — 11교시 종료(01:00) 이후라 판정 가능
     if (window.assessNoShowPenalties) window.assessNoShowPenalties().catch(e => console.error('무단결석 판정 오류:', e));
-    // 지난 주(월~토) 목표순공 자동판정 — 월요일 새벽이면 방금 끝난 주가 확정됨
+    // 지난 주(월~일) 목표순공 자동판정 — 월요일 새벽이면 방금 끝난 주가 확정됨
     if (window.assessWeeklyGoals) window.assessWeeklyGoals().catch(e => console.error('주간 목표 판정 오류:', e));
     // 끝난 주기(1주기 7/20~8/31, 이후 월간) 개근·순공 상점 판정 — 주기 종료 다음날부터
     if (window.assessCycleMerits) window.assessCycleMerits().catch(e => console.error('주기 상점 판정 오류:', e));
@@ -14850,13 +14850,17 @@ async function _writeAttendPenalty(dIso, dayName, seatKey, seat, name, missed, l
 }
 
 // ── 주간 목표순공 자동판정 (달성 상점 2점, 미달 벌점 없음) ──
-// 매주 지난 주(월~토) 순공(attendance_sessions durationMin 합)을 학생별 목표(weeklyGoalH)와 비교.
+// 매주 지난 주(월~일) 순공(attendance_sessions durationMin 합)을 학생별 목표(weeklyGoalH)와 비교.
+// 일요일은 자율등원일이라 교시도 시간표도 없지만 그날 앉아 있던 시간은 순공에 그대로 들어간다
+// (2026-08-31 확정 — 안내문의 '주간 목표 45시간'이 일요일을 포함한 값이다).
 // weeklyGoalH = 관리자가 설정한 목표(설정은 관리자앱에서만 — 학생앱은 조회 전용).
 // 유효목표 = 목표시간 − 그 주 '승인변경으로 빠진 교시'의 예정분(이중처벌 방지). 무단결석 교시는 차감 안 함.
 //   실제 ≥ 유효목표(100%) → merits +2(type:'auto') / 미달 시 벌점 없음(긍정 강화만)
 // 무단결석 판정과 동일: 앱 시작+새벽 리셋 때 소급, students/_meta_weekly_goal_done 로 멱등, 취소상태 보존.
 const WEEKLY_START_ISO = '2026-07-20'; // 자동판정 시작(운영 시작일) — 이전 주는 판정 안 함
-const WEEKLY_END_ISO = '2026-08-31';   // 1주기 종료 — 이 날짜 이후로 끝나는 주는 판정 안 함(다음 주기 정해지면 연장)
+const WEEKLY_END_ISO = '2026-09-30';   // 판정 대상 마지막 날 — 이 날짜 이후로 끝나는 주는 판정 안 함.
+// 🔴 주기가 끝날 때마다 여기를 늘려야 한다. 안 늘리면 그 다음 달 주간목표 상점이 조용히 0건이 된다
+// (1주기 7/20~8/31 종료 후 9월분을 놓칠 뻔했다 — 2026-08-31 연장).
 const WEEKLY_MERIT_POINTS = 2;
 // 특별 챌린지 주간(원장 지정): 해당 주만 전원 목표를 고정값으로 판정 + 상점 오버라이드 + 승인변경 차감 없음.
 // weeklyGoalH DB값과 무관하게 여기 값으로 판정하므로, 챌린지 주간의 판정(다음 월요일 02:00)이
@@ -14903,21 +14907,24 @@ window.assessWeeklyGoals = async function(){
 
 async function _assessWeekGoals(monDate, weekIso){
   try {
-    // 그 주 월~토 ISO + 판정 요일명, 세션 조회는 토요일 11교시 자정넘김 대비 일요일까지 포함
+    // dayIsos = 월~토. 교시가 있는 날이라 '승인변경 차감'과 플래너 성실 판정은 이 6일만 본다.
+    // sumIsos = 월~일. 순공 합계는 일요일(자율등원)까지 더한다 — 토요일 11교시 자정넘김도 이 날짜로 들어온다.
     const dayIsos = [], dayNames = [];
     for (let i = 0; i < 6; i++){ const d = new Date(monDate); d.setDate(d.getDate()+i); dayIsos.push(SH.sessIsoDate(d.getTime())); dayNames.push(_WEEKLY_DN[d.getDay()]); }
     const satDate = new Date(monDate); satDate.setDate(satDate.getDate()+5);
     const satIso = dayIsos[5];
     const sun = new Date(monDate); sun.setDate(sun.getDate()+6);
-    const queryIsos = [...dayIsos, SH.sessIsoDate(sun.getTime())];
+    const sunIso = SH.sessIsoDate(sun.getTime());
+    const sumIsos = [...dayIsos, sunIso];
 
     // 1) 순공 집계 (inDate 'in' 30개 청크)
-    const chunks = []; for (let i = 0; i < queryIsos.length; i += 30) chunks.push(queryIsos.slice(i, i+30));
+    const chunks = []; for (let i = 0; i < sumIsos.length; i += 30) chunks.push(sumIsos.slice(i, i+30));
     const snaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, SESS_COL), where('inDate', 'in', c)))));
     let sessCount = 0; const minByName = {}; const attendDaysByName = {};
     snaps.forEach(snap => snap.forEach(x => {
       const s = x.data(); if (!s.studentName || typeof s.inTs !== 'number') return;
-      if (dayIsos.includes(s.inDate)) { sessCount++; (attendDaysByName[s.studentName] = attendDaysByName[s.studentName] || new Set()).add(s.inDate); }
+      if (sumIsos.includes(s.inDate)) sessCount++;   // 휴관주 판정 — 일요일만 나온 주도 판정 대상이다
+      if (dayIsos.includes(s.inDate)) (attendDaysByName[s.studentName] = attendDaysByName[s.studentName] || new Set()).add(s.inDate); // 플래너 성실 분모는 교시가 있는 월~토만
       let m = 0;
       if (s.status === 'closed' && typeof s.durationMin === 'number') m = s.durationMin;
       else if (s.status === 'open') { let away = s.awayMs || 0; if (s.awayStartTs) away += Math.max(0, Math.min(Date.now(), sessCapTs(s.inTs)) - s.awayStartTs); m = sessDurationMin(s.inTs, Date.now(), away); }
@@ -19848,7 +19855,9 @@ function _rpAggregate(o) {
   const span = _rangeDateStringsISO(startISO, endISO);
   const isSun = d => new Date(d + 'T00:00:00').getDay() === 0;
   const attended = span.filter(d => att.mins[d] > 0);
-  const schedDays = span.filter(d => !isSun(d));          // 등원 예정일 = 월~토
+  // 등원 예정일 = 월~토. 일요일은 자율등원이라 예정일이 아니지만, 실제로 나온 일요일은 분모에 넣는다
+  // (순공은 총합에 들어가는데 분모에서 빠지면 하루 평균이 실제보다 높게 나온다)
+  const schedDays = span.filter(d => !isSun(d) || att.mins[d] > 0);
   const totalMin = attended.reduce((n, d) => n + att.mins[d], 0);
 
   // 주차(월요일 시작)
