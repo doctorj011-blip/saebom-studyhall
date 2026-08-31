@@ -1026,3 +1026,204 @@ window._testerGate = (function() {
 
   return { start, recheck, isBlocking };
 })();
+
+// ══════════════════════════════════════════════════════════════════
+// 청구 안내 게이트 (2026-08-31)
+// ══════════════════════════════════════════════════════════════════
+// 재등록 할인 확정 금액은 학생마다 다르다. 공지는 전체에게 같은 글이 나가므로
+// 개인 금액을 담을 수 없고, 카톡으로 33명에게 따로 보내는 것도 사람이 한다.
+// 그래서 이용 조사·테스터 게이트와 같은 방식 — 로그인 전면 게이트 — 으로
+// 자기 금액만 보여 주고 [확인했습니다]를 받는다(원장 지시).
+//
+// ⚠️ **앞의 두 게이트와 별개 모듈이다.** 운영 중인 쪽을 건드리지 않으려고
+//    수명주기(start/recheck/watch)만 같은 모양으로 맞췄다. 게이트가 겹치면
+//    조사 → 테스터 → 청구 순으로 양보한다(두 장이 겹치면 어느 쪽을 답해야
+//    하는지 알 수 없다).
+//
+// ⚠️ 조사·테스터와 달리 **답을 받는 게 아니라 알리는** 게이트다. 그래서
+//    한 번 확인하면 끝이고, 금액 문서가 없는 학생은 아예 막지 않는다
+//    (안내할 금액이 없는데 막으면 앱을 못 쓰는 사람만 생긴다).
+//
+//   billing_notices/_config                 회차 설정 1개
+//   billing_notices/{billId}__{uid}         학생 1인 1개 — 금액과 확인 시각
+//
+// 확인은 역할별로 따로 받는다(ackStudent · ackParent). 학부모가 확인했다고
+// 학생 화면에서 사라지면 학생은 자기 금액을 영영 못 본다.
+//
+// 기본은 active:false — 설정 문서가 없으면 아무것도 뜨지 않는다.
+window._BILLING_COL = 'billing_notices';
+
+window._billingConfig = function(raw) {
+  const d = raw || {};
+  return {
+    active: d.active === true,
+    billId: String(d.billId || ''),                   // 'YYYY-MM'
+    title:  String(d.title || '이용료 안내'),
+    // 결제 방법 안내 — 관리앱에서 고칠 수 있게 설정에 둔다(코드 배포 없이 바뀐다)
+    payText: String(d.payText || '면학관 데스크에서 카드로 결제해 주세요. 계좌이체나 별도 송금은 하지 않으셔도 됩니다.'),
+    exclude: Array.isArray(d.exclude) ? d.exclude.map(String) : []
+  };
+};
+
+// 문서 ID는 이용 조사와 같은 규칙(회차__uid)이다 — 지난 달 안내가 지워지지 않는다.
+window._billingDocId = function(billId, student) {
+  const uid = student && student.uid;
+  const seat = String((student && student.seat) || '').replace(/[^0-9]/g, '');
+  return String(billId || '') + '__' + (uid ? uid : ('seat' + (seat || '0')));
+};
+
+window._billingMonthLabel = function(billId) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(billId || ''));
+  return m ? (Number(m[2]) + '월') : '이번 달';
+};
+
+window._billingGate = (function() {
+  const S = { cfg: null, doc: null, opt: null, busy: false, timer: null };
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const won = n => Number(n || 0).toLocaleString('ko-KR');
+
+  function ackField(role) { return role === 'parent' ? 'ackParent' : 'ackStudent'; }
+
+  async function load() {
+    const opt = S.opt;
+    if (!opt) return 'idle';
+    try {
+      const snap = await opt.fs.getDoc(opt.fs.doc(opt.db, window._BILLING_COL, '_config'));
+      if (!snap || !snap.exists || !snap.exists()) { S.cfg = null; return 'idle'; }
+      const cfg = window._billingConfig(snap.data());
+      if (!cfg.active || !cfg.billId) { S.cfg = null; return 'idle'; }
+      const st = opt.student || {};
+      if (cfg.exclude.indexOf(String(st.name || '')) !== -1) { S.cfg = null; return 'idle'; }
+      // 관리자석·심사용 계정은 어떤 게이트에도 갇히면 안 된다(조사 게이트와 같은 방침)
+      if (window._surveyIsAdminSeat && window._surveyIsAdminSeat(st)) { S.cfg = null; return 'idle'; }
+      if (window._surveyIsReviewAccount && window._surveyIsReviewAccount(st)) { S.cfg = null; return 'idle'; }
+      const ds = await opt.fs.getDoc(
+        opt.fs.doc(opt.db, window._BILLING_COL, window._billingDocId(cfg.billId, st)));
+      S.cfg = cfg;
+      S.doc = (ds && ds.exists && ds.exists()) ? ds.data() : null;
+    } catch (e) {
+      console.warn('청구 안내 확인 실패:', e);
+      return 'error';                      // 이미 떠 있는 게이트를 읽기 실패로 내리지 않는다
+    }
+    if (!S.doc) return 'pass';             // 안내할 금액이 없는 학생 — 막지 않는다
+    if (S.doc[ackField(S.opt.role)]) return 'pass';
+    return 'block';
+  }
+
+  function isBlocking() {
+    return document.getElementById('billing-gate')?.dataset.blocking === '1';
+  }
+
+  async function start(opt) {
+    S.opt = opt;
+    const r = await load();
+    if (r === 'block') open();
+    watch();
+    return r;
+  }
+
+  async function recheck() {
+    if (!S.opt || S.busy) return;
+    const r = await load();
+    if (r === 'error') return;
+    if (r === 'block') { if (!isBlocking()) open(); return; }
+    if (isBlocking()) document.getElementById('billing-gate')?.remove();
+  }
+
+  function watch() {
+    if (S.timer) return;
+    S.timer = setInterval(() => { if (!document.hidden) recheck(); }, 10 * 60 * 1000);
+  }
+
+  function open() {
+    // 앞선 게이트가 떠 있으면 그쪽을 먼저 끝내게 둔다. 내려가는 순간 이어서
+    // 뜨도록 몇 초 간격으로 다시 본다(10분 주기만 믿으면 다음 접속에서야 만난다).
+    if (document.getElementById('survey-gate') || document.getElementById('tester-gate')) {
+      setTimeout(() => { if (S.cfg && S.doc && !S.doc[ackField(S.opt.role)]) open(); }, 3000);
+      return;
+    }
+    document.getElementById('billing-gate')?.remove();
+    const ov = document.createElement('div');
+    ov.id = 'billing-gate';
+    ov.dataset.blocking = '1';
+    // 색은 청구서답게 남색·금색 — 조사(보라)·테스터(초록)와 눈으로 구분된다
+    ov.style.cssText = 'position:fixed;inset:0;z-index:20000;padding:20px;overflow-y:auto' +
+      ';background:linear-gradient(150deg,#101E27 0%,#17323F 45%,#23515E 100%)' +
+      ';display:flex;align-items:center;justify-content:center';
+    ov.innerHTML = '<div id="billing-gate-card" style="background:#fff;border-radius:20px;padding:24px 20px;width:100%;max-width:380px;box-shadow:0 18px 50px rgba(0,0,0,0.30);color:#1F2937"></div>';
+    document.body.appendChild(ov);
+    render();
+  }
+
+  function render() {
+    const card = document.getElementById('billing-gate-card');
+    if (!card) return;
+    const st = S.opt.student || {}, cfg = S.cfg, d = S.doc || {};
+    const p = S.opt.role === 'parent';
+    const label = window._billingMonthLabel(cfg.billId);
+    const amount = Number(d.won || 0);
+    // 계산 근거를 같이 보여 준다 — 금액만 던지면 "왜 이 금액이냐"는 문의가 그대로 온다.
+    const basis = (d.rawMerit != null && d.rawDemerit != null)
+      ? `상점 ${Number(d.rawMerit)}점 − 벌점 ${Number(d.rawDemerit)}점` +
+        (Number(d.netDemerit || 0) > 0 ? ` → 남은 벌점 ${Number(d.netDemerit)}점` : ` → 남은 상점 ${Number(d.netMerit || 0)}점`)
+      : '';
+    card.innerHTML = `
+      <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">💳 ${esc(label)} ${esc(cfg.title)}</div>
+      <div style="font-size:12.5px;color:#6B7280;margin-top:5px;line-height:1.6">
+        ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}${p ? ' 학부모님' : ''}</div>
+
+      <div style="margin-top:14px;background:#F5ECDA;border:1px solid #E3D4B4;border-radius:12px;padding:16px 16px 14px">
+        <div style="font-size:12px;color:#8A5A22;font-weight:700;letter-spacing:.02em">${esc(label)} 재등록 할인</div>
+        <div style="font-size:30px;font-weight:900;color:#101E27;letter-spacing:-1px;margin-top:2px">
+          ${won(amount)}<span style="font-size:17px;font-weight:800">원</span></div>
+        ${basis ? `<div style="font-size:11.5px;color:#6F6353;margin-top:4px">${esc(basis)}</div>` : ''}
+        ${amount > 0
+          ? `<div style="font-size:12px;color:#6F6353;margin-top:8px;line-height:1.65">남은 상점 1점당 1,000원씩 ${esc(label)} 이용료에서 빼 드립니다.</div>`
+          : `<div style="font-size:12px;color:#6F6353;margin-top:8px;line-height:1.65">상점으로 벌점을 지우고도 벌점이 남아 이번 회차 할인은 없습니다. <b>추가로 받는 비용은 없습니다.</b></div>`}
+      </div>
+
+      <div style="margin-top:10px;background:#F9FAFB;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#374151;line-height:1.7">
+        <b>결제 방법</b><br>${esc(cfg.payText)}
+      </div>
+      <div style="margin-top:8px;font-size:11.5px;color:#9CA3AF;line-height:1.6">
+        상점·벌점 내역과 사유는 ${p ? '학부모앱' : '앱'} ‘오늘 일정’ 화면의 상·벌점 카드에서 그대로 보실 수 있습니다.
+      </div>
+
+      <div id="billing-err" style="margin-top:10px;font-size:12px;color:#C62828"></div>
+      <button id="billing-ok" onclick="window._billingGate.ack()"
+        style="width:100%;margin-top:12px;padding:14px;border:none;border-radius:12px;background:#17323F;color:#fff;font-size:15px;font-weight:800;cursor:pointer">
+        확인했습니다</button>
+      <div style="margin-top:8px;font-size:11px;color:#9CA3AF;text-align:center">문의 031-273-0982</div>`;
+  }
+
+  async function ack() {
+    if (S.busy || !S.opt || !S.cfg) return;
+    S.busy = true;
+    const err = document.getElementById('billing-err');
+    const btn = document.getElementById('billing-ok');
+    if (btn) { btn.disabled = true; btn.textContent = '저장 중…'; }
+    try {
+      const st = S.opt.student || {};
+      const now = new Date();
+      const p2 = n => String(n).padStart(2, '0');
+      const stamp = now.getFullYear() + '-' + p2(now.getMonth() + 1) + '-' + p2(now.getDate()) +
+                    ' ' + p2(now.getHours()) + ':' + p2(now.getMinutes());
+      const patch = {};
+      patch[ackField(S.opt.role)] = stamp;
+      await S.opt.fs.setDoc(
+        S.opt.fs.doc(S.opt.db, window._BILLING_COL, window._billingDocId(S.cfg.billId, st)),
+        patch, { merge: true });
+      S.doc = Object.assign({}, S.doc, patch);
+      document.getElementById('billing-gate')?.remove();
+    } catch (e) {
+      console.error('청구 안내 확인 저장 실패:', e);
+      if (err) err.textContent = '저장에 실패했어요. 잠시 후 다시 눌러 주세요.';
+      if (btn) { btn.disabled = false; btn.textContent = '확인했습니다'; }
+    } finally {
+      S.busy = false;
+    }
+  }
+
+  return { start, recheck, isBlocking, ack };
+})();

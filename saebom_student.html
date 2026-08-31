@@ -2195,6 +2195,19 @@ function startTesterGate() {
   });
 }
 
+// 청구 안내 게이트(2026-08-31). 개인별 확정 금액은 공지로는 알릴 수 없어(공지는 전체
+// 같은 글) 게이트로 자기 금액만 보여 준다. 설정(billing_notices/_config)이 없거나
+// active 가 아니면, 또는 그 학생 금액 문서가 없으면 아무것도 뜨지 않는다.
+function startBillingGate() {
+  if (!window._billingGate || !window._db || !currentStudent) return;
+  window._billingGate.start({
+    role: 'student',
+    student: currentStudent,
+    db: window._db,
+    fs: { doc: window._fsDoc, getDoc: window._fsGetDoc, setDoc: window._fsSetDoc }
+  });
+}
+
 // ── 로그인 ──
 let pinBuffer = '';
 
@@ -2707,6 +2720,7 @@ function enterApp() {
     restoreStandDeskWait();
     startUsageSurvey();
     startTesterGate();
+    startBillingGate();
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
@@ -2723,6 +2737,7 @@ function enterApp() {
       restoreStandDeskWait();
       startUsageSurvey();
       startTesterGate();
+      startBillingGate();
     startTesterGate();
     }, { once: true });
   }
@@ -5344,6 +5359,7 @@ document.addEventListener('visibilitychange', function() {
   // 조사를 켠 뒤에도 게이트를 만나지 않는다(2026-08-19 좌석 6 건)
   try { window._surveyGate?.recheck(); } catch(e) {}
   try { window._testerGate?.recheck(); } catch(e) {}
+  try { window._billingGate?.recheck(); } catch(e) {}
   // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
   if (activeTab === 'seatmap') buildStudentSeatmap();

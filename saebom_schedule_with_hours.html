@@ -115,6 +115,7 @@
   --kbg-191e30:#191e30;
   --kbg-1a1a1a:#1a1a1a;
   --kbg-1a2350:#1a2350;
+  --kbg-17323f:#17323f;
   --kbg-1e1b4b:#1e1b4b;
   --kbg-222a50:#222a50;
   --kbg-22c55e:#22c55e;
@@ -502,7 +503,8 @@
     --kbg-191e30:#252b41;
     --kbg-1a1a1a:#5f5959;
     --kbg-1a2350:#1c244a;
-    --kbg-1e1b4b:#211e48;
+    --kbg-17323f:#1e3a48;
+  --kbg-1e1b4b:#211e48;
     --kbg-222a50:#212745;
     --kbg-22c55e:#22924b;
     --kbg-2563eb:#1c4db8;
@@ -21823,6 +21825,25 @@ document.addEventListener('DOMContentLoaded', function() {
             ${td(esc(r.resp.updatedAt || ''), 'color:#9A96B8;white-space:nowrap')}
           </tr>`;
         }).join(''), ['좌석', '이름', '반영값', '응답 주체', '상점/벌점', '예상 할인', '확정 할인', '최종 응답'])}
+      </div>
+
+      <div class="card" style="margin-top:14px;border:1.5px solid var(--kbd-8f82e4)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap">
+          <div style="font-size:13px;font-weight:700;color:var(--kfg-1e1b4b)">💳 앱 청구 안내 게이트</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button onclick="usPushBilling()" style="padding:6px 14px;background:var(--kbg-17323f);color:var(--kfg-ffffff);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">📣 앱에 안내 띄우기</button>
+            <button onclick="usBillingStatus()" style="padding:6px 12px;background:var(--kbg-ffffff);border:1.5px solid var(--kbd-8f82e4);border-radius:8px;font-size:12px;color:var(--kfg-4a3fa8);font-weight:600;cursor:pointer">🔎 확인 현황</button>
+            <button onclick="usStopBilling()" style="padding:6px 12px;background:var(--kbg-ffffff);border:1.5px solid var(--kbd-d1d5db);border-radius:8px;font-size:12px;color:var(--kfg-6b7280);font-weight:600;cursor:pointer">■ 안내 내리기</button>
+          </div>
+        </div>
+        <div style="font-size:11.5px;color:var(--kfg-6b6b8a);line-height:1.7">
+          확정한 금액을 <b>학생앱·학부모앱 로그인 화면에 개인별로</b> 띄웁니다. 공지는 전체에게 같은 글이 나가지만
+          이 게이트는 자기 금액만 보여 주고 [확인했습니다]를 받습니다. 확인하면 그 사람에게는 다시 뜨지 않고,
+          학생과 학부모의 확인은 따로 셉니다.<br>
+          <b>[할인 확정]을 먼저 누르세요</b> — 확정값이 없는 학생은 안내에서 빠집니다.
+          금액이 0원인 학생에게도 '이번 회차 할인 없음'으로 뜹니다(추가 비용은 없다고 함께 안내됩니다).
+        </div>
+        <div id="us-billing-status" style="margin-top:8px;font-size:12px;color:var(--kfg-4a3fa8)"></div>
       </div>`;
   }
 
@@ -22069,6 +22090,88 @@ document.addEventListener('DOMContentLoaded', function() {
       alert(`할인을 확정했습니다. (${targets.length}명 · ${won(sum)}원)`);
     } catch (e) { console.error(e); alert('확정 실패: ' + e.message); }
     finally { BUSY = false; }
+  };
+
+  // ── 앱 청구 안내 게이트 (billing_notices) ─────────────────────────────
+  // 확정값(discountFinal)을 학생별 문서로 밀어넣고 설정을 켠다. 멱등이라 다시 눌러도 된다.
+  // ⚠️ 규칙상 확인 도장이 찍힌 문서는 금액을 못 고친다 — 이미 확인한 학생의 금액을
+  //    바꾸려면 그 학생만 따로 처리해야 한다(그럴 일이 없게 확정 뒤에 띄운다).
+  const _billId = () => CFG.surveyId;   // 조사 회차와 같은 'YYYY-MM'
+  window.usPushBilling = async function() {
+    if (BUSY) return;
+    if (!isCurrent()) { alert('지난 회차는 안내할 수 없습니다.'); return; }
+    const targets = ROWS.filter(r => r.resp && r.resp.want && r.resp.discountFinal != null);
+    if (!targets.length) { alert('확정된 할인이 없습니다. [할인 확정]을 먼저 누르세요.'); return; }
+    const skipped = ROWS.filter(r => r.resp && r.resp.want && r.resp.discountFinal == null).length;
+    const sum = targets.reduce((a, r) => a + Number(r.resp.discountFinal || 0), 0);
+    if (!confirm(`${window._surveyMonthLabel(_billId())} 청구 안내를 앱에 띄웁니다.\n\n대상 ${targets.length}명 · 합계 ${won(sum)}원`
+        + (skipped ? `\n⚠️ 확정값이 없는 ${skipped}명은 빠집니다` : '')
+        + `\n\n학생앱·학부모앱 로그인 화면에 각자 금액이 뜹니다. 계속할까요?`)) return;
+    BUSY = true;
+    try {
+      const db = await window.waitDb();
+      const { doc, setDoc } = window._fs;
+      const bid = _billId();
+      for (const r of targets) {
+        const b = r.resp.discountBase || {};
+        await setDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, { uid: r.uid, seat: r.seat })), {
+          billId: bid, uid: r.uid || '', name: r.name || '', seat: String(r.seat || ''),
+          won: Number(r.resp.discountFinal || 0),
+          rawMerit: Number(b.merit || 0), rawDemerit: Number(b.demerit || 0),
+          netMerit: Number(b.netMerit || 0), netDemerit: Number(b.netDemerit || 0),
+          pushedAt: window._noticeToday()
+        }, { merge: true });
+      }
+      await setDoc(doc(db, window._BILLING_COL, '_config'), {
+        active: true, billId: bid, title: '이용료 안내',
+        payText: '면학관 데스크에서 카드로 결제해 주세요. 계좌이체나 별도 송금은 하지 않으셔도 됩니다.'
+      }, { merge: true });
+      alert(`앱에 안내를 띄웠습니다. (${targets.length}명 · ${won(sum)}원)`);
+      usBillingStatus();
+    } catch (e) { console.error(e); alert('안내 띄우기 실패: ' + e.message); }
+    finally { BUSY = false; }
+  };
+
+  window.usStopBilling = async function() {
+    if (BUSY) return;
+    if (!confirm('앱에 뜨는 청구 안내를 내립니다.\n(금액 문서는 지우지 않습니다 — 다시 띄우면 그대로 살아납니다)')) return;
+    BUSY = true;
+    try {
+      const db = await window.waitDb();
+      const { doc, setDoc } = window._fs;
+      await setDoc(doc(db, window._BILLING_COL, '_config'), { active: false }, { merge: true });
+      alert('안내를 내렸습니다.');
+      usBillingStatus();
+    } catch (e) { console.error(e); alert('실패: ' + e.message); }
+    finally { BUSY = false; }
+  };
+
+  // 확인 현황 — 규칙이 list 를 막아 뒀으므로(개인 금액이라 통째 조회를 열지 않았다)
+  // 학생별로 하나씩 get 한다. 재원생 수십 명이라 무해하다.
+  window.usBillingStatus = async function() {
+    const el = document.getElementById('us-billing-status');
+    if (el) el.textContent = '확인 중…';
+    try {
+      const db = await window.waitDb();
+      const { doc, getDoc } = window._fs;
+      const bid = _billId();
+      const cs = await getDoc(doc(db, window._BILLING_COL, '_config'));
+      const on = cs.exists() && cs.data().active === true && cs.data().billId === bid;
+      const targets = ROWS.filter(r => r.resp && r.resp.want && r.resp.discountFinal != null);
+      let pushed = 0, ackS = 0, ackP = 0; const pend = [];
+      for (const r of targets) {
+        const d = await getDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, { uid: r.uid, seat: r.seat })));
+        if (!d.exists()) continue;
+        pushed++;
+        const v = d.data();
+        if (v.ackStudent) ackS++;
+        if (v.ackParent) ackP++;
+        if (!v.ackStudent || !v.ackParent) pend.push(r.seat + ' ' + r.name + (v.ackStudent ? '' : '(학생)') + (v.ackParent ? '' : '(학부모)'));
+      }
+      if (el) el.innerHTML = `${on ? '🟢 <b>안내 중</b>' : '⚪ 꺼져 있음'} · 띄운 학생 <b>${pushed}</b>명 ·
+        학생 확인 <b>${ackS}</b> · 학부모 확인 <b>${ackP}</b>` +
+        (pend.length ? `<div style="margin-top:4px;font-size:11.5px;color:var(--kfg-b45309)">아직 안 본 사람 — ${pend.map(x => esc(x)).join(' · ')}</div>` : '');
+    } catch (e) { console.error(e); if (el) el.textContent = '확인 실패: ' + e.message; }
   };
 })();
 </script>

@@ -920,6 +920,7 @@ function enterApp() {
   loadAllData();
   startUsageSurvey();
   startTesterGate();
+  startBillingGate();
 }
 
 function doLogout() {
@@ -1199,6 +1200,23 @@ async function startTesterGate() {
   }
   if (!window._testerGate || !currentStudent) return;
   window._testerGate.start({
+    role: 'parent',
+    student: currentStudent,
+    db: window._db,
+    fs: { doc: window._doc, getDoc: window._getDoc, setDoc: window._setDoc }
+  });
+}
+
+// 청구 안내 게이트(2026-08-31) — 학생앱과 같은 모듈. 확인은 역할별로 따로 받는다.
+async function startBillingGate() {
+  let waited = 0;
+  while (!window._db || !window._getDoc || !window._setDoc) {
+    if (waited >= 3000) return;
+    await new Promise(r => setTimeout(r, 100));
+    waited += 100;
+  }
+  if (!window._billingGate || !currentStudent) return;
+  window._billingGate.start({
     role: 'parent',
     student: currentStudent,
     db: window._db,
@@ -3027,6 +3045,7 @@ async function doLoginFirebase(name, phone) {
 document.addEventListener('visibilitychange', function() {
   if (document.hidden || !currentStudent) return;
   try { window._testerGate?.recheck(); } catch(e) {}
+  try { window._billingGate?.recheck(); } catch(e) {}
   refreshParentData();
   startStatusRealtime();
   startScheduleRealtime();

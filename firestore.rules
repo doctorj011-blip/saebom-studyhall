@@ -72,6 +72,9 @@ rules_version = '2';
 //                 summary 를 연 것과 같은 이유다 — 최근 3건의 코멘트가 다음 검사
 //                 프롬프트로 들어가므로(plannerAiHistory) 틀린 코멘트를 두면 며칠치가
 //                 오염된다. quality·stats 는 여전히 서버 전용
+//   - 2026-08-31  billing_notices 추가 — 재등록 할인 확정 금액 개인 안내 게이트.
+//                   금액이 들어 있어 list 를 막고 get 만 연다. 확인 도장이 찍힌 뒤에는
+//                   금액(won)을 못 고친다.
 //   - 2026-08-28  usage_surveys 를 매달 도는 조사로 바꿨다 — **규칙은 그대로다**(배포 불필요).
 //                 _config 에 startedAt·history[] 가 늘었지만 검사 항목은 surveyId·active 뿐이고,
 //                 회차 구분은 응답 문서 ID 접두사(surveyId__)라 컬렉션 모양이 안 바뀐다.
@@ -534,6 +537,31 @@ service cloud.firestore {
            && request.resource.data.firstBy in ['student', 'parent']
            && request.resource.data.name is string
            && request.resource.data.name.size() <= 30);
+    }
+
+    // 청구 안내 게이트(2026-08-31) — 재등록 할인 확정 금액을 학생마다 다르게 보여 준다.
+    // get 만 연다: 문서에 개인 금액이 들어 있어 list 를 열면 프로젝트를 아는 사람이
+    //   전교생 금액을 한 번에 긁는다. 게이트는 자기 문서 하나만 getDoc 한다.
+    // delete 도 막는다 — 지우면 게이트가 다시 떠서 이미 확인한 사람을 또 막는다.
+    // update 는 금액(won)을 건드리지 못하게 한다. 다만 아직 아무도 확인하지 않은
+    //   문서는 관리앱이 금액을 다시 채울 수 있어야 하므로 그때만 예외로 연다
+    //   (한 번이라도 확인 도장이 찍히면 금액은 그대로 굳는다).
+    match /billing_notices/{id} {
+      allow get: if true;
+      allow list: if false;
+      allow delete: if false;
+      allow create: if id == '_config'
+        ? request.resource.data.active is bool
+        : (request.resource.data.billId is string
+           && request.resource.data.won is int
+           && request.resource.data.won >= 0
+           && request.resource.data.name is string
+           && request.resource.data.name.size() <= 30);
+      allow update: if id == '_config'
+        ? request.resource.data.active is bool
+        : (request.resource.data.billId == resource.data.billId
+           && (request.resource.data.won == resource.data.won
+               || (!('ackStudent' in resource.data) && !('ackParent' in resource.data))));
     }
 
     // 학생관리앱: sm_ 접두사 컬렉션 (프로토타입 단계: 로그인 필요)
