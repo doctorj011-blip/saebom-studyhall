@@ -164,8 +164,12 @@ window._surveyIsAdminSeat = function(seat) {
 //      마감일이 미래로 옮겨가므로 그때부터는 정상 대상이 된다 — 명단을 손댈 일이 없다.
 //   5) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생. 여기만 회차마다 손댄다.
 // 이름 비교는 _sameStudentName 으로 한다("박지윤(9557)"·"박지윤A" 같은 표기 편차를 흡수).
+// ⚠️ startDate 는 '이번 이용권 시작일'이라 달마다 새로 쓰인다(9월분을 9-01로 일괄 변경).
+//    그걸 그대로 쓰면 어느 달이든 전원이 '마감 후 등록'이 되어 조사 대상이 통째로 빈다.
+//    그래서 최초 등록일(joinedAt)을 먼저 본다 — 이 값은 한 번 박히면 안 바뀐다.
+//    옛 학생은 joinedAt 이 없을 수 있어 startDate 로 떨어진다(백필 전 호환).
 window._surveyJoinedAfterClose = function(cfg, student) {
-  const sd = String((student && student.startDate) || '');
+  const sd = String((student && (student.joinedAt || student.startDate)) || '');
   const close = String((cfg && cfg.closeAt) || '').slice(0, 10);   // 'YYYY-MM-DD'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sd) || !/^\d{4}-\d{2}-\d{2}$/.test(close)) return false;
   return sd > close;
