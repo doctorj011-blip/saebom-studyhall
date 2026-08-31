@@ -20942,7 +20942,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <label>상점 1점당 <input id="us-won" type="number" value="${CFG.meritWon}" style="width:80px;padding:5px 8px;border:1.5px solid #c9c4e8;border-radius:7px">원</label>
         <label>할인 상한 <input id="us-cap" type="number" value="${CFG.meritCap}" style="width:90px;padding:5px 8px;border:1.5px solid #c9c4e8;border-radius:7px">원</label>
         <label style="display:flex;align-items:center;gap:4px"><input id="us-block" type="checkbox" ${CFG.blockAfterClose ? 'checked' : ''}> 마감 후에도 차단</label>
-        <label>제외 <input id="us-exclude" value="${esc(CFG.exclude.join(', '))}" placeholder="이름, 이름" style="width:180px;padding:5px 8px;border:1.5px solid #c9c4e8;border-radius:7px"></label>
+        <label>제외 <input id="us-exclude" value="${esc(CFG.exclude.join(', '))}" style="width:180px;padding:5px 8px;border:1.5px solid #c9c4e8;border-radius:7px"></label>
         <button onclick="usSaveConfig()" style="padding:6px 14px;background:#eef2ff;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;color:#4a3fa8;font-weight:600;cursor:pointer">저장</button>
         ${CFG.finalizedAt ? `<span style="color:#166534;font-weight:600">✔ 할인 확정 ${esc(CFG.finalizedAt)}</span>` : ''}
       </div>
@@ -20960,7 +20960,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <button onclick="${onclick}" style="padding:7px 16px;background:#6c5dd3;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">${esc(btnLabel)}</button>
       </div>
       <div style="margin-top:10px;font-size:12px">
-        <label>제외할 학생 <input id="us-exclude-new" value="${esc((base.exclude || []).join(', '))}" placeholder="이름, 이름" style="width:260px;padding:5px 8px;border:1.5px solid #c9c4e8;border-radius:7px"></label>
+        <label>제외할 학생 <input id="us-exclude-new" value="${esc((base.exclude || []).join(', '))}" style="width:260px;padding:5px 8px;border:1.5px solid #c9c4e8;border-radius:7px"></label>
         <span style="color:#9a96b8;margin-left:6px">쉼표로 구분. <b>관리자석(54~63)과 예약 퇴원일이 잡힌 학생은 적지 않아도 자동으로 빠집니다.</b></span>
       </div>`;
   }
