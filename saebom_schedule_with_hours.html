@@ -8411,10 +8411,16 @@ function buildFpSidePanel() {
   const countEl = document.getElementById('fp-side-count');
   if (!listEl) return;
 
-  // 전체 학생 (입실중 → 미입실 순) — 관리자석(54번~)은 학생이 아니라 제외
+  // 전체 학생 (입실중 → 미입실 → 미배석 순) — 관리자석(54번~)은 학생이 아니라 제외
+  // 배석 해제된 학생(seat '')도 카드를 남긴다. 자리만 뺀 것이지 나간 게 아니고,
+  // 이 카드를 좌석에 끌어다 놓는 것이 다시 앉히는 가장 빠른 길이다.
+  const _unseated = s2 => !(s2.seat && parseInt(s2.seat) > 0);
   const sorted = [...STUDENTS]
-    .filter(s => s.seat && parseInt(s.seat) > 0 && !window.isAdminSeat(s.seat))
+    .filter(s => s.name && !(s.seat && window.isAdminSeat(s.seat)) && !window.isNonStudent?.(s.name))
     .sort((a, b) => {
+      const aU = _unseated(a), bU = _unseated(b);
+      if (aU !== bU) return aU ? 1 : -1;          // 미배석은 항상 맨 아래
+      if (aU && bU) return String(a.name).localeCompare(String(b.name), 'ko');
       const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
       const bIn = todayRecords.some(r => r.studentName === b.name && !r.outTime);
       if (aIn && !bIn) return -1;
@@ -8438,7 +8444,11 @@ function buildFpSidePanel() {
 
     // 배지 및 배경 결정
     let badgeText, badgeBg, cardBg, cardBorder;
-    if (isIn && strNum) {
+    const unseated = _unseated(s);
+    if (unseated) {
+      badgeText = '미배석';
+      badgeBg = '#6b7280'; cardBg = '#f9fafb'; cardBorder = '#d1d5db';
+    } else if (isIn && strNum) {
       badgeText = `이용 · ST-R ${strNum}`;
       badgeBg = '#7c3aed'; cardBg = '#faf5ff'; cardBorder = '#c084fc';
     } else if (isIn) {
@@ -8479,9 +8489,10 @@ function buildFpSidePanel() {
     return `<div
       class="fp-side-card-drag"
       data-student-name="${s.name}"
-      data-student-seat="${s.seat}"
+      data-student-seat="${unseated ? window.unseatedDocId(s) : s.seat}"
       draggable="true"
-      onclick="fpSeatClick(${parseInt(s.seat)})"
+      ${unseated ? 'title="자리가 없는 학생입니다 — 카드를 배치도 좌석으로 끌어다 놓으면 배정됩니다"'
+                 : `onclick="fpSeatClick(${parseInt(s.seat)})"`}
       onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,0.1)'" onmouseout="this.style.boxShadow=''"
       style="background:${cardBg};border:1.5px solid ${cardBorder};border-radius:10px;padding:6px 10px;cursor:pointer;transition:box-shadow 0.1s;position:relative;flex-shrink:0;line-height:1.25">
       <div style="position:absolute;top:6px;right:9px;font-size:13px;color:#d1d5db">⠿</div>
@@ -8490,7 +8501,7 @@ function buildFpSidePanel() {
           <span style="font-size:10px;font-weight:700;padding:1px 8px;border-radius:20px;background:${badgeBg};color:#ffffff">${badgeText}</span>
           ${standChip}
         </div>
-        <span style="font-size:11px;color:#6b7280;margin-right:15px">${s.seat}번</span>
+        <span style="font-size:11px;color:#6b7280;margin-right:15px">${unseated ? '자리 없음' : s.seat + '번'}</span>
       </div>
       <div style="display:flex;align-items:center;gap:4px">
         <span style="font-size:13px;font-weight:700;color:#1f2937">${s.name}</span>
@@ -8586,7 +8597,8 @@ async function _onCellDrop(e) {
   if (targetSeatStr === fromSeat) { showAdminToast('💡 같은 좌석입니다'); return; }
 
   const occupant = STUDENTS.find(s => s.seat === targetSeatStr);
-  let confirmMsg = `${studentName} 학생을\n${fromSeat}번 → ${targetSeatStr}번으로 좌석 변경할까요?`;
+  const fromLabel = String(fromSeat).startsWith('unseated__') ? '미배석' : fromSeat + '번';
+  let confirmMsg = `${studentName} 학생을\n${fromLabel} → ${targetSeatStr}번으로 좌석 변경할까요?`;
   if (occupant) confirmMsg += `\n\n⚠️ ${targetSeatStr}번의 "${occupant.name}" 학생과 자리가 교환됩니다.`;
   if (!confirm(confirmMsg)) return;
 
@@ -8627,7 +8639,8 @@ async function _executeSeatChange(studentName, oldSeat, newSeat, occupant) {
     buildDashboard();
 
     const swapMsg = occupant ? ` ↔ ${occupant.name}(${newSeat}→${oldSeat})` : '';
-    showAdminToast(`✅ ${studentName}: ${oldSeat}번 → ${newSeat}번 변경${swapMsg}`);
+    const oldLabel = String(oldSeat).startsWith('unseated__') ? '미배석' : oldSeat + '번';
+    showAdminToast(`✅ ${studentName}: ${oldLabel} → ${newSeat}번 변경${swapMsg}`);
 
     // 1초 후 플래그 해제
     setTimeout(() => { window._seatChanging = false; }, 1000);
