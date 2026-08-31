@@ -11729,8 +11729,10 @@ window.recalcHoursWithConfirm = async function(){
 
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
-  const cleanSeat = String(student.seat).replace('번','');
-  const docRef = doc(db, 'students', cleanSeat);
+  const cleanSeat = String(student.seat == null ? '' : student.seat).replace('번','').trim();
+  // 배석 해제된 학생(좌석 없음)은 문서 ID가 좌석일 수 없다 — unseated__{uid} 에 둔다.
+  // 이 분기가 없으면 students/ 빈 ID 로 써서 저장이 통째로 실패한다.
+  const docRef = doc(db, 'students', cleanSeat || window.unseatedDocId(student));
   await setDoc(docRef, {
     // 불변 학생ID(이관 1단계) — setDoc은 문서를 통째로 덮으므로 여기 없으면 저장 한 번에 사라진다.
     // uid가 사라지면 uid로 조회하는 화면들이 통째로 빈다(이력 10,402건이 이 값으로 묶여 있다).
@@ -11774,6 +11776,12 @@ async function saveStudentToFirebase(student) {
     ...(student.plannerHidden === true && student.plannerHiddenAt ? { plannerHiddenAt: String(student.plannerHiddenAt) } : {}),
     updatedAt: serverTimestamp()
   });
+  // 좌석을 다시 받은 학생이면 배석 해제 때 만들어 둔 문서를 치운다(없으면 무해).
+  // 이게 없으면 같은 학생이 좌석판과 미배석 목록에 둘 다 뜬다.
+  if (cleanSeat) {
+    const un = window.unseatedDocId(student);
+    if (un !== cleanSeat) { try { await deleteDoc(doc(db, 'students', un)); } catch(e) {} }
+  }
 }
 
 // ── 누적시간 key 마이그레이션 (구형식 숫자키 1~12 → "2026-MM") ──
@@ -17400,19 +17408,46 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
   }, 50);
 };
 
+// ── 배석 해제 — 자리만 빼고 학생 데이터는 그대로 옮긴다 ──
+// 🔴 2026-09-01 이전에는 여기서 deleteStudentFromFirebase()를 불러 students·schedules·
+//    schedule_base 세 문서를 **지웠다**. 확인창은 "학생 정보는 유지됩니다"라고 했는데
+//    실제로는 퇴원과 달리 보관함에도 안 남아 되돌릴 수가 없었다(좌석 13 정시우 건).
+//    지금은 문서 ID만 좌석에서 unseated__{uid} 로 옮긴다 — 학생 목록에는 그대로 남고
+//    배치도에서만 빠진다(배치도는 seat 필드로 찾으므로 빈 값이면 안 뜬다).
+//    좌석을 다시 주면 saveStudentToFirebase 가 옛 unseated 문서를 지운다.
+window.unseatedDocId = function(student) {
+  const uid = student && student.uid;
+  return 'unseated__' + (uid || ('seat' + String((student && student.seat) || '0').replace(/[^0-9]/g, '')));
+};
+
+async function moveStudentToUnseated(seat, student) {
+  const from = String(seat).replace('번', '');
+  const to = window.unseatedDocId(student);
+  const cols = ['students', 'schedules', 'schedule_base'];
+  for (const col of cols) {
+    const snap = await _getDocData(col, from);
+    if (!snap) continue;
+    const body = Object.assign({}, snap, { seat: '' });
+    if (col === 'students') { body.unseatedAt = window._noticeToday(); body.unseatedFrom = from; }
+    await setDoc(doc(db, col, to), body);
+  }
+  for (const col of cols) { try { await deleteDoc(doc(db, col, from)); } catch(e) {} }
+  return to;
+}
+
 window.fpUnassignSeat = function(seatNum) {
   document.getElementById('fp-ctx-menu')?.remove();
   const student = getFpStudentBySeat(seatNum);
   if (!student) return;
-  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제하시겠습니까?\n학생 정보는 유지됩니다.`)) return;
+  if (!confirm(`${student.name}(${seatNum}번)의 배석을 해제할까요?\n\n학생 정보(연락처·시간표·누적시간·상벌점)는 그대로 남고 자리만 빕니다.\n학생 목록에서 좌석을 다시 주면 됩니다.`)) return;
 
   const idx = STUDENTS.findIndex(s => parseInt(s.seat) === seatNum);
   if (idx !== -1) {
-    const oldSeat = STUDENTS[idx].seat;
+    const target = STUDENTS[idx];
     STUDENTS[idx].seat = '';
-    if (oldSeat && window.deleteStudentFromFirebase) {
-      window.deleteStudentFromFirebase(String(seatNum)).catch(console.error);
-    }
+    moveStudentToUnseated(seatNum, target)
+      .then(id => console.log(`[배석해제] ${target.name} → ${id} (자리만 해제, 데이터 유지)`))
+      .catch(e => { console.error('배석 해제 실패:', e); alert('배석 해제 중 오류가 났습니다: ' + e.message); });
   }
 
   // 관리자석인 경우 ADMIN_FIXED name도 비우기
@@ -17424,7 +17459,7 @@ window.fpUnassignSeat = function(seatNum) {
   buildFloorplan();
   buildStudentList(document.getElementById('student-search')?.value || '');
   buildDashboard();
-  showAdminToast(`🪑 ${student.name} 배석이 해제됐습니다`);
+  showAdminToast(`🪑 ${student.name} 배석 해제 — 학생 정보는 그대로 남아 있습니다`);
 };
 
 // ── 퇴원처리(soft delete): 학생 데이터를 보관함으로 이동, 90일 내 복구 가능 ──
