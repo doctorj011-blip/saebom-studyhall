@@ -158,13 +158,24 @@ window._surveyIsAdminSeat = function(seat) {
 //   2) 관리자석 — 바로 위 참조(코드 규칙, 회차마다 다시 적지 않는다).
 //   3) withdrawAt(예약 퇴원일)이 잡힌 학생 — 나가기로 확정된 사람에게 "다음 달에도 오실래요?"를
 //      물으면 안 된다. 매달 이름을 다시 적지 않아도 되도록 이 조건을 먼저 둔다.
-//   4) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생. 여기만 회차마다 손댄다.
+//   4) 회수 마감 뒤에 등록한 학생 — 조사가 끝난 다음에 들어온 사람에게 그 회차를 물을 수는
+//      없다. 물은 적이 없으니 '미응답'도 아니다(2026-09-01: 30·33·40번 신규 3명이 9월 조사
+//      미응답으로 잡혔다). startDate 가 마감일보다 뒤면 자동으로 빠지고, 다음 회차를 시작하면
+//      마감일이 미래로 옮겨가므로 그때부터는 정상 대상이 된다 — 명단을 손댈 일이 없다.
+//   5) 설정의 exclude 명단 — 아직 퇴원일이 안 잡혔지만 빼야 하는 학생. 여기만 회차마다 손댄다.
 // 이름 비교는 _sameStudentName 으로 한다("박지윤(9557)"·"박지윤A" 같은 표기 편차를 흡수).
+window._surveyJoinedAfterClose = function(cfg, student) {
+  const sd = String((student && student.startDate) || '');
+  const close = String((cfg && cfg.closeAt) || '').slice(0, 10);   // 'YYYY-MM-DD'
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sd) || !/^\d{4}-\d{2}-\d{2}$/.test(close)) return false;
+  return sd > close;
+};
 window._surveyExcluded = function(cfg, student) {
   if (!student) return false;
   if (window._surveyIsReviewAccount(student)) return true;
   if (window._surveyIsAdminSeat(student.seat)) return true;
   if (student.withdrawAt) return true;
+  if (window._surveyJoinedAfterClose(cfg, student)) return true;
   const list = window._surveyConfig(cfg).exclude;
   return list.some(n => window._sameStudentName(n, student.name));
 };

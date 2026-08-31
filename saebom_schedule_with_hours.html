@@ -20860,7 +20860,9 @@ document.addEventListener('DOMContentLoaded', function() {
       .filter(s => window._surveyExcluded(CFG || {}, s))
       .map(s => ({ seat: seatNum(s.seat), name: s.name,
         why: window._surveyIsReviewAccount(s) ? '앱스토어 심사용'
-           : s.withdrawAt ? ('퇴원예정 ' + s.withdrawAt) : '제외 명단' }))
+           : s.withdrawAt ? ('퇴원예정 ' + s.withdrawAt)
+           : window._surveyJoinedAfterClose(CFG || {}, s) ? ('마감 후 등록 ' + (s.startDate || ''))
+           : '제외 명단' }))
       .sort((a, b) => a.seat - b.seat);
 
     ROWS = (window.STUDENTS || [])
