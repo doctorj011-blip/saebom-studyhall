@@ -8411,15 +8411,16 @@ function buildFpSidePanel() {
   const countEl = document.getElementById('fp-side-count');
   if (!listEl) return;
 
-  // 전체 학생 (입실중 → 미입실 → 미배석 순) — 관리자석(54번~)은 학생이 아니라 제외
-  // 배석 해제된 학생(seat '')도 카드를 남긴다. 자리만 뺀 것이지 나간 게 아니고,
-  // 이 카드를 좌석에 끌어다 놓는 것이 다시 앉히는 가장 빠른 길이다.
+  // 전체 학생 (미배석 → 입실중 → 미입실 순) — 관리자석(54번~)은 학생이 아니라 제외
+  // 좌석 없는 학생(신규 등록·배석 해제)은 카드를 남기고 **맨 위**에 둔다. 자리를 정해 줘야
+  // 하는 일이 남아 있는 사람이라 눈에 먼저 걸려야 하고, 이 카드를 배치도 좌석으로 끌어다
+  // 놓는 것이 앉히는 가장 빠른 길이다.
   const _unseated = s2 => !(s2.seat && parseInt(s2.seat) > 0);
   const sorted = [...STUDENTS]
     .filter(s => s.name && !(s.seat && window.isAdminSeat(s.seat)) && !window.isNonStudent?.(s.name))
     .sort((a, b) => {
       const aU = _unseated(a), bU = _unseated(b);
-      if (aU !== bU) return aU ? 1 : -1;          // 미배석은 항상 맨 아래
+      if (aU !== bU) return aU ? -1 : 1;          // 미배석은 항상 맨 위
       if (aU && bU) return String(a.name).localeCompare(String(b.name), 'ko');
       const aIn = todayRecords.some(r => r.studentName === a.name && !r.outTime);
       const bIn = todayRecords.some(r => r.studentName === b.name && !r.outTime);
