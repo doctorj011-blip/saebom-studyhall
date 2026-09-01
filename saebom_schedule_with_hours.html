@@ -2115,7 +2115,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       <div class="card-title" style="margin-bottom:8px">
         <i class="ti ti-armchair" style="font-size:15px;color:#6c5dd3"></i> 자리선택 허용
       </div>
-      <div style="font-size:12px;color:#4a3fa8;margin-bottom:12px">학생들이 학생앱에서 자리를 선택할 수 있는 기간을 설정합니다. 종료 시각이 되면 미선택 학생은 랜덤 배정됩니다.</div>
+      <div style="font-size:12px;color:#4a3fa8;margin-bottom:12px">학생들이 학생앱에서 자리를 선택할 수 있는 기간을 설정합니다. 기간이 끝나면 아래 '비활성화'를 눌러 닫아 주세요.</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
         <div>
           <div style="font-size:11px;color:#4a3fa8;margin-bottom:4px">시작 시각</div>
@@ -3589,7 +3589,6 @@ window.saveSeatSelection = async function() {
     document.getElementById('seat-sel-status').textContent = deferred ? `✅ 활성화됨 · ${effective} 적용 예정` : '✅ 활성화됨';
     document.getElementById('seat-sel-status').style.color = '#2d7a4f';
     showAdminToast(deferred ? `✅ 자리선택 설정 완료 — ${effective} 새벽 2시에 일괄 적용됩니다` : '✅ 자리선택 기간이 설정됐습니다');
-    scheduleRandomAssignment(new Date(end));
   } catch(e) { alert('저장 실패: ' + e.message); }
 };
 
@@ -3605,69 +3604,6 @@ window.cancelSeatSelection = async function() {
     showAdminToast('자리선택이 비활성화됐습니다');
   } catch(e) { alert('실패: ' + e.message); }
 };
-
-let randomAssignTimer = null;
-function scheduleRandomAssignment(endDate) {
-  if (randomAssignTimer) clearTimeout(randomAssignTimer);
-  const ms = endDate - new Date();
-  if (ms <= 0) { doRandomAssignment(); return; }
-  randomAssignTimer = setTimeout(doRandomAssignment, ms);
-}
-
-async function doRandomAssignment() {
-  const db2 = window._adminDb;
-  // 미래 적용일이 설정돼 있으면 즉시 배정 대신 '예약'으로 만든다(그날 새벽 2시 커밋).
-  let effDate = '';
-  try {
-    if (db2) { const ss = await window._fsGetDoc(window._fsDoc(db2, 'settings', 'seatSelection')); if (ss.exists()) effDate = ss.data().effectiveDate || ''; }
-  } catch(e) {}
-  const deferred = effDate && effDate > window._sessHelpers.sessIsoDate(Date.now());
-
-  // 자리 없는 학생에게 빈 자리 랜덤 배정
-  const DEFAULT_SEATS_VALUES = Object.values(DEFAULT_SEATS).filter(v => v > 0);
-  const takenSeats = new Set(STUDENTS.filter(s => s.seat && parseInt(s.seat) > 0).map(s => parseInt(s.seat)));
-  // 이미 예약된 자리도 빈자리 후보에서 제외
-  if (db2) {
-    try {
-      const psnap = await window._fsGetDocs(window._fsCollection(db2, 'pendingSeats'));
-      psnap.forEach(pd => { const n = parseInt(pd.data().toSeat); if (n > 0) takenSeats.add(n); });
-    } catch(e) {}
-  }
-  const emptySeats = DEFAULT_SEATS_VALUES.filter(v => !takenSeats.has(v));
-  const unassigned = STUDENTS.filter(s => !s.seat || parseInt(s.seat) <= 0);
-
-  // 셔플
-  for (let i = emptySeats.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [emptySeats[i], emptySeats[j]] = [emptySeats[j], emptySeats[i]];
-  }
-
-  const n = Math.min(unassigned.length, emptySeats.length);
-  const RDAYS = ['월','화','수','목','금','토'];
-  for (let i = 0; i < n; i++) {
-    const ns = String(emptySeats[i]);
-    if (deferred) {
-      // 예약으로 저장 — 미배정 학생은 옮길 원본 문서가 없으므로 학생 데이터 스냅샷을 함께 담는다.
-      const s = unassigned[i];
-      const sd = { name: s.name || '', parent: s.parent || '', gender: s.gender || 'f', expiry: s.expiry || '',
-        phone: s.phone || '', hours: s.hours || {} };
-      RDAYS.forEach(d => { sd[d] = (s.schedule && s.schedule[d]) || '-'; });
-      await window._fsSetDoc(window._fsDoc(db2, 'pendingSeats', ns), {
-        name: s.name || '', fromSeat: '', toSeat: ns, effectiveDate: effDate,
-        studentData: sd, createdAt: window._fsServerTimestamp()
-      }).catch(console.error);
-    } else {
-      unassigned[i].seat = ns;
-      if (window.saveStudentToFirebase) await window.saveStudentToFirebase(unassigned[i]).catch(console.error);
-    }
-  }
-
-  // 선택 창은 닫되(active:false), 미래 적용일은 보존해 예약이 커밋될 수 있게 한다.
-  if (db2) await window._fsSetDoc(window._fsDoc(db2, 'settings', 'seatSelection'), { active: false, start: '', end: '' }, { merge: true });
-  buildFloorplan();
-  buildDashboard();
-  showAdminToast(deferred ? `🎲 ${n}명 랜덤 예약 완료 — ${effDate} 적용` : `🎲 ${n}명 랜덤 배정 완료`);
-}
 
 async function loadSeatSelectionStatus() {
   try {
@@ -3685,7 +3621,6 @@ async function loadSeatSelectionStatus() {
     if (d.active) {
       statusEl.textContent = deferred ? `✅ 활성화됨 · ${d.effectiveDate} 적용 예정` : '✅ 활성화됨';
       statusEl.style.color = '#2d7a4f';
-      if (d.end) scheduleRandomAssignment(new Date(d.end));
     } else if (deferred) {
       statusEl.textContent = `⏳ ${d.effectiveDate} 적용 대기 중`;
       statusEl.style.color = '#b45309';
@@ -7686,7 +7621,7 @@ setInterval(() => {
 let _fpDragDist = 0;
 //
 // 그리드 10행 × 9열:
-//  C1: 관리자석 63→54 (r1~r10)
+//  C1: 관리자석 63→54 (r1~r10), 스터디룸석 46번(r11)
 //  C2: 1번(r2),2번(r3),3번(r4),4번(r5)
 //  C3: 스터디룸1(r2~r5 span), 스터디룸2(r6~r7 span), 스터디룸3(r8~r9 span)
 //  C4: 9번(r1),8번(r2),7번(r3),6번(r4),5번(r5) | 45번(r7),36번(r8),35번(r9)
@@ -7832,15 +7767,6 @@ function buildFloorplan() {
     'r5_c7':14,
     'r5_c8':15,
     'r5_c10':24,
-    // ── 스터디룸석 46~48 (2026-09-01) ──
-    // 지정좌석 없이 스터디룸만 쓰는 학생(예: 토요일 이용권)의 **기록을 남기기 위한 자리**다.
-    // 일반 좌석(1~45)을 빌려 쓰면 그 자리를 신규생에게 팔 수 없다. 좌석번호를 46~53 으로
-    // 잡은 이유: 45 까지가 열람실, 54~63 이 관리자석이라 그 사이가 비어 있었다.
-    // isAdminSeat(>=54)에 걸리지 않으므로 상벌점·이용조사·통계는 일반 학생과 똑같이 돈다.
-    // ⚠️ CCTV 재석감지(seats.json)에는 이 좌석이 없다 — 입퇴실 기록은 키오스크로만 남는다.
-    'r6_c4':46,
-    'r6_c5':47,
-    'r6_c6':48,
     'r6_c10':25,
     'r7_c10':26,
     'r8_c2':-3,
@@ -7868,6 +7794,15 @@ function buildFloorplan() {
     'r11_c7':32,
     'r11_c8':31,
     'r11_c9':30,
+    // ── 스터디룸석 46 (2026-09-01 신설, 같은 날 위치 이동) ──
+    // 지정좌석 없이 스터디룸만 쓰는 학생(예: 토요일 이용권)의 **기록을 남기기 위한 자리**다.
+    // 일반 좌석(1~45)을 빌려 쓰면 그 자리를 신규생에게 팔 수 없다. 좌석번호를 46~53 으로
+    // 잡은 이유: 45 까지가 열람실, 54~63 이 관리자석이라 그 사이가 비어 있었다.
+    // isAdminSeat(>=54)에 걸리지 않으므로 상벌점·이용조사·통계는 일반 학생과 똑같이 돈다.
+    // ⚠️ CCTV 재석감지(seats.json)에는 이 좌석이 없다 — 입퇴실 기록은 키오스크로만 남는다.
+    // 열람실 한가운데(r6_c4~c6)에 있으면 실제로 없는 자리가 있는 것처럼 보여서
+    // 관리자석 열 맨 아래(54번 밑)로 내렸다. 47·48은 필요해지면 그때 다시 만든다.
+    'r11_c1':46,
   };
 
   const layout = {...DEFAULT_SEATS};
@@ -14470,7 +14405,7 @@ window.resetSchedulesToBase = async function() {
 };
 
 // ── 예약된(미래 적용) 자리변경 커밋 ──
-// 학생앱/랜덤배정이 pendingSeats에 남긴 예약 중, 적용일(effectiveDate)이 오늘 이하인 것을
+// 학생앱이 pendingSeats에 남긴 예약 중, 적용일(effectiveDate)이 오늘 이하인 것을
 // 실제 좌석 이동으로 반영한다. 새벽 2시 리셋 블록에서 하루 한 번 호출된다.
 // 여러 기기가 동시에 돌아도 각 예약을 트랜잭션으로 '집어들며' 처리해 중복 이동을 막는다.
 // forceAll=true면 적용일과 무관하게 대기 중인 모든 예약을 지금 커밋한다('예약 즉시 적용' 버튼).
