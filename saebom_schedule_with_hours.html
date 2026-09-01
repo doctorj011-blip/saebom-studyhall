@@ -7783,6 +7783,12 @@ window.ADMIN_FIXED = {
   'r10_c1':{type:'admin',n:54,name:''},
 };
 
+// 스터디룸석(46~53) — 자리를 차지하지 않고 기록만 남기는 좌석. 학생이지만 열람실 정원 밖이다.
+window.isStudyDeskSeat = function(seat) {
+  const n = parseInt(String(seat == null ? '' : seat).replace(/[^0-9]/g, ''), 10);
+  return n >= 46 && n <= 53;
+};
+
 // 관리자석 여부 판별(window.isAdminSeat)은 파일 위쪽 '관리자·조교 계정' 블록에 한 곳만 둔다.
 // ADMIN_FIXED 정의보다 앞서 선언돼 있어도 되도록 좌석번호 범위(54~63)를 우선 검사한다.
 
@@ -7826,6 +7832,15 @@ function buildFloorplan() {
     'r5_c7':14,
     'r5_c8':15,
     'r5_c10':24,
+    // ── 스터디룸석 46~48 (2026-09-01) ──
+    // 지정좌석 없이 스터디룸만 쓰는 학생(예: 토요일 이용권)의 **기록을 남기기 위한 자리**다.
+    // 일반 좌석(1~45)을 빌려 쓰면 그 자리를 신규생에게 팔 수 없다. 좌석번호를 46~53 으로
+    // 잡은 이유: 45 까지가 열람실, 54~63 이 관리자석이라 그 사이가 비어 있었다.
+    // isAdminSeat(>=54)에 걸리지 않으므로 상벌점·이용조사·통계는 일반 학생과 똑같이 돈다.
+    // ⚠️ CCTV 재석감지(seats.json)에는 이 좌석이 없다 — 입퇴실 기록은 키오스크로만 남는다.
+    'r6_c4':46,
+    'r6_c5':47,
+    'r6_c6':48,
     'r6_c10':25,
     'r7_c10':26,
     'r8_c2':-3,
@@ -8029,9 +8044,9 @@ function buildFloorplan() {
           if (memoG) titleParts.push(`📌 ${memoLvG.label} — ${memoG.body}${memoG.updatedAt ? ` (${memoG.updatedAt}${memoG.author ? ' ' + memoG.author : ''})` : ''}`);
           const reasonTitle = titleParts.length ? ` title="${titleParts.join('\n').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;')}"` : '';
 
-          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7c3aed':''}${standStyle}${memoStyle}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
+          html += `<div class="fp-cell ${cellCls}${fpEditMode?' fp-cell-edit':''}${selClass}${inStudyRoomGrid?' fp-cell-studyroom':''}" style="grid-row:${r};grid-column:${c}${inStudyRoomGrid?';border-color:#7c3aed':''}${window.isStudyDeskSeat(seatNum)?';border-color:#c084fc;border-style:dashed':''}${standStyle}${memoStyle}" data-slot-key="${key}" data-seat-num="${seatNum}" ${editAttr} ${ctxAttr}${reasonTitle}>
             <div style="display:flex;justify-content:space-between;align-items:center">
-              <span class="fp-num">${seatNum}번</span>
+              <span class="fp-num">${seatNum}번${window.isStudyDeskSeat(seatNum) ? ' <span style="font-size:9px;color:#7c3aed;font-weight:700">스터디룸</span>' : ''}</span>
               ${genderIcon}
             </div>
             <div class="fp-name">${student ? student.name : '<span style="color:#d1d5db">공석</span>'}</div>
