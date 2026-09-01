@@ -15696,12 +15696,30 @@ async function saveSmsLogToFirebase(entry, logId) {
 let _billingYm = _curYm();
 let _billingPayments = {};   // key → 납부 문서
 let _billingConfig = null;   // settings/billing (기본요금·안내문구)
+let _billingDiscounts = {};  // uid → 그 달 확정 재등록 할인(usage_surveys.discountFinal)
 const BILLING_DEFAULT_REMINDER = '[새봄면학관]\n{이름} 학생의 {월} 이용료 {금액}원이 아직 납부되지 않았습니다.\n\n아래 링크에서 카드로 바로 결제하실 수 있습니다.\nhttps://saebom-pay.web.app/pay.html';
 
 function _fmtWon(n){ return (n||0).toLocaleString('ko-KR') + '원'; }
 function _billingKey(s){ return (s.phone||'').replace(/\D/g,'') || (s.name||'').replace(/[^a-zA-Z0-9가-힣]/g,''); }
-function _billingStudents(){ return STUDENTS.filter(s => s.name && parseInt(s.seat) < 54).sort((a,b)=>parseInt(a.seat)-parseInt(b.seat)); }
-function _billingFee(s){ return (s.fee && s.fee > 0) ? s.fee : ((_billingConfig && _billingConfig.defaultFee) || 0); }
+// 수납 대상 — 청구 안내 게이트와 같은 기준으로 잡는다(둘이 어긋나면 앱에 뜬 금액과 청구서가 다르다).
+// parseInt(seat) < 54 만 쓰면 좌석 없는 학생(미배석·신규 등록 직후)이 NaN 이 되어 통째로 빠졌다.
+function _billingStudents(){
+  return STUDENTS
+    .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name) && !s.withdrawAt)
+    .sort((a,b)=>(parseInt(a.seat)||9999)-(parseInt(b.seat)||9999));
+}
+// 재등록 할인 — 이용조사에서 [할인 확정]으로 박아 둔 discountFinal 을 그대로 쓴다.
+// 여기서 상벌점을 다시 계산하지 않는다: 주기가 넘어가면 지금 점수는 0이 되고, 확정 금액과
+// 어긋나면 학생앱에 뜬 금액과 청구서가 달라진다.
+function _billingDiscOf(s){
+  if (s.fee && s.fee > 0) return 0;                 // 정액 요금제(예: 토요일 이용권)는 할인 미적용
+  return Number(_billingDiscounts[s.uid || ''] || 0);
+}
+function _billingFee(s){
+  if (s.fee && s.fee > 0) return s.fee;
+  const base = (_billingConfig && _billingConfig.defaultFee) || 0;
+  return Math.max(0, base - _billingDiscOf(s));
+}
 function _billingMonthLabel(){ const p=_billingYm.split('-'); return parseInt(p[1],10)+'월'; }
 
 window.loadBillingTab = async function(){
@@ -15719,6 +15737,17 @@ window.loadBillingTab = async function(){
       const txtEl = document.getElementById('billing-reminder-text');
       if (txtEl) txtEl.value = _billingConfig.reminderText || BILLING_DEFAULT_REMINDER;
     }
+    // 그 달 확정 할인 — 문서 ID가 '{YYYY-MM}__{uid}' 라 접두사로 그 회차만 고른다
+    _billingDiscounts = {};
+    try {
+      const us = await getDocs(collection(db, 'usage_surveys'));
+      us.forEach(d => {
+        if (d.id.indexOf(_billingYm + '__') !== 0) return;
+        const v = d.data() || {};
+        if (v.uid && v.discountFinal != null) _billingDiscounts[v.uid] = Number(v.discountFinal) || 0;
+      });
+    } catch(e) { console.warn('[수납] 할인 조회 실패 — 할인 없이 표시합니다:', e); }
+
     _billingPayments = {};
     const ps = await getDocs(query(collection(db, 'payments'), where('ym', '==', _billingYm)));
     ps.forEach(d => { const v = d.data(); if (v && v.key) _billingPayments[v.key] = { ...v, _id: d.id }; });
@@ -15764,9 +15793,14 @@ window.renderBillingList = function(){
     if (filter === 'paid' && !p) return;
     if (filter === 'unpaid' && p) return;
     const fee = _billingFee(s);
+    const dc = _billingDiscOf(s);
     const feeHtml = (s.fee && s.fee > 0)
       ? `<b style="color:#6c5dd3">${_fmtWon(s.fee)}</b>${s.feeMemo ? ` <span style="font-size:10px;color:#6a1b9a">🏷️ ${s.feeMemo}</span>` : ''}`
-      : `<span style="color:var(--color-text-secondary)">${_fmtWon(fee)}</span>`;
+      : dc > 0
+        ? `<b style="color:#1e1b4b">${_fmtWon(fee)}</b>
+           <span style="font-size:10.5px;color:var(--color-text-tertiary);margin-left:4px">기본 ${_fmtWon((_billingConfig && _billingConfig.defaultFee) || 0)}</span>
+           <span style="font-size:10.5px;color:#2d7a4f;font-weight:700;margin-left:3px">− ${_fmtWon(dc)}</span>`
+        : `<span style="color:var(--color-text-secondary)">${_fmtWon(fee)}</span>`;
     const stateHtml = p
       ? `<span style="display:inline-block;padding:2px 8px;border-radius:10px;background:#e8f5e9;color:#2d7a4f;font-weight:700;font-size:11px">납부</span>
          <span style="font-size:11px;color:var(--color-text-secondary)">${p.paidDate || ''} · ${p.method || ''} · ${_fmtWon(p.amount)}${p.memo ? ' · ' + p.memo : ''}</span>`
@@ -15775,7 +15809,7 @@ window.renderBillingList = function(){
       ? `<button onclick="cancelBillingPayment('${key}')" style="padding:5px 10px;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:8px;font-size:11px;color:var(--color-text-secondary);cursor:pointer;white-space:nowrap">납부 취소</button>`
       : `<button onclick="openBillingPayModal('${key}')" style="padding:5px 12px;background:#eef2ff;border:1.5px solid #8f82e4;border-radius:8px;font-size:11px;color:#4a3fa8;cursor:pointer;font-weight:700;white-space:nowrap">납부 처리</button>`;
     rows.push(`<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px">
-      <span style="width:40px;font-weight:700;color:#6c5dd3;flex-shrink:0">${s.seat}번</span>
+      <span style="width:40px;font-weight:700;color:#6c5dd3;flex-shrink:0">${s.seat ? s.seat + '번' : '미배석'}</span>
       <span style="width:72px;font-weight:600;color:var(--color-text-primary);flex-shrink:0">${s.name}</span>
       <span style="flex:1;min-width:120px">${feeHtml}</span>
       <span style="flex:1.6;min-width:180px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${stateHtml}</span>
