@@ -21363,7 +21363,13 @@ document.addEventListener('DOMContentLoaded', function() {
   window.usPushBilling = async function() {
     if (BUSY) return;
     if (!isCurrent()) { alert('지난 회차는 안내할 수 없습니다.'); return; }
-    const targets = ROWS.filter(r => r.resp && r.resp.want && r.resp.discountFinal != null);
+    const CFGB = { baseFee: 300000 };   // 기본 원비 — 바뀌면 여기와 billing_notices/_config.baseFee 를 함께 본다
+    // 정액 요금제 학생(명부 fee > 0)은 확정 할인이 없어도 안내 대상이다.
+    const _flatOf = r => {
+      const st = (window.STUDENTS || []).find(x => (x.uid && x.uid === r.uid) || String(x.seat).replace('번','') === String(r.seat));
+      return Number(st && st.fee) > 0;
+    };
+    const targets = ROWS.filter(r => r.resp && r.resp.want && (r.resp.discountFinal != null || _flatOf(r)));
     if (!targets.length) { alert('확정된 할인이 없습니다. [할인 확정]을 먼저 누르세요.'); return; }
     const skipped = ROWS.filter(r => r.resp && r.resp.want && r.resp.discountFinal == null).length;
     const sum = targets.reduce((a, r) => a + Number(r.resp.discountFinal || 0), 0);
@@ -21377,16 +21383,23 @@ document.addEventListener('DOMContentLoaded', function() {
       const bid = _billId();
       for (const r of targets) {
         const b = r.resp.discountBase || {};
+        // 명부의 fee 에 값이 있으면 그 학생은 **정액 요금제**로 본다(예: 좌석 없이 토요일만 50,000원).
+        // 정액이면 재등록 할인을 적용하지 않는다. fee 가 0이면 baseFee 에서 할인을 뺀다.
+        const _stu = (window.STUDENTS || []).find(x => (x.uid && x.uid === r.uid) || String(x.seat).replace('번','') === String(r.seat));
+        const flat = Number(_stu && _stu.fee) > 0 ? Number(_stu.fee) : 0;
+        const _base = flat || Number(CFGB.baseFee) || 300000;
+        const _won = flat ? 0 : Number(r.resp.discountFinal || 0);
         await setDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, { uid: r.uid, seat: r.seat })), {
           billId: bid, uid: r.uid || '', name: r.name || '', seat: String(r.seat || ''),
-          won: Number(r.resp.discountFinal || 0),
+          base: _base, pay: Math.max(0, _base - _won), flat: !!flat,
+          won: _won,
           rawMerit: Number(b.merit || 0), rawDemerit: Number(b.demerit || 0),
           netMerit: Number(b.netMerit || 0), netDemerit: Number(b.netDemerit || 0),
           pushedAt: window._noticeToday()
         }, { merge: true });
       }
       await setDoc(doc(db, window._BILLING_COL, '_config'), {
-        active: true, billId: bid, title: '이용료 안내',
+        active: true, billId: bid, title: '이용료 안내', baseFee: Number(CFGB.baseFee) || 300000,
         payText: '면학관 데스크에서 카드로 결제해 주세요. 계좌이체나 별도 송금은 하지 않으셔도 됩니다.'
       }, { merge: true });
       alert(`앱에 안내를 띄웠습니다. (${targets.length}명 · ${won(sum)}원)`);
@@ -21420,7 +21433,12 @@ document.addEventListener('DOMContentLoaded', function() {
       const bid = _billId();
       const cs = await getDoc(doc(db, window._BILLING_COL, '_config'));
       const on = cs.exists() && cs.data().active === true && cs.data().billId === bid;
-      const targets = ROWS.filter(r => r.resp && r.resp.want && r.resp.discountFinal != null);
+    // 정액 요금제 학생(명부 fee > 0)은 확정 할인이 없어도 안내 대상이다.
+    const _flatOf = r => {
+      const st = (window.STUDENTS || []).find(x => (x.uid && x.uid === r.uid) || String(x.seat).replace('번','') === String(r.seat));
+      return Number(st && st.fee) > 0;
+    };
+    const targets = ROWS.filter(r => r.resp && r.resp.want && (r.resp.discountFinal != null || _flatOf(r)));
       let pushed = 0, ackS = 0, ackP = 0; const pend = [];
       for (const r of targets) {
         const d = await getDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, { uid: r.uid, seat: r.seat })));

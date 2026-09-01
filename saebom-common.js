@@ -1076,6 +1076,7 @@ window._billingConfig = function(raw) {
     title:  String(d.title || '이용료 안내'),
     // 결제 방법 안내 — 관리앱에서 고칠 수 있게 설정에 둔다(코드 배포 없이 바뀐다)
     payText: String(d.payText || '면학관 데스크에서 카드로 결제해 주세요. 계좌이체나 별도 송금은 하지 않으셔도 됩니다.'),
+    baseFee: Number(d.baseFee) > 0 ? Number(d.baseFee) : 300000,   // 기본 원비 — 관리앱에서 배포 없이 바꾼다
     exclude: Array.isArray(d.exclude) ? d.exclude.map(String) : []
   };
 };
@@ -1177,11 +1178,16 @@ window._billingGate = (function() {
     const st = S.opt.student || {}, cfg = S.cfg, d = S.doc || {};
     const p = S.opt.role === 'parent';
     const label = window._billingMonthLabel(cfg.billId);
-    const amount = Number(d.won || 0);
-    // 계산 근거를 같이 보여 준다 — 금액만 던지면 "왜 이 금액이냐"는 문의가 그대로 온다.
-    const basis = (d.rawMerit != null && d.rawDemerit != null)
-      ? `상점 ${Number(d.rawMerit)}점 − 벌점 ${Number(d.rawDemerit)}점` +
-        (Number(d.netDemerit || 0) > 0 ? ` → 남은 벌점 ${Number(d.netDemerit)}점` : ` → 남은 상점 ${Number(d.netMerit || 0)}점`)
+    // 금액은 관리앱이 밀어넣은 값을 그대로 쓴다(폰에서 다시 계산하지 않는다).
+    //   base = 그 학생의 기본 원비 · won = 재등록 할인 · pay = 실제로 낼 금액
+    // 옛 문서(할인만 들어 있던 것)와도 맞물리도록 없으면 설정값으로 떨어진다.
+    const base = Number(d.base != null ? d.base : cfg.baseFee) || 0;
+    const disc = Number(d.won || 0);
+    const pay  = Number(d.pay != null ? d.pay : Math.max(0, base - disc)) || 0;
+    // 계산 근거는 **할인이 있을 때만** 보여 준다. 할인이 0원인 학생에게 '상점 22 − 벌점 56'을
+    // 들이밀면 원비 안내가 아니라 벌점 통보가 된다(원장 판단 2026-09-01).
+    const basis = (disc > 0 && d.rawMerit != null)
+      ? `상점 ${Number(d.rawMerit)}점 − 벌점 ${Number(d.rawDemerit || 0)}점 → 남은 상점 ${Number(d.netMerit || 0)}점`
       : '';
     card.innerHTML = `
       <div style="font-size:19px;font-weight:900;letter-spacing:-0.4px">💳 ${esc(label)} ${esc(cfg.title)}</div>
@@ -1189,21 +1195,24 @@ window._billingGate = (function() {
         ${esc(st.name || '')}${st.seat ? ' · ' + esc(String(st.seat)) + '번' : ''}${p ? ' 학부모님' : ''}</div>
 
       <div style="margin-top:14px;background:#F5ECDA;border:1px solid #E3D4B4;border-radius:12px;padding:16px 16px 14px">
-        <div style="font-size:12px;color:#8A5A22;font-weight:700;letter-spacing:.02em">${esc(label)} 재등록 할인</div>
+        <div style="font-size:12px;color:#8A5A22;font-weight:700;letter-spacing:.02em">${esc(label)} 이용료</div>
         <div style="font-size:30px;font-weight:900;color:#101E27;letter-spacing:-1px;margin-top:2px">
-          ${won(amount)}<span style="font-size:17px;font-weight:800">원</span></div>
-        ${basis ? `<div style="font-size:11.5px;color:#6F6353;margin-top:4px">${esc(basis)}</div>` : ''}
-        ${amount > 0
-          ? `<div style="font-size:12px;color:#6F6353;margin-top:8px;line-height:1.65">남은 상점 1점당 1,000원씩 ${esc(label)} 이용료에서 빼 드립니다.</div>`
-          : `<div style="font-size:12px;color:#6F6353;margin-top:8px;line-height:1.65">상점으로 벌점을 지우고도 벌점이 남아 이번 회차 할인은 없습니다. <b>추가로 받는 비용은 없습니다.</b></div>`}
+          ${won(pay)}<span style="font-size:17px;font-weight:800">원</span></div>
+        ${disc > 0 ? `
+          <div style="margin-top:9px;border-top:1px dashed #D9C9A6;padding-top:8px;font-size:12.5px;color:#6F6353;line-height:1.9">
+            <div style="display:flex;justify-content:space-between"><span>기본 이용료</span><b>${won(base)}원</b></div>
+            <div style="display:flex;justify-content:space-between;color:#2E7D53"><span>재등록 할인</span><b>− ${won(disc)}원</b></div>
+          </div>
+          ${basis ? `<div style="font-size:11.5px;color:#8A8172;margin-top:6px">${esc(basis)} · 상점 1점당 1,000원</div>` : ''}`
+        : ''}
       </div>
 
       <div style="margin-top:10px;background:#F9FAFB;border-radius:10px;padding:12px 14px;font-size:12.5px;color:#374151;line-height:1.7">
         <b>결제 방법</b><br>${esc(cfg.payText)}
       </div>
-      <div style="margin-top:8px;font-size:11.5px;color:#9CA3AF;line-height:1.6">
+      ${disc > 0 ? `<div style="margin-top:8px;font-size:11.5px;color:#9CA3AF;line-height:1.6">
         상점·벌점 내역과 사유는 ${p ? '학부모앱' : '앱'} ‘오늘 일정’ 화면의 상·벌점 카드에서 그대로 보실 수 있습니다.
-      </div>
+      </div>` : ''}
 
       <div id="billing-err" style="margin-top:10px;font-size:12px;color:#C62828"></div>
       <button id="billing-ok" onclick="window._billingGate.ack()"
