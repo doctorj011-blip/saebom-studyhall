@@ -1743,12 +1743,13 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         style="padding:6px 10px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#ffffff;color:#1e1b4b;outline:none;min-width:150px">
         <option value="">학생 선택</option>
       </select>
-      <input type="date" id="rp-start" style="padding:6px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#ffffff;color:#1e1b4b;outline:none">
-      <span style="color:#9ca3af;font-size:12px">~</span>
-      <input type="date" id="rp-end" style="padding:6px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#ffffff;color:#1e1b4b;outline:none">
-      <button onclick="window.reportPreset('summer')" title="여름방학 자습 시작일부터 오늘까지"
-        style="background:#f1eeff;color:#6c5dd3;border:1px solid #c7bef5;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer">썸머</button>
-      <button onclick="window.reportPreset('month')" title="이번 달 1일부터 오늘까지"
+      <!-- 기간은 '달' 하나로 고른다. 실제 조회 구간(1일~말일, 이번 달이면 오늘까지)은
+           reportMonthSync 가 아래 hidden 두 칸에 넣는다 — 집계 코드는 그대로 이걸 읽는다 -->
+      <input type="month" id="rp-month" onchange="window.reportMonthSync()"
+        style="padding:6px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#ffffff;color:#1e1b4b;outline:none">
+      <input type="hidden" id="rp-start"><input type="hidden" id="rp-end">
+      <span id="rp-range" style="font-size:11.5px;color:#9ca3af;white-space:nowrap"></span>
+      <button onclick="window.reportThisMonth()" title="이번 달로 되돌리기"
         style="background:#f1eeff;color:#6c5dd3;border:1px solid #c7bef5;border-radius:8px;padding:6px 11px;font-size:12px;font-weight:700;cursor:pointer">이번 달</button>
       <button onclick="window.reportRender()"
         style="background:#6c5dd3;color:#ffffff;border:none;border-radius:8px;padding:6px 14px;font-size:12.5px;font-weight:700;cursor:pointer">만들기</button>
@@ -1756,14 +1757,35 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖨 PDF로 저장</button>
       <button id="rp-img-btn" onclick="window.reportImage()" disabled title="리포트 전체를 그림 파일(PNG) 한 장으로 저장합니다"
         style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖼 이미지로 저장</button>
+      <button id="rp-arch-btn" onclick="window.reportArchiveToggle()" title="지금까지 만든 리포트를 다시 열어 봅니다"
+        style="background:#fff7ed;color:#b45309;border:1px solid #fed7aa;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🗂 만든 리포트</button>
     </div>
     <div id="rp-priv-note" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12px;color:#b45309;line-height:1.6">
       🔒 <b>이 학생은 플래너를 학부모에게 비공개로 설정했습니다.</b>
       리포트에는 플래너 검사에서 뽑은 과목·시간이 그대로 들어갑니다 — 보내실지 확인해 주세요.
     </div>
-    <div style="font-size:11px;color:#9ca3af">입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다. <b>이미지로 저장</b>은 카카오톡으로 바로 보내기 좋은 그림 파일(PNG)로 내려받습니다.</div>
+    <div style="font-size:11px;color:#9ca3af">달을 하나 골라, 그 달의 입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다. <b>이미지로 저장</b>은 카카오톡으로 바로 보내기 좋은 그림 파일(PNG)로 내려받습니다.</div>
   </div>
-  <div id="rp-content"><div style="color:#aaaaaa;font-size:13px;text-align:center;padding:40px 0">학생과 기간을 고르고 <b>만들기</b>를 누르세요</div></div>
+  <!-- 🗂 만든 리포트 — 지금까지 만들어진 리포트 목록(report_comments 문서가 곧 목록이다).
+       인쇄·이미지 저장에는 안 나가야 하므로 반드시 #sec-report 바로 밑의 .card 로 둔다
+       (body.rp-printing #sec-report > .card 규칙이 이걸 숨긴다) -->
+  <div class="card" id="rp-archive" style="display:none">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap">
+      <div style="font-size:14px;font-weight:700;color:#1e1b4b">🗂 만든 리포트</div>
+      <select id="rp-arch-month" onchange="window.reportArchiveRender()"
+        style="padding:5px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;background:#ffffff;color:#1e1b4b;outline:none">
+        <option value="">전체 기간</option>
+      </select>
+      <input id="rp-arch-q" oninput="window.reportArchiveRender()" placeholder="이름으로 찾기"
+        style="padding:5px 9px;border:1.5px solid #ddd6fe;border-radius:8px;font-size:12px;outline:none;width:130px">
+      <div style="flex:1"></div>
+      <span id="rp-arch-count" style="font-size:11.5px;color:#9ca3af"></span>
+      <button onclick="window.reportArchiveLoad(true)"
+        style="background:#f1eeff;color:#6c5dd3;border:1px solid #c7bef5;border-radius:8px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer">🔄 새로고침</button>
+    </div>
+    <div id="rp-arch-list"></div>
+  </div>
+  <div id="rp-content"><div style="color:#aaaaaa;font-size:13px;text-align:center;padding:40px 0">학생과 달을 고르고 <b>만들기</b>를 누르세요</div></div>
 </div>
 
 <!-- 플래너 상세 모달 (사진 확대 + 코멘트) -->
@@ -19759,8 +19781,43 @@ window.saRender = async function() {
 //   학습분석 탭(sec-analytics)이 화면에서 보는 용도라면, 이쪽은 학부모께 나가는 문서다.
 //   데이터 출처는 같다: attendance_sessions + planner_ai_reviews(statsFixed 우선) + merits/penalties.
 // ══════════════════════════════════════════════════════════════════
-const RP_SUMMER_START = '2026-07-20';   // 여름방학 자습(오전 개시) 시작일 — '썸머' 프리셋 기준
 let _rpLast = null;                      // 마지막으로 만든 리포트(인쇄 버튼 활성화 판단용)
+
+// ── 기간은 '달' 단위 ──────────────────────────────────────────────────────
+// 리포트는 한 달치를 학부모께 보내는 문서다. 임의 기간을 허용하면 같은 학생의 리포트가
+// 매번 다른 구간으로 나가 비교가 안 되고, 아래 '만든 리포트' 목록도 줄이 서지 않는다.
+// 화면에는 달 하나만 고르게 하고, 실제 조회 구간은 여기서 만들어 hidden 칸에 넣는다.
+const _rpYm = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+function _rpMonthRange(ym) {
+  if (!/^\d{4}-\d{2}$/.test(ym || '')) return null;
+  const y = +ym.slice(0, 4), m = +ym.slice(5, 7);
+  const startISO = `${ym}-01`;
+  const lastISO = `${ym}-` + String(new Date(y, m, 0).getDate()).padStart(2, '0');
+  // 이번 달은 오늘까지만. 아직 오지 않은 날까지 넣으면 남은 평일이 전부 '결석'으로 세어진다
+  const today = _apcIso(new Date());
+  const endISO = lastISO > today ? today : lastISO;
+  return endISO < startISO ? null : { startISO, endISO, partial: endISO < lastISO };
+}
+
+// 달 선택 → hidden 시작/종료 칸 동기화. 화면에도 실제 구간을 적어 준다
+window.reportMonthSync = function() {
+  const mo = document.getElementById('rp-month');
+  const st = document.getElementById('rp-start'), en = document.getElementById('rp-end');
+  const lab = document.getElementById('rp-range');
+  if (!mo || !st || !en) return null;
+  const r = _rpMonthRange(mo.value);
+  st.value = r ? r.startISO : '';
+  en.value = r ? r.endISO : '';
+  if (lab) lab.textContent = r ? `${r.startISO} ~ ${r.endISO}${r.partial ? ' (오늘까지)' : ''}`
+                              : (mo.value ? '아직 시작하지 않은 달입니다' : '');
+  return r;
+};
+
+window.reportThisMonth = function() {
+  const mo = document.getElementById('rp-month');
+  if (mo) mo.value = _rpYm(new Date());
+  window.reportMonthSync();
+};
 
 function _rpStudent() {
   const sel = document.getElementById('rp-student-sel');
@@ -19777,19 +19834,9 @@ window.reportInit = function() {
     .map(s => { const k = _apcSeatKey(s.seat);
       return `<option value="${k}" ${k === cur ? 'selected' : ''}>${_apcEsc(s.name)} (${_apcEsc(s.seat)}번)</option>`; })
     .join('');
-  const st = document.getElementById('rp-start'), en = document.getElementById('rp-end');
-  if (st && !st.value) window.reportPreset('summer');
-  else if (en && !en.value) en.value = _apcIso(new Date());
-};
-
-window.reportPreset = function(kind) {
-  const st = document.getElementById('rp-start'), en = document.getElementById('rp-end');
-  if (!st || !en) return;
-  const today = new Date();
-  en.value = _apcIso(today);
-  st.value = kind === 'month'
-    ? _apcIso(new Date(today.getFullYear(), today.getMonth(), 1))
-    : RP_SUMMER_START;
+  const mo = document.getElementById('rp-month');
+  if (mo && !mo.value) mo.value = _rpYm(new Date());
+  window.reportMonthSync();
 };
 
 // 기간 내 이 학생의 순공/외출/첫 입실 — _saAttendance 와 같은 청크 쿼리에 외출(awayMs)을 더해 받는다
@@ -19826,8 +19873,9 @@ window.reportRender = async function() {
   const privNote = document.getElementById('rp-priv-note');
   if (privNote) privNote.style.display =
     (stu && stu.plannerHidden === true && window.PLANNER_PRIVACY_ON !== false) ? 'block' : 'none';
-  const startISO = (document.getElementById('rp-start') || {}).value;
-  const endISO   = (document.getElementById('rp-end')   || {}).value;
+  const range = window.reportMonthSync();   // 달 → 실제 구간(hidden 칸)까지 여기서 확정한다
+  const startISO = range ? range.startISO : '';
+  const endISO   = range ? range.endISO   : '';
   const btn = document.getElementById('rp-print-btn');
   const imgBtn = document.getElementById('rp-img-btn');
   if (btn) btn.disabled = true;
@@ -19836,9 +19884,7 @@ window.reportRender = async function() {
   _rpLast = null;
   if (!box) return;
   if (!stu)               { box.innerHTML = _rpMsg('학생을 선택하세요'); return; }
-  if (!startISO || !endISO) { box.innerHTML = _rpMsg('기간을 지정하세요'); return; }
-  if (startISO > endISO)  { box.innerHTML = _rpMsg('시작일이 종료일보다 늦습니다'); return; }
-  if (_rangeDateStringsISO(startISO, endISO).length > 120) { box.innerHTML = _rpMsg('기간이 너무 깁니다 (최대 120일)'); return; }
+  if (!startISO || !endISO) { box.innerHTML = _rpMsg('달을 고르세요 (아직 시작하지 않은 달은 만들 수 없습니다)'); return; }
 
   box.innerHTML = _rpMsg('불러오는 중...');
   const seatKey = _apcSeatKey(stu.seat), uid = stu.uid;
@@ -19882,6 +19928,7 @@ window.reportRender = async function() {
   _rpLast = data;
   if (btn) btn.disabled = false;
   if (imgBtn) imgBtn.disabled = false;
+  _rpArchive = null;  // 방금 만든 건이 '만든 리포트' 목록에 뜨도록 캐시를 버린다
   _rpOpStart(data);   // 선생님 의견 — 저장된 게 있으면 불러오고, 없으면 새로 쓴다
 };
 
@@ -20308,9 +20355,21 @@ function _rpAiPayload(d) {
   };
 }
 
-function _rpOpStart(d) {
+async function _rpOpStart(d) {
   _rpOpStop();
-  const key = `${d.stu.uid || _apcSeatKey(d.stu.seat)}_${d.startISO}_${d.endISO}`;
+  const base = d.stu.uid || _apcSeatKey(d.stu.seat);
+  // 키는 '학생_달' 이다. 예전엔 '학생_시작일_종료일' 이었는데, 이번 달은 종료일이 매일
+  // 밀려서 하루가 지나면 다른 키가 되고 AI 의견을 처음부터 다시 쓰게 된다(호출 비용).
+  // 달로 묶으면 같은 달 리포트를 며칠에 걸쳐 다시 만들어도 쓴 글이 그대로 나온다.
+  let key = `${base}_${d.startISO.slice(0, 7)}`;
+  try {
+    // 옛 키로 저장된 의견이 있으면 그걸 계속 쓴다 — 선생님이 손봐 둔 글을 잃지 않기 위해서다
+    if (!(await getDoc(doc(db, 'report_comments', key))).exists()) {
+      const legacy = `${base}_${d.startISO}_${d.endISO}`;
+      if ((await getDoc(doc(db, 'report_comments', legacy))).exists()) key = legacy;
+    }
+  } catch(e) { /* 조회 실패는 새 키로 진행 */ }
+  if (_rpLast !== d) return;   // 조회를 기다리는 사이 다른 리포트로 넘어갔다
   _rpOpKey = key;
   _rpOpUnsub = onSnapshot(doc(db, 'report_comments', key), snap => {
     if (_rpOpKey !== key) return;                      // 그 사이 다른 학생으로 넘어갔다
@@ -20422,6 +20481,123 @@ window.reportOpSave = async function() {
   } catch (e) {
     showAdminToast('❌ 저장 실패: ' + (e.message || e));
   }
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// 🗂 만든 리포트 — 지금까지 만든 리포트를 다시 열어 본다.
+//   보관함을 따로 두지 않는다. 리포트를 만들면 '선생님 의견' 문서(report_comments)가
+//   반드시 하나 생기므로 그 컬렉션이 곧 만들어진 리포트 목록이다.
+//   종이 자체는 저장하지 않고 그 학생·그 달로 다시 그린다 — 지난달 기록은 더 바뀌지 않고,
+//   교재명 교정처럼 나중에 손본 것은 오히려 반영되는 편이 맞다. 의견은 저장돼 있으므로
+//   다시 열어도 그때 나간 글이 그대로 나온다.
+// ══════════════════════════════════════════════════════════════════════════
+let _rpArchive = null;   // 목록 캐시. '만들기' 뒤와 새로고침 때만 다시 읽는다
+
+// 문서 id 에서 학생·기간을 되읽는다. 옛 '학생_시작일_종료일' 형식도 함께 받는다
+function _rpArchParseId(id) {
+  let m = /^(.*)_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})$/.exec(id);
+  if (m) return { base: m[1], startISO: m[2], endISO: m[3] };
+  m = /^(.*)_(\d{4}-\d{2})$/.exec(id);
+  if (m) { const r = _rpMonthRange(m[2]);
+           return { base: m[1], startISO: r ? r.startISO : `${m[2]}-01`, endISO: r ? r.endISO : '' }; }
+  return null;
+}
+
+// 목록의 한 줄이 지금 명부의 누구인지 — uid 우선, 없으면 좌석
+function _rpArchStudent(r) {
+  return _apcStudents().find(s =>
+    (r.uid && s.uid === r.uid) || (r.seat && _apcSeatKey(s.seat) === _apcSeatKey(r.seat))) || null;
+}
+const _rpArchName = r => r.name || (_rpArchStudent(r) || {}).name || '(이름 없음)';
+
+window.reportArchiveToggle = function(show) {
+  const el = document.getElementById('rp-archive');
+  if (!el) return;
+  const on = (show === undefined) ? el.style.display === 'none' : !!show;
+  el.style.display = on ? '' : 'none';
+  if (on) window.reportArchiveLoad(false);
+};
+
+window.reportArchiveLoad = async function(force) {
+  const list = document.getElementById('rp-arch-list');
+  if (!list) return;
+  if (_rpArchive && !force) { window.reportArchiveRender(); return; }
+  list.innerHTML = _rpMsg('불러오는 중...');
+  let rows;
+  try {
+    const snap = await getDocs(collection(db, 'report_comments'));
+    rows = [];
+    snap.forEach(dd => {
+      const v = dd.data() || {};
+      const p = _rpArchParseId(dd.id);
+      const startISO = v.startISO || (p ? p.startISO : '');
+      if (!startISO) return;   // 기간을 알 수 없는 문서는 열 방법이 없으니 목록에서 뺀다
+      const isUid = p && /^s_[0-9a-f]{8}$/.test(p.base);
+      rows.push({
+        id: dd.id,
+        uid:  v.uid  || (isUid ? p.base : null),
+        seat: v.seat || (p && !isUid ? p.base : null),
+        name: v.name || '',
+        startISO, endISO: v.endISO || (p ? p.endISO : ''),
+        ym: startISO.slice(0, 7),
+        hasOpinion: !!v.opinion, editedAt: v.editedAt || ''
+      });
+    });
+    rows.sort((a, b) => b.startISO.localeCompare(a.startISO)
+                     || String(_rpArchName(a)).localeCompare(String(_rpArchName(b))));
+  } catch (e) {
+    list.innerHTML = `<div style="color:#c62828;font-size:12.5px;text-align:center;padding:20px 0">목록을 불러오지 못했습니다: ${_apcEsc(e.message || e)}</div>`;
+    return;
+  }
+  _rpArchive = rows;
+  const sel = document.getElementById('rp-arch-month');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">전체 기간</option>' +
+      [...new Set(rows.map(r => r.ym))].sort().reverse()
+        .map(y => `<option value="${y}"${y === cur ? ' selected' : ''}>${+y.slice(0,4)}년 ${+y.slice(5,7)}월</option>`).join('');
+  }
+  window.reportArchiveRender();
+};
+
+window.reportArchiveRender = function() {
+  const list = document.getElementById('rp-arch-list'), cnt = document.getElementById('rp-arch-count');
+  if (!list) return;
+  const all = _rpArchive || [];
+  const ym = (document.getElementById('rp-arch-month') || {}).value || '';
+  const q  = ((document.getElementById('rp-arch-q') || {}).value || '').trim();
+  const rows = all.filter(r => (!ym || r.ym === ym) && (!q || _rpArchName(r).includes(q)));
+  if (cnt) cnt.textContent = rows.length === all.length ? `${all.length}건` : `${rows.length}건 / 전체 ${all.length}건`;
+  if (!rows.length) { list.innerHTML = _rpMsg(all.length ? '조건에 맞는 리포트가 없습니다' : '아직 만들어진 리포트가 없습니다'); return; }
+  const chip = (bg, bd, fg, t) => `<span style="background:${bg};border:1px solid ${bd};color:${fg};border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap">${t}</span>`;
+  list.innerHTML = '<div style="display:flex;flex-direction:column;gap:5px">' + rows.map(r => {
+    const stu = _rpArchStudent(r);
+    const badge = !r.hasOpinion ? chip('#f9fafb','#e5e7eb','#9ca3af','의견 없음')
+                : r.editedAt   ? chip('#f1eeff','#c7bef5','#6c5dd3','✏️ 손본 의견')
+                               : chip('#ecfdf5','#a7f3d0','#059669','💬 의견 있음');
+    return `<div onclick="window.reportArchiveOpen('${_apcEsc(r.id)}')" title="눌러서 이 리포트를 다시 엽니다"
+      style="display:flex;align-items:center;gap:10px;padding:8px 11px;border:1px solid #ece9fb;border-radius:9px;background:#fbfaff;cursor:pointer;flex-wrap:wrap">
+      <div style="font-size:12px;font-weight:700;color:#6c5dd3;min-width:78px">${+r.ym.slice(0,4)}년 ${+r.ym.slice(5,7)}월</div>
+      <div style="font-size:13px;font-weight:700;color:#1e1b4b">${_apcEsc(_rpArchName(r))}</div>
+      <div style="font-size:11.5px;color:#9ca3af">${stu ? _apcEsc(stu.seat) + '번' : '명부에 없음'}</div>
+      <div style="font-size:11.5px;color:#9ca3af">${r.endISO ? _rpMd(r.startISO) + '~' + _rpMd(r.endISO) : ''}</div>
+      <div style="flex:1"></div>${badge}
+    </div>`;
+  }).join('') + '</div>';
+};
+
+window.reportArchiveOpen = function(id) {
+  const r = (_rpArchive || []).find(x => x.id === id);
+  if (!r) return;
+  const stu = _rpArchStudent(r);
+  if (!stu) { showAdminToast('⚠️ 이 학생을 명부에서 찾지 못했습니다 (퇴원했을 수 있습니다)'); return; }
+  const sel = document.getElementById('rp-student-sel'), mo = document.getElementById('rp-month');
+  if (sel) sel.value = _apcSeatKey(stu.seat);
+  if (sel && !sel.value) { showAdminToast('⚠️ 이 학생이 선택 목록에 없습니다'); return; }
+  if (mo) mo.value = r.ym;
+  window.reportMonthSync();
+  window.reportArchiveToggle(false);
+  window.reportRender();
 };
 
 // ══════════════════════════════════════════════════════════════════════════
