@@ -1757,6 +1757,8 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖨 PDF로 저장</button>
       <button id="rp-img-btn" onclick="window.reportImage()" disabled title="리포트 전체를 그림 파일(PNG) 한 장으로 저장합니다"
         style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖼 이미지로 저장</button>
+      <button onclick="window.reportBulkOpen()" title="고른 달의 리포트를 학생 전원분 한 번에 만듭니다"
+        style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">⚡ 일괄 만들기</button>
       <button id="rp-arch-btn" onclick="window.reportArchiveToggle()" title="지금까지 만든 리포트를 다시 열어 봅니다"
         style="background:#fff7ed;color:#b45309;border:1px solid #fed7aa;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🗂 만든 리포트</button>
     </div>
@@ -1786,6 +1788,16 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
     <div id="rp-arch-list"></div>
   </div>
   <div id="rp-content"><div style="color:#aaaaaa;font-size:13px;text-align:center;padding:40px 0">학생과 달을 고르고 <b>만들기</b>를 누르세요</div></div>
+</div>
+
+<!-- ⚡ 리포트 일괄 만들기 -->
+<div id="rp-bulk-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;align-items:center;justify-content:center">
+  <div style="background:#ffffff;border-radius:16px;width:min(94vw,540px);max-height:90vh;overflow:auto;padding:20px 22px;box-shadow:0 8px 40px rgba(0,0,0,0.25)">
+    <div style="font-size:16px;font-weight:800;color:#1e1b4b">⚡ 리포트 일괄 만들기</div>
+    <div id="rp-bulk-period" style="font-size:12.5px;color:#6c5dd3;font-weight:700;margin:3px 0 14px"></div>
+    <div id="rp-bulk-body"></div>
+    <div id="rp-bulk-foot" style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"></div>
+  </div>
 </div>
 
 <!-- 플래너 상세 모달 (사진 확대 + 코멘트) -->
@@ -20540,7 +20552,7 @@ window.reportArchiveLoad = async function(force) {
         name: v.name || '',
         startISO, endISO: v.endISO || (p ? p.endISO : ''),
         ym: startISO.slice(0, 7),
-        hasOpinion: !!v.opinion, editedAt: v.editedAt || ''
+        hasOpinion: !!v.opinion, editedAt: v.editedAt || '', status: v.status || ''
       });
     });
     rows.sort((a, b) => b.startISO.localeCompare(a.startISO)
@@ -20572,7 +20584,9 @@ window.reportArchiveRender = function() {
   const chip = (bg, bd, fg, t) => `<span style="background:${bg};border:1px solid ${bd};color:${fg};border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700;white-space:nowrap">${t}</span>`;
   list.innerHTML = '<div style="display:flex;flex-direction:column;gap:5px">' + rows.map(r => {
     const stu = _rpArchStudent(r);
-    const badge = !r.hasOpinion ? chip('#f9fafb','#e5e7eb','#9ca3af','의견 없음')
+    const running = !r.hasOpinion && (r.status === 'running' || r.status === 'requested');
+    const badge = running      ? chip('#fffbeb','#fde68a','#b45309','🖊 작성 중')
+                : !r.hasOpinion ? chip('#f9fafb','#e5e7eb','#9ca3af','의견 없음')
                 : r.editedAt   ? chip('#f1eeff','#c7bef5','#6c5dd3','✏️ 손본 의견')
                                : chip('#ecfdf5','#a7f3d0','#059669','💬 의견 있음');
     return `<div onclick="window.reportArchiveOpen('${_apcEsc(r.id)}')" title="눌러서 이 리포트를 다시 엽니다"
@@ -20598,6 +20612,297 @@ window.reportArchiveOpen = function(id) {
   window.reportMonthSync();
   window.reportArchiveToggle(false);
   window.reportRender();
+};
+
+// ══════════════════════════════════════════════════════════════════════════
+// ⚡ 일괄 만들기 — 고른 달의 리포트를 학생 전원분 한 번에.
+//   종이를 N장 그리는 게 아니라, 학생마다 집계해서 '선생님 의견' 생성 요청만 넣는다.
+//   의견 문서가 곧 리포트 목록이므로, 다 돌고 나면 '🗂 만든 리포트'에서 눌러 보면 된다
+//   (종이는 그때 그 학생·그 달로 다시 그린다).
+//
+//   ⚠️ 한 명당 AI를 한 번 부른다 — 인원수만큼 돈이 든다. 그래서 ①이미 있는 건 기본으로
+//      건너뛰고 ②시작 전에 몇 명분인지 확인을 받는다.
+//
+//   읽기는 컬렉션마다 딱 한 번씩이다. 리포트 한 장 만들 때 쓰는 경로를 그대로 학생 수만큼
+//   돌리면 같은 달 출결을 인원수배로 다시 읽는다(40명이면 40번) — 그래서 여기만 따로 팠다.
+// ══════════════════════════════════════════════════════════════════════════
+let _rpBulkAbort = false;   // 진행 중 '중단'을 누르면 켜진다
+let _rpBulkSel = new Set(); // 만들 학생(좌석키). 모달을 열 때마다 기본값으로 다시 잡는다
+
+// 한 달치를 컬렉션마다 한 번씩 읽어 학생별로 갈라 둔다
+async function _rpBulkFetch(startISO, endISO) {
+  const isoDates = _rangeDateStringsISO(startISO, endISO);
+  const chunks = [];
+  for (let i = 0; i < isoDates.length; i += 30) chunks.push(isoDates.slice(i, i + 30));
+
+  const [attSnaps, revSnap, merSnap, penSnap] = await Promise.all([
+    Promise.all(chunks.map(c => getDocs(query(collection(db, 'attendance_sessions'), where('inDate', 'in', c))))),
+    getDocs(query(collection(db, 'planner_ai_reviews'), where('date', '>=', startISO), where('date', '<=', endISO))),
+    getDocs(query(collection(db, 'merits'),            where('date', '>=', startISO), where('date', '<=', endISO))),
+    getDocs(query(collection(db, 'penalties'),         where('date', '>=', startISO), where('date', '<=', endISO))),
+  ]);
+
+  // 출결 — _rpAttendance(학생 한 명)와 _saAttendanceAll(또래 평균)을 한 바퀴에 같이 만든다
+  const attByName = {}, peerByName = {}, peerDays = {};
+  const now = Date.now();
+  attSnaps.forEach(snap => snap.forEach(d => {
+    const v = d.data();
+    if (!v || !v.studentName || typeof v.inTs !== 'number' || !v.inDate) return;
+    let min = 0, aw = v.awayMs || 0;
+    if (v.status === 'closed' && v.outTs) {
+      min = (typeof v.durationMin === 'number') ? v.durationMin : sessDurationMin(v.inTs, v.outTs, aw);
+    } else {
+      if (v.awayStartTs) aw += Math.max(0, now - v.awayStartTs);
+      min = sessDurationMin(v.inTs, now, aw);
+    }
+    min = Math.max(0, min);
+    const a = attByName[v.studentName] || (attByName[v.studentName] = { mins: {}, ins: {}, away: {} });
+    a.mins[v.inDate] = (a.mins[v.inDate] || 0) + min;
+    a.away[v.inDate] = (a.away[v.inDate] || 0) + Math.round(aw / 60000);
+    const at = new Date(v.inTs), im = at.getHours() * 60 + at.getMinutes();
+    if (a.ins[v.inDate] == null || im < a.ins[v.inDate]) a.ins[v.inDate] = im;
+
+    const pr = peerByName[v.studentName] || (peerByName[v.studentName] = { min: 0, days: 0 });
+    pr.min += min;
+    const ds = peerDays[v.studentName] || (peerDays[v.studentName] = new Set());
+    if (!ds.has(v.inDate)) { ds.add(v.inDate); pr.days++; }
+  }));
+
+  // uid 가 있으면 uid 로, 없으면 좌석으로 — 리포트 한 장 만들 때(reportRender)와 같은 기준
+  const bucket = (snap, seatField, ok) => {
+    const byUid = {}, bySeat = {};
+    snap.forEach(d => {
+      const v = d.data();
+      if (!v || (ok && !ok(v))) return;
+      v.__id = d.id;
+      if (v.uid) (byUid[v.uid] || (byUid[v.uid] = [])).push(v);
+      else if (v[seatField]) {
+        const k = _apcSeatKey(v[seatField]);
+        (bySeat[k] || (bySeat[k] = [])).push(v);
+      }
+    });
+    return { byUid, bySeat };
+  };
+  return {
+    attByName, peerByName,
+    rev: bucket(revSnap, 'seat',     v => v.status === 'done' && v.date),
+    mer: bucket(merSnap, 'seatKey',  v => !v.canceled),
+    pen: bucket(penSnap, 'seatKey',  null),
+  };
+}
+
+// 캐시에서 학생 한 명분을 뽑아 _rpAggregate 가 받는 모양으로 맞춘다
+function _rpBulkAggregate(stu, C, startISO, endISO) {
+  const seatKey = _apcSeatKey(stu.seat);
+  const att = C.attByName[stu.name] || { mins: {}, ins: {}, away: {} };
+  const take = g => stu.uid ? (g.byUid[stu.uid] || []) : (g.bySeat[seatKey] || []);
+
+  // 검사만 이름으로 한 번 더 거른다 — uid 없는 학생은 좌석을 물려받았을 때 이전 주인 것이 섞인다
+  const reviews = take(C.rev)
+    .filter(v => stu.uid || !window._sameStudentName || window._sameStudentName(v.name || v.studentName, stu.name))
+    .map(v => v.statsFixed ? { ...v, stats: v.statsFixed } : v)   // 사람이 교정한 수치가 기준
+    .sort((a, b) => a.date < b.date ? -1 : 1);
+  // 상·벌점은 _rpAggregate 가 원본 문서 모양 그대로 읽는다(merits.points / penalties.periods)
+  return _rpAggregate({ stu, startISO, endISO, att, reviews,
+    peerByName: C.peerByName, merits: take(C.mer), penalties: take(C.pen) });
+}
+
+// ── 모달 ──
+function _rpBulkStudents() {
+  const g = (document.getElementById('rp-bulk-grade') || {}).value || '';
+  return _apcStudents().filter(s =>
+    !(window.isTestStudent && window.isTestStudent(s.name)) && (!g || (s.grade || '') === g));
+}
+
+// 이 학생·이 달 리포트가 이미 있나 — '만든 리포트' 목록(report_comments)이 그대로 기준이다
+function _rpBulkDone(stu, ym) {
+  return (_rpArchive || []).some(r => r.ym === ym &&
+    ((r.uid && stu.uid && r.uid === stu.uid) || (r.seat && _apcSeatKey(r.seat) === _apcSeatKey(stu.seat))));
+}
+
+window.reportBulkOpen = async function() {
+  const r = window.reportMonthSync();
+  if (!r) { showAdminToast('⚠️ 먼저 달을 고르세요 (아직 시작하지 않은 달은 만들 수 없습니다)'); return; }
+  const m = document.getElementById('rp-bulk-modal');
+  if (!m) return;
+  _rpBulkAbort = false;
+  m.style.display = 'flex';
+  document.getElementById('rp-bulk-period').textContent =
+    `${+r.startISO.slice(0,4)}년 ${+r.startISO.slice(5,7)}월 · ${r.startISO} ~ ${r.endISO}${r.partial ? ' (오늘까지)' : ''}`;
+  document.getElementById('rp-bulk-body').innerHTML = _rpMsg('명부와 기존 리포트를 확인하는 중...');
+  document.getElementById('rp-bulk-foot').innerHTML = '';
+  await window.reportArchiveLoad(true);   // 건너뛸 대상을 정확히 세려면 최신 목록이 필요하다
+  _rpBulkSetup();
+};
+
+window.reportBulkClose = function() { 
+  const m = document.getElementById('rp-bulk-modal');
+  if (m) m.style.display = 'none';
+};
+
+function _rpBulkSetup() {
+  const body = document.getElementById('rp-bulk-body'), foot = document.getElementById('rp-bulk-foot');
+  if (!body) return;
+  const grades = [...new Set(_apcStudents().map(s => s.grade || '').filter(Boolean))].sort();
+  const curG = (document.getElementById('rp-bulk-grade') || {}).value || '';
+  const btn = (fn, t) => `<button onclick="${fn}" style="background:#f1eeff;color:#6c5dd3;border:1px solid #c7bef5;border-radius:7px;padding:4px 10px;font-size:11.5px;font-weight:700;cursor:pointer">${t}</button>`;
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:7px;margin-bottom:9px;flex-wrap:wrap">
+      <span style="font-size:12.5px;color:#4a3fa8;font-weight:700">학년</span>
+      <select id="rp-bulk-grade" onchange="window.reportBulkGrade()"
+        style="padding:5px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#fff;color:#1e1b4b">
+        <option value="">전체</option>
+        ${grades.map(g => `<option value="${_apcEsc(g)}"${g === curG ? ' selected' : ''}>${_apcEsc(g)}</option>`).join('')}
+      </select>
+      <div style="flex:1"></div>
+      ${btn("window.reportBulkPick('new')", '이미 만든 건 빼고')}
+      ${btn("window.reportBulkPick('all')", '전체 선택')}
+      ${btn("window.reportBulkPick('none')", '전체 해제')}
+    </div>
+    <div id="rp-bulk-list" style="max-height:38vh;overflow:auto;border:1px solid #ece9fb;border-radius:9px;padding:4px"></div>
+    <div id="rp-bulk-count" style="font-size:13px;color:#1e1b4b;margin-top:9px"></div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:9px;padding:10px 12px;margin-top:10px;font-size:12px;color:#b45309;line-height:1.65">
+      ⚠️ <b>체크한 학생 한 명당 AI가 의견을 한 번씩 씁니다.</b> 인원수만큼 비용이 듭니다.<br>
+      서버가 한 건씩 차례로 처리하므로(1건에 20초쯤) 다 채워지기까지 시간이 걸립니다.
+      요청을 넣는 것까지가 여기서 하는 일이고, 결과는 <b>🗂 만든 리포트</b>에서 차오릅니다.
+    </div>`;
+  foot.innerHTML = `
+    <button onclick="window.reportBulkClose()"
+      style="background:#f3f4f6;color:#4b5563;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">취소</button>
+    <button id="rp-bulk-go" onclick="window.reportBulkRun()"
+      style="background:#6c5dd3;color:#fff;border:none;border-radius:9px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">만들기</button>`;
+  window.reportBulkPick('new');   // 기본은 '이미 만든 건 빼고 전부'
+}
+
+// 학년을 바꾸면 목록이 통째로 달라지므로 선택도 기본값으로 되돌린다
+window.reportBulkGrade = function() { window.reportBulkPick('new'); };
+
+// 전체 선택 / 이미 만든 건 빼고 / 전체 해제
+window.reportBulkPick = function(mode) {
+  const ym = (document.getElementById('rp-month') || {}).value;
+  _rpBulkSel = new Set();
+  if (mode !== 'none') _rpBulkStudents()
+    .filter(s => mode === 'all' || !_rpBulkDone(s, ym))
+    .forEach(s => _rpBulkSel.add(_apcSeatKey(s.seat)));
+  _rpBulkList();
+};
+
+window.reportBulkToggle = function(seatKey) {
+  if (_rpBulkSel.has(seatKey)) _rpBulkSel.delete(seatKey); else _rpBulkSel.add(seatKey);
+  window.reportBulkRecount();   // 목록은 그대로 두고 숫자만 고친다(스크롤 위치가 튀지 않게)
+};
+
+function _rpBulkList() {
+  const el = document.getElementById('rp-bulk-list');
+  if (!el) return;
+  const ym = (document.getElementById('rp-month') || {}).value;
+  const list = _rpBulkStudents();
+  el.innerHTML = list.length ? list.map(s => {
+    const k = _apcSeatKey(s.seat), done = _rpBulkDone(s, ym);
+    return `<label style="display:flex;align-items:center;gap:9px;padding:5px 8px;border-radius:7px;cursor:pointer">
+      <input type="checkbox" onchange="window.reportBulkToggle('${k}')"${_rpBulkSel.has(k) ? ' checked' : ''}>
+      <span style="min-width:36px;font-size:11.5px;color:#9ca3af">${_apcEsc(s.seat)}번</span>
+      <span style="font-size:13px;font-weight:700;color:#1e1b4b">${_apcEsc(s.name)}</span>
+      <span style="font-size:11px;color:#9ca3af">${_apcEsc(s.grade || '')}</span>
+      <span style="flex:1"></span>
+      ${done ? '<span style="background:#ecfdf5;border:1px solid #a7f3d0;color:#059669;border-radius:6px;padding:1px 7px;font-size:10.5px;font-weight:700">이미 있음</span>' : ''}
+    </label>`;
+  }).join('') : _rpMsg('해당하는 학생이 없습니다');
+  window.reportBulkRecount();
+}
+
+window.reportBulkRecount = function() {
+  const n = _rpBulkPicked().length;
+  const cnt = document.getElementById('rp-bulk-count'), go = document.getElementById('rp-bulk-go');
+  const total = _rpBulkStudents().length;
+  if (cnt) cnt.innerHTML = `목록 <b>${total}명</b> 중 <b style="color:#6c5dd3;font-size:15px">${n}명</b> 선택`;
+  if (go) {
+    go.textContent = n ? `${n}명 만들기` : '선택된 학생이 없습니다';
+    go.disabled = !n;
+    go.style.opacity = n ? '1' : '0.45';
+    go.style.cursor = n ? 'pointer' : 'default';
+  }
+};
+
+// 지금 목록에 보이면서 체크된 학생만 — 학년을 좁혀 두고 만들면 보이는 것만 나간다
+function _rpBulkPicked() {
+  return _rpBulkStudents().filter(s => _rpBulkSel.has(_apcSeatKey(s.seat)));
+}
+
+window.reportBulkRun = async function() {
+  const r = window.reportMonthSync();
+  if (!r) return;
+  const ym = (document.getElementById('rp-month') || {}).value;
+  const todo = _rpBulkPicked();
+  if (!todo.length) return;
+  const again = todo.filter(s => _rpBulkDone(s, ym)).length;
+  if (!confirm(`${ym.slice(0,4)}년 ${+ym.slice(5,7)}월 리포트를 ${todo.length}명분 만듭니다.`
+    + (again ? `\n이 중 ${again}명은 이미 리포트가 있습니다 — 손보신 의견은 그대로 두고 나머지는 새로 씁니다.` : '')
+    + `\n학생 한 명당 AI 의견을 한 번씩 쓰므로 그만큼 비용이 듭니다.\n계속할까요?`)) return;
+
+  const body = document.getElementById('rp-bulk-body'), foot = document.getElementById('rp-bulk-foot');
+  _rpBulkAbort = false;
+  const draw = (i, name, note) => {
+    body.innerHTML = `
+      <div style="font-size:13px;color:#1e1b4b;margin-bottom:8px">${note || `${i} / ${todo.length}명 · ${_apcEsc(name || '')}`}</div>
+      <div style="height:9px;background:#eef0f7;border-radius:5px;overflow:hidden">
+        <div style="height:100%;width:${Math.round(i / todo.length * 100)}%;background:#6c5dd3;transition:width .2s"></div>
+      </div>`;
+  };
+  foot.innerHTML = `<button onclick="window.reportBulkStop()"
+    style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">중단</button>`;
+  draw(0, '', '한 달치 기록을 읽는 중...');
+
+  let C;
+  try { C = await _rpBulkFetch(r.startISO, r.endISO); }
+  catch (e) {
+    body.innerHTML = `<div style="color:#c62828;font-size:13px">기록을 읽지 못했습니다: ${_apcEsc(e.message || e)}</div>`;
+    foot.innerHTML = `<button onclick="window.reportBulkClose()" style="background:#f3f4f6;color:#4b5563;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">닫기</button>`;
+    return;
+  }
+
+  let sent = 0, empty = 0, failed = 0;
+  for (let i = 0; i < todo.length; i++) {
+    if (_rpBulkAbort) break;
+    const stu = todo[i];
+    draw(i, stu.name);
+    try {
+      const d = _rpBulkAggregate(stu, C, r.startISO, r.endISO);
+      // 리포트 한 장 만들 때와 같은 기준 — 쓸 기록이 하나도 없으면 만들지 않는다
+      if (!d.attDays && !d.reviews.length) { empty++; continue; }
+      const key = `${stu.uid || _apcSeatKey(stu.seat)}_${ym}`;
+      await setDoc(doc(db, 'report_ai_requests', `${key}_${Date.now()}_${i}`), {
+        key, uid: stu.uid || null, seat: _apcSeatKey(stu.seat), name: stu.name,
+        startISO: r.startISO, endISO: r.endISO, force: false,
+        payload: JSON.stringify(_rpAiPayload(d)),
+        requestedAt: serverTimestamp()
+      });
+      sent++;
+    } catch (e) {
+      failed++;
+      console.warn('[리포트 일괄] 실패:', stu.name, e.message || e);
+    }
+  }
+
+  _rpArchive = null;   // 목록을 다시 읽게 한다
+  body.innerHTML = `
+    <div style="font-size:13.5px;color:#1e1b4b;line-height:1.9">
+      ${_rpBulkAbort ? '⏹ <b>중단했습니다.</b><br>' : '✅ <b>요청을 다 넣었습니다.</b><br>'}
+      요청 <b style="color:#6c5dd3">${sent}건</b>
+      ${empty ? ` · 기록이 없어 건너뜀 <b>${empty}명</b>` : ''}
+      ${failed ? ` · <b style="color:#c62828">실패 ${failed}건</b>` : ''}
+    </div>
+    <div style="background:#f8faff;border:1px solid #ddd6fe;border-radius:9px;padding:10px 12px;margin-top:10px;font-size:12px;color:#4a3fa8;line-height:1.65">
+      서버가 한 건씩 의견을 씁니다(1건에 20초쯤). <b>🗂 만든 리포트</b>를 열고 새로고침하면
+      다 된 것부터 <b>💬 의견 있음</b>으로 바뀝니다.
+    </div>`;
+  foot.innerHTML = `<button onclick="window.reportBulkClose();window.reportArchiveToggle(true);window.reportArchiveLoad(true)"
+      style="background:#6c5dd3;color:#fff;border:none;border-radius:9px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">🗂 만든 리포트 보기</button>`;
+};
+
+window.reportBulkStop = function() {
+  _rpBulkAbort = true;
+  showAdminToast('⏹ 남은 건은 보내지 않습니다 (이미 보낸 건은 그대로 처리됩니다)');
 };
 
 // ══════════════════════════════════════════════════════════════════════════
