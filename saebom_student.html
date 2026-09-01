@@ -1148,6 +1148,10 @@ body{
 .wk-cell-partial{background:#FFE9C2;color:#B45309;border:1.5px solid #E08A1E}
 .wk-cell-early{background:#D6E8FF;color:#0B4A9B;border:1.5px solid #2F7BE0}
 .wk-cell-empty{background:#F1F5F9;color:#B6C2D2;border:1.5px dashed #D3DBE5;font-size:20px}
+/* 운영하지 않는 교시(학기 중 평일 1~6교시) — X로 고정, 탭해도 바뀌지 않는다 */
+.wk-cell-absent.wk-cell-locked{background:#F6E4E4;color:#B76A6A;border:1.5px solid #E3C0C0;cursor:default}
+.wk-cell-absent.wk-cell-locked:active{transform:none}
+.wk-closed-note{display:block;font-size:9.5px;font-weight:700;color:#9AA6B4;margin-top:4px;white-space:nowrap}
 /* 사유·시간 입력칸 */
 .wk-cell-input,.wk-cell-input.reason{
   margin-top:5px;width:100%;max-width:none;box-sizing:border-box;
@@ -3238,6 +3242,18 @@ function setReason(day, pNum, val) {
 }
 
 // ── 주간 시간표 ──
+// 학기 중 평일(월~금) 1~6교시는 등원 자체가 불가능한 시간대다 → 표에서 항상 X(불참)로 고정한다.
+// 방학에는 평일도 토요일처럼 오전 1교시부터 운영하므로 제외 — periodsFor와 같은 isSatLike로 판별한다.
+// ※ 표시 전용 규칙이라 draftSchedule/저장 문자열은 건드리지 않는다. 예전 데이터에 '1~11' 같은
+//    범위가 남아 있어 1~6교시가 attend로 파싱되더라도 화면에는 X로 보인다.
+function wkClosedCell(day, pNum) {
+  return pNum <= 6 && !isSatLike(day);
+}
+
+function wkClosedNotice() {
+  showToast('평일 1~6교시는 운영하지 않습니다');
+}
+
 function buildWeeklyTable() {
   const el = document.getElementById('weekly-table');
   // 모든 교시 (1~11) — 방학 중에는 11교시를 운영하지 않으므로 행 자체를 뺀다
@@ -3270,6 +3286,12 @@ function buildWeeklyTable() {
     html += `<td><div class="wk-period-label">${pNum}교시</div><div class="wk-period-time">${periodInfo?.t||''}</div></td>`;
 
     DAYS.forEach(day => {
+      // 운영하지 않는 교시(학기 중 평일 오전) — 상태·배지 계산 없이 잠긴 X로 그린다
+      if (wkClosedCell(day, pNum)) {
+        const closedCls = day === todayDay ? ' class="wk-todaycol"' : '';
+        html += `<td${closedCls}><span class="wk-cell-absent wk-cell-locked" onclick="wkClosedNotice()" title="평일 1~6교시는 운영하지 않습니다">X</span><span class="wk-closed-note">미운영</span></td>`;
+        return;
+      }
       const status = draftSchedule[day]?.periods[pNum] || 'none';
       const editable = scheduleEditEnabled;
       let cell = '';
@@ -3326,6 +3348,8 @@ function buildWeeklyTable() {
 }
 
 function wkToggle(day, pNum) {
+  // 운영하지 않는 교시는 수정 허용 여부와 무관하게 잠겨 있다
+  if (wkClosedCell(day, pNum)) { wkClosedNotice(); return; }
   if (!scheduleEditEnabled) {
     showToast('🔒 관리자가 허용할 때만 수정할 수 있습니다');
     return;
