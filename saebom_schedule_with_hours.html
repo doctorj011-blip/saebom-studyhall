@@ -8675,7 +8675,7 @@ function _studentDocData(student, ns) {
     seat: ns, name: student.name,
     phone: student.phone||'', phoneLast4: window._phoneLast4(student.phone), parent: student.parent||'',
     gender: student.gender||'f', expiry: student.expiry||'', startDate: student.startDate||'',
-    joinedAt: String(student.joinedAt || student.startDate || ''),   // 최초 등록일 — 좌석이 바뀌어도 따라간다
+    joinedAt: String(student.joinedAt || student.startDate || ''),   // 이번 등록일 — 좌석이 바뀌어도 따라간다
     월: student.schedule?.['월']||'-', 화: student.schedule?.['화']||'-',
     수: student.schedule?.['수']||'-', 목: student.schedule?.['목']||'-',
     금: student.schedule?.['금']||'-', 토: student.schedule?.['토']||'-',
@@ -11776,8 +11776,8 @@ async function saveStudentToFirebase(student) {
     gender: student.gender || 'f',
     expiry: student.expiry || '',
     startDate: student.startDate || '',
-    // 최초 등록일 — startDate 는 달마다 갱신되므로 '언제 처음 왔나'는 이 값만 안다.
-    // 이용조사 대상 판정이 이걸 본다. 없으면 지금 startDate 로 굳힌다.
+    // 이번 등록 시작일 — startDate 는 달마다 갱신되므로 '언제 등록했나'는 이 값만 안다.
+    // 이용조사 대상 판정이 이걸 본다(재등록 학생은 재등록일). 없으면 지금 startDate 로 굳힌다.
     joinedAt: String(student.joinedAt || student.startDate || ''),
     월: student.schedule['월'] || '-',
     화: student.schedule['화'] || '-',
@@ -12088,7 +12088,7 @@ async function loadStudentsFromFirebase() {
           seat: String(v.seat).replace('번',''), name: v.name,
           phone: v.phone || '', parent: v.parent || '',
           gender: v.gender || 'f', expiry: v.expiry || '', startDate: v.startDate || '',
-          joinedAt: v.joinedAt || '',   // 최초 등록일(이용조사 대상 판정) — 안 읽으면 저장 때 사라진다
+          joinedAt: v.joinedAt || '',   // 이번 등록일(이용조사 대상 판정) — 안 읽으면 저장 때 사라진다
           schedule: { 월:v['월']||'-', 화:v['화']||'-', 수:v['수']||'-', 목:v['목']||'-', 금:v['금']||'-', 토:v['토']||'-' },
           hours: _normalizeHours(v.hours), fee: v.fee||0, feeMemo: v.feeMemo||'',
           weeklyGoalH: Number(v.weeklyGoalH) || 0, // 주간 목표순공(시간) — 관리자가 설정한 값, 자동판정 기준

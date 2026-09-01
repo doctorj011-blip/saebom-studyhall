@@ -166,7 +166,9 @@ window._surveyIsAdminSeat = function(seat) {
 // 이름 비교는 _sameStudentName 으로 한다("박지윤(9557)"·"박지윤A" 같은 표기 편차를 흡수).
 // ⚠️ startDate 는 '이번 이용권 시작일'이라 달마다 새로 쓰인다(9월분을 9-01로 일괄 변경).
 //    그걸 그대로 쓰면 어느 달이든 전원이 '마감 후 등록'이 되어 조사 대상이 통째로 빈다.
-//    그래서 최초 등록일(joinedAt)을 먼저 본다 — 이 값은 한 번 박히면 안 바뀐다.
+//    그래서 joinedAt(이번 등록 시작일)을 먼저 본다 — 이 값은 등록할 때 한 번 박고 안 바꾼다.
+//    ★'최초 등록일'이 아니라 '이번 등록일'이다. 나갔다 다시 온 학생(2026-09 이은혁)은
+//      재등록일을 넣는다 — 조사 마감 시점에 명부에 없었다면 그 회차 대상이 아닌 게 맞다.
 //    옛 학생은 joinedAt 이 없을 수 있어 startDate 로 떨어진다(백필 전 호환).
 window._surveyJoinedAfterClose = function(cfg, student) {
   const sd = String((student && (student.joinedAt || student.startDate)) || '');
