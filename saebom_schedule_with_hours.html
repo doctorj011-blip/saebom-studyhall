@@ -20279,7 +20279,10 @@ const _rpMatKey = n => String(n == null ? '' : n).replace(/\s+/g, '').toLowerCas
 //   r.__id 를 그대로 planners 문서 id 로 쓸 수 있다 — 좌석은 학기 중 교환되지만
 //   그때 그 좌석으로 박혀 있어서, 지금 좌석으로 다시 조립하면 옛 사진을 못 찾는다.
 // ══════════════════════════════════════════════════════════════════════════
-let _rpSrcIdx = null;   // 지금 보고 있는 교재(✏️ 고치기가 이어받는다)
+let _rpSrcIdx = null;    // 지금 보고 있는 교재(✏️ 고치기가 이어받는다)
+let _rpSrcMat = null;    // 그 교재 객체
+let _rpSrcRevs = [];     // 이 교재가 나온 검사 문서들(날짜순) — 날짜별 저장이 여기를 되짚는다
+let _rpSrcDirty = false; // 한 건이라도 고쳤나 — 창을 닫을 때 리포트를 다시 그린다
 
 window.reportMatSource = async function(idx) {
   const d = _rpLast;
@@ -20298,6 +20301,7 @@ window.reportMatSource = async function(idx) {
     .filter(r => (((r.stats || {}).materials) || []).some(x => x && _rpMatKey(x.name) === m.key))
     .sort((a, b) => a.date < b.date ? -1 : 1);
   if (!revs.length) { body.innerHTML = _rpMsg('이 교재가 적힌 검사 기록을 찾지 못했습니다'); return; }
+  _rpSrcMat = m; _rpSrcRevs = revs;
 
   const urls = await Promise.all(revs.map(async r => {
     try { const p = await getDoc(doc(db, 'planners', r.__id)); return p.exists() ? (p.data().url || '') : ''; }
@@ -20305,19 +20309,26 @@ window.reportMatSource = async function(idx) {
   }));
   if (_rpSrcIdx !== idx) return;   // 그 사이 다른 교재를 열었다
 
-  body.innerHTML = revs.map((r, i) => {
+  const guide = `<div style="background:#f8faff;border:1px solid #ddd6fe;border-radius:9px;padding:9px 12px;margin-bottom:12px;font-size:12px;color:#4a3fa8;line-height:1.6">
+    사진을 보고 <b>그날 칸을 고쳐 💾 저장</b>하면 그 날짜만 바뀝니다.
+    이름만 <b>전체 날짜</b>에서 한 번에 바꾸려면 오른쪽 위 <b>✏️ 이 이름 고치기</b>를 쓰세요.
+    고친 내용은 창을 닫을 때 리포트에 반영됩니다.</div>`;
+  body.innerHTML = guide + revs.map((r, i) => {
     const mats = (((r.stats || {}).materials) || []).filter(x => x && x.name);
     const mine = mats.find(x => _rpMatKey(x.name) === m.key) || {};
     const others = mats.filter(x => _rpMatKey(x.name) !== m.key).map(x => x.name);
     const url = urls[i];
-    return `<div style="background:#ffffff;border:1px solid #e6e3da;border-radius:11px;padding:11px 13px;margin-bottom:12px">
+    return `<div id="rp-src-card-${i}" style="background:#ffffff;border:1px solid #e6e3da;border-radius:11px;padding:11px 13px;margin-bottom:12px">
       <div style="font-size:12.5px;font-weight:700;color:#6c5dd3">${_rpMd(r.date)} (${_rpDow(r.date)})</div>
-      <div style="font-size:13px;color:#1b2420;margin-top:5px;line-height:1.6">
-        ${r.statsAi ? '지금 값' : 'AI가 이 교재로 읽은 문구'} — <b>${_apcEsc(mine.raw || mine.name || '(원문 없음)')}</b>
-        ${mine.name && mine.raw && !_rpMatKey(mine.raw).includes(_rpMatKey(mine.name))
-            ? `<span style="color:#7c8a84">→ 교재명 "${_apcEsc(mine.name)}"</span>` : ''}
+      <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
+        <input id="rp-src-n-${i}" value="${_apcEsc(mine.name || '')}" placeholder="교재명"
+          style="width:150px;padding:5px 8px;border:1.5px solid #ddd6fe;border-radius:7px;font-size:12.5px;outline:none">
+        <input id="rp-src-r-${i}" value="${_apcEsc(mine.raw || mine.name || '')}" placeholder="플래너에 적힌 문구 (진도까지)"
+          style="flex:1;min-width:190px;padding:5px 8px;border:1.5px solid #ddd6fe;border-radius:7px;font-size:12.5px;outline:none">
+        <button onclick="window.reportMatSrcSave(${i})"
+          style="background:#6c5dd3;color:#fff;border:none;border-radius:7px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer">💾 저장</button>
       </div>
-      ${r.statsAi ? `<div style="font-size:11.5px;color:#9a6420;margin-top:3px">✏️ 사람이 교정한 기록입니다 · AI 원본: ${
+      ${r.statsAi ? `<div style="font-size:11.5px;color:#9a6420;margin-top:4px">✏️ 사람이 교정한 기록입니다 · AI 원본: ${
         _apcEsc((((r.statsAi.materials) || []).map(x => x && (x.raw || x.name)).filter(Boolean).join(' · ')) || '(없음)')}</div>` : ''}
       ${others.length ? `<div style="font-size:11.5px;color:#9ca3af;margin-top:3px">그날 함께 읽은 것: ${_apcEsc(others.join(' · '))}</div>` : ''}
       ${url
@@ -20331,7 +20342,60 @@ window.reportMatSource = async function(idx) {
 window.reportMatSrcClose = function() {
   const m = document.getElementById('rp-src-modal');
   if (m) m.style.display = 'none';
-  _rpSrcIdx = null;
+  _rpSrcIdx = null; _rpSrcMat = null; _rpSrcRevs = [];
+  // 고친 게 있으면 여기서 다시 그린다 — 저장할 때마다 그리면 열려 있는 이 창의 기준이 무너진다
+  if (_rpSrcDirty) { _rpSrcDirty = false; window.reportRender(); }
+};
+
+// 날짜 한 건의 교재명·문구를 고쳐 statsFixed 로 저장한다.
+// statsFixed 는 stats 를 통째로 대신하는 값이라, 고치는 항목만이 아니라 그날 수치를
+// 전부 담아야 한다(빠뜨리면 그 필드가 사라진다). 모양은 reportMatRename·'수치 수정'과
+// 똑같이 맞춘다 — 세 경로가 같은 문서를 쓰므로 어긋나면 한쪽에서 고친 게 다른 쪽에서 지워진다.
+window.reportMatSrcSave = async function(i) {
+  const r = _rpSrcRevs[i], m = _rpSrcMat;
+  if (!r || !m) return;
+  const nEl = document.getElementById(`rp-src-n-${i}`), rEl = document.getElementById(`rp-src-r-${i}`);
+  if (!nEl || !rEl) return;
+  const newName = nEl.value.trim(), newRaw = rEl.value.trim();
+  if (!newName) { showAdminToast('⚠️ 교재명은 비울 수 없습니다'); return; }
+
+  const base = r.stats || {};
+  const cur = (base.materials || []).find(x => x && _rpMatKey(x.name) === m.key) || {};
+  const oldName = String(cur.name || '');
+  if (newName === oldName && newRaw === String(cur.raw || cur.name || '')) {
+    showAdminToast('바뀐 내용이 없습니다'); return;
+  }
+
+  const swap = s => (oldName && newName !== oldName)
+    ? String(s == null ? '' : s).split(oldName).join(newName) : s;
+  const subjects = (base.subjects || []).map(s => {
+    const o = { ...s };
+    if (o.detail != null) o.detail = swap(o.detail);
+    return o;
+  });
+  const materials = (base.materials || []).filter(x => x && x.name).map(x => {
+    if (_rpMatKey(x.name) !== m.key) return { raw: x.raw || x.name, name: x.name, kind: x.kind, subject: x.subject };
+    return { raw: newRaw || newName, name: newName, kind: x.kind, subject: x.subject };
+  });
+  const subjSum = subjects.reduce((a, s) => a + (s.minutes || 0), 0);
+  const statsFixed = {
+    total_minutes: base.total_minutes != null ? base.total_minutes : (subjSum || null),
+    planned_count: base.planned_count || 0,
+    completed_count: base.completed_count || 0,
+    subjects, hourly: base.hourly || [], materials
+  };
+  try {
+    await updateDoc(doc(db, 'planner_ai_reviews', r.__id), { statsFixed, statsFixedAt: serverTimestamp() });
+  } catch (e) {
+    showAdminToast('❌ 저장 실패: ' + (e.message || e));
+    return;
+  }
+  if (!r.statsAi) r.statsAi = r.stats;   // 처음 고치는 날이면 지금 값이 곧 AI 원본이다
+  r.stats = statsFixed;
+  _rpSrcDirty = true;
+  showAdminToast(`💾 ${_rpMd(r.date)} 기록을 고쳤습니다 — 창을 닫으면 리포트에 반영됩니다`);
+  const card = document.getElementById(`rp-src-card-${i}`);
+  if (card) card.style.borderColor = '#6c5dd3';
 };
 
 // 사진을 보고 바로 고친다 — 고치면 리포트를 다시 그리므로 이 창은 닫는다
