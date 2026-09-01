@@ -1793,6 +1793,22 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   <div id="rp-content"><div style="color:#aaaaaa;font-size:13px;text-align:center;padding:40px 0">학생과 달을 고르고 <b>만들기</b>를 누르세요</div></div>
 </div>
 
+<!-- 📷 교재 원본 보기 — AI가 무엇을 보고 그 이름을 뽑았는지 그날 사진과 나란히 확인한다 -->
+<div id="rp-src-modal" onclick="if(event.target===this)window.reportMatSrcClose()"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:#ffffff;border-radius:16px;width:min(96vw,780px);height:92vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.25);overflow:hidden">
+    <div style="display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:0.5px solid #eeeeee;background:#f8faff">
+      <div id="rp-src-title" style="font-size:14px;font-weight:700;color:#1e1b4b"></div>
+      <div style="flex:1"></div>
+      <button id="rp-src-fix" onclick="window.reportMatSrcFix()"
+        style="background:#f1eeff;color:#6c5dd3;border:1px solid #c7bef5;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">✏️ 이 이름 고치기</button>
+      <button onclick="window.reportMatSrcClose()"
+        style="background:rgba(0,0,0,0.08);border:none;width:30px;height:30px;border-radius:50%;font-size:15px;cursor:pointer">✕</button>
+    </div>
+    <div id="rp-src-body" style="flex:1;overflow:auto;padding:14px 18px;background:#fbfaf7"></div>
+  </div>
+</div>
+
 <!-- ⚡ 리포트 일괄 만들기 -->
 <div id="rp-bulk-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9998;align-items:center;justify-content:center">
   <div style="background:#ffffff;border-radius:16px;width:min(94vw,540px);max-height:90vh;overflow:auto;padding:20px 22px;box-shadow:0 8px 40px rgba(0,0,0,0.25)">
@@ -19921,7 +19937,9 @@ window.reportRender = async function() {
     mine.forEach(d => {
       const v = d.data();
       if (!v || v.status !== 'done' || !v.date || v.date < startISO || v.date > endISO || !isMine(v)) return;
-      if (v.statsFixed) v.stats = v.statsFixed;   // 사람이 교정한 수치가 기준
+      // 사람이 교정한 수치가 기준. 다만 '📷 원본 보기'가 AI 판독 원본과 비교해 보여 줘야 하므로
+      // 덮기 전에 따로 들고 간다(교정본만 남으면 무엇을 고쳤는지 화면에서 알 수 없다)
+      if (v.statsFixed) { v.statsAi = v.stats; v.stats = v.statsFixed; }
       // 문서 id 를 들고 다닌다 — 교재명 고치기가 좌석_날짜를 다시 조립하지 않고 여기로 되쓴다
       // (좌석은 학기 중에 교환되므로 지금 좌석으로 조립하면 옛 문서를 못 찾는다)
       v.__id = d.id;
@@ -19991,7 +20009,9 @@ function _rpAggregate(o) {
   const materials = Object.keys(matAgg).map(k => {
     const g = matAgg[k], rs = g.raws.sort((a, b) => a.d < b.d ? -1 : 1);
     // key 는 이름 고치기(reportMatRename)가 원본 문서를 되짚을 때 쓴다 — 이름이 바뀌면 이 키도 바뀐다
+    // raws(날짜별 원문)는 '📷 원본 보기'가 그날 사진과 나란히 보여 주려고 그대로 들고 간다
     return { key: k, name: g.name, subject: g.subject, kind: g.kind, days: g.days.size,
+             dates: [...g.days].sort(), raws: rs,
              first: rs.length ? rs[0].raw : null, last: rs.length ? rs[rs.length - 1].raw : null };
   }).sort((a, b) => b.days - a.days || String(a.subject).localeCompare(String(b.subject)));
 
@@ -20164,6 +20184,8 @@ function _rpSheet(d) {
       <thead><tr><th>교재 · 강의</th><th>종류</th><th>진도 (처음 → 마지막 기록)</th><th style="text-align:right">학습일</th></tr></thead>
       <tbody>${mats.map(m => `<tr>
         <td><span class="rp-mname">${_apcEsc(m.name)}</span><span class="rp-msub">${_apcEsc(m.subject)}</span><button
+          class="rp-mfix" onclick="window.reportMatSource(${d.materials.indexOf(m)})"
+          title="원본 보기 — 이 이름이 나온 날의 플래너 사진과 AI가 읽은 문구">📷</button><button
           class="rp-mfix" onclick="window.reportMatRename(${d.materials.indexOf(m)})"
           title="교재명 고치기 — 이 기간 기록에 함께 반영됩니다">✏️</button></td>
         <td><span class="rp-kind ${_rpKind(m.kind)}">${_apcEsc(m.kind)}</span></td>
@@ -20245,6 +20267,80 @@ function _rpSheet(d) {
 //   raw·detail 은 옛 이름이 문장 안에 섞여 있으므로 그 부분만 문자열 치환한다.
 // ══════════════════════════════════════════════════════════════════════════
 const _rpMatKey = n => String(n == null ? '' : n).replace(/\s+/g, '').toLowerCase();
+
+// ══════════════════════════════════════════════════════════════════════════
+// 📷 교재 원본 보기 — "AI가 뭘 보고 이 이름을 뽑았나"를 눈으로 확인한다.
+//   교재명이 '?문', '강대X' 처럼 깨져 나오는 건 판독 오류인데, 표만 봐서는 학생이 그렇게
+//   적은 건지 AI가 잘못 읽은 건지 가릴 수 없다. 그날 플래너 사진과 AI가 읽어 낸 문구를
+//   나란히 놓으면 바로 판정이 되고, 그 자리에서 ✏️ 로 고칠 수 있다.
+//
+//   사진은 학생앱이 planners/{좌석}_{날짜} 에 넣어 둔 다운로드 URL을 쓴다. 검사 문서
+//   (planner_ai_reviews)의 id 가 서버에서 같은 `${좌석}_${날짜}` 로 만들어지므로
+//   r.__id 를 그대로 planners 문서 id 로 쓸 수 있다 — 좌석은 학기 중 교환되지만
+//   그때 그 좌석으로 박혀 있어서, 지금 좌석으로 다시 조립하면 옛 사진을 못 찾는다.
+// ══════════════════════════════════════════════════════════════════════════
+let _rpSrcIdx = null;   // 지금 보고 있는 교재(✏️ 고치기가 이어받는다)
+
+window.reportMatSource = async function(idx) {
+  const d = _rpLast;
+  const m = d && d.materials && d.materials[idx];
+  if (!m) { showAdminToast('⚠️ 먼저 리포트를 만드세요'); return; }
+  const modal = document.getElementById('rp-src-modal');
+  const body = document.getElementById('rp-src-body');
+  const title = document.getElementById('rp-src-title');
+  if (!modal || !body) return;
+  _rpSrcIdx = idx;
+  modal.style.display = 'flex';
+  title.textContent = `📷 ${m.name}${m.subject ? ' · ' + m.subject : ''} — ${m.days}일치 원본`;
+  body.innerHTML = _rpMsg('플래너 사진을 불러오는 중...');
+
+  const revs = (d.reviews || [])
+    .filter(r => (((r.stats || {}).materials) || []).some(x => x && _rpMatKey(x.name) === m.key))
+    .sort((a, b) => a.date < b.date ? -1 : 1);
+  if (!revs.length) { body.innerHTML = _rpMsg('이 교재가 적힌 검사 기록을 찾지 못했습니다'); return; }
+
+  const urls = await Promise.all(revs.map(async r => {
+    try { const p = await getDoc(doc(db, 'planners', r.__id)); return p.exists() ? (p.data().url || '') : ''; }
+    catch (e) { return ''; }
+  }));
+  if (_rpSrcIdx !== idx) return;   // 그 사이 다른 교재를 열었다
+
+  body.innerHTML = revs.map((r, i) => {
+    const mats = (((r.stats || {}).materials) || []).filter(x => x && x.name);
+    const mine = mats.find(x => _rpMatKey(x.name) === m.key) || {};
+    const others = mats.filter(x => _rpMatKey(x.name) !== m.key).map(x => x.name);
+    const url = urls[i];
+    return `<div style="background:#ffffff;border:1px solid #e6e3da;border-radius:11px;padding:11px 13px;margin-bottom:12px">
+      <div style="font-size:12.5px;font-weight:700;color:#6c5dd3">${_rpMd(r.date)} (${_rpDow(r.date)})</div>
+      <div style="font-size:13px;color:#1b2420;margin-top:5px;line-height:1.6">
+        ${r.statsAi ? '지금 값' : 'AI가 이 교재로 읽은 문구'} — <b>${_apcEsc(mine.raw || mine.name || '(원문 없음)')}</b>
+        ${mine.name && mine.raw && !_rpMatKey(mine.raw).includes(_rpMatKey(mine.name))
+            ? `<span style="color:#7c8a84">→ 교재명 "${_apcEsc(mine.name)}"</span>` : ''}
+      </div>
+      ${r.statsAi ? `<div style="font-size:11.5px;color:#9a6420;margin-top:3px">✏️ 사람이 교정한 기록입니다 · AI 원본: ${
+        _apcEsc((((r.statsAi.materials) || []).map(x => x && (x.raw || x.name)).filter(Boolean).join(' · ')) || '(없음)')}</div>` : ''}
+      ${others.length ? `<div style="font-size:11.5px;color:#9ca3af;margin-top:3px">그날 함께 읽은 것: ${_apcEsc(others.join(' · '))}</div>` : ''}
+      ${url
+        ? `<a href="${_apcEsc(url)}" target="_blank" rel="noopener" title="새 탭에서 원본 크기로 열기"><img src="${_apcEsc(url)}" loading="lazy"
+             style="display:block;width:100%;margin-top:9px;border-radius:9px;border:1px solid #eeeeee"></a>`
+        : `<div style="font-size:12px;color:#c62828;margin-top:9px">이 날짜의 플래너 사진을 찾지 못했습니다 (지워졌거나 좌석이 바뀐 기록일 수 있습니다)</div>`}
+    </div>`;
+  }).join('');
+};
+
+window.reportMatSrcClose = function() {
+  const m = document.getElementById('rp-src-modal');
+  if (m) m.style.display = 'none';
+  _rpSrcIdx = null;
+};
+
+// 사진을 보고 바로 고친다 — 고치면 리포트를 다시 그리므로 이 창은 닫는다
+window.reportMatSrcFix = async function() {
+  const idx = _rpSrcIdx;
+  if (idx == null) return;
+  window.reportMatSrcClose();
+  await window.reportMatRename(idx);
+};
 
 window.reportMatRename = async function(idx) {
   const d = _rpLast;
@@ -20703,7 +20799,7 @@ function _rpBulkAggregate(stu, C, startISO, endISO) {
   // 검사만 이름으로 한 번 더 거른다 — uid 없는 학생은 좌석을 물려받았을 때 이전 주인 것이 섞인다
   const reviews = take(C.rev)
     .filter(v => stu.uid || !window._sameStudentName || window._sameStudentName(v.name || v.studentName, stu.name))
-    .map(v => v.statsFixed ? { ...v, stats: v.statsFixed } : v)   // 사람이 교정한 수치가 기준
+    .map(v => v.statsFixed ? { ...v, statsAi: v.stats, stats: v.statsFixed } : v)   // 사람이 교정한 수치가 기준
     .sort((a, b) => a.date < b.date ? -1 : 1);
   // 상·벌점은 _rpAggregate 가 원본 문서 모양 그대로 읽는다(merits.points / penalties.periods)
   return _rpAggregate({ stu, startISO, endISO, att, reviews,
