@@ -1745,8 +1745,11 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </select>
       <!-- 기간은 '달' 하나로 고른다. 실제 조회 구간(1일~말일, 이번 달이면 오늘까지)은
            reportMonthSync 가 아래 hidden 두 칸에 넣는다 — 집계 코드는 그대로 이걸 읽는다 -->
+      <!-- 칸 아무 데나 눌러도 달력이 열리게. 크롬은 기본으로 오른쪽 달력 아이콘을 눌러야만 열린다.
+           showPicker() 는 사용자 클릭 안에서만 되고, 아이콘을 눌러 이미 열린 상태면 예외가 나므로 감싼다 -->
       <input type="month" id="rp-month" onchange="window.reportMonthSync()"
-        style="padding:6px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#ffffff;color:#1e1b4b;outline:none">
+        onclick="try{this.showPicker()}catch(e){}"
+        style="padding:6px 9px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12.5px;background:#ffffff;color:#1e1b4b;outline:none;cursor:pointer">
       <input type="hidden" id="rp-start"><input type="hidden" id="rp-end">
       <span id="rp-range" style="font-size:11.5px;color:#9ca3af;white-space:nowrap"></span>
       <button onclick="window.reportThisMonth()" title="이번 달로 되돌리기"
