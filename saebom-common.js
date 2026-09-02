@@ -695,6 +695,16 @@ window._sameStudentName = function(a, b) {
   const lo = x.length < y.length ? x : y, hi = x.length < y.length ? y : x;
   return hi.indexOf(lo) === 0 && /^[A-Za-z0-9]$/.test(hi.slice(lo.length));
 };
+// 좌석키 기록 한 건이 이 학생 것인가 — uid 가 양쪽에 있으면 uid 로, 없으면 이름으로 판정한다.
+// 플래너(planners·planner_ai_reviews)처럼 '제출 당시 좌석'으로 저장되는 문서를 지금 좌석으로
+// 찾으면 남의 것이 딸려오거나 본인 것이 사라지므로(2026-09-02 좌석 이동 뒤 관리앱 격자가 전부
+// 어긋남), 좌석으로 찾은 뒤에는 반드시 이걸로 주인을 확인한다. student 는 {uid,name} 또는 이름.
+window._ownsDoc = function(d, student) {
+  if (!d || !student) return false;
+  var su = student.uid, du = d.uid;
+  if (su && du) return String(su) === String(du);
+  return window._sameStudentName(d.name || d.studentName, student.name || student);
+};
 // 좌석으로 긁어온 문서 배열에서 '이 학생 것'만 남긴다.
 // student 는 학생 객체({name}) 또는 이름 문자열. 이름 필드가 없는 기록은 주인을 확정할 수 없어
 // 보수적으로 제외한다(2026-08-04 기준 해당 컬렉션 1,827건 중 0건이라 실제 손실은 없다).

@@ -2747,28 +2747,63 @@ function enterApp() {
   }
 }
 
+// ── 명부에서 '나'를 찾는다 — uid 가 있으면 uid, 없으면 이름(단 한 명일 때만). 못 찾으면 null ──
+// 좌석 문서(students/{좌석})를 바로 읽지 않는 이유: 관리앱에서 자리를 옮기면 그 문서는 다른 학생
+// 것이거나 없어진다. 좌석은 로그인 시점 값이라 세션이 살아 있는 동안 조용히 낡는다.
+async function _findMyStudentDoc() {
+  try {
+    const { collection, query, where, getDocs } = window._fs;
+    const c = collection(window._db, 'students');
+    const pick = snap => { const hits = []; snap.forEach(d => { const v = d.data(); if (v && v.name && v.seat) hits.push(v); }); return hits.length === 1 ? hits[0] : null; };
+    if (currentStudent.uid) {
+      const hit = pick(await getDocs(query(c, where('uid', '==', String(currentStudent.uid)))));
+      if (hit) return hit;
+    }
+    return pick(await getDocs(query(c, where('name', '==', currentStudent.name))));
+  } catch(e) { console.warn('내 명부 조회 실패:', e); return null; }
+}
+
 // ── 최신 학생 데이터 갱신 (sessionStorage 캐시 stale 방지) ──
 async function refreshStudentData() {
   try {
     if (!currentStudent || !window._db || !window._fsGetDoc || !window._fsDoc) return;
     const seat = String(currentStudent.seat || '').replace('번','');
     if (!seat) return;
-    const snap = await window._fsGetDoc(window._fsDoc(window._db, 'students', seat));
-    if (snap && snap.exists && snap.exists()) {
-      currentStudent.hours = _normalizeHours(snap.data().hours);
+    // 세션 캐시의 좌석은 로그인 시점 값이다. 관리앱에서 자리를 옮기면 students/{옛좌석}은 다른 학생
+    // 것이거나(교환) 없어진다(빈자리 이동). 예전엔 그 문서를 그대로 읽어 남의 uid·hours·비공개설정을
+    // 내 것으로 덮어썼고, 플래너·스케줄은 옛 좌석에 써졌다(2026-09-02 실측). 그래서 먼저 '나'를
+    // 찾아 좌석이 바뀌었으면 세션을 새 좌석으로 고치고 화면을 다시 연다(모든 탭이 좌석으로 구독한다).
+    const mine = await _findMyStudentDoc();
+    const mineSeat = mine ? String(mine.seat).replace('번','') : '';
+    if (mine && /^\d+$/.test(mineSeat) && mineSeat !== seat) {
+      currentStudent.seat = mineSeat;
+      if (mine.uid) currentStudent.uid = mine.uid;
+      try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
+      showToast(`좌석이 ${mineSeat}번으로 바뀌어 다시 불러옵니다`);
+      setTimeout(() => location.reload(), 900);
+      return;
+    }
+    let data = mine;
+    if (!data) {
+      // 나를 못 찾았을 때만 좌석 문서로 내려간다 — 그것도 이름이 맞을 때만 받는다(남의 문서 방지)
+      const snap = await window._fsGetDoc(window._fsDoc(window._db, 'students', seat));
+      if (snap && snap.exists && snap.exists() && window._sameStudentName(snap.data().name, currentStudent.name)) data = snap.data();
+    }
+    if (data) {
+      currentStudent.hours = _normalizeHours(data.hours);
       // uid 도입(2026-08-04) 전에 로그인한 세션 캐시엔 uid가 없다 — 여기서 채우면
       // 재로그인 없이 좌석 폴백에서 uid 조회로 올라온다.
-      if (snap.data().uid) currentStudent.uid = snap.data().uid;
+      if (data.uid) currentStudent.uid = data.uid;
       // 예약 퇴원일 — 이용 조사 대상에서 빼는 근거라 세션 캐시가 아니라 문서 값을 따른다.
-      currentStudent.withdrawAt = snap.data().withdrawAt || '';
+      currentStudent.withdrawAt = data.withdrawAt || '';
       // 옛 세션 캐시엔 gender가 없다 — 여기서 채운다.
-      const g = snap.data().gender === 'm' ? 'm' : 'f';
+      const g = data.gender === 'm' ? 'm' : 'f';
       currentStudent.gender = g;
       // 태블릿 보관 관리 동의(학부모앱에서 설정) — 동의 학생만 홈에 태블릿 카드가 열린다
-      currentStudent.tabletConsent = snap.data().tabletConsent === true;
+      currentStudent.tabletConsent = data.tabletConsent === true;
       try { updateTabletCard(); } catch(e) {}
       // 플래너 학부모 공개 설정 — 다른 기기에서 바꿨을 수 있으니 문서 값을 따른다
-      currentStudent.plannerHidden = snap.data().plannerHidden === true;
+      currentStudent.plannerHidden = data.plannerHidden === true;
       try { renderPlannerPrivacy(); } catch(e) {}
       try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
       buildMyStats();
@@ -5713,6 +5748,41 @@ async function loadPlannerMonthData() {
     // Storage 미설정 또는 빈 달 - 달력은 계속 렌더링
     console.warn('[Planner] Storage 로드 실패 (정상 - 사진 없음):', e.message || e);
   }
+  // 자리를 옮기기 전 좌석에 남은 내 제출분은 위 Storage 목록에 없다 — 문서로 보탠다
+  await _plMergeOwnDocs();
+}
+
+// 옮기기 전 좌석에 남은 내 제출분을 달력에 더한다 — 플래너는 '제출 당시 좌석'으로 저장되므로
+// Storage 목록(지금 좌석)만 보면 자리를 옮긴 학생의 옛 기록이 통째로 사라진다(2026-09-02 실측).
+// planners 문서의 url 을 쓰므로 Storage 를 다시 뒤지지 않는다. 주인 확인은 saebom-common.js _ownsDoc.
+// 날짜별 문서 좌석키(_plDocKeyByDate)는 코멘트 조회가 같은 키로 쓴다(코멘트도 '제출 당시 좌석' 키).
+let _plOwnDocs = null;          // 세션 캐시 — 제출·삭제 때 비운다
+let _plDocKeyByDate = {};
+async function _plMergeOwnDocs() {
+  if (!currentStudent) return;
+  try {
+    if (!_plOwnDocs) {
+      const { collection, query, where, getDocs } = window._fs;
+      const db = window._db || window._fs.getFirestore();
+      const c = collection(db, 'planners');
+      const qs = [getDocs(query(c, where('name', '==', currentStudent.name)))];
+      if (currentStudent.uid) qs.push(getDocs(query(c, where('uid', '==', String(currentStudent.uid)))));
+      const byDate = {};
+      (await Promise.all(qs)).forEach(snap => snap.forEach(d => {
+        const v = d.data();
+        if (!v || !v.date || !v.url || !window._ownsDoc(v, currentStudent)) return;
+        const prev = byDate[v.date];   // 같은 날짜가 두 좌석에 있으면(옮긴 날 두 번 제출) 나중 것
+        if (!prev || String(v.updatedAt || v.submittedAt || '') > String(prev.updatedAt || prev.submittedAt || '')) byDate[v.date] = v;
+      }));
+      _plOwnDocs = Object.values(byDate);
+      _plDocKeyByDate = {};
+      _plOwnDocs.forEach(v => { _plDocKeyByDate[v.date] = String(v.seat || '').replace(/[^0-9]/g, '') || String(v.seat || ''); });
+    }
+    const monthPrefix = `${plannerYear}-${String(plannerMonth+1).padStart(2,'0')}`;
+    _plOwnDocs.forEach(v => { if (String(v.date).startsWith(monthPrefix) && !plannerUploadedDates[v.date]) plannerUploadedDates[v.date] = v.url; });
+  } catch(e) {
+    console.warn('[Planner] 내 제출 기록 조회 실패:', e && e.message);
+  }
 }
 
 // 이 좌석의 planners 메타 중 '내 것이 아님이 확인된' 날짜를 달력에서 제거한다.
@@ -5822,10 +5892,11 @@ async function plannerLoadComments(dateStr) {
   const list = document.getElementById('planner-comments-list');
   if (!area || !list || !currentStudent) return;
   // 코멘트도 좌석 기준 키라 이전 좌석 주인이 받은 선생님 코멘트가 딸려온다 → 그 날짜는 숨긴다
-  if (_plNotMineDates.has(dateStr)) { area.style.display = 'none'; list.innerHTML = ''; return; }
+  // (단, 그날 내 제출이 옛 좌석에 있으면 그 키로 읽는다 — 자리를 옮긴 학생의 옛 코멘트)
+  if (_plNotMineDates.has(dateStr) && !_plDocKeyByDate[dateStr]) { area.style.display = 'none'; list.innerHTML = ''; return; }
   try {
     const seat = _plSeatKey();   // 관리앱이 코멘트를 저장하는 키와 같은 규칙
-    const docId = seat + '_' + dateStr;
+    const docId = (_plDocKeyByDate[dateStr] || seat) + '_' + dateStr;
     const snap = await window._fsGetDoc(window._fsDoc(window._db, 'planner_comments', docId));
     if (snap.exists()) {
       const comments = snap.data().comments || [];
@@ -5938,6 +6009,7 @@ async function plannerUploadPhoto(input) {
         bar.style.width = '0%';
         // 메타를 먼저 확정해야 카드가 올바른 상태(정시/지각)로 그려진다.
         await savePlannerMeta(seat, ds, url);
+        _plOwnDocs = null;   // 내 제출 목록 캐시 무효화
         await loadPlannerToday();
         renderPlannerToday();
         plannerUploadedDates[ds] = url;   // 달력에도 반영(같은 달을 보고 있을 때)
@@ -5984,6 +6056,9 @@ async function savePlannerMeta(seat, dateStr, url) {
       date: dateStr,
       url,
       name: currentStudent.name,
+      // 불변 학생ID — 좌석은 옮겨도 이 값은 그대로라, 관리앱·학부모앱이 '제출 당시 좌석'이 아니라
+      // 사람으로 제출분을 찾을 수 있다(없으면 이름으로 찾는다 — saebom-common.js _ownsDoc)
+      ...(currentStudent.uid ? { uid: String(currentStudent.uid) } : {}),
       submittedAt,          // 최초 제출 (불변)
       status,               // 'ontime' | 'late' — 최초 제출 기준
       updatedAt: nowIso     // 마지막 교체 시각
@@ -6029,6 +6104,7 @@ async function plannerDeleteToday() {
     const { doc, deleteDoc } = window._fs;
     const db = window._db || window._fs.getFirestore();
     await deleteDoc(doc(db, 'planners', `${seat}_${ds}`));
+    _plOwnDocs = null;   // 내 제출 목록 캐시 무효화
     delete plannerUploadedDates[ds];
     _plTodayMeta = null;
     renderPlannerToday();

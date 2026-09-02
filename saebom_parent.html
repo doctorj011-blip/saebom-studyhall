@@ -2897,16 +2897,39 @@ function _ppRenderPrivacy() {
   if (note) note.style.display = _pPlannerHidden() ? 'block' : 'none';
 }
 
-// 비공개일 때 쓰는 제출일 목록 — planners 메타 문서에는 날짜와 제출시각만 있고 사진은 없다.
-// 세션에 한 번만 읽고 달을 옮길 때는 재사용한다(달마다 읽으면 조회가 달 수만큼 늘어난다).
+// 자녀의 planners 문서 전부 — 플래너는 '제출 당시 좌석'으로 저장되므로 지금 좌석(Storage 폴더)만 보면
+// 자리를 옮기기 전 제출분이 통째로 빠지고 그 자리 이전 주인의 사진이 섞인다(2026-09-02 실측).
+// uid 조회와 이름 조회를 합쳐 좌석과 무관하게 모으고, 주인 확인은 saebom-common.js _ownsDoc 로 한다.
+// 세션에 한 번만 읽는다(달마다 읽으면 조회가 달 수만큼 늘어난다). 날짜별 문서 좌석키(_ppDocKeyByDate)는
+// 코멘트 조회가 쓴다 — 코멘트도 같은 '제출 당시 좌석' 키다.
+let _ppOwnCache = null;
+let _ppDocKeyByDate = {};
+async function _ppOwnDocs() {
+  if (_ppOwnCache) return _ppOwnCache;
+  const c = window._collection(window._db, 'planners');
+  const qs = [window._getDocs(window._query(c, window._where('name', '==', currentStudent.name)))];
+  if (currentStudent.uid) qs.push(window._getDocs(window._query(c, window._where('uid', '==', currentStudent.uid))));
+  const byDate = {};
+  (await Promise.all(qs)).forEach(snap => snap.forEach(d => {
+    const v = d.data();
+    if (!v || !v.date || !window._ownsDoc(v, currentStudent)) return;
+    // 같은 날짜가 두 좌석에 있으면(옮긴 날 두 번 제출) 나중 제출을 택한다
+    const prev = byDate[v.date];
+    if (!prev || String(v.updatedAt || v.submittedAt || '') > String(prev.updatedAt || prev.submittedAt || '')) byDate[v.date] = v;
+  }));
+  _ppDocKeyByDate = {};
+  Object.values(byDate).forEach(v => { _ppDocKeyByDate[v.date] = String(v.seat || '').replace(/[^0-9]/g, '') || String(v.seat || ''); });
+  _ppOwnCache = Object.values(byDate);
+  return _ppOwnCache;
+}
+
+// 비공개일 때 쓰는 제출일 목록 — 사진 주소는 쓰지 않고 날짜만 남긴다.
 let _ppMetaAll = null;
 async function _ppLoadMetaDates() {
   if (_ppMetaAll) return _ppMetaAll;
   const set = {};
   try {
-    const snap = await _pByStudent('planners', 'seat');
-    const docs = []; snap.forEach(d => { const v = d.data(); if (v) docs.push(v); });
-    _pMineOnly(docs).forEach(v => { if (v.date && v.url) set[v.date] = true; });
+    (await _ppOwnDocs()).forEach(v => { if (v.date && v.url) set[v.date] = true; });
   } catch(e) { console.warn('[플래너] 제출 기록 조회 실패:', e && e.code, e && e.message); }
   _ppMetaAll = set;
   return set;
@@ -2924,18 +2947,13 @@ async function _ppLoadMonth() {
     _ppRenderCal();
     return;
   }
-  if (!currentStudent || !window._storage) return;
+  if (!currentStudent || !window._db) return;
+  // 사진 주소는 planners 문서의 url 을 쓴다. 예전처럼 Storage 의 좌석 폴더를 나열하면 자리를
+  // 옮긴 자녀의 옛 사진이 빠지고 그 자리 이전 학생의 사진이 보인다(주인 확인 없이 폴더째 보여 줬다).
   try {
-    const seat = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');  // 학생앱 업로드 키와 동일 규칙(숫자 우선)
     const monthPrefix = _ppYear + '-' + String(_ppMonth+1).padStart(2,'0');
-    const seatRef = window._storageRef(window._storage, 'planners/' + seat);
-    const result = await window._listAll(seatRef);
-    for (const item of result.items) {
-      const key = item.name.replace(/\.jpg$/i, '');
-      if (!key.startsWith(monthPrefix)) continue;
-      try { _ppDates[key] = await window._getDownloadURL(item); } catch(e) {}
-    }
-  } catch(e) {}
+    (await _ppOwnDocs()).forEach(v => { if (v.url && String(v.date).startsWith(monthPrefix)) _ppDates[v.date] = v.url; });
+  } catch(e) { console.warn('[플래너] 사진 목록 조회 실패:', e && e.code, e && e.message); }
   _ppRenderCal();
 }
 
@@ -2986,7 +3004,9 @@ async function _ppLoadComments(ds) {
   try {
     if (!window._getDoc || !window._doc || !window._db) return;
     const seat = String(currentStudent.seat || '').replace(/[^0-9]/g, '') || String(currentStudent.seat || '').replace(/[^0-9a-zA-Z가-힣]/g, '_');  // 학생앱 업로드 키와 동일 규칙(숫자 우선)
-    const snap = await window._getDoc(window._doc(window._db, 'planner_comments', seat + '_' + ds));
+    // 코멘트는 그날 제출 문서와 같은 '제출 당시 좌석' 키에 달린다 — 자리를 옮긴 자녀의 옛 코멘트는 옛 키에 있다
+    const docKey = _ppDocKeyByDate[ds] || seat;
+    const snap = await window._getDoc(window._doc(window._db, 'planner_comments', docKey + '_' + ds));
     if (snap.exists()) {
       const comments = snap.data().comments || [];
       if (comments.length > 0) {

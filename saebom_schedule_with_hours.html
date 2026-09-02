@@ -14977,13 +14977,15 @@ async function _assessWeekGoals(monDate, weekIso){
 
     // 플래너 제출일 집계(성실 상점용) — planners.seat(학생앱 _plSeatKey 규칙) → 그 주 제출 날짜 Set
     const plSnaps = await Promise.all(chunks.map(c => getDocs(query(collection(db, 'planners'), where('date', 'in', c)))));
-    const subByKey = {};
+    // 플래너 문서는 '제출 당시 좌석'으로 저장된다 — 그 주에 자리를 옮긴 학생은 두 좌석에 걸쳐 있고,
+    // 옛 좌석엔 이전 주인의 제출이 남아 있다(2026-09-02 실측). 그래서 좌석이 아니라 주인(uid, 없으면
+    // 이름 — saebom-common.js _ownsDoc)으로 모은다.
+    const plDocs = [];
     plSnaps.forEach(snap => snap.forEach(x => {
-      const v = x.data(); if (!v || !v.seat || !v.date || !dayIsos.includes(v.date)) return;
-      // 좌석은 숫자로 정규화 — 옛 학생앱이 '1번'처럼 저장한 문서도 좌석 숫자로 집계되도록
-      const k = String(v.seat).replace(/[^0-9]/g, '') || String(v.seat);
-      (subByKey[k] = subByKey[k] || new Set()).add(v.date);
+      const v = x.data(); if (!v || !v.date || !dayIsos.includes(v.date)) return;
+      plDocs.push(v);
     }));
+    const subDatesFor = st => { const set = new Set(); plDocs.forEach(v => { if (window._ownsDoc(v, st)) set.add(v.date); }); return set; };
 
     // 3) 학생별 판정
     const writes = [], plWrites = [];
@@ -14995,11 +14997,9 @@ async function _assessWeekGoals(monDate, weekIso){
       if (window.isTestStudent && window.isTestStudent(st.name)) return;
 
       // 플래너 성실 상점(목표 순공과 독립 — 목표 미설정 학생도 대상)
-      // planners.seat 은 순수 숫자로 저장돼 있다(실측: "11"). 좌석 숫자로 매칭한다.
       const attDates = attendDaysByName[st.name] || new Set();
       if (attDates.size >= PLANNER_MIN_ATTEND) {
-        const plKey = String(st.seat).replace(/[^0-9]/g, '');
-        const subDates = subByKey[plKey] || new Set();
+        const subDates = subDatesFor(st);
         const onAttend = [...attDates].filter(dd => subDates.has(dd)).length;
         if (onAttend / attDates.size >= PLANNER_SUBMIT_RATE) plWrites.push(_writePlannerWeeklyMerit(st, seatKey, weekIso, satIso, onAttend, attDates.size));
       }
@@ -18155,7 +18155,10 @@ onSnapshot(doc(db, 'door_commands', 'current'), (snap) => {
 let _apcDate = null;        // 보고 있는 학습일 'YYYY-MM-DD'
 let _apcSubs = {};          // { 좌석키: planners 문서 } — 제출분
 let _apcCmtCount = {};      // { 좌석키: 코멘트 개수 }
-let _apcSeat = null;        // 모달에 열려 있는 학생 좌석키
+let _apcSeat = null;        // 모달에 열려 있는 문서 키(제출 당시 좌석) — 코멘트·검사 문서가 이 키를 쓴다
+let _apcStudent = null;     // 모달에 열려 있는 학생
+let _apcForeign = false;    // 모달 키의 제출분이 다른 학생(옛 주인) 것인가 — 그러면 코멘트·검사를 막는다
+let _apcCards = [];         // 격자에 그린 학생 배열(카드 idx → 학생)
 let _apcCurrentDate = null; // 모달 대상 날짜 (코멘트 저장이 참조)
 let _apcAi = {};            // { 좌석키: planner_ai_reviews 문서 } — AI 검사 결과
 let _apcAiUnsub = null;     // 모달의 AI 결과 실시간 구독 해제 함수
@@ -18208,6 +18211,28 @@ async function _apcLoad() {
   }
 }
 
+// ── 학생 ↔ 제출 문서 매칭 ──
+// 플래너 문서(planners·planner_comments·planner_ai_reviews)는 '제출 당시 좌석'으로 저장된다.
+// 좌석을 옮겨도 옛 자리에 남으므로 지금 좌석으로 찾으면 새 주인 카드에 이전 학생 사진이 뜨고
+// 옮긴 학생은 미제출로 보인다(2026-09-02 실측: 장혜령 19→11 뒤 격자가 통째로 어긋남).
+// 그래서 그날 제출분 전체에서 주인(uid, 없으면 이름 — saebom-common.js _ownsDoc)을 찾아
+// 그 문서의 키를 쓴다. 제출이 없으면 지금 좌석 키다(코멘트·검사 요청이 그 키로 나간다).
+function _apcKeyFor(s) {
+  for (const key of Object.keys(_apcSubs)) if (window._ownsDoc(_apcSubs[key], s)) return key;
+  return _apcSeatKey(s.seat);
+}
+// 카드 하나에 필요한 것 전부. 지금 좌석 키에 옛 주인의 제출분이 남아 있으면(foreign) 그건 이 학생의
+// 것이 아니므로 미제출로 그리고, 그 키의 코멘트·검사도 이 학생 것으로 보여 주지 않는다.
+function _apcSlot(s) {
+  const key = _apcKeyFor(s);
+  const raw = _apcSubs[key];
+  const foreign = !!(raw && !window._ownsDoc(raw, s));
+  return { key, foreign,
+    sub: foreign ? null : (raw || null),
+    n:   foreign ? 0 : (_apcCmtCount[key] || 0),
+    ai:  foreign ? null : (_apcAi[key] || null) };
+}
+
 // 검사 상태 → 그리드 배지 표시 (색은 quality별)
 const _APC_AI_COLORS = { '우수': '#15803D', '양호': '#1565C0', '보통': '#B45309', '부실': '#C62828', '판독불가': '#6B7280' };
 function _apcAiBadge(ai) {
@@ -18239,12 +18264,10 @@ function _apcRender() {
     return;
   }
 
+  _apcCards = students;
   let done = 0, cmted = 0, aied = 0, aiRunning = 0, aiError = 0;
-  const cards = students.map(s => {
-    const key = _apcSeatKey(s.seat);
-    const sub = _apcSubs[key];
-    const n = _apcCmtCount[key] || 0;
-    const ai = _apcAi[key];
+  const cards = students.map((s, idx) => {
+    const { sub, n, ai } = _apcSlot(s);
     if (sub) done++;
     if (n) cmted++;
     if (ai && ai.status === 'done') aied++;
@@ -18267,7 +18290,7 @@ function _apcRender() {
     const aiBadge = _apcAiBadge(ai);
     // 제출: 썸네일 / 미제출: 회색 점선 카드 — 클릭하면 둘 다 코멘트는 달 수 있다.
     if (sub && sub.url) {
-      return `<div onclick="window.apcOpen('${key}')" title="${name}"
+      return `<div onclick="window.apcOpen(${idx})" title="${name}"
         style="border:1.5px solid #8f82e4;border-radius:12px;overflow:hidden;cursor:pointer;background:#ffffff">
         <div style="aspect-ratio:3/4;background:#f3f4f6;position:relative">
           <img src="${_apcEsc(sub.url)}" loading="lazy" alt=""
@@ -18279,7 +18302,7 @@ function _apcRender() {
         </div>
       </div>`;
     }
-    return `<div onclick="window.apcOpen('${key}')" title="${name}"
+    return `<div onclick="window.apcOpen(${idx})" title="${name}"
       style="border:1.5px dashed #e5e7eb;border-radius:12px;overflow:hidden;cursor:pointer;background:#fafafa">
       <div style="aspect-ratio:3/4;position:relative;display:flex;align-items:center;justify-content:center;color:#c9cdd4;font-size:12px;font-weight:600">
         미제출${badge}${privBadge}
@@ -18324,21 +18347,23 @@ function _apcRenderHealth(submitted, aiDone, aiRunning, aiError) {
   el.style.display = 'block';
 }
 
-window.apcOpen = function(seatKey) {
+window.apcOpen = function(idx) {
   const modal = document.getElementById('apc-modal');
   const titleEl = document.getElementById('apc-detail-title');
   const img = document.getElementById('apc-photo');
   const nophoto = document.getElementById('apc-nophoto');
   if (!modal) return;
-  _apcSeat = seatKey;
+  const s = _apcCards[idx];
+  if (!s) return;
+  const slot = _apcSlot(s);
+  _apcStudent = s; _apcSeat = slot.key; _apcForeign = slot.foreign;
   _apcCurrentDate = _apcDate;   // 코멘트는 지금 보고 있는 학습일에 달린다
-  const s = _apcStudents().find(x => _apcSeatKey(x.seat) === seatKey);
   const [y, m, d] = _apcDate.split('-').map(Number);
-  titleEl.textContent = (s ? `${s.name} (${s.seat}번)` : seatKey) + ` — ${m}월 ${d}일`
+  titleEl.textContent = `${s.name} (${s.seat}번)` + (_apcForeign || slot.key !== _apcSeatKey(s.seat) ? ` · 제출 좌석 ${slot.key}` : '') + ` — ${m}월 ${d}일`
     + ((s && s.plannerHidden === true)
         ? (window.PLANNER_PRIVACY_ON !== false ? '  🔒 학부모 비공개' : '  🔓 잠금 정지 중(전체 스위치 꺼짐)')
         : '');
-  const sub = _apcSubs[seatKey];
+  const sub = slot.sub;
   if (sub && sub.url) {
     img.src = sub.url; img.style.display = 'block'; nophoto.style.display = 'none';
   } else {
@@ -18349,7 +18374,7 @@ window.apcOpen = function(seatKey) {
   _apcSetEditMode(null);
   modal.style.display = 'flex';
   _apcLoadComments(_apcDate);
-  _apcAiWatch(seatKey, _apcDate);
+  if (_apcForeign) _apcAiRenderPanel(null); else _apcAiWatch(_apcSeat, _apcDate);
 };
 
 window.apcCloseModal = function() {
@@ -18362,7 +18387,7 @@ window.apcCloseModal = function() {
 // 자동 상점(주간 성실·우수)이 놓치는 '이건 정말 잘 썼다'를 사람이 포착하는 수단.
 // merits 자동ID 저장, 날짜는 보고 있는 학습일(_apcDate)에 귀속. type 없이(수기), reason에 플래너 태그.
 window.apcGiveMerit = async function() {
-  const s = _apcStudents().find(x => _apcSeatKey(x.seat) === _apcSeat);
+  const s = _apcStudent;
   if (!s) { alert('학생 정보를 찾을 수 없습니다'); return; }
   const seatNum = String(s.seat).replace(/[^0-9]/g, '');
   const raw = prompt(`${s.name} 학생에게 줄 상점 점수 (1~3)`, '1');
@@ -18392,6 +18417,11 @@ async function _apcLoadComments(ds) {
   const list = document.getElementById('apc-comments-list');
   if (!list) return;
   list.innerHTML = '<div style="color:#aaaaaa;font-size:12px">로딩 중...</div>';
+  if (_apcForeign) {
+    _apcComments = [];
+    list.innerHTML = '<div style="color:#b45309;font-size:12px">이 좌석 키에는 이전 학생의 제출이 남아 있어 이 날짜엔 코멘트를 달 수 없습니다</div>';
+    return;
+  }
   try {
     const docId = _apcSeat + '_' + ds;
     const snap = await getDoc(doc(db, 'planner_comments', docId));
@@ -18446,6 +18476,7 @@ window.apcCancelEdit = function() {
 window.apcSaveComment = async function() {
   const input = document.getElementById('apc-comment-input');
   if (!input || !_apcCurrentDate || !_apcSeat) return;
+  if (_apcForeign) { showAdminToast('⚠️ 이 날짜 좌석 키에 이전 학생의 제출이 있어 코멘트를 달 수 없습니다'); return; }
   const text = input.value.trim();
   if (!text) { window.apcCloseModal(); return; }   // 쓸 내용이 없으면 닫기 버튼처럼 동작
   const docId = _apcSeat + '_' + _apcCurrentDate;
@@ -18480,7 +18511,7 @@ window.apcSaveComment = async function() {
 
 // 코멘트 삭제
 window.apcDeleteComment = async function(idx) {
-  if (!_apcCurrentDate || !_apcSeat) return;
+  if (!_apcCurrentDate || !_apcSeat || _apcForeign) return;
   if (!confirm('이 코멘트를 삭제할까요?')) return;
   const docId = _apcSeat + '_' + _apcCurrentDate;
   try {
@@ -18535,7 +18566,7 @@ function _apcAiRenderPanel(v) {
   const box = document.getElementById('apc-ai-result');
   const btn = document.getElementById('apc-ai-btn');
   if (!box || !btn) return;
-  const sub = _apcSubs[_apcSeat];
+  const sub = _apcForeign ? null : _apcSubs[_apcSeat];
   btn.disabled = false;
   if (!v) {
     box.style.display = 'none'; box.innerHTML = '';
@@ -18600,11 +18631,11 @@ function _apcAiRenderPanel(v) {
 // 모달의 [검사하기 / 다시 검사]
 window.apcAiRun = async function() {
   if (!_apcSeat || !_apcCurrentDate) return;
-  const sub = _apcSubs[_apcSeat];
+  const sub = _apcForeign ? null : _apcSubs[_apcSeat];
   if (!sub || !sub.url) { showAdminToast('⚠️ 제출된 사진이 없어 검사할 수 없습니다'); return; }
   const cur = _apcAi[_apcSeat];
   if (cur && cur.status === 'done' && !confirm('이미 검사한 플래너입니다. 다시 검사할까요?')) return;
-  const s = _apcStudents().find(x => _apcSeatKey(x.seat) === _apcSeat);
+  const s = _apcStudent;
   try {
     const btn = document.getElementById('apc-ai-btn');
     if (btn) { btn.textContent = '검사 중...'; btn.disabled = true; }
@@ -18852,9 +18883,7 @@ window.apcAiStatsSave = async function() {
 window.apcAiRunAll = async function() {
   if (!_apcDate) return;
   const targets = _apcStudents().filter(s => {
-    const key = _apcSeatKey(s.seat);
-    const sub = _apcSubs[key];
-    const ai = _apcAi[key];
+    const { sub, ai } = _apcSlot(s);
     const busy = ai && (ai.status === 'running' || ai.status === 'requested') && !_apcAiStuck(ai);
     return sub && sub.url && !(ai && (ai.status === 'done' || busy));
   });
@@ -18863,7 +18892,7 @@ window.apcAiRunAll = async function() {
   if (!confirm(`${m}월 ${d}일 플래너 ${targets.length}건을 검사할까요?`)) return;
   try {
     for (const s of targets) {
-      const key = _apcSeatKey(s.seat);
+      const key = _apcKeyFor(s);   // 제출 문서의 키 — 옮긴 학생은 옛 좌석 키다
       _apcAi[key] = { seat: key, date: _apcDate, status: 'requested' };   // 요청 직후 배지 즉시 표시
       await _apcAiRequest(key, _apcDate, s.name);
     }
