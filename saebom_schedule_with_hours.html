@@ -590,6 +590,8 @@ body{letter-spacing:-0.012em;
 .hours-table th{background:linear-gradient(135deg,#5546c4,#5546c4);font-weight:600;letter-spacing:.2px}
 .schedule-table tr td,.hours-table tr td{transition:background .18s ease}
 .hours-table tr:hover td,.schedule-table tr:hover td{background:#f5f3ff}
+.billing-row{transition:background .12s}
+.billing-row:hover{background:#f5f3ff}
 
 /* ── 모달/팝업 : 강한 블러 배경 + 스케일-인 등장 ── */
 .sched-modal{animation:sbPopIn .32s var(--ease-out) both;box-shadow:var(--shadow-lg)!important}
@@ -15796,7 +15798,7 @@ window.renderBillingList = function(){
     const btn = p
       ? `<button onclick="cancelBillingPayment('${key}')" style="padding:5px 10px;background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:8px;font-size:11px;color:var(--color-text-secondary);cursor:pointer;white-space:nowrap">납부 취소</button>`
       : `<button onclick="openBillingPayModal('${key}')" style="padding:5px 12px;background:#eef2ff;border:1.5px solid #8f82e4;border-radius:8px;font-size:11px;color:#4a3fa8;cursor:pointer;font-weight:700;white-space:nowrap">납부 처리</button>`;
-    rows.push(`<div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px">
+    rows.push(`<div class="billing-row" style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:0.5px solid var(--color-border-tertiary);font-size:12px">
       <span style="width:40px;font-weight:700;color:#6c5dd3;flex-shrink:0">${s.seat ? s.seat + '번' : '미배석'}</span>
       <span style="width:72px;font-weight:600;color:var(--color-text-primary);flex-shrink:0">${s.name}</span>
       <span style="flex:1;min-width:120px">${feeHtml}</span>
