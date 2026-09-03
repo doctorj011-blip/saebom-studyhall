@@ -27,6 +27,14 @@ window._meritCycle = function(refISO) {
   return { start: ym + '-01', end: ym + '-' + String(lastDay).padStart(2, '0'), label: '이번 달' };
 };
 window._inMeritCycle = function(dateISO, cyc) { return !!dateISO && dateISO >= cyc.start && dateISO <= cyc.end; };
+// 지난 주기 기록은 접어 둔다 — '매달 1일 초기화'가 학생·학부모 눈에 보이게(2026-09-03 원장 지시).
+// 지우는 게 아니라 접는 것이다: 규칙상 penalties 는 삭제가 안 되고, 관리앱은 전체 이력을 계속 본다.
+// inner 는 이미 만들어진 행 HTML, n 은 지난 기록 건수(0이면 아무것도 안 그린다).
+window._pastRowsHtml = function(inner, n) {
+  if (!n) return '';
+  return '<details style="margin-top:8px"><summary style="font-size:11.5px;color:#9CA3AF;cursor:pointer">지난 달 기록 ' + n + '건 보기</summary><div style="opacity:0.75">' + inner + '</div></details>';
+};
+window._noCurRowsHtml = function() { return '<div style="font-size:12px;color:#9CA3AF;padding:6px 0">이번 달 기록이 없어요</div>'; };
 
 // ── 벌점 자동 상쇄(계산식) ──
 // 주기 상점총합 M, 벌점총합 P(둘 다 미취소 기준)로 상쇄를 그때그때 계산(원장 없음, 멱등).

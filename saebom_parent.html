@@ -1271,16 +1271,20 @@ async function loadParentPenalties() {
     window._pCycPen = monthTotal; renderParentOffsetNote();
     _homeScoreNew('pen', rows.filter(r => _within7d(r.date)).length);
     if (!rows.length) { el.innerHTML = ''; renderParentScoreEmpty(); return; }
-    const list = rows.slice(0, 15).map(r => `
+    const rowHtml = r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(198,40,40,0.12);${r.p.canceled?'opacity:0.45':''}">
         <span style="${r.p.canceled?'text-decoration:line-through':''}">${r.date.slice(5).replace('-','/')} (${r.day}) ${(r.p.type==='manual'||r.p.type==='weekly_short') ? String(r.p.reason||'벌점').replace(/</g,'&lt;') : `${r.n}교시 ${r.p.type==='noshow' ? '무단결석 (변경 없이 미입실)' : r.p.type==='late' ? `지각${r.p.lateMin ? ` (${r.p.lateMin}분 늦게 입실)` : ''}` : `늦은 ${r.p.to==='absent'?'불참':(r.p.to==='early'?'중간퇴실':'해제')} 변경`}`}${r.p.canceled?' · 관리자 취소':''}</span>
         <span style="font-weight:700;color:#C62828;flex:0 0 auto">${r.p.canceled?0:(r.p.points||1)}점</span>
-      </div>`).join('');
+      </div>`;
+    // 이번 달 것만 펼치고 지난 달은 접는다 — 매달 1일 초기화(saebom-common.js _pastRowsHtml)
+    const curRows = rows.filter(r => window._inMeritCycle(r.date, cyc)), pastRows = rows.filter(r => !window._inMeritCycle(r.date, cyc));
+    const list = (curRows.length ? curRows.slice(0, 40).map(rowHtml).join('') : window._noCurRowsHtml())
+      + window._pastRowsHtml(pastRows.slice(0, 20).map(rowHtml).join(''), pastRows.length);
     el.innerHTML = `
       <div class="card" style="border:1.5px solid #F5BABA;background:#FEF0F0">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:13px;font-weight:700;color:#C62828">⚠️ 벌점</span>
-          <span style="font-size:12px;font-weight:700;color:#C62828">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
+          <span style="font-size:12px;font-weight:700;color:#C62828">${cyc.label} ${monthTotal}점</span>
         </div>
         <div style="margin-top:4px">${list}</div>
         <div style="font-size:10.5px;color:#B05555;margin-top:8px">교시 시작 5시간 전 마감 이후의 출석 취소는 교시당 1점, 변경 없이 오지 않으면(무단결석) 교시당 2점이 부여됩니다. 교시 시작 5분이 지나 입실하면 지각으로 교시당 1점입니다.</div>
@@ -1326,16 +1330,19 @@ async function loadParentMerits() {
     window._pCycMerit = monthTotal; renderParentOffsetNote();
     _homeScoreNew('merit', rows.filter(r => _within7d(r.date)).length);
     if (!rows.length) { el.innerHTML = ''; renderParentScoreEmpty(); return; }
-    const list = rows.slice(0, 15).map(r => `
+    const rowHtml = r => `
       <div style="display:flex;justify-content:space-between;gap:8px;font-size:12px;padding:5px 0;border-top:1px solid rgba(5,150,105,0.14)">
         <span>${r.date.slice(5).replace('-','/')} ${r.day ? `(${r.day})` : ''} ${r.reason ? String(r.reason).replace(/</g,'&lt;') : '상점'}</span>
         <span style="font-weight:700;color:#059669;flex:0 0 auto">+${r.pts}점</span>
-      </div>`).join('');
+      </div>`;
+    const curRows = rows.filter(r => window._inMeritCycle(r.date, cyc)), pastRows = rows.filter(r => !window._inMeritCycle(r.date, cyc));
+    const list = (curRows.length ? curRows.slice(0, 40).map(rowHtml).join('') : window._noCurRowsHtml())
+      + window._pastRowsHtml(pastRows.slice(0, 20).map(rowHtml).join(''), pastRows.length);
     el.innerHTML = `
       <div class="card" style="border:1.5px solid #A7F3D0;background:#ECFDF5">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <span style="font-size:13px;font-weight:700;color:#059669">🎁 상점</span>
-          <span style="font-size:12px;font-weight:700;color:#059669">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
+          <span style="font-size:12px;font-weight:700;color:#059669">${cyc.label} ${monthTotal}점</span>
         </div>
         <div style="margin-top:4px">${list}</div>
       </div>`;
