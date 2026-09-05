@@ -1762,6 +1762,8 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         style="background:#ecfdf5;color:#059669;border:1px solid #a7f3d0;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖨 PDF로 저장</button>
       <button id="rp-img-btn" onclick="window.reportImage()" disabled title="리포트 전체를 그림 파일(PNG) 한 장으로 저장합니다"
         style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🖼 이미지로 저장</button>
+      <button onclick="window.reportImageFolder()" title="이미지를 바로 저장할 폴더를 바꿉니다 (처음엔 바탕화면에서 고르게 됩니다)"
+        style="background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:8px;padding:6px 8px;font-size:12.5px;font-weight:700;cursor:pointer;margin-left:-4px">📁</button>
       <button onclick="window.reportBulkOpen()" title="고른 달의 리포트를 학생 전원분 한 번에 만듭니다"
         style="background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">⚡ 일괄 만들기</button>
       <button id="rp-arch-btn" onclick="window.reportArchiveToggle()" title="지금까지 만든 리포트를 다시 열어 봅니다"
@@ -1771,7 +1773,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       🔒 <b>이 학생은 플래너를 학부모에게 비공개로 설정했습니다.</b>
       리포트에는 플래너 검사에서 뽑은 과목·시간이 그대로 들어갑니다 — 보내실지 확인해 주세요.
     </div>
-    <div style="font-size:11px;color:#9ca3af">달을 하나 골라, 그 달의 입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다. <b>이미지로 저장</b>은 카카오톡으로 바로 보내기 좋은 그림 파일(PNG)로 내려받습니다.</div>
+    <div style="font-size:11px;color:#9ca3af">달을 하나 골라, 그 달의 입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. 인쇄 대화상자에서 '대상'을 <b>PDF로 저장</b>으로 바꾸면 파일로 남습니다. <b>이미지로 저장</b>은 카카오톡으로 바로 보내기 좋은 그림 파일(PNG)을 <b>학생 이름</b>으로 만듭니다 — PC 크롬에서는 처음 한 번 바탕화면 폴더를 골라 주면 그 뒤로는 묻지 않고 바로 저장됩니다(📁 로 폴더 변경).</div>
   </div>
   <!-- 🗂 만든 리포트 — 지금까지 만들어진 리포트 목록(report_comments 문서가 곧 목록이다).
        인쇄·이미지 저장에는 안 나가야 하므로 반드시 #sec-report 바로 밑의 .card 로 둔다
@@ -21120,6 +21122,83 @@ function _rpLoadH2C() {
   return _rpH2C;
 }
 
+// ── 저장 폴더 기억 ─────────────────────────────────────────────────────────
+// 브라우저는 스스로 폴더를 고를 수 없다. 대신 PC 크롬·엣지에서는 폴더 선택창을
+// "처음 한 번만" 띄우고(바탕화면에서 열린다), 고른 폴더 핸들을 IndexedDB 에 넣어 둔다.
+// 그 뒤로는 버튼만 누르면 그 폴더에 `학생이름.png` 로 바로 떨어진다.
+// 폰·사파리처럼 이 기능이 없는 곳은 예전처럼 공유 시트/내려받기로 간다.
+const _RP_DIR_DB = 'saebom_rp_img';
+function _rpDirDb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(_RP_DIR_DB, 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('kv');
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function _rpDirGet() {
+  try {
+    const db = await _rpDirDb();
+    return await new Promise((res, rej) => {
+      const q = db.transaction('kv', 'readonly').objectStore('kv').get('dir');
+      q.onsuccess = () => res(q.result || null); q.onerror = () => rej(q.error);
+    });
+  } catch (e) { return null; }
+}
+async function _rpDirSet(handle) {
+  try {
+    const db = await _rpDirDb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction('kv', 'readwrite');
+      if (handle) tx.objectStore('kv').put(handle, 'dir'); else tx.objectStore('kv').delete('dir');
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch (e) { console.warn('[report image] 폴더 기억 실패', e); }
+}
+function _rpDirSupported() { return typeof window.showDirectoryPicker === 'function'; }
+
+// 저장 폴더 핸들을 돌려준다. 사용자가 버튼을 누른 직후(활성 제스처 안)에 불러야
+// 폴더 선택창·권한 확인이 뜬다 — 캡처를 먼저 돌리고 나면 제스처가 만료돼 막힌다.
+//   force=true 면 기억한 폴더가 있어도 다시 고른다(📁 버튼).
+//   못 고르거나 거절하면 null → 호출한 쪽이 내려받기로 넘어간다.
+async function _rpDirPick(force) {
+  if (!_rpDirSupported()) return null;
+  let dir = force ? null : await _rpDirGet();
+  if (dir) {
+    try {
+      let perm = await dir.queryPermission({ mode: 'readwrite' });
+      if (perm === 'prompt') perm = await dir.requestPermission({ mode: 'readwrite' });
+      if (perm === 'granted') return dir;
+    } catch (e) { /* 폴더가 지워졌거나 옮겨진 경우 → 다시 고른다 */ }
+    dir = null;
+  }
+  try {
+    dir = await window.showDirectoryPicker({ id: 'saebom-report-img', startIn: 'desktop', mode: 'readwrite' });
+  } catch (e) {
+    if (e && e.name === 'AbortError') return null;      // 사용자가 닫음
+    console.warn('[report image] 폴더 선택 실패', e);
+    return null;
+  }
+  await _rpDirSet(dir);
+  return dir;
+}
+
+// 폴더에 파일을 쓴다. 같은 이름이 이미 있으면 덮지 않고 `이름 (2).png` 식으로 비켜 간다
+// — 지난달 리포트가 바탕화면에 남아 있을 때 조용히 사라지지 않도록.
+async function _rpDirWrite(dir, blob, filename) {
+  const base = filename.replace(/\.png$/i, '');
+  let name = filename;
+  for (let n = 2; n < 100; n++) {
+    try { await dir.getFileHandle(name, { create: false }); name = `${base} (${n}).png`; }
+    catch (e) { break; }   // 없으면 이 이름을 쓴다
+  }
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(blob);
+  await w.close();
+  return name;
+}
+
 // 폰에서는 내려받기보다 공유 시트가 낫다(카카오톡으로 바로 넘길 수 있다).
 // 안 되면 조용히 내려받기로 넘어간다.
 async function _rpSaveBlob(blob, filename) {
@@ -21136,6 +21215,13 @@ async function _rpSaveBlob(blob, filename) {
   return '저장';
 }
 
+// 📁 버튼 — 저장 폴더를 다시 고른다
+window.reportImageFolder = async function() {
+  if (!_rpDirSupported()) { showAdminToast('⚠️ 이 브라우저는 저장 폴더를 정할 수 없습니다 (PC 크롬·엣지에서 가능)'); return; }
+  const dir = await _rpDirPick(true);
+  if (dir) showAdminToast(`📁 이제 이미지는 '${dir.name}' 폴더에 바로 저장됩니다`);
+};
+
 window.reportImage = async function() {
   if (!_rpLast) { showAdminToast('⚠️ 먼저 리포트를 만드세요'); return; }
   if (_rpOpEditing) { showAdminToast('⚠️ 의견을 저장하거나 취소한 뒤 다시 눌러 주세요'); return; }
@@ -21144,6 +21230,8 @@ window.reportImage = async function() {
   if (!sheet) return;
   if (btn) { btn.disabled = true; btn.textContent = '🖼 만드는 중...'; }
   try {
+    // 폴더는 캡처보다 먼저 — 클릭 제스처가 살아 있을 때만 선택창·권한 확인이 뜬다
+    const dir = await _rpDirPick(false);
     const h2c = await _rpLoadH2C();
     document.body.classList.add('rp-capturing');
     await new Promise(r => setTimeout(r, 120));   // 레이아웃이 새 폭으로 자리잡을 시간
@@ -21157,9 +21245,15 @@ window.reportImage = async function() {
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     if (!blob) throw new Error('그림 파일을 만들지 못했습니다');
     const d = _rpLast;
-    const name = `새봄리포트_${d.stu.name}_${d.startISO.replace(/-/g, '')}-${d.endISO.replace(/-/g, '')}.png`;
-    const how = await _rpSaveBlob(blob, name);
-    if (how) showAdminToast(`🖼 이미지를 ${how}했습니다`);
+    // 파일 이름은 학생 이름 그대로 — 바탕화면에서 바로 찾아 카카오톡에 올리는 용도
+    const safeName = String(d.stu.name || '학생').replace(/[\\/:*?"<>|]/g, '_').trim() || '학생';
+    if (dir) {
+      const saved = await _rpDirWrite(dir, blob, `${safeName}.png`);
+      showAdminToast(`🖼 '${dir.name}' 폴더에 ${saved} 로 저장했습니다`);
+    } else {
+      const how = await _rpSaveBlob(blob, `${safeName}.png`);
+      if (how) showAdminToast(`🖼 이미지를 ${how}했습니다`);
+    }
   } catch (e) {
     console.error('[report image]', e);
     showAdminToast('❌ ' + (e.message || e));
