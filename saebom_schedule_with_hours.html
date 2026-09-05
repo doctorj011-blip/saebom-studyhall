@@ -5199,22 +5199,32 @@ async function _renderPenaltyList(filterSeatKey) {
       (byStudent[k] = byStudent[k] || []).push(doc);
     });
     const cyc = window._meritCycle();
+    // 이번 달만 펼치고 지난 달은 접는다 — 매달 1일 초기화가 관리앱 전체 보기에서도 보이게(2026-09-06 원장 지시).
+    // 학생·학부모앱(17dd2f0)과 같은 방식이다. 지우는 게 아니라 접는 것: 지난 달 기록도 취소·복구는 그대로 된다.
+    // 다시 그려도 펼쳐 둔 접힘이 닫히지 않도록 data-k 로 표시해 두고 아래에서 복원한다.
+    const attr = v => String(v).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+    const fold = (key, summary, inner, style) => `<details data-k="${attr(key)}" style="${style || 'margin-top:8px'}"><summary style="font-size:11.5px;color:#9ca3af;cursor:pointer;user-select:none">${summary}</summary><div style="opacity:0.75">${inner}</div></details>`;
+    const noteHtml = t => `<div style="font-size:12px;color:#9ca3af;padding:6px 0">${t}</div>`;
 
-    const blocks = Object.keys(byStudent).sort((a, b) => (parseInt(a)||999) - (parseInt(b)||999)).map(sk => {
+    const students = Object.keys(byStudent).sort((a, b) => (parseInt(a)||999) - (parseInt(b)||999)).map(sk => {
       const list = byStudent[sk].sort((a, b) => a.date < b.date ? 1 : -1);
       const name = list[0].name || '?';
-      let total = 0, monthTotal = 0;
-      const rows = [];
+      let monthTotal = 0, hasCur = false;
+      const curRows = [], pastRows = [];
       list.forEach(doc => {
+        const isCur = window._inMeritCycle(doc.date, cyc);
         Object.keys(doc.periods || {}).sort((a, b) => a - b).forEach(pn => {
           const p = doc.periods[pn];
           const pts = p.points || 1; // 구 기록(늦은 변경)은 points 필드가 없음 = 1점
+          // 취소돼 숨긴 것도 '이번 달에 있었던 기록'으로 센다 — 이번 달 벌점을 취소한 순간
+          // 학생 블록이 아래 '지난 달에만…' 묶음으로 튀어 사라져 보이지 않게
+          if (isCur) hasCur = true;
           if (p.canceled && !_showCanceledPenalties) return; // 취소된 벌점은 기본으로 숨김
           const isNoShow = p.type === 'noshow';
           const isLate = p.type === 'late';
           const isManual = p.type === 'manual';
           const isAutoReason = p.type === 'weekly_short'; // 교시 없는 자동 벌점(사유 기반)
-          if (!p.canceled) { total += pts; if (window._inMeritCycle(doc.date, cyc)) monthTotal += pts; }
+          if (!p.canceled && isCur) monthTotal += pts;
           const dl = p.deadline ? new Date(p.deadline) : null;
           const ch = p.changedAt ? new Date(p.changedAt) : null;
           const fmt = d => d ? `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}` : '?';
@@ -5230,7 +5240,7 @@ async function _renderPenaltyList(filterSeatKey) {
                   : `${p.to==='absent'?'불참':(p.to==='early'?'중간퇴실':'해제')} 변경`;
             meta = (isNoShow || isLate) ? '· 자동 판정' : `· 마감 ${fmt(dl)} → 변경 ${fmt(ch)}${p.reason ? ` · 사유: ${p.reason}` : ''}`;
           }
-          rows.push(`
+          (isCur ? curRows : pastRows).push(`
             <div style="display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0;border-top:1px solid #f3f4f6;${p.canceled?'opacity:0.5':''}">
               <span style="flex:1;${p.canceled?'text-decoration:line-through':''}">
                 ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) ${when}${label}
@@ -5244,22 +5254,37 @@ async function _renderPenaltyList(filterSeatKey) {
       });
       // 전체 보기에서는 벌점 기록이 하나도 없는 학생(빈 문서만 남은 경우)은 숨긴다.
       // 학생 1명으로 필터된 경우엔 수기 부과 대상이므로 0건이어도 블록을 남긴다.
-      if (!filterSeatKey && !rows.length) return '';
-
-      return `<div style="border:1px solid #eeeeee;border-radius:12px;padding:10px 14px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
-          <span style="font-size:13.5px;font-weight:700;color:#1f2937">${name} <span style="font-size:11px;font-weight:500;color:#9ca3af">${sk}번</span></span>
-          <span style="font-size:12px;font-weight:700;color:#c62828">${cyc.label} ${monthTotal}점 · 전체 ${total}점</span>
-        </div>${rows.join('')}
-      </div>`;
+      if (!filterSeatKey && !curRows.length && !pastRows.length) return null;
+      return { sk, name, monthTotal, hasCur, curRows, pastRows };
     }).filter(Boolean);
 
-    if (!blocks.length) {
+    // 학생 블록. unfoldPast=true 면(아래 '지난 달에만 기록이 있는 학생' 묶음 안) 이미 접힌 묶음 속이므로
+    // 지난 기록을 한 번 더 접지 않고 바로 펼쳐 둔다.
+    const block = (s, unfoldPast) => `<div style="border:1px solid #eeeeee;border-radius:12px;padding:10px 14px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-size:13.5px;font-weight:700;color:#1f2937">${s.name} <span style="font-size:11px;font-weight:500;color:#9ca3af">${s.sk}번</span></span>
+          <span style="font-size:12px;font-weight:700;color:#c62828">${cyc.label} ${s.monthTotal}점</span>
+        </div>${s.curRows.length ? s.curRows.join('') : (unfoldPast ? '' : noteHtml(s.hasCur ? `${cyc.label} 벌점은 모두 취소됐습니다 (취소된 항목 보기)` : `${cyc.label} 기록이 없습니다`))}${
+          unfoldPast ? s.pastRows.join('')
+          : (s.pastRows.length ? fold('past:' + s.sk, `지난 달 기록 ${s.pastRows.length}건 보기`, s.pastRows.join('')) : '')}
+      </div>`;
+
+    // 전체 보기: 이번 달 기록이 있(었)는 학생만 본문에, 지난 달 기록뿐인 학생은 맨 아래 한 묶음으로 접는다.
+    // 학생 1명 필터는 그 학생 블록 하나(이번 달이 비어도 '기록이 없습니다' + 접힌 지난 기록).
+    const curStudents = filterSeatKey ? students : students.filter(s => s.hasCur);
+    const pastOnly = filterSeatKey ? [] : students.filter(s => !s.hasCur);
+    if (!curStudents.length && !pastOnly.length) {
       bodyEl.innerHTML = `<div style="text-align:center;padding:28px;color:#aaaaaa;font-size:13px">${filterSeatKey ? '부과된 벌점이 없습니다' : '벌점 기록이 있는 학생이 없습니다'}</div>`;
       return;
     }
+    let html = curStudents.map(s => block(s, false)).join('');
+    if (!curStudents.length) html = `<div style="text-align:center;padding:20px 0 14px;color:#aaaaaa;font-size:13px">${cyc.label} 벌점 기록이 있는 학생이 없습니다</div>`;
+    if (pastOnly.length) html += fold('pastonly', `지난 달에만 기록이 있는 학생 ${pastOnly.length}명 보기`, `<div style="margin-top:6px">${pastOnly.map(s => block(s, true)).join('')}</div>`, 'margin-top:2px');
 
-    bodyEl.innerHTML = blocks.join('');
+    // 취소·복구 뒤 다시 그릴 때 펼쳐 뒀던 접힘을 그대로 유지한다(지난 달 기록을 복구하자마자 사라져 보이지 않게)
+    const wasOpen = new Set(Array.from(bodyEl.querySelectorAll('details[data-k][open]')).map(d => d.getAttribute('data-k')));
+    bodyEl.innerHTML = html;
+    bodyEl.querySelectorAll('details[data-k]').forEach(d => { if (wasOpen.has(d.getAttribute('data-k'))) d.open = true; });
   } catch(e) {
     console.error('벌점 조회 실패:', e);
     bodyEl.innerHTML = `<div style="text-align:center;padding:32px;color:#c62828;font-size:13px">❌ 조회 실패: ${e.message || e}</div>`;
