@@ -1661,7 +1661,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   <!-- 미납 안내문자 문구 -->
   <div style="background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:12px;padding:10px 12px;margin-bottom:14px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-      <div style="font-size:11px;color:#4a3fa8;font-weight:700">📨 미납 안내문자 문구 <span style="font-weight:400;color:var(--color-text-tertiary)">— {이름} {월} {금액} 자리에 학생 이름·청구월·금액이 자동으로 들어갑니다</span></div>
+      <div style="font-size:11px;color:#4a3fa8;font-weight:700">📨 미납 안내문자 문구 <span style="font-weight:400;color:var(--color-text-tertiary)">— {이름} {월} {금액} 자리에 학생 이름·청구월·금액이 자동으로 들어갑니다 · 90바이트 이하면 단문(SMS)으로 나갑니다</span></div>
       <button onclick="saveBillingConfig()" style="padding:4px 10px;background:#eef2ff;border:1.5px solid #8f82e4;border-radius:8px;font-size:11px;color:#4a3fa8;cursor:pointer;font-weight:600">문구 저장</button>
     </div>
     <textarea id="billing-reminder-text" rows="3"
@@ -15606,6 +15606,17 @@ async function getSolapiAuthHeader() {
   return `HMAC-SHA256 apiKey=${SOLAPI_API_KEY}, date=${date}, salt=${salt}, signature=${signature}`;
 }
 
+// 본문 길이로 단문(SMS)/장문(LMS)을 고른다. 솔라피 기준은 EUC-KR 90바이트 —
+// 한글·전각은 2바이트, 나머지는 1바이트로 세고 90 이하면 SMS(요금이 싸다).
+function smsByteLen(t) {
+  let n = 0;
+  for (const ch of String(t || '')) n += ch.charCodeAt(0) < 128 ? 1 : 2;
+  return n;
+}
+function smsType(t) { return smsByteLen(t) <= 90 ? 'SMS' : 'LMS'; }
+window.smsByteLen = smsByteLen;
+window.smsType = smsType;
+
 // 공통 솔라피 발송 함수
 async function solapiSend(to, text) {
   if (!SOLAPI_API_KEY || !SOLAPI_API_SECRET || !SOLAPI_SENDER) {
@@ -15617,7 +15628,7 @@ async function solapiSend(to, text) {
   const res = await fetch('https://api.solapi.com/messages/v4/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': authorization },
-    body: JSON.stringify({ message: { from: SOLAPI_SENDER, to, text, type: 'LMS' } })
+    body: JSON.stringify({ message: { from: SOLAPI_SENDER, to, text, type: smsType(text) } })
   });
   const data = await res.json();
   // errorCount가 0이거나 없으면서 groupId가 있으면 성공
@@ -15714,7 +15725,9 @@ let _billingYm = _curYm();
 let _billingPayments = {};   // key → 납부 문서
 let _billingConfig = null;   // settings/billing (기본요금·안내문구)
 let _billingDiscounts = {};  // uid → 그 달 확정 재등록 할인(usage_surveys.discountFinal)
-const BILLING_DEFAULT_REMINDER = '[새봄면학관]\n{이름} 학생의 {월} 이용료 {금액}원이 아직 납부되지 않았습니다.\n\n아래 링크에서 카드로 바로 결제하실 수 있습니다.\nhttps://saebom-pay.web.app/pay.html';
+// 결제 링크는 아직 연동 전이라 문구에서 뺐다. 길이를 90바이트(EUC-KR) 안에 맞춰
+// SMS 단문으로 나가게 한 문구다 — 늘리면 solapiSend가 알아서 LMS로 보낸다.
+const BILLING_DEFAULT_REMINDER = '[새봄면학관]\n{이름} 학생 {월} 이용료 {금액}원 납부 안내드립니다. 확인 부탁드립니다.';
 
 function _fmtWon(n){ return (n||0).toLocaleString('ko-KR') + '원'; }
 function _billingKey(s){ return (s.phone||'').replace(/\D/g,'') || (s.name||'').replace(/[^a-zA-Z0-9가-힣]/g,''); }
@@ -15917,8 +15930,12 @@ window.sendBillingReminders = async function(){
   const noPhone = unpaid.length - targets.length;
   if (!targets.length) { showAdminToast('⚠️ 학부모 번호가 등록된 미납 학생이 없습니다'); return; }
   const mLabel = _billingMonthLabel();
-  if (!confirm(`미납 ${unpaid.length}명 중 학부모 번호가 있는 ${targets.length}명에게\n${mLabel} 이용료 안내문자(LMS)를 발송할까요?${noPhone ? `\n(번호 없는 ${noPhone}명은 제외됩니다)` : ''}`)) return;
   const tpl = (document.getElementById('billing-reminder-text').value.trim()) || BILLING_DEFAULT_REMINDER;
+  // 미리보기 — 실제로 나가는 문장을 첫 대상자 기준으로 그대로 보여준다(오타·치환 실수 방지).
+  const p0 = targets[0];
+  const preview = tpl.replaceAll('{이름}', p0.name).replaceAll('{월}', mLabel).replaceAll('{금액}', _billingFee(p0).toLocaleString('ko-KR'));
+  const kind = smsType(preview) === 'SMS' ? '단문(SMS)' : '장문(LMS)';
+  if (!confirm(`미납 ${unpaid.length}명 중 학부모 번호가 있는 ${targets.length}명에게\n${mLabel} 이용료 안내문자를 ${kind}로 발송할까요?${noPhone ? `\n(번호 없는 ${noPhone}명은 제외됩니다)` : ''}\n\n─ 미리보기 (${p0.name} 학생) ─\n${preview}`)) return;
   let ok = 0, fail = 0;
   for (const s of targets) {
     const text = tpl.replaceAll('{이름}', s.name).replaceAll('{월}', mLabel).replaceAll('{금액}', _billingFee(s).toLocaleString('ko-KR'));
