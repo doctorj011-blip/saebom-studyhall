@@ -454,7 +454,10 @@ body.admin-device .subtab-bar.on{display:flex}
 .sched-period-btn.partial{background:#ffe9c2;color:#8a4b00;border:1.5px solid #e08a1e;font-weight:700}
 .sched-period-btn.early{background:#d6e8ff;color:#0b4a9b;border:1.5px solid #2f7be0;font-weight:700}
 /* 결석은 색 말고도 구분되도록 점선 테두리 + 취소선 (적록색약 대비) */
-.sched-period-btn.absent{background:#fbd5d5;color:#a81e1e;border:1.5px dashed #db4e4e;font-weight:700;text-decoration:line-through}
+.sched-period-btn.absent{background:#fbd5d5;color:#a81e1e;border:1.5px dashed #db4e4e;font-weight:700}
+.sched-period-btn.absent .sched-period-name{text-decoration:line-through}
+.sched-period-name{display:block}
+.sched-period-time{display:block;font-size:10px;font-weight:400;line-height:1.4;margin-top:3px;letter-spacing:-.3px}
 /* 좁은 화면에서도 11칸이 한 줄에 들어가도록 글자만 축소 */
 @media (max-width:860px){.sched-period-btn{font-size:10px;padding:4px 1px;letter-spacing:-0.3px}}
 
@@ -9260,12 +9263,15 @@ function renderScheduleModal() {
 
     html += `<div class="sched-day-row">
       <div class="sched-day-label${day==='토'?' sat':''}">${day}요일</div>
-      <div>
-        <div class="sched-periods" style="grid-template-columns:repeat(${availPeriods.length},minmax(0,1fr))">`;
+      <div style="min-width:0;overflow-x:auto">
+        <div class="sched-periods" style="grid-template-columns:repeat(${availPeriods.length},minmax(78px,1fr))">`;
 
     availPeriods.forEach(p => {
       let cls = 'sched-period-btn';
       let label = `${p}교시`;
+      const period = (isSat ? _PERIOD_MIN_SAT : _PERIOD_MIN_WEEKDAY).find(item => parseInt(item.n) === p);
+      const clock = min => `${String(Math.floor(min / 60) % 24).padStart(2,'0')}:${String(min % 60).padStart(2,'0')}`;
+      const hours = period ? `${clock(period.startMin)}~${clock(period.endMin)}` : '';
       if (draft.absentPeriods && draft.absentPeriods.has(p)) {
         cls += ' absent';
       } else if (draft.periods.has(p)) {
@@ -9278,7 +9284,7 @@ function renderScheduleModal() {
         ontouchstart="startLongPress('${day}',${p},event)"
         ontouchend="cancelLongPress()"
         ontouchmove="cancelLongPress()"
-        title="${p}교시">${label}</button>`;
+        title="${label} ${hours}" aria-label="${label} ${hours}"><span class="sched-period-name">${label}</span><span class="sched-period-time">${hours}</span></button>`;
     });
 
     html += `</div>`;
