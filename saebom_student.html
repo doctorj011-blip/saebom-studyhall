@@ -2267,7 +2267,8 @@ async function tryLogin() {
       }
       list.forEach(doc => {
         const v = doc.data();
-        if (v.name && v.phone && window._loginKey(v) === pinBuffer) {
+        // 미배석 학생은 로그인시키지 않는다 — seat 가 빈 채로 들어오면 schedules/'' 등 엉뚱한 문서에 쓴다
+        if (v.name && v.phone && String(v.seat || '').trim() && window._loginKey(v) === pinBuffer) {
           matched.push({
             // 불변 학생ID — 상벌점·플래너 조회의 기준이다. 여기서 안 담으면 좌석 폴백으로 내려간다.
             uid: v.uid || '',
@@ -2286,7 +2287,7 @@ async function tryLogin() {
 
   // 2) Firebase에서 못 찾으면(오프라인·장애 포함) 로컬 STUDENTS 배열로 폴백
   if (matched.length === 0) {
-    matched = STUDENTS.filter(s => s.phone && window._loginKey(s) === pinBuffer);
+    matched = STUDENTS.filter(s => s.phone && String(s.seat || '').trim() && window._loginKey(s) === pinBuffer);   // 미배석 제외
   }
 
   // 3) 초대 명단(신규 자가등록) 대조 — 아직 등록되지 않은 초대자만 후보로

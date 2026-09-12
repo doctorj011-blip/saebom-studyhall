@@ -3062,7 +3062,7 @@ async function doLoginFirebase(name, phone) {
     let found = null;
     snap.forEach(d => {
       const s = d.data();
-      if (s.name === name && s.parent && s.parent.replace(/-/g,'').endsWith(phone)) found = s;
+      if (s.name === name && String(s.seat || '').trim() && s.parent && s.parent.replace(/-/g,'').endsWith(phone)) found = s;   // 미배석 제외
     });
     return found;
   } catch(e) { return null; }

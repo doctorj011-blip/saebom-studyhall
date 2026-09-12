@@ -1232,7 +1232,10 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </div>
       <div style="font-size:12px;font-weight:700;color:#1e1b4b;padding:4px 2px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
         <span>📋 입실 현황</span>
-        <span id="fp-side-count" style="font-size:11px;color:#888888"></span>
+        <span style="display:flex;align-items:center;gap:6px">
+          <span id="fp-side-count" style="font-size:11px;color:#888888"></span>
+          <button onclick="openAddStudentModal(null)" title="자리를 나중에 정할 학생 — 목록 맨 위 '미배석' 카드를 좌석에 끌어다 놓으면 배정됩니다" style="padding:2px 8px;background:#6c5dd3;color:#ffffff;border:none;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer">＋ 자리 없이 등록</button>
+        </span>
       </div>
       <div id="fp-side-list" style="flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding:2px"></div>
       <div class="fp-side-drag-hint" id="fp-side-drag-hint" style="flex-shrink:0">✋ 카드를 배치도 좌석에 드롭 → 좌석 변경</div>
@@ -6519,7 +6522,7 @@ async function processCheckin() {
   const last4 = numpadBuffer;
   // 전화번호 뒷 4자리(또는 지정된 loginPin)로 학생 검색 (로컬 먼저)
   // ★loginPin이 있는 학생은 그 번호로만 검색된다 → 같은 뒷 4자리를 원래 쓰던 학생은 영향 없음.
-  let matched = STUDENTS.filter(s => s.phone && window._loginKey(s) === last4);
+  let matched = STUDENTS.filter(s => s.phone && String(s.seat || '').trim() && window._loginKey(s) === last4);   // 미배석 제외
 
   // 로컬에 없으면 Firebase students 컬렉션에서 검색
   if (matched.length === 0 && window._adminDb) {
@@ -6539,7 +6542,8 @@ async function processCheckin() {
       [byLast4, byPin].forEach(s => s.forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); list.push(d); } }));
       list.forEach(doc => {
         const v = doc.data();
-        if (v.name && v.phone && window._loginKey(v) === last4) {
+        // 미배석(자리 없이 등록·배석 해제) 학생은 좌석이 없어 입실 기록을 남길 자리가 없다 — 제외
+        if (v.name && v.phone && String(v.seat || '').trim() && window._loginKey(v) === last4) {
           const existing = STUDENTS.find(s => s.seat === v.seat);
           if (!existing) {
             STUDENTS.push({
@@ -11711,6 +11715,9 @@ window.recalcHoursWithConfirm = async function(){
 // ── Firebase students 컬렉션에 학생 저장 ──
 async function saveStudentToFirebase(student) {
   const cleanSeat = String(student.seat == null ? '' : student.seat).replace('번','').trim();
+  // uid 는 문서 ID(unseated__{uid})보다 먼저 정해야 한다 — 자리 없이 신규 등록한 학생은
+  // uid 가 없어서, 뒤에서 발급하면 전원 unseated__seat0 한 문서에 덮어써진다.
+  if (!student.uid) student.uid = window._newStudentUid();
   // 배석 해제된 학생(좌석 없음)은 문서 ID가 좌석일 수 없다 — unseated__{uid} 에 둔다.
   // 이 분기가 없으면 students/ 빈 ID 로 써서 저장이 통째로 실패한다.
   const docRef = doc(db, 'students', cleanSeat || window.unseatedDocId(student));
@@ -17087,8 +17094,8 @@ window.openAddStudentModal = function(seatNum) {
       </div>
     </div>` : `
     <div style="background:#ffffff;border-radius:20px;padding:24px;width:min(90vw,360px);box-shadow:0 8px 32px rgba(0,0,0,0.2)">
-      <div style="font-size:15px;font-weight:700;color:#1e1b4b;margin-bottom:4px">➕ ${seatNum}번 학생 추가</div>
-      <div style="font-size:12px;color:#4a3fa8;margin-bottom:16px">새 학생을 이 자리에 배정합니다</div>
+      <div style="font-size:15px;font-weight:700;color:#1e1b4b;margin-bottom:4px">➕ ${seatNum ? seatNum + '번 학생 추가' : '학생 등록 (자리 미정)'}</div>
+      <div style="font-size:12px;color:#4a3fa8;margin-bottom:16px">${seatNum ? '새 학생을 이 자리에 배정합니다' : '자리는 나중에 정합니다 — 배정 전에는 키오스크 입실·앱 로그인이 안 됩니다'}</div>
       <div style="display:flex;flex-direction:column;gap:10px">
         <div style="display:flex;gap:8px">
           <div style="flex:1">
@@ -17225,7 +17232,7 @@ window.confirmAddStudent = function(seatNum) {
 
   // STUDENTS 배열에 추가
   const newStudent = {
-    seat: seatNum + '번',
+    seat: seatNum ? seatNum + '번' : '',   // 빈 값 = 미배석(unseated__{uid} 문서로 저장된다)
     name,
     phone,
     parent,
@@ -17250,7 +17257,9 @@ window.confirmAddStudent = function(seatNum) {
   if (window.saveStudentToFirebase) window.saveStudentToFirebase(newStudent).catch(console.error);
 
   document.getElementById('add-student-modal').remove();
-  showAdminToast(`✅ ${name} ${isAdmin ? '관리자' : '학생'}이 ${seatNum}번 자리에 추가됐습니다`);
+  showAdminToast(seatNum
+    ? `✅ ${name} ${isAdmin ? '관리자' : '학생'}이 ${seatNum}번 자리에 추가됐습니다`
+    : `✅ ${name} 학생을 자리 없이 등록했습니다 — 입실 현황 맨 위 카드를 좌석에 끌어다 놓으세요`);
 };
 
 window.showTodayAttendees = function() {
@@ -17713,7 +17722,10 @@ window.restoreWithdrawnStudent = async function(archiveId) {
     }
     if (!confirm(`${a.name} 학생을 ${seat}번 좌석으로 복구할까요?`)) return;
     // student 문서가 없이 base만 보관된 경우에도 최소 정보로 복구
-    const stu = a.student || {
+    // 퇴원 예약(withdrawAt)·자리 승계 예약(nextStudent)은 떼고 되살린다. 남겨 두면 날짜가 이미
+    // 지났으므로 autoWithdrawExpired 가 다음 로드·자정에 곧바로 다시 퇴원시킨다
+    // (2026-09-13 우지효: 9/12 23:31 복구 → 00:00 withdrawAt=2026-08-31 로 재퇴원).
+    const { withdrawAt: _w, nextStudent: _n, ...stu } = a.student || {
       phone:'', parent:'', gender:'f', expiry:'', startDate:'', hours:{}, awayAt:'',
       월:a.base?.['월']||'-', 화:a.base?.['화']||'-', 수:a.base?.['수']||'-',
       목:a.base?.['목']||'-', 금:a.base?.['금']||'-', 토:a.base?.['토']||'-'
