@@ -480,6 +480,7 @@ body.admin-device .subtab-bar.on{display:flex}
 body.kiosk-mode .topbar{display:none}
 body.kiosk-mode .subtab-bar{display:none!important}
 body.kiosk-mode #checkin-door-controls{display:none !important}
+body:not(.admin-device) #checkin-door-controls{display:none !important}
 body.kiosk-mode .checkin-wrap{margin-top:4vh;zoom:var(--kiosk-zoom,1.8)}
 body.kiosk-mode .checkin-today-wrap{display:none}
 /* 종료 버튼: 우측 상단에 존재하지만 보이지 않음 (관리자만 위치를 앎) */
@@ -774,15 +775,10 @@ body.kiosk-mode #kiosk-weather{display:flex;transform:scale(1.15);margin-bottom:
   .topbar-title .today-chip,.topbar-title .now-period-chip{font-size:10.5px}
   .checkin-shortcut-btn{margin-left:auto!important}
 
-  /* ── 폰에서 감출 탭 ──
-     폰은 '확인용'(대시보드·배치도·학생·공부시간·알림·설정)으로만 쓴다.
-     입퇴실은 키오스크 태블릿 몫이고, 시간표·문자·수납·플래너·학습분석·인수인계는
-     입력이 많아 PC에서 하는 작업이라 좁은 화면에 띄울 이유가 없다.
-     ※ 미등록 기기는 입퇴실 화면밖에 못 보므로, 입퇴실 버튼은 관리자 기기에서만 감춘다.
-     ※ '학습' 그룹은 폰에서 공부시간 하나만 남으므로 그룹 버튼은 남기고 서브탭 바만 감춘다
-        (그 판정은 JS 쪽 MOBILE_HIDDEN_TABS·renderSubtabs가 한다. 목록을 맞출 것) */
-  body.admin-device .checkin-shortcut-btn,
-  .tab-btn.hide-mobile{display:none}
+  /* 폰에서도 관리 탭을 제공한다. 관리자 폰에서만 키오스크 바로가기를 감춘다. */
+  body.admin-device .checkin-shortcut-btn{display:none}
+  .billing-row{flex-wrap:wrap}
+  #sec-schedule,#sec-handover,#sec-planner,#sec-report,#sec-analytics{overflow-x:auto}
 
   /* 서브탭 바는 폰에서 붙박이(sticky)로 두면 좁은 화면을 더 잡아먹는다 */
   .subtab-bar{position:static;padding:0 10px}
@@ -1262,7 +1258,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
           style="padding:5px 12px;background:#8f82e4;color:#1e1b4b;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
           🔌 포트 연결
         </button>
-        <button onclick="window.doorOpenTimed(3)"
+        <button onclick="window.adminManualDoorOpen()"
           style="padding:5px 12px;background:#6c5dd3;color:#ffffff;border:none;border-radius:8px;font-size:11px;font-weight:600;cursor:pointer">
           🚪 수동 열기
         </button>
@@ -1327,8 +1323,9 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
 
   <!-- 오늘 입실 현황 -->
   <div class="checkin-today-wrap">
-    <div class="checkin-today-title"><i class="ti ti-users" style="font-size:14px"></i> 오늘 입실 현황 <span class="checkin-today-count" id="checkin-today-count">0명</span></div>
+    <div class="checkin-today-title"><i class="ti ti-users" style="font-size:14px"></i> 현재 입실 현황 <span class="checkin-today-count" id="checkin-today-count" role="status">확인 중…</span></div>
     <div class="checkin-today-list" id="checkin-today-list"></div>
+    <details><summary>오늘 입퇴실 이력</summary><div id="checkin-today-history"></div></details>
   </div>
 </div>
 
@@ -2400,6 +2397,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
 
 <!-- 3앱 공용 유틸 (_ymKey/_normalizeHours/_phoneLast4 등) — 반드시 같은 폴더에 함께 배포 -->
 <script src="saebom-common.js"></script>
+<script src="saebom-admin-core.js"></script>
 <script>
 const DAYS=['월','화','수','목','금','토'];
 const PERIODS_WEEKDAY=[
@@ -2474,9 +2472,10 @@ function _currentPeriodInfo(now){
   let nowMin = h*60 + now.getMinutes();
   if (h < 3) nowMin += 1440; // 자정 넘긴 시각을 확장 스케일(24:00~)로
   // 방학에는 평일도 토요일과 같은 교시 시간대를 쓴다(경계 계산용 원본 목록)
-  const list = (effDay === 6) ? _PERIOD_MIN_SAT
+  const rawList = (effDay === 6) ? _PERIOD_MIN_SAT
              : (effDay >= 1 && effDay <= 5) ? (VACATION_MODE ? _PERIOD_MIN_SAT : _PERIOD_MIN_WEEKDAY)
              : null; // 일요일(0) → 휴관
+  const list = rawList && rawList.filter(p => !isPeriodOffToday(parseInt(p.n)));
   if (!list) return { phase: 'closed' };
   for (const p of list) if (nowMin >= p.startMin && nowMin < p.endMin) return { phase: 'in', current: p };
   const next = list.find(p => p.startMin > nowMin);
@@ -2492,7 +2491,8 @@ function updateNowPeriodChip(){
   el.classList.toggle('active', info.phase === 'in');
   switch (info.phase){
     case 'in':
-      el.innerHTML = `<i class="ti ti-clock-hour-4" aria-hidden="true"></i> ${info.current.n} · ${info.current.t}`;
+      const clock = m => `${String(Math.floor(m / 60) % 24).padStart(2,'0')}:${String(m % 60).padStart(2,'0')}`;
+      el.innerHTML = `<i class="ti ti-clock-hour-4" aria-hidden="true"></i> ${info.current.n} · ${clock(info.current.startMin)}~${clock(info.current.endMin)}`;
       el.title = `현재 ${info.current.n} 진행 중 (${info.current.t})`;
       break;
     case 'break':
@@ -2757,27 +2757,13 @@ const STUDYROOM_OVERFLOW_ROOM = 3;
 let studyRoomStudents = { 1: [], 2: [], 3: [] };
 let studyRoomWaiting  = { 1: [], 2: [], 3: [] };
 
-// ── F5 새로고침 가로채기 ──
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) {
-    e.preventDefault();
-    const activeId = document.querySelector('.section.active')?.id?.replace('sec-', '') || 'dashboard';
-    if (window._adminDb) {
-      window.loadTodayCheckinFromFirebase && window.loadTodayCheckinFromFirebase();
-    }
-    buildDashboard();
-    if (activeId === 'floorplan' && document.getElementById('fp-room')) buildFloorplan();
-    if (activeId === 'hours') buildHoursTable();
-    if (activeId === 'smslog') loadSmsLog();
-    showAdminToast('🔄 새로고침됨');
-  }
-});
+// F5 / Ctrl+R / Cmd+R은 브라우저 기본 새로고침을 유지한다(새 배포 코드 반영).
 
 // ── 폰에서 감추는 탭 ──
 // CSS(@media max-width:600px)에서 버튼을 숨기지만, 탭 복원·기본 활성 섹션은
 // JS가 정하므로 목록을 여기에도 둔다. 한쪽만 고치면 '버튼은 없는데 화면은 떠 있는'
 // 상태가 되니 CSS 쪽 목록과 항상 같이 고칠 것.
-const MOBILE_HIDDEN_TABS = ['checkin','handover','planner','analytics','report','schedule','smslog','usagelog','netlog','billing'];
+const MOBILE_HIDDEN_TABS = ['checkin'];
 function isMobileView() { return window.matchMedia('(max-width:600px)').matches; }
 // 미등록 기기는 입퇴실 말고는 열 수 있는 화면이 없으므로 감추지 않는다.
 function isTabHiddenOnMobile(id) {
@@ -6032,35 +6018,8 @@ function buildMonthTabs(){
 
 // 현재 시간 기준 교시 번호 계산
 function getCurrentPeriod() {
-  const now = new Date();
-  const h = now.getHours();
-  // 자정~새벽 3시는 전날 밤의 연장(11교시)으로 취급 (00:20은 t=20이라 11교시[1440~1500]에 안 걸리던 버그 수정)
-  const effDay = h < 3 ? (now.getDay() + 6) % 7 : now.getDay();
-  // 일요일은 교시 없음
-  if (effDay === 0) return null;
-  const m = now.getMinutes();
-  let t = h * 60 + m;
-  if (h < 3) t += 1440;
-  // 교시 시간 (시작~종료)
-  const PERIOD_TIMES = [
-    null,            // 0 (dummy)
-    [9*60, 10*60],   // 1교시
-    [10*60+10, 11*60+10], // 2교시
-    [11*60+20, 12*60+30], // 3교시
-    [13*60+30, 14*60+30], // 4교시
-    [14*60+40, 15*60+40], // 5교시
-    [15*60+50, 17*60],    // 6교시
-    [18*60, 18*60+50],    // 7교시
-    [19*60, 20*60+20],    // 8교시
-    [20*60+30, 22*60],    // 9교시
-    [22*60+30, 23*60+50], // 10교시
-    [24*60, 25*60],        // 11교시 (자정 이후)
-  ];
-  for (let p = 1; p <= 11; p++) {
-    const [start, end] = PERIOD_TIMES[p];
-    if (t >= start && t < end) return p;
-  }
-  return null; // 교시 외 시간
+  const info = _currentPeriodInfo();
+  return info.phase === 'in' ? parseInt(info.current.n) : null;
 }
 
 // 오늘 입실 현황 팝업
@@ -6489,6 +6448,7 @@ function maskName(name) {
   return name[0] + 'O'.repeat(name.length - 1);
 }
 const todayRecords = [];
+window._checkinLoadState = 'loading';
 
 // ── 키오스크 방치 자동 초기화 ──
 // 확인 화면을 띄운 채 자리를 뜨거나 번호를 치다 만 상태가 30초 이상 지속되면
@@ -6496,6 +6456,7 @@ const todayRecords = [];
 let _checkinPanelShownAt = 0;
 let _numpadLastInput = 0;
 setInterval(() => {
+  if (window._checkinProcessing) return;
   const confirmVisible = document.getElementById('checkin-confirm-panel')?.style.display === 'block';
   if (confirmVisible && _checkinPanelShownAt && Date.now() - _checkinPanelShownAt > 30000) {
     window.checkinReset();
@@ -6545,6 +6506,13 @@ function hideCheckinError() {
 }
 
 async function processCheckin() {
+  if (window._checkinLoadState !== 'ready') {
+    const el = document.getElementById('checkin-error');
+    el.textContent = '출결 연결을 확인 중입니다. 잠시 후 다시 시도해 주세요.';
+    el.style.display = 'block';
+    numpadBuffer = ''; updateCheckinDisplay();
+    return;
+  }
   const last4 = numpadBuffer;
   // 전화번호 뒷 4자리(또는 지정된 loginPin)로 학생 검색 (로컬 먼저)
   // ★loginPin이 있는 학생은 그 번호로만 검색된다 → 같은 뒷 4자리를 원래 쓰던 학생은 영향 없음.
@@ -6559,17 +6527,13 @@ async function processCheckin() {
     try {
       const { getDocs, collection, query, where } = window._fs;
       // 색인 2개로 조회(전체 다운로드 방지): 뒷 4자리(phoneLast4) + 지정 PIN(loginPin).
-      // 구 문서(phoneLast4 미저장) 대비: 색인 조회가 비면 기존 방식(전체 스캔)으로 폴백.
+      // 구 문서는 초기 명부의 로컬 검색으로 처리한다. 오입력 때 전체 명부를 재조회하지 않는다.
       const [byLast4, byPin] = await Promise.all([
         getDocs(query(collection(window._adminDb, 'students'), where('phoneLast4', '==', last4))),
         getDocs(query(collection(window._adminDb, 'students'), where('loginPin',   '==', last4))),
       ]);
       const seen = new Set(); let list = [];
       [byLast4, byPin].forEach(s => s.forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); list.push(d); } }));
-      if (list.length === 0) {
-        const all = await getDocs(collection(window._adminDb, 'students'));
-        list = []; all.forEach(d => list.push(d));
-      }
       list.forEach(doc => {
         const v = doc.data();
         if (v.name && v.phone && window._loginKey(v) === last4) {
@@ -6759,7 +6723,28 @@ function showCheckinConfirmFor(student) {
   document.getElementById('confirm-ok-btn')._existingRecord = existing;
 }
 
-window.checkinConfirm = function() {
+async function confirmSessionAction(action) {
+  document.querySelectorAll('#confirm-btns button').forEach(b => { b.disabled = true; });
+  document.getElementById('confirm-status').textContent = '출결 저장 중…';
+  try {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) throw new Error('인터넷 연결을 확인해 주세요. 출결은 아직 저장되지 않았습니다.');
+    const api = await waitSessionApi();
+    const result = await action(api);
+    if (!result || result.ok !== true || result.fallback) {
+      throw new Error('출결을 확정하지 못했습니다. 연결과 현재 상태를 확인한 뒤 다시 시도해 주세요.');
+    }
+    return result;
+  } catch(e) {
+    window._checkinProcessing = false;
+    checkinReset();
+    const el = document.getElementById('checkin-error');
+    el.textContent = e.message || '출결 저장 실패. 다시 시도해 주세요.';
+    el.style.display = 'block';
+    return null;
+  }
+}
+
+window.checkinConfirm = async function() {
   try {
   const btn = document.getElementById('confirm-ok-btn');
   const student = btn._student;
@@ -6772,7 +6757,7 @@ window.checkinConfirm = function() {
   // (2) 현재 실제 상태와 어긋나는 요청은 기록하지 않는다
   //     (입실 중인데 또 입실 → in 중복 / 이미 퇴실인데 또 퇴실 → out 중복 방지)
   const openRec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
-  if (!isCheckout && openRec) {
+  if (!isCheckout && openRec && !btn._freshCheckin) {
     showAdminToast(`ℹ️ ${student.name} 학생은 이미 입실 중입니다`);
     checkinReset();
     return;
@@ -6790,6 +6775,13 @@ window.checkinConfirm = function() {
     return;
   }
   window._checkinProcessing = true;
+  const sessionResult = await confirmSessionAction(api => isCheckout
+    ? api.checkout(student, 'student') : api.checkin(student));
+  if (!sessionResult) return;
+  if (btn._freshCheckin && openRec) {
+    const i = todayRecords.indexOf(openRec);
+    if (i !== -1) todayRecords.splice(i, 1);
+  }
 
   const now = new Date();
   const timeStr = now.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
@@ -6846,11 +6838,12 @@ window.checkinConfirm = function() {
     // ── 누적시간 저장: 세션 엔진(트랜잭션) ──
     // 세션 문서를 닫고 그 달 누적을 세션 합산으로 재계산(멱등)한다.
     // 예전의 hours[월] += 증분 방식은 폐기 — 세션만 맞으면 hours는 항상 복구 가능.
-    waitSessionApi().then(api => api.checkout(student, 'student')).catch(console.error);
+    _checkoutTotalMin = sessionResult.durationMin;
     buildHoursTable();
   } else {
-    todayRecords.push({ studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null, inTs: Date.now() });
-    waitSessionApi().then(api => api.checkin(student)).catch(console.error);
+    if (!todayRecords.some(r => r.studentName === student.name && !r.outTime)) {
+      todayRecords.push({ uid: student.uid, studentName: student.name, seat: student.seat, inTime: timeStr, outTime: null, inTs: sessionResult.inTs });
+    }
   }
 
   // 완료 패널
@@ -6933,13 +6926,14 @@ function _showAwayDone(student, icon, msg, timeStr) {
   document.getElementById('done-time').textContent = timeStr;
 }
 
-window.checkinAway = function() {
+window.checkinAway = async function() {
   try {
     if (window._checkinProcessing) return;
     const student = document.getElementById('confirm-ok-btn')._student;
     const openRec = todayRecords.find(r => r.studentName === student.name && !r.outTime);
     if (!openRec) { showAdminToast(`ℹ️ ${student.name} 학생은 입실 중이 아닙니다`); checkinReset(); return; }
     window._checkinProcessing = true;
+    if (!await confirmSessionAction(api => api.away(student, false))) return;
     const nowMs = Date.now();
     const timeStr = new Date(nowMs).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     window._awayStudents[student.name] = timeStr;
@@ -6953,7 +6947,6 @@ window.checkinAway = function() {
     if (mealName) sendAwaySMS(student, false, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, false, timeStr);
     // 세션 문서에 외출 시작(awayStartTs) 기록 — 사용시간 제외의 원본
-    waitSessionApi().then(api => api.away(student, false)).catch(console.error);
     // checkin_logs에 외출(out·away) 감사 기록
     saveCheckinToFirebase(student, true, timeStr, null, true).catch(console.error);
     buildCheckinTodayList();
@@ -6968,17 +6961,19 @@ window.checkinAway = function() {
   }
 };
 
-window.checkinAwayReturn = function() {
+window.checkinAwayReturn = async function() {
   try {
     if (window._checkinProcessing) return;
     const student = document.getElementById('confirm-ok-btn')._student;
     window._checkinProcessing = true;
+    const result = await confirmSessionAction(api => api.away(student, true));
+    if (!result) return;
     const nowMs = Date.now();
     const timeStr = new Date(nowMs).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     // 복귀 알림은 '나간 시각'으로 판정한다 — 12:35에 점심 먹으러 나가 14:00에 돌아오면
     // 복귀 시각만 보면 식사시간이 아니어서, 외출 알림만 가고 복귀 알림이 빠지게 된다.
     // 시작 epoch는 세션 문서에서 오므로 다른 키오스크에서 외출한 학생도 잡힌다(없으면 현재 시각으로 폴백).
-    const awayStartMs = (window._awayStartTs && window._awayStartTs[student.name]) || nowMs;
+    const awayStartMs = result.awayStartTs || (window._awayStartTs && window._awayStartTs[student.name]) || nowMs;
     const mealName = mealAwayTargetFor(student, awayStartMs);
     delete window._awayStudents[student.name];
     student.awayAt = '';
@@ -6997,7 +6992,6 @@ window.checkinAwayReturn = function() {
     if (mealName) sendAwaySMS(student, true, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, true, timeStr);
     // 세션 문서에 외출 구간(awayMs) 정산 — 사용시간 제외의 원본
-    waitSessionApi().then(api => api.away(student, true)).catch(console.error);
     // checkin_logs에 복귀(in·away) 감사 기록
     saveCheckinToFirebase(student, false, timeStr, null, true).catch(console.error);
     buildCheckinTodayList();
@@ -7214,25 +7208,10 @@ window.awrCommit = async function(){
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
 window.checkinFreshCheckin = function() {
   const btn = document.getElementById('confirm-ok-btn');
-  const student = btn._student;
-  const stale = btn._existingRecord;
-
-  // 1) 이월된 미퇴실 기록 제거
-  if (stale) {
-    const i = todayRecords.indexOf(stale);
-    if (i !== -1) todayRecords.splice(i, 1);
-    const pi = PRESENT.indexOf(student.name);
-    if (pi !== -1) PRESENT.splice(pi, 1);
-    // 어제 날짜로 퇴실 로그를 남겨 다음 새로고침 때 재이월되지 않도록 마감
-    if (stale.carryFromDate) {
-      const closeTime = (stale.inTime && /\d/.test(stale.inTime)) ? stale.inTime : '23:59';
-      saveCheckinToFirebase(student, true, closeTime, stale.carryFromDate).catch(console.error);
-    }
-  }
-
-  // 2) 신규 입실로 재구성 후 확정
+  // 이전 세션 마감과 신규 세션 생성은 sessionCheckin의 한 트랜잭션으로 처리한다.
+  if (window._checkinProcessing) return;
+  btn._freshCheckin = true;
   btn._isCheckout = false;
-  btn._existingRecord = null;
   checkinConfirm();
 };
 
@@ -7649,19 +7628,26 @@ window.checkinReset = function() {
 
 function buildCheckinTodayList() {
   const listEl = document.getElementById('checkin-today-list');
+  if (window._checkinLoadState !== 'ready') {
+    const message = window._checkinLoadState === 'error' ? '연결 확인 필요 · 새로고침해 주세요' : '출결 확인 중…';
+    document.getElementById('checkin-today-count').textContent = message;
+    listEl.textContent = message;
+    return;
+  }
   // 관리자·테스트 계정은 학생이 아니므로 목록·인원수에서 제외
   const records = todayRecords.filter(r => !window.isNonStudent(r.studentName));
-  const inCount = records.filter(r => !r.outTime).length;
-  const awayCount = records.filter(r => !r.outTime && window._awayStudents && window._awayStudents[r.studentName]).length;
+  const inCount = SaebomAdminCore.latestRecords(records).filter(r => !r.outTime).length;
+  const awayCount = SaebomAdminCore.latestRecords(records).filter(r => !r.outTime && window._awayStudents && window._awayStudents[r.studentName]).length;
   document.getElementById('checkin-today-count').textContent =
-    `현재 ${inCount}명 입실 중` + (awayCount > 0 ? ` · 외출 ${awayCount}명` : '');
+    `재실 ${Math.max(0, inCount - awayCount)}명 · 외출 ${awayCount}명`;
 
   if (records.length === 0) {
+    document.getElementById('checkin-today-history').textContent = '';
     listEl.innerHTML = '<div style="text-align:center;color:var(--color-text-tertiary);font-size:12px;padding:12px">아직 입실 기록이 없습니다</div>';
     return;
   }
 
-  listEl.innerHTML = [...records].reverse().map(r => {
+  const renderRecord = r => {
     const isIn = !r.outTime;
     const aw = isIn ? awayInfo(r.studentName) : null;
     // 외출이 오래되면(복귀 미입력 의심) 빨갛게 — 그 시간이 통째로 학습시간에서 빠진다
@@ -7678,7 +7664,10 @@ function buildCheckinTodayList() {
         : `<span style="font-size:11px;color:var(--color-text-tertiary)">퇴실</span>`}
       <span class="ci-time">${aw ? r.inTime + ' · 외출 ' + aw.at : r.inTime + (r.outTime ? ' → ' + r.outTime : '')}</span>
     </div>`;
-  }).join('');
+  };
+  listEl.innerHTML = SaebomAdminCore.latestRecords(records).filter(r => !r.outTime).map(renderRecord).join('')
+    || '<div style="padding:12px">현재 입실 중인 학생이 없습니다</div>';
+  document.getElementById('checkin-today-history').innerHTML = [...records].reverse().map(renderRecord).join('');
 }
 
 // 외출 경과 시간은 그리는 시점에 계산되므로, 외출 중인 학생이 있는 동안만 1분마다 다시 그린다.
@@ -11498,35 +11487,11 @@ async function sessionCheckin(student){
   let res;
   try { res = await exec(); }
   catch(e){
-    // 폴백은 진짜 오프라인(unavailable)일 때만. 경합/규칙 오류까지 폴백하면
-    // 키오스크 2대가 같은 학생의 세션을 2건 만들 수 있다(비원자 경로).
-    // 그 외 오류는 실패를 삼키지 않고 토스트로 드러낸다(7/10 규칙 사고 재발 방지).
-    if (e && e.code === 'unavailable') {
-      console.warn('[세션] 입실 트랜잭션 실패(오프라인) — 폴백 기록:', e);
-      res = await _sessionCheckinFallback(student).catch(err => { console.error('[세션] 입실 폴백도 실패:', err); return { ok:false, reason:'error' }; });
-    } else {
-      console.error('[세션] 입실 트랜잭션 실패(폴백 안 함):', e && e.code, e);
-      if (window.showAdminToast) window.showAdminToast(`⚠️ ${name} 입실 세션 기록 실패 — 잠시 후 다시 입실해 주세요`);
-      res = { ok:false, reason:'error' };
-    }
+    console.error('[세션] 입실 저장 실패:', e && e.code, e);
+    res = { ok:false, reason:'error' };
   }
   if (res && res.staleClosed) recomputeMonthHours(student, res.staleClosed.monthKey).catch(console.error);
   return res || { ok:false, reason:'error' };
-}
-async function _sessionCheckinFallback(student){
-  const seat = _sessCleanSeat(student.seat), name = student.name, now = Date.now(), uid = _sessUid(student);
-  let ptr = null;
-  try { const s = await getDoc(_sessPtrRef(name)); if (s.exists()) ptr = s.data(); } catch(e){}
-  if (ptr && SH.sessIsoDate(ptr.inTs) >= SH.sessIsoDate(now)) return { ok:false, reason:'already-open', inTs: ptr.inTs };
-  const sid = seat + '_' + now;
-  setDoc(doc(db, SESS_COL, sid), {
-    sid, seat, studentName: name, ...(uid ? { uid } : {}),
-    inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
-    inDate: SH.sessIsoDate(now), monthKey: SH.sessMonthKey(now), status:'open', closedBy: null,
-    createdAt: serverTimestamp(), updatedAt: now
-  }).catch(console.error);
-  setDoc(_sessPtrRef(name), { sessionId: sid, seat, studentName: name, ...(uid ? { uid } : {}), inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now }).catch(console.error);
-  return { ok:true, sid, inTs: now, fallback:true };
 }
 
 // ── 퇴실 (트랜잭션) ──
@@ -11556,32 +11521,13 @@ async function sessionCheckout(student, closedBy){
   let res;
   try { res = await exec(); }
   catch(e){
-    // 오프라인 등 트랜잭션 실패 → 캐시 기반 최선노력 폴백(쓰기는 큐에 남아 재접속 시 동기화)
-    console.warn('[세션] 퇴실 트랜잭션 실패 — 폴백 기록:', e);
-    res = await _sessionCheckoutFallback(student, closedBy).catch(err => { console.error('[세션] 퇴실 폴백도 실패:', err); return { ok:false, reason:'error' }; });
+    console.warn('[세션] 퇴실 저장 실패:', e);
+    res = { ok:false, reason:'error' };
   }
   // 항상 이번 달(및 세션의 달) 재계산 — 실패했어도 세션 상태 기준으로 hours를 맞춘다
   const mk = (res && res.monthKey) || SH.sessMonthKey(Date.now());
   recomputeMonthHours(student, mk).catch(console.error);
   return res;
-}
-async function _sessionCheckoutFallback(student, closedBy){
-  const name = student.name, now = Date.now();
-  let ptr = null;
-  try { const s = await getDoc(_sessPtrRef(name)); if (s.exists()) ptr = s.data(); } catch(e){}
-  if (!ptr) return { ok:false, reason:'not-open' };
-  let sess = null;
-  try { const s = await getDoc(doc(db, SESS_COL, ptr.sessionId)); if (s.exists()) sess = s.data(); } catch(e){}
-  if (!sess || sess.status !== 'open') {
-    deleteDoc(_sessPtrRef(name)).catch(console.error);
-    return { ok:false, reason:'orphan-pointer' };
-  }
-  const away = _sessFoldAway(sess, now);
-  const dur = SH.sessDurationMin(sess.inTs, now, away);
-  updateDoc(doc(db, SESS_COL, ptr.sessionId), { outTs: now, awayMs: away, awayStartTs: null,
-    durationMin: dur, status:'closed', closedBy: closedBy || 'student', updatedAt: now }).catch(console.error);
-  deleteDoc(_sessPtrRef(name)).catch(console.error);
-  return { ok:true, durationMin: dur, inTs: sess.inTs, outTs: now, monthKey: sess.monthKey, fallback: true };
 }
 
 // ── 외출/복귀 (트랜잭션) — 세션 문서의 awayStartTs/awayMs 가 외출 제외의 원본 ──
@@ -11612,26 +11558,8 @@ async function sessionAway(student, isReturn, atMs){
       return { ok:true };
     });
   } catch(e){
-    // 폴백: 캐시 기반 비원자 기록 (외출 상태는 저위험 — 최악의 경우 외출 미제외)
-    console.warn('[세션] 외출/복귀 트랜잭션 실패 — 폴백 기록:', e);
-    try {
-      const now = Date.now();
-      const evt = _evtOf(now);
-      const ptrSnap = await getDoc(_sessPtrRef(name));
-      if (!ptrSnap.exists()) return { ok:false, reason:'not-open' };
-      const sRef = doc(db, SESS_COL, ptrSnap.data().sessionId);
-      const sSnap = await getDoc(sRef);
-      if (!sSnap.exists() || sSnap.data().status !== 'open') return { ok:false, reason:'not-open' };
-      const o = sSnap.data();
-      if (isReturn) {
-        if (!o.awayStartTs) return { ok:true, settled:false, fallback:true };
-        await updateDoc(sRef, { awayMs: (o.awayMs||0) + Math.max(0, evt - o.awayStartTs), awayStartTs: null, updatedAt: now });
-        return { ok:true, settled:true, awayStartTs: o.awayStartTs, fallback:true };
-      } else {
-        if (!o.awayStartTs) await updateDoc(sRef, { awayStartTs: evt, updatedAt: now });
-      }
-      return { ok:true, fallback:true };
-    } catch(e2){ console.error('[세션] 외출/복귀 폴백도 실패:', e2); return { ok:false, reason:'error' }; }
+    console.warn('[세션] 외출/복귀 저장 실패:', e);
+    return { ok:false, reason:'error' };
   }
 }
 
@@ -12030,15 +11958,7 @@ window.purgeOldLogs = async function(days = 60, execute = false) {
       if (dt && dt < cutoff) targets.push({ col, id: d.id });
     });
   }
-  // 세션 기록도 함께 정리 (닫힌 것만 — 열린 세션은 상태의 원본이므로 보존)
-  {
-    const snap = await getDocs(collection(db, 'attendance_sessions'));
-    snap.forEach(d => {
-      const v = d.data();
-      const dt = parseDate(v.inDate);
-      if (dt && dt < cutoff && v.status === 'closed') targets.push({ col: 'attendance_sessions', id: d.id });
-    });
-  }
+  // attendance_sessions는 공부시간의 원본이므로 로그 정리에서 삭제하지 않는다.
   console.log(`[로그정리] ${days}일 이전 대상: ${targets.length}건`);
   if (!execute) return targets.length;
   let ok = 0, fail = 0;
@@ -12061,7 +11981,7 @@ window.purgeOldLogsWithConfirm = async function(days = 60) {
       showAdminToast(`✅ ${days}일 이전 기록이 없습니다`);
       return;
     }
-    if (!confirm(`${days}일 이전 입퇴실·문자 기록 ${count}건을 삭제할까요?\n(누적 이용시간 통계는 유지됩니다. 되돌릴 수 없습니다.)`)) {
+    if (!confirm(`${days}일 이전 감사·문자·사용 로그 ${count}건을 삭제할까요?\n공부시간 원본(세션)은 보존합니다. 삭제한 로그는 되돌릴 수 없습니다.`)) {
       if (st) st.textContent = '';
       return;
     }
@@ -12301,7 +12221,7 @@ function _rebuildTodayFromSessions(){
     const closed = o.status === 'closed' && o.outTs;
     const awayStartDt = (!closed && o.awayStartTs) ? new Date(o.awayStartTs) : null;
     todayRecords.push({
-      studentName: o.studentName, seat: o.seat,
+      uid: o.uid || '', studentName: o.studentName, seat: o.seat,
       inTime: SH.sessFmtKoTime(o.inTs), outTime: closed ? SH.sessFmtKoTime(o.outTs) : null,
       inTs: o.inTs, awayMin: Math.round((o.awayMs||0)/60000),
       _awayStart: awayStartDt ? (awayStartDt.getHours()*60 + awayStartDt.getMinutes()) : null,
@@ -12323,7 +12243,7 @@ function _rebuildTodayFromSessions(){
     if (todayRecords.some(r => r.studentName === p.studentName && !r.outTime)) return;
     const carried = p.inDate !== todayIso;
     const rec = {
-      studentName: p.studentName, seat: p.seat,
+      uid: p.uid || '', studentName: p.studentName, seat: p.seat,
       inTime: SH.sessFmtKoTime(p.inTs), outTime: null, inTs: p.inTs,
       awayMin: 0, _awayStart: null, sessionId: p.sessionId
     };
@@ -12368,13 +12288,23 @@ async function loadTodayCheckinFromFirebase() {
     ]);
     _sessTodayDocs = sSnap.docs.map(d => d.data());
     _sessPtrDocs = pSnap.docs.map(d => d.data());
+    window._checkinLoadState = (sSnap.metadata.fromCache || pSnap.metadata.fromCache) ? 'error' : 'ready';
     _rebuildTodayFromSessions();
     _refreshCheckinUI();
     _checkinSnapshotReady = true; // 이제부터 실시간 스냅샷 재구성 허용
-  } catch(e) { console.error('입퇴실 로드 실패:', e); }
+  } catch(e) {
+    window._checkinLoadState = 'error';
+    buildCheckinTodayList();
+    console.error('입퇴실 로드 실패:', e);
+  }
   finally { _loadCheckinLock = false; }
 }
 window.loadTodayCheckinFromFirebase = loadTodayCheckinFromFirebase;
+window.addEventListener('offline', () => {
+  window._checkinLoadState = 'error';
+  buildCheckinTodayList();
+});
+window.addEventListener('online', () => loadTodayCheckinFromFirebase());
 
 // 앱 시작
 loadStudentsFromFirebase();
@@ -15725,6 +15655,9 @@ let _billingYm = _curYm();
 let _billingPayments = {};   // key → 납부 문서
 let _billingConfig = null;   // settings/billing (기본요금·안내문구)
 let _billingDiscounts = {};  // uid → 그 달 확정 재등록 할인(usage_surveys.discountFinal)
+let _billingNotices = {};
+let _billingReady = false;
+let _billingLoadId = 0;
 // 결제 링크는 아직 연동 전이라 문구에서 뺐다. 길이를 90바이트(EUC-KR) 안에 맞춰
 // SMS 단문으로 나가게 한 문구다 — 늘리면 solapiSend가 알아서 LMS로 보낸다.
 const BILLING_DEFAULT_REMINDER = '[새봄면학관]\n{이름} 학생 {월} 이용료 {금액}원 납부 안내드립니다. 확인 부탁드립니다.';
@@ -15735,57 +15668,87 @@ function _billingKey(s){ return (s.phone||'').replace(/\D/g,'') || (s.name||'').
 // parseInt(seat) < 54 만 쓰면 좌석 없는 학생(미배석·신규 등록 직후)이 NaN 이 되어 통째로 빠졌다.
 function _billingStudents(){
   return STUDENTS
-    .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name) && !s.withdrawAt)
+    .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name)
+      && (_billingNotices[window._billingDocId(_billingYm, s)] || _billingPayments[_billingKey(s)]
+          || SaebomAdminCore.billingEligible(s, _billingYm)))
     .sort((a,b)=>(parseInt(a.seat)||9999)-(parseInt(b.seat)||9999));
 }
 // 재등록 할인 — 이용조사에서 [할인 확정]으로 박아 둔 discountFinal 을 그대로 쓴다.
 // 여기서 상벌점을 다시 계산하지 않는다: 주기가 넘어가면 지금 점수는 0이 되고, 확정 금액과
 // 어긋나면 학생앱에 뜬 금액과 청구서가 달라진다.
 function _billingDiscOf(s){
+  const notice = _billingNotices[window._billingDocId(_billingYm, s)];
+  if (notice) return notice.won;
   if (s.fee && s.fee > 0) return 0;                 // 정액 요금제(예: 토요일 이용권)는 할인 미적용
   return Number(_billingDiscounts[s.uid || ''] || 0);
 }
 function _billingFee(s){
-  if (s.fee && s.fee > 0) return s.fee;
-  const base = (_billingConfig && _billingConfig.defaultFee) || 0;
-  return Math.max(0, base - _billingDiscOf(s));
+  const notice = _billingNotices[window._billingDocId(_billingYm, s)];
+  if (notice) return notice.pay;
+  return SaebomAdminCore.bill(s, SaebomAdminCore.baseFee(_billingConfig), _billingDiscOf(s)).pay;
 }
 function _billingMonthLabel(){ const p=_billingYm.split('-'); return parseInt(p[1],10)+'월'; }
 
 window.loadBillingTab = async function(){
+  const loadId = ++_billingLoadId;
+  const month = _billingYm;
+  _billingReady = false;
+  document.getElementById('billing-list').textContent = '이용료·할인·납부 기록 확인 중…';
   const label = document.getElementById('billing-month-label');
   if (label) { const p=_billingYm.split('-'); label.textContent = p[0]+'년 '+parseInt(p[1],10)+'월'; }
   const db = window._adminDb;
   if (!db) { setTimeout(window.loadBillingTab, 300); return; }
   try {
     const { doc, getDoc, getDocs, collection, query, where } = window._fs;
-    if (!_billingConfig) {
+    {
       const snap = await getDoc(doc(db, 'settings', 'billing'));
+      if (loadId !== _billingLoadId) return;
+      if (snap.metadata.fromCache) throw new Error('기본 이용료를 서버에서 확인하지 못했습니다.');
       _billingConfig = snap.exists() ? (snap.data() || {}) : {};
       const feeEl = document.getElementById('billing-default-fee');
-      if (feeEl && _billingConfig.defaultFee) feeEl.value = _billingConfig.defaultFee;
+      if (feeEl && _billingConfig.defaultFee != null) feeEl.value = _billingConfig.defaultFee;
       const txtEl = document.getElementById('billing-reminder-text');
       if (txtEl) txtEl.value = _billingConfig.reminderText || BILLING_DEFAULT_REMINDER;
     }
     // 그 달 확정 할인 — 문서 ID가 '{YYYY-MM}__{uid}' 라 접두사로 그 회차만 고른다
-    _billingDiscounts = {};
-    try {
-      const us = await getDocs(collection(db, 'usage_surveys'));
+    const discounts = {};
+    {
+      const us = await getDocs(query(collection(db, 'usage_surveys'), where('surveyId', '==', month)));
+      if (us.metadata.fromCache) throw new Error('할인 정보를 서버에서 확인하지 못했습니다.');
       us.forEach(d => {
-        if (d.id.indexOf(_billingYm + '__') !== 0) return;
+        if (d.id.indexOf(month + '__') !== 0) return;
         const v = d.data() || {};
-        if (v.uid && v.discountFinal != null) _billingDiscounts[v.uid] = Number(v.discountFinal) || 0;
+        if (v.uid && v.discountFinal != null) discounts[v.uid] = Number(v.discountFinal);
       });
-    } catch(e) { console.warn('[수납] 할인 조회 실패 — 할인 없이 표시합니다:', e); }
-
-    _billingPayments = {};
-    const ps = await getDocs(query(collection(db, 'payments'), where('ym', '==', _billingYm)));
-    ps.forEach(d => { const v = d.data(); if (v && v.key) _billingPayments[v.key] = { ...v, _id: d.id }; });
+    }
+    const notices = {};
+    await SaebomAdminCore.mapLimit(STUDENTS.filter(s => s.name), 6, async s => {
+      const id = window._billingDocId(month, s);
+      const snap = await getDoc(doc(db, window._BILLING_COL, id));
+      if (snap.metadata.fromCache) throw new Error('확정 청구액을 서버에서 확인하지 못했습니다.');
+      if (snap.exists()) {
+        const v = snap.data();
+        if (!Number.isSafeInteger(v.pay) || v.pay < 0) throw new Error('확정 청구액을 확인해 주세요.');
+        notices[id] = v;
+      }
+    });
+    const payments = {};
+    const ps = await getDocs(query(collection(db, 'payments'), where('ym', '==', month)));
+    if (ps.metadata.fromCache) throw new Error('납부 기록을 서버에서 확인하지 못했습니다.');
+    ps.forEach(d => { const v = d.data(); if (v && v.key) payments[v.key] = { ...v, _id: d.id }; });
+    if (loadId !== _billingLoadId) return;
+    SaebomAdminCore.baseFee(_billingConfig);
+    _billingDiscounts = discounts;
+    _billingNotices = notices;
+    _billingPayments = payments;
+    _billingReady = true;
     renderBillingList();
   } catch(e) {
+    if (loadId !== _billingLoadId) return;
+    _billingReady = false;
     console.error('[수납] 로드 실패:', e);
     const list = document.getElementById('billing-list');
-    if (list) list.innerHTML = '<div style="text-align:center;padding:48px;color:#c62828;font-size:13px">불러오기 실패: ' + e.message + '<br>Firestore 보안규칙에 payments 컬렉션 허용이 필요할 수 있습니다.</div>';
+    if (list) list.textContent = '청구 정보 확인 실패 — 납부 처리와 안내 발송을 중지했습니다. ' + e.message;
   }
 };
 
@@ -15800,17 +15763,18 @@ window.saveBillingConfig = async function(){
   const db = window._adminDb; if (!db) return;
   try {
     const { doc, setDoc, serverTimestamp } = window._fs;
-    const defaultFee = parseInt(document.getElementById('billing-default-fee').value, 10) || 0;
+    const defaultFee = SaebomAdminCore.baseFee({ defaultFee: document.getElementById('billing-default-fee').value });
     const reminderText = document.getElementById('billing-reminder-text').value.trim() || BILLING_DEFAULT_REMINDER;
-    _billingConfig = { ...(_billingConfig || {}), defaultFee, reminderText };
     await setDoc(doc(db, 'settings', 'billing'), { defaultFee, reminderText, updatedAt: serverTimestamp() }, { merge: true });
+    _billingConfig = { ...(_billingConfig || {}), defaultFee, reminderText };
     const st = document.getElementById('billing-config-status');
     if (st) { st.textContent = '✅ 저장됐습니다'; setTimeout(() => st.textContent = '', 2000); }
-    renderBillingList();
+    await window.loadBillingTab();
   } catch(e) { showAdminToast('⚠️ 수납 설정 저장 실패: ' + e.message); }
 };
 
 window.renderBillingList = function(){
+  if (!_billingReady) return;
   const list = document.getElementById('billing-list'); if (!list) return;
   const filter = document.getElementById('billing-filter') ? document.getElementById('billing-filter').value : 'all';
   const students = _billingStudents();
@@ -15824,7 +15788,8 @@ window.renderBillingList = function(){
     if (filter === 'unpaid' && p) return;
     const fee = _billingFee(s);
     const dc = _billingDiscOf(s);
-    const feeHtml = (s.fee && s.fee > 0)
+    const notice = _billingNotices[window._billingDocId(_billingYm, s)];
+    const feeHtml = notice ? `<b>${_fmtWon(fee)}</b> <span style="font-size:11px">확정 청구액</span>` : (s.fee && s.fee > 0)
       ? `<b style="color:#6c5dd3">${_fmtWon(s.fee)}</b>${s.feeMemo ? ` <span style="font-size:10px;color:#6a1b9a">🏷️ ${s.feeMemo}</span>` : ''}`
       : dc > 0
         ? `<b style="color:#1e1b4b">${_fmtWon(fee)}</b>
@@ -15855,6 +15820,7 @@ window.renderBillingList = function(){
 };
 
 window.openBillingPayModal = function(key){
+  if (!_billingReady) { showAdminToast('청구 정보를 먼저 확인해 주세요.'); return; }
   const s = _billingStudents().find(x => _billingKey(x) === key); if (!s) return;
   const fee = _billingFee(s);
   const old = document.getElementById('billing-pay-modal'); if (old) old.remove();
@@ -15891,6 +15857,7 @@ window.openBillingPayModal = function(key){
 };
 
 window.confirmBillingPayment = async function(key){
+  if (!_billingReady) { showAdminToast('청구 정보를 먼저 확인해 주세요.'); return; }
   const s = _billingStudents().find(x => _billingKey(x) === key); if (!s) return;
   const db = window._adminDb; if (!db) return;
   const amount = parseInt(document.getElementById('bp-amount').value, 10);
@@ -15924,6 +15891,7 @@ window.cancelBillingPayment = async function(key){
 };
 
 window.sendBillingReminders = async function(){
+  if (!_billingReady) { showAdminToast('청구 정보 확인 실패 또는 확인 중입니다. 발송하지 않았습니다.'); return; }
   const unpaid = _billingStudents().filter(s => !_billingPayments[_billingKey(s)]);
   if (!unpaid.length) { showAdminToast('✅ 미납 학생이 없습니다'); return; }
   const targets = unpaid.filter(s => s.parent && s.parent.replace(/\D/g,'').length >= 10);
@@ -17864,6 +17832,12 @@ window.confirmDeleteStudent = function(seat, name) {
 let _serialPort = null;
 let _serialWriter = null;
 
+window.adminManualDoorOpen = async function() {
+  if (await _checkDeviceToken('admin', localStorage.getItem(ADMIN_TOKEN_KEY)) !== true) {
+    showAdminToast('관리자 인증을 확인해 주세요.'); return;
+  }
+  return window.doorOpenTimed(3);
+};
 window.connectSerial = async function() {
   try {
     if (!('serial' in navigator)) {
@@ -18003,6 +17977,8 @@ function getCurrentBreak() {
   const useDay = day === 6 || isDayBreakDoorOn(); // 토요일 + 낮 자동문 켜진 평일
   const list = useDay ? [...BREAKS_DAY, ...BREAKS_EVENING] : BREAKS_EVENING;
   for (const [start, end, label] of list) {
+    const nextPeriod = Number(label.split('~')[1].replace('교시',''));
+    if (window.isPeriodOffToday(nextPeriod)) continue;
     if (t >= start && t < end) return { start, end, label };
   }
   return null;
@@ -18121,7 +18097,11 @@ window.isBreakReentryWindow = function() {
   return _lastBreakEndTs > 0 && (Date.now() - _lastBreakEndTs) < BREAK_REENTRY_GRACE_MIN * 60 * 1000;
 };
 
-window.toggleBreakAutoDoor = function(on) {
+window.toggleBreakAutoDoor = async function(on) {
+  if (await _checkDeviceToken('admin', localStorage.getItem(ADMIN_TOKEN_KEY)) !== true) {
+    document.getElementById('break-auto-door-chk').checked = _breakAutoEnabled;
+    showAdminToast('관리자 인증을 확인해 주세요.'); return;
+  }
   _breakAutoEnabled = on;
   localStorage.setItem('breakAutoDoor', on ? '1' : '0');
   showAdminToast(on ? '🚪 쉬는시간 자동개방 켜짐' : '🚪 쉬는시간 자동개방 꺼짐');
@@ -22143,15 +22123,27 @@ document.addEventListener('DOMContentLoaded', function() {
   window.usPushBilling = async function() {
     if (BUSY) return;
     if (!isCurrent()) { alert('지난 회차는 안내할 수 없습니다.'); return; }
-    const BASE_FEE = 300000;   // 기본 원비 — billing_notices/_config.baseFee 로도 함께 저장된다
+    let BASE_FEE;
+    const bid = _billId();
+    const db = await window.waitDb();
+    const { doc, getDoc, getDocs, collection, query, where } = window._fs;
+    let surveyDocs;
+    try {
+      const config = await getDoc(doc(db, 'settings', 'billing'));
+      if (config.metadata.fromCache) throw new Error('기본 이용료를 서버에서 확인하지 못했습니다.');
+      BASE_FEE = SaebomAdminCore.baseFee(config.exists() ? config.data() : null);
+      surveyDocs = await getDocs(query(collection(db, window._SURVEY_COL), where('surveyId', '==', bid)));
+      if (surveyDocs.metadata.fromCache) throw new Error('할인 정보를 서버에서 확인하지 못했습니다.');
+    } catch(e) { alert('청구 안내를 중지했습니다: ' + e.message); return; }
 
     // 청구 대상은 **조사 응답이 아니라 명부**가 기준이다. 조사에서 빠진 학생(마감 뒤 등록한
     // 신규생)도 원비는 낸다 — 응답을 기준으로 잡으면 신규생에게 안내가 안 나간다.
     // 나가기로 한 학생(withdrawAt)과 관리자석·테스트 계정만 뺀다.
     const disc = {};   // uid → 확정 할인
-    ROWS.forEach(r => { if (r.uid && r.resp && r.resp.discountFinal != null) disc[r.uid] = r.resp; });
+    surveyDocs.forEach(d => { const r = d.data(); if (r.uid && r.discountFinal != null) disc[r.uid] = r; });
     const bill = (window.STUDENTS || [])
-      .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name) && !s.withdrawAt)
+      .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name)
+        && SaebomAdminCore.billingEligible(s, bid))
       .map(s => {
         const uid = s.uid || '';
         const flat = Number(s.fee) > 0 ? Number(s.fee) : 0;          // 정액 요금제(예: 토요일 이용권)
@@ -22163,10 +22155,23 @@ document.addEventListener('DOMContentLoaded', function() {
                  b: (resp && resp.discountBase) || {} };
       });
     if (!bill.length) { alert('청구할 학생이 없습니다.'); return; }
+    try {
+      await SaebomAdminCore.mapLimit(bill, 6, async x => {
+        Object.assign(x, SaebomAdminCore.bill(x.s, BASE_FEE, x.won));
+        const snap = await getDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, x)));
+        if (snap.metadata.fromCache) throw new Error('기존 청구액 확인 실패');
+        if (snap.exists()) {
+          const saved = snap.data();
+          if (!Number.isSafeInteger(saved.pay) || saved.pay < 0) throw new Error('기존 청구액을 확인해 주세요.');
+          Object.assign(x, {base:saved.base, pay:saved.pay, won:saved.won, flat:saved.flat, existing:true});
+        }
+      });
+    } catch(e) { alert('청구 안내를 중지했습니다: ' + e.message); return; }
     const sumPay = bill.reduce((a, x) => a + x.pay, 0);
     const sumDisc = bill.reduce((a, x) => a + x.won, 0);
     const nFlat = bill.filter(x => x.flat).length;
     const nNoDisc = bill.filter(x => !x.flat && x.won === 0).length;
+    if (bid !== _billId() || !isCurrent()) { alert('조사 회차가 바뀌었습니다. 다시 확인해 주세요.'); return; }
     if (!confirm(`${window._surveyMonthLabel(_billId())} 청구 안내를 앱에 띄웁니다.\n\n`
         + `대상 ${bill.length}명 · 청구 합계 ${won(sumPay)}원\n`
         + `할인 ${won(sumDisc)}원 적용 · 할인 없는 학생 ${nNoDisc}명`
@@ -22176,15 +22181,23 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const db = await window.waitDb();
       const { doc, setDoc } = window._fs;
-      const bid = _billId();
       for (const x of bill) {
-        await setDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, { uid: x.uid, seat: x.seat })), {
+        if (x.existing) continue; // 이미 안내한 청구서는 요금 설정이 바뀌어도 보존
+        const ref = doc(db, window._BILLING_COL, window._billingDocId(bid, x));
+        await window._fs.runTransaction(db, async tx => {
+          const current = await tx.get(ref);
+          if (current.exists()) {
+            if (current.data().pay !== x.pay || current.data().won !== x.won) throw new Error('다른 기기에서 청구액이 확정되었습니다. 다시 확인해 주세요.');
+            return;
+          }
+          tx.set(ref, {
           billId: bid, uid: x.uid, name: x.name, seat: x.seat,
           base: x.base, pay: x.pay, flat: x.flat, won: x.won,
           rawMerit: Number(x.b.merit || 0), rawDemerit: Number(x.b.demerit || 0),
           netMerit: Number(x.b.netMerit || 0), netDemerit: Number(x.b.netDemerit || 0),
           pushedAt: window._noticeToday()
-        }, { merge: true });
+          });
+        });
       }
       await setDoc(doc(db, window._BILLING_COL, '_config'), {
         active: true, billId: bid, title: '이용료 안내', baseFee: BASE_FEE,
@@ -22224,11 +22237,14 @@ document.addEventListener('DOMContentLoaded', function() {
       // 대상은 밀어넣기와 같은 기준이다 — 명부 전체에서 퇴원예정·관리자석·테스트 계정만 뺀다.
       // 조사 응답을 기준으로 잡으면 마감 뒤 등록한 신규생이 통째로 빠진다.
       const targets = (window.STUDENTS || [])
-        .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name) && !s.withdrawAt)
+        .filter(s => s.name && !window.isAdminSeat(s.seat) && !window.isTestStudent(s.name)
+          && SaebomAdminCore.billingEligible(s, bid))
         .map(s => ({ uid: s.uid || '', seat: String(s.seat || '').replace('번',''), name: s.name }));
       let pushed = 0, ackS = 0, ackP = 0; const pend = [];
-      for (const r of targets) {
-        const d = await getDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, { uid: r.uid, seat: r.seat })));
+      const snapshots = await SaebomAdminCore.mapLimit(targets, 6, r =>
+        getDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, r))));
+      for (let i = 0; i < targets.length; i++) {
+        const r = targets[i], d = snapshots[i];
         if (!d.exists()) continue;
         pushed++;
         const v = d.data();
