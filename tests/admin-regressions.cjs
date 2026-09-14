@@ -151,3 +151,8 @@ for(const action of ['sessionCheckin','sessionCheckout','sessionAway']) test(act
   const result=await vm.runInContext(action+'({seat:"1",name:"테스트",uid:"fixture"})',ctx);
   assert.equal(result.ok,false); assert.equal(writes,0);
 });
+test('09-01 notices without pay/base use the same amount the student app showed',()=>{
+  assert.deepEqual(core.notice({won:42000},300000),{won:42000,base:300000,pay:258000});
+  assert.equal(core.notice({won:10000,base:80000,pay:80000},300000).pay,80000);
+  assert.throws(()=>core.notice({won:1000,pay:1.5},300000));
+});

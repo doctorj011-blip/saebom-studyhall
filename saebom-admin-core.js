@@ -24,6 +24,14 @@
       if (![fee, won].every(n => Number.isSafeInteger(n) && n >= 0)) throw new Error('이용료 또는 할인액이 올바르지 않습니다.');
       return {base: fee, won, pay: Math.max(0, fee - won), flat};
     },
+    // 2026-09-01 첫 청구서는 won 만 저장되고 base·pay 가 없다. 학생앱(saebom-common.js _billingGate)이
+    // 보여준 것과 같은 식(설정 baseFee − 할인)으로 채워, 가족이 본 금액과 관리앱 금액을 맞춘다.
+    notice(saved, legacyBase) {
+      const won = saved.won, base = saved.base != null ? saved.base : legacyBase;
+      const pay = saved.pay != null ? saved.pay : Math.max(0, base - won);
+      if (![won, base, pay].every(n => Number.isSafeInteger(n) && n >= 0)) throw new Error('확정 청구액을 확인해 주세요.');
+      return {...saved, base, pay};
+    },
     async mapLimit(items, concurrency, task) {
       const results = new Array(items.length);
       let next = 0;

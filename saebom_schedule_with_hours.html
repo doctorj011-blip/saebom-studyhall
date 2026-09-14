@@ -15738,15 +15738,14 @@ window.loadBillingTab = async function(){
       });
     }
     const notices = {};
+    const cfgSnap = await getDoc(doc(db, window._BILLING_COL, '_config'));
+    if (cfgSnap.metadata.fromCache) throw new Error('청구 안내 설정을 서버에서 확인하지 못했습니다.');
+    const legacyBase = window._billingConfig(cfgSnap.exists() ? cfgSnap.data() : null).baseFee;
     await SaebomAdminCore.mapLimit(STUDENTS.filter(s => s.name), 6, async s => {
       const id = window._billingDocId(month, s);
       const snap = await getDoc(doc(db, window._BILLING_COL, id));
       if (snap.metadata.fromCache) throw new Error('확정 청구액을 서버에서 확인하지 못했습니다.');
-      if (snap.exists()) {
-        const v = snap.data();
-        if (!Number.isSafeInteger(v.pay) || v.pay < 0) throw new Error('확정 청구액을 확인해 주세요.');
-        notices[id] = v;
-      }
+      if (snap.exists()) notices[id] = SaebomAdminCore.notice(snap.data(), legacyBase);
     });
     const payments = {};
     const ps = await getDocs(query(collection(db, 'payments'), where('ym', '==', month)));
@@ -22149,8 +22148,11 @@ document.addEventListener('DOMContentLoaded', function() {
     const bid = _billId();
     const db = await window.waitDb();
     const { doc, getDoc, getDocs, collection, query, where } = window._fs;
-    let surveyDocs;
+    let surveyDocs, legacyBase;
     try {
+      const noticeCfg = await getDoc(doc(db, window._BILLING_COL, '_config'));
+      if (noticeCfg.metadata.fromCache) throw new Error('청구 안내 설정을 서버에서 확인하지 못했습니다.');
+      legacyBase = window._billingConfig(noticeCfg.exists() ? noticeCfg.data() : null).baseFee;
       const config = await getDoc(doc(db, 'settings', 'billing'));
       if (config.metadata.fromCache) throw new Error('기본 이용료를 서버에서 확인하지 못했습니다.');
       BASE_FEE = SaebomAdminCore.baseFee(config.exists() ? config.data() : null);
@@ -22183,9 +22185,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const snap = await getDoc(doc(db, window._BILLING_COL, window._billingDocId(bid, x)));
         if (snap.metadata.fromCache) throw new Error('기존 청구액 확인 실패');
         if (snap.exists()) {
-          const saved = snap.data();
-          if (!Number.isSafeInteger(saved.pay) || saved.pay < 0) throw new Error('기존 청구액을 확인해 주세요.');
-          Object.assign(x, {base:saved.base, pay:saved.pay, won:saved.won, flat:saved.flat, existing:true});
+          const saved = SaebomAdminCore.notice(snap.data(), legacyBase);
+          Object.assign(x, {base:saved.base, pay:saved.pay, won:saved.won, flat:!!saved.flat, existing:true});
         }
       });
     } catch(e) { alert('청구 안내를 중지했습니다: ' + e.message); return; }
