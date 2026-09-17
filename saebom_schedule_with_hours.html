@@ -1936,6 +1936,10 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
           <option value="parent">👨‍👩‍👧 학부모만</option>
         </select>
       </div>
+      <!-- 상단 고정 — 학생앱·학부모앱·모바일 앱 목록 맨 위에 둔다(2026-09). -->
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#4a3fa8;font-weight:600;margin-bottom:8px;cursor:pointer">
+        <input id="notice-pinned-chk" type="checkbox" style="width:16px;height:16px"> 📌 목록 맨 위에 고정
+      </label>
       <input id="notice-title-inp" type="text" autocomplete="new-password" placeholder="제목" style="width:100%;padding:7px 10px;border:1.5px solid #8f82e4;border-radius:8px;font-size:13px;margin-bottom:8px;box-sizing:border-box;background:#ffffff">
       <textarea id="notice-body-inp" autocomplete="off" placeholder="내용 (줄바꿈 가능)" rows="4" style="width:100%;padding:7px 10px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;resize:vertical;box-sizing:border-box;background:#ffffff;font-family:inherit;margin-bottom:8px"></textarea>
 
@@ -9844,6 +9848,7 @@ window.noticeResetForm = function() {
   document.getElementById('notice-cancel-edit-btn').style.display = 'none';
   document.getElementById('notice-badge-sel').value = 'general';
   document.getElementById('notice-audience-sel').value = 'both';
+  document.getElementById('notice-pinned-chk').checked = false;
   document.getElementById('notice-title-inp').value = '';
   document.getElementById('notice-body-inp').value = '';
   noticeClearImage();
@@ -10121,13 +10126,14 @@ async function loadNoticesAdmin() {
     // 최신 공지가 위로 오도록 날짜 내림차순 정렬(원본 인덱스는 유지 — 수정/삭제가 인덱스 기반이므로)
     const ordered = items
       .map((n, i) => ({ n, i }))
-      .sort((a, b) => (window._noticeSortKey(b.n) - window._noticeSortKey(a.n)) || ((b.n.id || 0) - (a.n.id || 0)));
+      .sort((a, b) => ((b.n.pinned ? 1 : 0) - (a.n.pinned ? 1 : 0)) ||
+        (window._noticeSortKey(b.n) - window._noticeSortKey(a.n)) || ((b.n.id || 0) - (a.n.id || 0)));
 
     el.innerHTML = ordered.map(({ n, i }) => `
       <div style="background:#f8faff;border:1px solid #8f82e4;border-radius:10px;padding:10px 12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px">
           <div style="min-width:0;flex:1;cursor:pointer" onclick="noticeToggleBody(${i})">
-            <span style="font-size:10px;font-weight:700;color:#6c5dd3;margin-right:6px">${n.badgeLabel||n.badge}</span>
+            ${n.pinned ? '<span style="font-size:10px;font-weight:700;color:#1B4DFF;margin-right:6px">📌 고정</span>' : ''}<span style="font-size:10px;font-weight:700;color:#6c5dd3;margin-right:6px">${n.badgeLabel||n.badge}</span>
             ${(() => {
               const MAP = { both: ['👥 학생+학부모', '#6B7280'], student: ['🎒 학생만', '#1565C0'], parent: ['👨‍👩‍👧 학부모만', '#B45309'] };
               const m = MAP[n.audience || 'both'] || MAP.both;
@@ -10166,6 +10172,7 @@ window.editNotice = function(i) {
   document.getElementById('notice-cancel-edit-btn').style.display = 'inline-block';
   document.getElementById('notice-badge-sel').value = n.badge || 'general';
   document.getElementById('notice-audience-sel').value = n.audience || 'both';   // 옛 공지는 양쪽 대상
+  document.getElementById('notice-pinned-chk').checked = !!n.pinned;
   document.getElementById('notice-title-inp').value = n.title || '';
   document.getElementById('notice-body-inp').value = n.body || '';
   // 기존 이미지를 { url } 형태로 채워서 썸네일 표시
@@ -10207,7 +10214,9 @@ window.publishNotice = async function() {
       }
     }
 
-    const noticeObj = { id: noticeId, badge, badgeLabel, audience, title, preview: body.slice(0,40), body,
+    const pinned = !!document.getElementById('notice-pinned-chk').checked;
+    // 고정은 수정으로 켜고 끈다. 같은 id 를 재사용하므로 새 공지 푸시(pushOnNotice)가 다시 나가지 않는다.
+    const noticeObj = { id: noticeId, badge, badgeLabel, audience, title, preview: body.slice(0,40), body, pinned,
       date: isEdit ? (window._adminNotices[window._noticeEditIdx].date || today) : today,
       ...(imageUrls.length ? { images: imageUrls } : {}) };
 

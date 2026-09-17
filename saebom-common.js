@@ -645,8 +645,11 @@ window._noticeSortKey = function(n) {
 };
 // 최신 공지가 앞으로 오도록 날짜 내림차순 정렬(원본 배열은 건드리지 않음).
 // 같은 날짜끼리는 id(생성 시각) 최신순.
+// **고정(pinned) 공지는 맨 위** — 관리앱 '상단 고정' 체크(2026-09). 고정끼리도 날짜순이다.
+// 모바일 앱(saebom-app notice_service.dart)도 같은 순서로 정렬한다.
 window._sortNoticesDesc = function(items) {
   return [...(items || [])].sort((a, b) =>
+    ((b && b.pinned ? 1 : 0) - (a && a.pinned ? 1 : 0)) ||
     (window._noticeSortKey(b) - window._noticeSortKey(a)) || ((b.id || 0) - (a.id || 0)));
 };
 

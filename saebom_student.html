@@ -3104,7 +3104,7 @@ function buildNotices() {
     <div class="notice-card">
       <div class="notice-header" onclick="toggleNotice(${i})">
         <div style="flex:1">
-          <span class="notice-badge badge-${n.badge}">${n.badgeLabel}</span>
+          <span class="notice-badge badge-${n.badge}">${n.badgeLabel}</span>${n.pinned ? '<span style="font-size:11px;font-weight:700;color:#1B4DFF;margin-left:6px">📌 고정</span>' : ''}
           <div class="notice-title">${n.title}</div>
           <div class="notice-date">${window._noticeDateLabel(n.date)}</div>
         </div>

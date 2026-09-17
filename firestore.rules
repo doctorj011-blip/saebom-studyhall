@@ -110,6 +110,10 @@ rules_version = '2';
 //                 에는 학생·보호자 동의 기록이 들어 있으니, 지우기 전에 개인정보 보관
 //                 의무 기간이 걸리는지 먼저 확인할 것.
 // ══════════════════════════════════════════════════════════════════════════
+//   - 2026-09-17  (배포 전) timer_share·timer_daily 추가 — 몰입 타이머 기록을 학생이 켰을 때만
+//                 보호자와 공유. 학생은 자기 sid 문서만 쓰고/지우고, 학부모는 토큰의 sid·sids 에
+//                 든 자녀 것만 읽는다. sids 클레임은 saebom-auth(buildIdentity) 배포 후 새로 로그인한
+//                 형제 학부모부터 생긴다. 로그인 필요(push_tokens 와 같은 이유 — 웹앱이 안 쓴다)
 
 // 새봄 면학관 Firestore 보안 규칙 (2026-07-10 통합본)
 // 앱이 쓰는 컬렉션만 허용하고 그 외는 전부 차단합니다.
@@ -614,6 +618,56 @@ service cloud.firestore {
       // 로그아웃 시 자기 토큰만 지운다.
       allow delete: if request.auth != null
         && resource.data.uid == request.auth.uid;
+    }
+
+    // ── 몰입 타이머 기록 공유 (새 모바일 앱 전용, 2026-09) ─────────────────────
+    // 타이머 기록은 원래 학생 폰에만 남는다. 학생이 앱에서 '보호자와 공유'를 켰을 때만
+    // 날짜별 합계·과목별 분이 올라온다. 웹앱은 쓰지 않으므로 처음부터 로그인을 요구한다.
+    //
+    // sid = 불변 학생ID(students.uid). 학생 토큰의 sid 가 비어 있으면(번호를 형제와 나눠 쓰는
+    // 계정 등 본인 확정이 안 된 경우) 아무것도 못 쓴다.
+    function isStudentSid(sid) {
+      return request.auth != null
+        && request.auth.token.role == 'student'
+        && request.auth.token.sid is string
+        && request.auth.token.sid != ''
+        && request.auth.token.sid == sid;
+    }
+    // 학부모: 자녀가 하나면 sid, 여럿이면 sids(saebom-auth buildIdentity).
+    function isParentOf(sid) {
+      return request.auth != null
+        && request.auth.token.role == 'parent'
+        && sid is string && sid != ''
+        && (request.auth.token.get('sid', '') == sid
+            || sid in request.auth.token.get('sids', []));
+    }
+
+    // 공유 스위치. 학부모 화면이 '공유를 안 켰다'와 '기록이 없다'를 가를 수 있게 따로 둔다.
+    match /timer_share/{sid} {
+      allow get: if isStudentSid(sid) || isParentOf(sid);
+      allow list: if false;
+      allow create, update: if isStudentSid(sid)
+        && request.resource.data.keys().hasOnly(['sid', 'on', 'updatedAt'])
+        && request.resource.data.sid == sid
+        && request.resource.data.on is bool;
+      allow delete: if false;
+    }
+
+    // 하루 한 문서: {sid}_{YYYY-MM-DD}. 공유를 끄면 앱이 자기 문서를 지운다.
+    match /timer_daily/{id} {
+      allow read: if isStudentSid(resource.data.sid) || isParentOf(resource.data.sid);
+      allow create, update: if isStudentSid(request.resource.data.sid)
+        && get(/databases/$(database)/documents/timer_share/$(request.resource.data.sid)).data.on == true
+        && request.resource.data.keys().hasOnly(['sid', 'name', 'date', 'totalMin', 'bySubject', 'updatedAt'])
+        && request.resource.data.date is string
+        && request.resource.data.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && id == request.resource.data.sid + '_' + request.resource.data.date
+        && request.resource.data.totalMin is int
+        && request.resource.data.totalMin >= 0
+        && request.resource.data.totalMin <= 1440
+        && request.resource.data.bySubject is map
+        && request.resource.data.bySubject.size() <= 20;
+      allow delete: if isStudentSid(resource.data.sid);
     }
 
     // 그 외 모든 컬렉션은 읽기·쓰기 전부 차단
