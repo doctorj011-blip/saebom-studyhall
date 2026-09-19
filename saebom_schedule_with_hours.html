@@ -334,6 +334,19 @@ body.admin-device .subtab-bar.on{display:flex}
 .fp-leg-out{background:#bdc1c6}
 .fp-leg-empty{background:var(--color-background-secondary);border:0.5px solid var(--color-border-secondary)}
 
+/* ── 공석만 보기 ── 신규생에게 자리를 고르게 할 때: 점유 좌석은 이름·배지를 가리고, 공석만 번호+색으로 남긴다 */
+#sec-floorplan.fp-vacant-only .fp-cell:not(.fp-cell-vacant-seat):not(.fp-cell-studio):not(.fp-cell-admin){background:#f3f4f6 !important;border:1px solid #e5e7eb !important;box-shadow:none !important}
+#sec-floorplan.fp-vacant-only .fp-cell:not(.fp-cell-vacant-seat):not(.fp-cell-studio):not(.fp-cell-admin) > *{display:none !important}
+#sec-floorplan.fp-vacant-only .fp-cell-admin > div:not(.fp-num){display:none !important}
+#sec-floorplan.fp-vacant-only .fp-cell-studio > div:not(:first-child){display:none !important}
+#sec-floorplan.fp-vacant-only .fp-cell-vacant-seat{background:#dbeafe !important;border:2px solid #3b82f6 !important}
+#sec-floorplan.fp-vacant-only .fp-cell-vacant-seat > div:first-child{justify-content:center}
+#sec-floorplan.fp-vacant-only .fp-cell-vacant-seat .fp-num{font-size:20px;font-weight:800;color:#1d4ed8}
+#sec-floorplan.fp-vacant-only .fp-cell-vacant-seat .fp-name{display:none}
+/* 옆 패널에도 이름이 있으니 같이 가린다 */
+#sec-floorplan.fp-vacant-only #fp-side-panel,#sec-floorplan.fp-vacant-only #fp-sticky-panel{display:none}
+#sec-floorplan.fp-vacant-only .fp-drag-wrap{margin-right:0 !important}
+
 /* 드래그 스크롤 컨테이너 */
 .fp-drag-wrap{
   overflow:hidden;
@@ -1198,6 +1211,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
     </div>
     <div style="display:flex;align-items:center;gap:10px">
       <span style="font-size:11px;color:var(--color-text-tertiary);display:none" id="fp-drag-hint"></span>
+      <button id="fp-vacant-btn" class="fp-edit-btn" onclick="toggleFpVacantOnly(this)" title="점유 좌석의 이름을 가리고 공석만 보여줍니다 (신규생 자리 선택용)">👀 공석만 보기</button>
     </div>
   </div>
 
@@ -7811,6 +7825,14 @@ window.isStudyDeskSeat = function(seat) {
 
 // 관리자석 여부 판별(window.isAdminSeat)은 파일 위쪽 '관리자·조교 계정' 블록에 한 곳만 둔다.
 // ADMIN_FIXED 정의보다 앞서 선언돼 있어도 되도록 좌석번호 범위(54~63)를 우선 검사한다.
+
+// ── 공석만 보기 ── 신규생에게 "여기서 골라" 할 때 쓰는 보기 모드. 데이터는 그대로 두고 CSS만 바꾼다
+// (클래스가 #sec-floorplan 에 붙으므로 교시 갱신으로 배치도를 다시 그려도 유지된다).
+window.toggleFpVacantOnly = function(btn) {
+  const on = document.getElementById('sec-floorplan').classList.toggle('fp-vacant-only');
+  btn.classList.toggle('active', on);
+  btn.textContent = on ? '✅ 공석만 보기 (끄기)' : '👀 공석만 보기';
+};
 
 function buildFloorplan() {
   const el = document.getElementById('fp-room');
