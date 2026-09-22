@@ -344,7 +344,7 @@ body.admin-device .subtab-bar.on{display:flex}
 #sec-floorplan.fp-vacant-only .fp-cell-vacant-seat .fp-num{font-size:20px;font-weight:800;color:#1d4ed8}
 #sec-floorplan.fp-vacant-only .fp-cell-vacant-seat .fp-name{display:none}
 /* 옆 패널에도 이름이 있으니 같이 가린다 */
-#sec-floorplan.fp-vacant-only #fp-side-panel,#sec-floorplan.fp-vacant-only #fp-sticky-panel{display:none}
+#sec-floorplan.fp-vacant-only #fp-side-panel{display:none}
 #sec-floorplan.fp-vacant-only .fp-drag-wrap{margin-right:0 !important}
 
 /* 드래그 스크롤 컨테이너 */
@@ -383,40 +383,6 @@ body.admin-device .subtab-bar.on{display:flex}
 
 /* 위치수정 모드: 좌석을 absolute로 자유 배치 */
 .fp-room.edit-mode{background:repeating-linear-gradient(0deg,transparent,transparent 67px,rgba(0,0,0,0.04) 67px,rgba(0,0,0,0.04) 68px),repeating-linear-gradient(90deg,transparent,transparent 82px,rgba(0,0,0,0.04) 82px,rgba(0,0,0,0.04) 83px);}
-
-/* ── 조교 스티키 메모 (배치도 왼쪽 관리석 위의 포스트잇) ──
-   배치도 왼쪽 끝(관리석 자리)에 absolute로 겹쳐 뜬다 — 조교가 앉는 자리 옆이라 눈에 잡히고,
-   아래로 흘려보내면 배치도·입실현황이 통째로 밀려 내려가 불편하다(2026-07-30 사용자 요청).
-   ★z-index는 좌석 드롭 하이라이트(z-index:10)보다 위여야 메모가 좌석에 묻히지 않는다.
-   ★오른쪽 입실현황 패널(right:0, 240px)과는 컨테이너가 472px보다 넓으면 절대 안 겹친다.
-   진짜 좁은 화면(<820px)에서만 .fp-sticky-inline 폴백으로 배치도 위 블록이 된다. */
-#fp-sticky-panel{position:absolute;top:0;left:0;width:232px;max-height:100%;display:flex;flex-direction:column;gap:6px;z-index:30}
-.fp-sticky-head{display:flex;align-items:center;justify-content:space-between;background:#fef3c7;border:1.5px solid #fcd34d;border-radius:10px;padding:6px 8px;flex-shrink:0}
-#fp-sticky-form{flex-shrink:0}  /* 입력 종이가 자란 만큼 유지 — 자리가 모자라면 아래 목록이 스크롤 */
-#fp-sticky-list{overflow-y:auto;display:flex;flex-direction:column;gap:6px;min-height:0;padding-bottom:4px}
-.fp-sticky-note{position:relative;border-radius:2px 10px 10px 10px;padding:8px 10px 7px;font-size:12px;line-height:1.5;color:#44381b;background:#fef9c3;border:1px solid #fde047;box-shadow:0 2px 6px rgba(120,90,0,0.10);word-break:break-word;white-space:pre-wrap}
-.fp-sticky-note.imp{background:#fee2e2;border-color:#fca5a5;color:#5f1a1a;box-shadow:0 2px 8px rgba(180,30,30,0.14)}
-.fp-sticky-note .st-meta{display:flex;align-items:center;justify-content:space-between;margin-top:5px;font-size:10px;color:#a18f5c}
-.fp-sticky-note.imp .st-meta{color:#c08484}
-.fp-sticky-note .st-btns{display:flex;gap:6px}
-.fp-sticky-note .st-btns button{background:none;border:none;cursor:pointer;font-size:11px;padding:0;line-height:1;opacity:0.65}
-.fp-sticky-note .st-btns button:hover{opacity:1}
-.fp-sticky-imp-tag{display:inline-block;background:#dc2626;color:#ffffff;font-size:9.5px;font-weight:800;border-radius:5px;padding:1px 5px;margin-right:4px;vertical-align:1px}
-.fp-sticky-collapsed-note{font-size:10.5px;color:#b8a576;text-align:center;padding:2px 0}
-/* 좁은 화면(<820px) 전용 폴백: 배치도 위 일반 블록으로. ★margin-right:254px로 입실현황 패널(240px+여백,
-   absolute 오버레이) 폭을 비켜간다 — 없으면 패널이 입실현황 카드를 덮어 클릭을 막는다(실사고).
-   ★width는 absolute일 때와 같은 232px — width:auto로 두면 포스트잇이 화면폭만큼 커져
-   "메모가 갑자기 커졌다"가 된다(2026-07-30 실사용 지적). 위치만 옮기고 크기는 그대로.
-   ★단 min()으로 상한을 둔다: 폴백은 컨테이너 왼쪽에서 시작하는데, 컨테이너가 486px보다
-   좁으면 232px 고정 폭이 오른쪽 입실현황 카드(240px absolute) 아래로 파고든다(폰에서
-   메모가 학생 카드를 덮은 실사고, 2026-07-30). 자리가 있으면 232px, 없으면 남는 만큼.
-   .fp-sticky-inline 클래스는 JS(_fpStickyReflow)가 실측 겹침 판정으로 붙인다(중간 폭 화면 대응). */
-#fp-sticky-panel.fp-sticky-inline{position:static;width:min(232px,calc(100% - 254px));max-height:none;margin:0 254px 10px 0}
-#fp-sticky-panel.fp-sticky-inline #fp-sticky-list{max-height:200px}
-@media (max-width:820px){
-  #fp-sticky-panel{position:static;width:min(232px,calc(100% - 254px));max-height:none;margin:0 254px 10px 0}
-  #fp-sticky-list{max-height:200px}
-}
 
 @keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
 @keyframes ctxIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}
@@ -1216,20 +1182,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   </div>
 
   <div style="position:relative">
-    <!-- 조교 스티키 메모 : 배치도 오른쪽 여백(좌석 그리드와 입실현황 패널 사이)에 붙는 포스트잇.
-         접기를 해도 '중요' 메모는 항상 보인다. 기기 간 공유(students/_meta_sticky_memos). -->
-    <div id="fp-sticky-panel">
-      <div class="fp-sticky-head">
-        <span style="font-size:12px;font-weight:800;color:#92400e">🗒️ 조교 메모 <span id="fp-sticky-count" style="font-size:11px;font-weight:600;color:#b8a576"></span></span>
-        <span style="display:flex;gap:4px">
-          <button onclick="openStickyAdd()" title="메모 추가" style="padding:2px 8px;background:#d97706;color:#ffffff;border:none;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer">＋</button>
-          <button id="fp-sticky-collapse-btn" onclick="toggleStickyCollapse()" title="일반 메모 접기/펼치기" style="padding:2px 8px;background:#fde68a;color:#92400e;border:none;border-radius:6px;font-size:10.5px;font-weight:700;cursor:pointer">접기</button>
-        </span>
-      </div>
-      <div id="fp-sticky-form" style="display:none"></div>
-      <div id="fp-sticky-list"></div>
-    </div>
-
     <div class="fp-drag-wrap" id="fp-drag-wrap" style="margin-right:254px;min-width:0">
       <div class="fp-room" id="fp-room" style="position:relative"></div>
     </div>
@@ -5866,161 +5818,9 @@ function buildScheduleTable(day){
    쓰지 않아 2026-08-05 제거. Firestore students/_meta_schedule_classes 문서는 남아 있으나
    읽는 곳이 없다(다른 _meta_ 문서와 같이 학생 리스너가 통째로 무시). */
 
-// ══ 조교 스티키 메모 (배치도 여백 포스트잇) ═══════════════════════
-// 메모 = {id, text, imp(중요 여부), ts(작성 ms)}. 배열 전체를 students/_meta_sticky_memos
-// 한 문서로 공유한다(저장은 모듈의 _syncStickyMemos, 수신은
-// _applyRemoteStickyMemos). 접기 상태는 기기별(localStorage)이고, ★'중요' 메모는
-// 접어도 항상 보인다 — 조교가 반드시 봐야 하는 메모가 접기에 묻히지 않게.
-window.STICKY_MEMOS = [];
-const STICKY_COLLAPSE_KEY = 'saebom_fp_sticky_collapsed';
-function _stickyCollapsed(){ try{ return localStorage.getItem(STICKY_COLLAPSE_KEY)==='1'; }catch(e){ return false; } }
-const _stickyEsc = s => String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function _stickyWhen(ts){
-  if(!ts) return '';
-  const d=new Date(ts);
-  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-}
-
-function renderStickyMemos(){
-  const list=document.getElementById('fp-sticky-list');
-  const cnt=document.getElementById('fp-sticky-count');
-  const colBtn=document.getElementById('fp-sticky-collapse-btn');
-  if(!list) return;
-  const memos=[...window.STICKY_MEMOS].sort((a,b)=>(b.imp?1:0)-(a.imp?1:0) || (b.ts||0)-(a.ts||0));
-  const collapsed=_stickyCollapsed();
-  const normals=memos.filter(m=>!m.imp);
-  if(cnt) cnt.textContent = memos.length ? `${memos.length}` : '';
-  if(colBtn) colBtn.textContent = collapsed ? `펼치기${normals.length?` (${normals.length})`:''}` : '접기';
-  const shown = collapsed ? memos.filter(m=>m.imp) : memos;
-  let html = shown.map(m=>`<div class="fp-sticky-note${m.imp?' imp':''}">
-      ${m.imp?'<span class="fp-sticky-imp-tag">중요</span>':''}${_stickyEsc(m.text)}
-      <div class="st-meta"><span>${_stickyWhen(m.ts)}</span>
-        <span class="st-btns">
-          <button onclick="toggleStickyImp('${m.id}')" title="${m.imp?'중요 해제':'중요로 표시'}">${m.imp?'📌':'📍'}</button>
-          <button onclick="deleteStickyMemo('${m.id}')" title="삭제">✕</button>
-        </span></div>
-    </div>`).join('');
-  if(collapsed && normals.length) html += `<div class="fp-sticky-collapsed-note">일반 메모 ${normals.length}개 접힘</div>`;
-  if(!memos.length && !collapsed) html = '<div class="fp-sticky-collapsed-note">메모 없음 — ＋로 추가</div>';
-  list.innerHTML = html;
-}
-
-window.toggleStickyCollapse = function(){
-  try{ localStorage.setItem(STICKY_COLLAPSE_KEY, _stickyCollapsed()?'0':'1'); }catch(e){}
-  renderStickyMemos();
-};
-
-// 추가 폼 — 패널 안 인라인, 한 번에 하나만.
-// ★＋는 폼을 '열기만' 한다 — 이미 열려 있으면 입력칸 포커스만 주고 절대 닫지 않는다.
-//   (초기 버전에서 ＋가 토글이라, 내용을 적고 ＋를 '추가' 버튼인 줄 알고 눌렀다가
-//    쓰던 메모가 통째로 사라지는 실사고가 있었음. 닫기는 오직 취소 버튼으로만.)
-window.openStickyAdd = function(){
-  const box=document.getElementById('fp-sticky-form');
-  if(!box) return;
-  if(box.style.display!=='none'){ document.getElementById('fp-sticky-input')?.focus(); return; }
-  box.style.display='';
-  box.innerHTML = `<div style="background:#fffbeb;border:1.5px dashed #fcd34d;border-radius:10px;padding:8px;display:flex;flex-direction:column;gap:6px">
-    <textarea id="fp-sticky-input" rows="3" placeholder="메모 내용 (Ctrl+Enter로 저장)" style="width:100%;box-sizing:border-box;border:1px solid #fde68a;border-radius:8px;padding:7px 8px;font-size:12px;font-family:inherit;resize:none;outline:none;background:#ffffff;overflow-y:hidden;max-height:45vh"></textarea>
-    <label style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#b91c1c;font-weight:700;cursor:pointer">
-      <input type="checkbox" id="fp-sticky-imp" style="accent-color:#dc2626">📌 중요 (접어도 항상 표시)
-    </label>
-    <div style="display:flex;gap:6px">
-      <button onclick="closeStickyAdd()" style="flex:1;padding:6px;background:#ffffff;color:#92400e;border:1px solid #fde68a;border-radius:8px;font-size:11.5px;font-weight:600;cursor:pointer">취소</button>
-      <button onclick="saveStickyMemo()" style="flex:2;padding:6px;background:#d97706;color:#ffffff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">💾 저장</button>
-    </div>
-  </div>`;
-  const inp=document.getElementById('fp-sticky-input');
-  if(inp){
-    inp.addEventListener('keydown', e=>{ if(e.key==='Enter'&&(e.ctrlKey||e.metaKey)) saveStickyMemo(); });
-    // 종이(입력칸)가 내용 길이만큼 자라게 — 45vh(max-height)를 넘으면 그때부터 내부 스크롤
-    const grow=()=>{ inp.style.height='auto'; inp.style.height=inp.scrollHeight+'px';
-                     inp.style.overflowY = (inp.scrollHeight>inp.clientHeight+2)?'auto':'hidden'; };
-    inp.addEventListener('input', grow);
-    grow();
-  }
-  setTimeout(()=>inp?.focus(),50);
-};
-
-// 취소로만 닫는다. 쓰다 만 내용이 있으면 버릴지 물어본다.
-window.closeStickyAdd = function(){
-  const box=document.getElementById('fp-sticky-form');
-  if(!box) return;
-  const draft=(document.getElementById('fp-sticky-input')?.value||'').trim();
-  if(draft && !confirm('작성 중인 메모가 있습니다. 저장하지 않고 버릴까요?')) return;
-  box.style.display='none'; box.innerHTML='';
-};
-
-window.saveStickyMemo = function(){
-  const inp=document.getElementById('fp-sticky-input');
-  const text=(inp?.value||'').trim();
-  if(!text){ showAdminToast('⚠️ 메모 내용을 입력하세요'); return; }
-  const imp=!!document.getElementById('fp-sticky-imp')?.checked;
-  window.STICKY_MEMOS.push({ id:'m'+Date.now()+Math.random().toString(36).slice(2,6), text, imp, ts:Date.now() });
-  const box=document.getElementById('fp-sticky-form');
-  if(box){ box.style.display='none'; box.innerHTML=''; }
-  _persistStickyMemos(); renderStickyMemos();
-};
-
-window.deleteStickyMemo = function(id){
-  const m=window.STICKY_MEMOS.find(x=>x.id===id);
-  if(!m) return;
-  if(!confirm(`이 메모를 삭제할까요?\n\n"${m.text.slice(0,60)}${m.text.length>60?'…':''}"`)) return;
-  window.STICKY_MEMOS = window.STICKY_MEMOS.filter(x=>x.id!==id);
-  _persistStickyMemos(); renderStickyMemos();
-};
-
-window.toggleStickyImp = function(id){
-  const m=window.STICKY_MEMOS.find(x=>x.id===id);
-  if(!m) return;
-  m.imp=!m.imp;
-  _persistStickyMemos(); renderStickyMemos();
-};
-
-function _persistStickyMemos(){
-  try{ if(window._syncStickyMemos) window._syncStickyMemos(window.STICKY_MEMOS); }
-  catch(e){ console.error('스티키 메모 저장 실패:',e); }
-}
-
-// 다른 기기(또는 시작 시 Firebase)에서 받은 메모 반영 — 모듈 스크립트가 호출
-window._applyRemoteStickyMemos = function(arr){
-  if(!Array.isArray(arr)) return;
-  window.STICKY_MEMOS = arr;
-  renderStickyMemos();
-};
-window.renderStickyMemos = renderStickyMemos;
-renderStickyMemos();   // Firestore 로드 전 빈 패널 골격(접기 버튼 라벨 포함) 표시
-
-// ── 스티키 패널 위치 자동 전환 ──
-// 원칙(2026-07-30 사용자 요청): 펼쳤을 때 패널은 관리석 위에 그냥 겹쳐 뜬다. 예전엔 좌석과
-// 겹치면 배치도 위 블록으로 내려보냈는데, 그러면 배치도 전체가 아래로 밀려 쓰기 불편했다.
-// 패널은 배치도 왼쪽 끝(left:0, 관리석 자리)에 붙어 있어 오른쪽 입실현황 패널과는 애초에
-// 만나지 않는다(컨테이너 472px 이상이면). 좌석 겹침은 허용.
-// .fp-sticky-inline(아래로 흐르는 블록)은 패널 놓을 폭조차 없는 좁은 화면 전용 폴백.
-// ★클래스를 토글해 가며 측정하면 ResizeObserver와 무한 루프가 된다 — 컨테이너 폭만 보고 판정한다.
-function _fpStickyReflow(){
-  const p=document.getElementById('fp-sticky-panel');
-  const wrap=document.getElementById('fp-drag-wrap');
-  const room=document.getElementById('fp-room');
-  const cont=wrap?wrap.parentElement:null;
-  if(!p||!room||!cont) return;
-  const cr=cont.getBoundingClientRect();
-  if(!cr.width) return;                          // 배치도 탭이 숨김 상태면 판단 보류
-  // 좌석(관리석)과 겹치는 건 이제 정상 동작이므로 판정에서 뺐다. 아래로 흘리는 건
-  // 패널을 겹쳐 놓을 자리조차 없는 폭에서만 — 그때는 좌석 그리드가 통째로 가려진다.
-  p.classList.toggle('fp-sticky-inline', cr.width < 820);
-}
-window._fpStickyReflow=_fpStickyReflow;
-window.addEventListener('resize', ()=>{ try{_fpStickyReflow();}catch(e){} });
-// resize/RO가 안 울리는 환경(창 이동·줌 등) 대비 보험 — 판정은 멱등이라 반복 호출 무해
-setInterval(()=>{ try{_fpStickyReflow();}catch(e){} }, 30000);
-try{
-  // 좌석 그리드 크기 변화(배치도 렌더·탭 표시·좌석 편집)와 컨테이너 폭 변화를 모두 감지
-  const _fpRo=new ResizeObserver(()=>{ try{_fpStickyReflow();}catch(e){} });
-  const _w=document.getElementById('fp-drag-wrap');
-  if(_w&&_w.parentElement) _fpRo.observe(_w.parentElement);
-  const _r=document.getElementById('fp-room');
-  if(_r) _fpRo.observe(_r);
-}catch(e){}
+/* [삭제됨] 조교 스티키 메모 — 배치도 왼쪽에 겹쳐 뜨던 포스트잇(＋/접기).
+   쓰지 않아 2026-09-22 제거(CSS·HTML·동기화 전부). Firestore students/_meta_sticky_memos
+   문서는 남아 있으나 읽는 곳이 없다. */
 
 function buildDayTabs(){
   document.getElementById('day-tabs').innerHTML=DAYS.map(d=>
@@ -12144,12 +11944,6 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
-      if (change.doc.id === '_meta_sticky_memos') {
-        if (change.type !== 'removed' && window._applyRemoteStickyMemos) {
-          window._applyRemoteStickyMemos(change.doc.data().memos || []);
-        }
-        return;
-      }
       if (change.doc.id === '_meta_tablet') {
         if (change.type !== 'removed' && window._applyRemoteTabletEntries) {
           window._applyRemoteTabletEntries(change.doc.data().entries || {});
@@ -12441,24 +12235,6 @@ window._applyRemoteDismissedStudyroom = function(idsMap) {
     const snap = await getDoc(doc(db, 'students', '_meta_studyroom_alerts'));
     if (snap.exists()) window._applyRemoteDismissedStudyroom(snap.data().dismissed || {});
   } catch(e) { console.error('스터디룸 알림 닫기상태 로드 실패:', e); }
-})();
-
-// ── 조교 스티키 메모 기기 간 동기화 (students/_meta_sticky_memos) ──
-// classic 스크립트(renderStickyMemos 쪽)에서 추가/삭제/중요토글 시 이 함수를 호출한다.
-window._syncStickyMemos = async function(memosArr) {
-  try {
-    await setDoc(doc(db, 'students', '_meta_sticky_memos'),
-      { name: '', memos: Array.isArray(memosArr) ? memosArr : [], updatedAt: Date.now() }, { merge: true });
-  } catch(e) { console.error('스티키 메모 동기화 실패:', e); }
-};
-
-// 시작 시 저장된 메모 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
-(async function _loadStickyMemosOnce() {
-  try {
-    const snap = await getDoc(doc(db, 'students', '_meta_sticky_memos'));
-    if (snap.exists() && window._applyRemoteStickyMemos) window._applyRemoteStickyMemos(snap.data().memos || []);
-    else if (window.renderStickyMemos) window.renderStickyMemos();
-  } catch(e) { console.error('스티키 메모 로드 실패:', e); }
 })();
 
 // ── 방학 시간표(settings/vacation_mode) 실시간 구독 ──
