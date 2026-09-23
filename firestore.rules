@@ -90,6 +90,8 @@ rules_version = '2';
 //                 ★이 규칙 없이는 스위치가 조용히 무력화된다 — 세 앱 모두 '못 읽으면
 //                 기능 켜짐'으로 넘어지게 해 뒀기 때문이다(학생이 걸어 둔 잠금을 존중하는
 //                 방향). 그래서 앱보다 규칙을 먼저 배포할 것
+//   - 2026-09-23  settings 에 popup_notice 추가 — 모바일 앱을 열 때 한 번 덮는 공지.
+//                 read 만 연다(write 는 app_version 과 같은 이유로 뺀다).
 //   - 2026-08-25  settings 에 app_version 추가 — 모바일 앱의 업데이트 안내(스토어 최신·
 //                 최소 버전). 로그인 전에도 읽으므로 read 는 미인증 개방, write 는 막았다
 //                 (원장이 콘솔에서 직접 고친다 — 잘못 쓰면 전교생 앱이 잠긴다).
@@ -408,7 +410,7 @@ service cloud.firestore {
                             'seatSelection', 'vacation_mode', 'schedule_edit',
                             'meal_away_sms', 'summerInvites', 'alimtalk_server',
                             'day_break_door', 'bell_schedule', 'weather',
-                            'planner_privacy', 'app_version'];
+                            'planner_privacy', 'app_version', 'popup_notice'];
       // planner_privacy — 플래너 학부모 비공개 기능의 전체 스위치(원장 전용, 관리앱에서만 쓴다).
       // ★읽기를 못 하면 학생·학부모앱은 '기능 켜짐'으로 간주한다(학생이 걸어 둔 잠금을 존중하는 쪽).
       //   그래서 이 규칙을 배포하지 않으면 스위치를 꺼도 아무 일도 일어나지 않는다.
@@ -416,6 +418,11 @@ service cloud.firestore {
       //   로그인 전에 읽으므로 미인증 read 다. 담긴 건 버전 문자열뿐이라 열려도 잃을 것이 없다.
       // 🔴 write 는 일부러 뺐다 — min 을 잘못 올리면 앱이 통째로 잠기는 문서다.
       //   값은 Firebase 콘솔에서 사람이 직접 고친다(관리앱에 스위치를 만들지 말 것).
+      // popup_notice — 모바일 앱을 열 때 한 번 덮는 공지(on·id·title·body·role·
+      //   from·until, 전부 문자열). app_version 과 같은 이유로 **write 는 뺐다** —
+      //   화면을 덮는 문서라 실수로 켜 두면 전원이 팝업을 보게 된다. 콘솔에서
+      //   사람이 직접 고친다. 읽기는 로그인 뒤라 인증 read 지만 settings 는 전부
+      //   미인증 read 라 그냥 열어 둔다(담긴 건 공지 문구뿐이다).
       allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather', 'planner_privacy'];
     }
 
