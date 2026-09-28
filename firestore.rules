@@ -72,6 +72,8 @@ rules_version = '2';
 //                 summary 를 연 것과 같은 이유다 — 최근 3건의 코멘트가 다음 검사
 //                 프롬프트로 들어가므로(plannerAiHistory) 틀린 코멘트를 두면 며칠치가
 //                 오염된다. quality·stats 는 여전히 서버 전용
+//   - 2026-09-28  billing_notices — 확인 뒤에도 할인이 '늘어나는' 수정은 허용한다. 확정 전
+//                 예상 할인으로 먼저 안내하고, 이달 상점이 더해지면 늘어난 금액으로 고쳐 다시 띄운다.
 //   - 2026-08-31  billing_notices 추가 — 재등록 할인 확정 금액 개인 안내 게이트.
 //                   금액이 들어 있어 list 를 막고 get 만 연다. 확인 도장이 찍힌 뒤에는
 //                   금액(won)을 못 고친다.
@@ -572,6 +574,7 @@ service cloud.firestore {
         ? request.resource.data.active is bool
         : (request.resource.data.billId == resource.data.billId
            && (request.resource.data.won == resource.data.won
+               || request.resource.data.won > resource.data.won
                || (!('ackStudent' in resource.data) && !('ackParent' in resource.data))));
     }
 

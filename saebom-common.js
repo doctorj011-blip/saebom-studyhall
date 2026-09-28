@@ -1224,8 +1224,10 @@ window._billingGate = (function() {
         ${disc > 0 ? `
           <div style="margin-top:9px;border-top:1px dashed #D9C9A6;padding-top:8px;font-size:12.5px;color:#6F6353;line-height:1.9">
             <div style="display:flex;justify-content:space-between"><span>기본 이용료</span><b>${won(base)}원</b></div>
-            <div style="display:flex;justify-content:space-between;color:#2E7D53"><span>재등록 할인</span><b>− ${won(disc)}원</b></div>
+            <div style="display:flex;justify-content:space-between;color:#2E7D53"><span>재등록 할인${d.estimate ? ' (예상)' : ''}</span><b>− ${won(disc)}원</b></div>
           </div>
+          ${d.estimate ? `<div style="font-size:11.5px;color:#2E7D53;margin-top:6px;line-height:1.6">지금까지의 상점으로 계산한 예상 할인이에요. 이달 상점이 더 반영돼 할인이 늘면 다시 알려 드려요.</div>` : ''}
+          ${d.revisedFrom != null ? `<div style="font-size:11.5px;color:#2E7D53;margin-top:6px">할인이 ${won(d.revisedFrom)}원 → ${won(disc)}원으로 늘었어요.</div>` : ''}
           ${basis ? `<div style="font-size:11.5px;color:#8A8172;margin-top:6px">${esc(basis)} · 상점 1점당 1,000원</div>` : ''}`
         : ''}
       </div>

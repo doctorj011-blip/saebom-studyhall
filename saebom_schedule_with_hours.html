@@ -21973,7 +21973,12 @@ document.addEventListener('DOMContentLoaded', function() {
       BASE_FEE = SaebomAdminCore.baseFee(config.exists() ? config.data() : null);
       surveyDocs = await getDocs(query(collection(db, window._SURVEY_COL), where('surveyId', '==', bid)));
       if (surveyDocs.metadata.fromCache) throw new Error('할인 정보를 서버에서 확인하지 못했습니다.');
+      await loadAll();   // 예상 할인은 지금 상벌점 기준 — 탭을 연 뒤 바뀐 상벌점까지 반영
     } catch(e) { alert('청구 안내를 중지했습니다: ' + e.message); return; }
+    // 확정 전 학생은 '지금까지의 예상 할인'으로 안내하고(estimate), 나중에 할인이 늘면
+    // 다시 누를 때 늘어난 금액으로 고쳐 다시 보여 준다. 할인이 줄어드는 쪽으로는 안 고친다.
+    const estOf = {};
+    ROWS.forEach(r => { estOf[r.uid || ('n:' + window._normStudentName(r.name))] = r.disc; });
 
     // 청구 대상은 **조사 응답이 아니라 명부**가 기준이다. 조사에서 빠진 학생(마감 뒤 등록한
     // 신규생)도 원비는 낸다 — 응답을 기준으로 잡으면 신규생에게 안내가 안 나간다.
@@ -21987,11 +21992,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const uid = s.uid || '';
         const flat = Number(s.fee) > 0 ? Number(s.fee) : 0;          // 정액 요금제(예: 토요일 이용권)
         const resp = disc[uid] || null;
+        const est = estOf[uid || ('n:' + window._normStudentName(s.name))] || null;
+        const estimate = !flat && !resp;
         const base = flat || BASE_FEE;
-        const w = flat ? 0 : Number((resp && resp.discountFinal) || 0);
+        const w = flat ? 0 : resp ? Number(resp.discountFinal || 0) : Number((est && est.won) || 0);
         return { s, uid, seat: String(s.seat || '').replace('번',''), name: s.name,
-                 base, won: w, pay: Math.max(0, base - w), flat: !!flat,
-                 b: (resp && resp.discountBase) || {} };
+                 base, won: w, pay: Math.max(0, base - w), flat: !!flat, estimate,
+                 b: resp ? (resp.discountBase || {})
+                   : est ? { merit: est.rawMerit, demerit: est.rawDemerit, netMerit: est.netMerit, netDemerit: est.netDemerit } : {} };
       });
     if (!bill.length) { alert('청구할 학생이 없습니다.'); return; }
     try {
@@ -22001,7 +22009,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (snap.metadata.fromCache) throw new Error('기존 청구액 확인 실패');
         if (snap.exists()) {
           const saved = SaebomAdminCore.notice(snap.data(), legacyBase);
-          Object.assign(x, {base:saved.base, pay:saved.pay, won:saved.won, flat:!!saved.flat, existing:true});
+          // 할인이 늘었으면 새 금액으로 고친다(revise). 같거나 줄었으면 이미 안내한 금액을 지킨다.
+          if (!saved.flat && x.won > saved.won) { x.revise = true; x.prevWon = saved.won; }
+          else Object.assign(x, {base:saved.base, pay:saved.pay, won:saved.won, flat:!!saved.flat, existing:true,
+                                 settle: !!saved.estimate && !x.estimate});   // 예상→확정 표시만 바꾼다
         }
       });
     } catch(e) { alert('청구 안내를 중지했습니다: ' + e.message); return; }
@@ -22009,31 +22020,42 @@ document.addEventListener('DOMContentLoaded', function() {
     const sumDisc = bill.reduce((a, x) => a + x.won, 0);
     const nFlat = bill.filter(x => x.flat).length;
     const nNoDisc = bill.filter(x => !x.flat && x.won === 0).length;
+    const nEst = bill.filter(x => x.estimate && !x.existing).length;
+    const nRev = bill.filter(x => x.revise).length;
     if (bid !== _billId() || !isCurrent()) { alert('조사 회차가 바뀌었습니다. 다시 확인해 주세요.'); return; }
     if (!confirm(`${window._surveyMonthLabel(_billId())} 청구 안내를 앱에 띄웁니다.\n\n`
         + `대상 ${bill.length}명 · 청구 합계 ${won(sumPay)}원\n`
         + `할인 ${won(sumDisc)}원 적용 · 할인 없는 학생 ${nNoDisc}명`
         + (nFlat ? ` · 정액 ${nFlat}명` : '')
+        + (nEst ? `\n예상 할인(확정 전 지금 기준)으로 안내 ${nEst}명` : '')
+        + (nRev ? `\n할인이 늘어 금액을 고쳐 다시 안내 ${nRev}명` : '')
         + `\n\n학생앱·학부모앱 로그인 화면에 각자 금액이 뜹니다. 계속할까요?`)) return;
     BUSY = true;
     try {
       const db = await window.waitDb();
       const { doc, setDoc } = window._fs;
       for (const x of bill) {
-        if (x.existing) continue; // 이미 안내한 청구서는 요금 설정이 바뀌어도 보존
         const ref = doc(db, window._BILLING_COL, window._billingDocId(bid, x));
+        if (x.existing) { // 이미 안내한 청구서는 요금 설정이 바뀌어도 보존 — 예상→확정 표시만 바꾼다
+          if (x.settle) await setDoc(ref, { estimate: false }, { merge: true });
+          continue;
+        }
         await window._fs.runTransaction(db, async tx => {
           const current = await tx.get(ref);
-          if (current.exists()) {
+          if (current.exists() && !x.revise) {
             if (current.data().pay !== x.pay || current.data().won !== x.won) throw new Error('다른 기기에서 청구액이 확정되었습니다. 다시 확인해 주세요.');
             return;
           }
+          if (x.revise && (!current.exists() || current.data().won !== x.prevWon)) throw new Error('다른 기기에서 청구액이 바뀌었습니다. 다시 확인해 주세요.');
+          // 통째로 덮어써서 확인 도장(ackStudent·ackParent)을 지운다 — 늘어난 할인을 다시 보여 주려는 것.
+          // 규칙은 확인 뒤에도 할인이 '늘어나는' 수정만 허용한다.
           tx.set(ref, {
           billId: bid, uid: x.uid, name: x.name, seat: x.seat,
-          base: x.base, pay: x.pay, flat: x.flat, won: x.won,
+          base: x.base, pay: x.pay, flat: x.flat, won: x.won, estimate: !!x.estimate,
           rawMerit: Number(x.b.merit || 0), rawDemerit: Number(x.b.demerit || 0),
           netMerit: Number(x.b.netMerit || 0), netDemerit: Number(x.b.netDemerit || 0),
-          pushedAt: window._noticeToday()
+          pushedAt: window._noticeToday(),
+          ...(x.revise ? { revisedFrom: x.prevWon } : {})
           });
         });
       }
