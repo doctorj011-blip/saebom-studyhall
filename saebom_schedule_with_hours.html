@@ -21456,7 +21456,11 @@ document.addEventListener('DOMContentLoaded', function() {
     // 상벌점 집계 — uid 가 있으면 uid 로, 없으면 이름으로(구 기록 폴백). 순위 모달과 같은 규칙.
     const cyc = window._meritCycle();
     const M = {}, P = {};
-    const key = v => v.uid || ('n:' + window._normStudentName(v.name));
+    // uid 가 빠진 기록(학생앱 구 세션이 쓴 벌점 등)은 이름으로 지금 학생의 uid 를 찾아 붙인다.
+    // 이게 없으면 그 벌점이 합계에서 통째로 빠져 할인이 부풀려진다(2026-09 김은호 벌점 10점 누락).
+    const uidByName = {};
+    (window.STUDENTS || []).forEach(s => { if (s.uid && s.name) uidByName[window._normStudentName(s.name)] = s.uid; });
+    const key = v => v.uid || uidByName[window._normStudentName(v.name)] || ('n:' + window._normStudentName(v.name));
     mSnap.forEach(d => { const v = d.data(); if (v.canceled || !window._inMeritCycle(v.date, cyc)) return;
       M[key(v)] = (M[key(v)] || 0) + (Number(v.points) || 0); });
     pSnap.forEach(d => { const v = d.data(); if (!window._inMeritCycle(v.date, cyc)) return;
