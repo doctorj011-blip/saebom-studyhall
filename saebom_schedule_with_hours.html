@@ -21481,7 +21481,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const r = (s.uid && byUid[s.uid]) || byName[window._normStudentName(s.name)] || null;
         const k = s.uid || ('n:' + window._normStudentName(s.name));
         const d = window._surveyDiscount(CFG || {}, M[k] || 0, P[k] || 0);
-        return { seat: seatNum(s.seat), name: s.name, uid: s.uid || '', parent: s.parent || '', resp: r, disc: d };
+        return { seat: seatNum(s.seat), name: s.name, uid: s.uid || '', parent: s.parent || '', resp: r, disc: d,
+                 flat: Number(s.fee) > 0 };   // 정액 요금제 — 청구 때 할인이 0원이 된다(usPushBilling 과 같은 기준)
       })
       .sort((a, b) => a.seat - b.seat);
   }
@@ -21602,6 +21603,9 @@ document.addEventListener('DOMContentLoaded', function() {
       </div>`;
 
     const discSum = yes.reduce((a, r) => a + (r.resp.discountFinal != null ? r.resp.discountFinal : r.disc.won), 0);
+    // 예상 할인 칸 — 응답표·미응답표가 같이 쓴다(미응답도 응답하면 받을 금액을 미리 본다)
+    const discCell = r => r.flat ? '<span style="color:#9a96b8;font-weight:500">정액(할인 없음)</span>'
+      : r.disc.netDemerit > 0 ? '<span style="color:#b45309">벌점 잔여 ' + r.disc.netDemerit + '</span>' : won(r.disc.won) + '원';
 
     const respLine = r => {
       const s = r.resp.student, p = r.resp.parent;
@@ -21651,7 +21655,7 @@ document.addEventListener('DOMContentLoaded', function() {
           <div style="font-size:13px;font-weight:700;color:#b45309">⏳ 미응답 ${none.length}명</div>
           <button onclick="usCopyPending()" style="padding:5px 12px;background:#ffffff;border:1.5px solid #fde68a;border-radius:8px;font-size:11.5px;color:#b45309;font-weight:600;cursor:pointer">📋 명단 복사</button>
         </div>
-        ${table(none.map(r => `<tr>${td('<b>' + r.seat + '</b>')}${td(esc(r.name))}${td(esc(r.parent), 'color:#6B6B8A;white-space:nowrap')}</tr>`).join(''), ['좌석', '이름', '학부모'])}
+        ${table(none.map(r => `<tr>${td('<b>' + r.seat + '</b>')}${td(esc(r.name))}${td(r.disc.rawMerit + ' / ' + r.disc.rawDemerit, 'color:#6B6B8A;white-space:nowrap')}${td(discCell(r), 'font-weight:700;color:#047857;white-space:nowrap')}${td(esc(r.parent), 'color:#6B6B8A;white-space:nowrap')}</tr>`).join(''), ['좌석', '이름', '상점/벌점', '예상 할인', '학부모'])}
       </div>` : ''}
 
       <div class="card">
@@ -21671,7 +21675,7 @@ document.addEventListener('DOMContentLoaded', function() {
             ${td(`<b style="color:${r.resp.want ? '#166534' : '#b3261e'}">${r.resp.want ? '희망' : '안 함'}</b>${r.resp.conflict ? ' <span style="color:#c62828;font-size:10.5px">불일치</span>' : ''}`)}
             ${td(respLine(r), 'font-size:11px;color:#6B6B8A')}
             ${td(r.resp.want ? (d.rawMerit + ' / ' + d.rawDemerit) : '—', 'color:#6B6B8A;white-space:nowrap')}
-            ${td(r.resp.want ? (d.netDemerit > 0 ? '<span style="color:#b45309">벌점 잔여 ' + d.netDemerit + '</span>' : won(d.won) + '원') : '—', 'font-weight:700;color:#047857;white-space:nowrap')}
+            ${td(r.resp.want ? discCell(r) : '—', 'font-weight:700;color:#047857;white-space:nowrap')}
             ${td(fin != null ? '<b>' + won(fin) + '원</b>' : '<span style="color:#c4c2d4">미확정</span>', 'white-space:nowrap')}
             ${td(esc(r.resp.updatedAt || ''), 'color:#9A96B8;white-space:nowrap')}
           </tr>`;
