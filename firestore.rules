@@ -74,6 +74,9 @@ rules_version = '2';
 //                 오염된다. quality·stats 는 여전히 서버 전용
 //   - 2026-09-28  billing_notices — 확인 뒤에도 할인이 '늘어나는' 수정은 허용한다. 확정 전
 //                 예상 할인으로 먼저 안내하고, 이달 상점이 더해지면 늘어난 금액으로 고쳐 다시 띄운다.
+//   - 2026-09-30  경영앱 원비(sm_tuition·sm_aca365)를 sm_ 공통 규칙에서 빼고 원비 권한자만
+//                 (doctorj011 + 이우영 sec9db4…·정원혁 seca095… 실명 계정) 읽고 쓰게 — 그전엔
+//                 로그인한 직원 누구나 가능했다.
 //   - 2026-08-31  billing_notices 추가 — 재등록 할인 확정 금액 개인 안내 게이트.
 //                   금액이 들어 있어 list 를 막고 get 만 연다. 확인 도장이 찍힌 뒤에는
 //                   금액(won)을 못 고친다.
@@ -579,9 +582,21 @@ service cloud.firestore {
     }
 
     // 학생관리앱: sm_ 접두사 컬렉션 (프로토타입 단계: 로그인 필요)
+    //   단, 원비(sm_tuition 월별 청구·강사별 매출, sm_aca365 청구·수납)는 아래 원비 권한자만 — 여기서 뺀다.
     match /{coll}/{docId} {
-      allow read, write: if coll.matches('sm_.*') && request.auth != null;
+      allow read, write: if coll.matches('sm_.*') && !(coll in ['sm_tuition', 'sm_aca365']) && request.auth != null;
     }
+    // 경영앱 원비 — 원장이 정한 사람만(2026-09-30): 콘솔 관리자 계정 + 이우영·정원혁(경영앱 실명 가입 계정 = 이름 UTF-8 hex).
+    //   경영앱 index.html 의 FEE_USERS/FEE_EMAILS 와 같게 유지. 서버 함수(Admin SDK)·REST 스크립트(IAM 토큰)는 규칙을 안 탄다.
+    function isFeeUser() {
+      return request.auth != null && request.auth.token.email in [
+        'doctorj011@gmail.com',
+        'sec9db4ec9ab0ec9881@saebom.app',
+        'seca095ec9b90ed9881@saebom.app'
+      ];
+    }
+    match /sm_tuition/{docId} { allow read, write: if isFeeUser(); }
+    match /sm_aca365/{docId}  { allow read, write: if isFeeUser(); }
 
     // 수납관리: 월별 이용료 납부 기록
     match /payments/{paymentId} {
