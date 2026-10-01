@@ -89,6 +89,13 @@ window._surveyShiftId = function(sid, delta) {
   const d = new Date(ym.y, ym.m - 1 + (Number(delta) || 0), 1);
   return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
 };
+// N월 조사의 할인은 **그 전달 상벌점 주기**로 센다(10월분 = 9월 주기, 9월분 = 7/20~8/31).
+// 오늘 기준 주기를 쓰면 달이 바뀌는 순간(확정·청구는 보통 1일 전후) 전원이 0점이 된다(2026-10-01).
+window._surveyMeritCycle = function(sid) {
+  const prev = window._surveyYM(window._surveyShiftId(sid, -1));
+  if (!prev) return window._meritCycle();
+  return window._meritCycle(prev.y + '-' + String(prev.m).padStart(2, '0') + '-' + String(new Date(prev.y, prev.m, 0).getDate()).padStart(2, '0'));
+};
 window._surveyMonthLabel = function(sid) {
   const ym = window._surveyYM(sid);
   return ym ? (ym.m + '월') : '다음 달';
@@ -257,8 +264,8 @@ window._surveyApply = function(existing, role, want, nowISO) {
 // ── 이번 주기 상점·벌점 합계 (조사 화면의 할인 계산용) ──
 // 상벌점 카드와 같은 규칙으로 센다: 취소된 건 빼고, penalties 는 periods 맵을 펼쳐 교시별로,
 // merits 는 문서의 points 를 더한다. docs 는 이미 '내 것'만 걸러진 배열이어야 한다.
-window._surveyCycleTotals = function(meritDocs, penaltyDocs) {
-  const cyc = window._meritCycle();
+window._surveyCycleTotals = function(meritDocs, penaltyDocs, sid) {
+  const cyc = window._surveyMeritCycle(sid);
   let M = 0, P = 0;
   (meritDocs || []).forEach(d => {
     if (!d || d.canceled) return;
@@ -320,7 +327,7 @@ window._surveyGate = (function() {
   const M = cfg => window._surveyMonthLabel(cfg && cfg.surveyId);                       // '9월'
   const prevM = cfg => window._surveyMonthLabel(window._surveyShiftId(cfg && cfg.surveyId, -1));  // '8월'
   // 할인 확정 기준일 = 이번 상벌점 주기의 끝(7/20~8/31 같은 예외 주기도 그대로 따라간다).
-  const cycleEndLabel = () => window._surveyDateLabel(window._meritCycle().end);
+  const cycleEndLabel = () => window._surveyDateLabel(window._surveyMeritCycle(S.cfg && S.cfg.surveyId).end);
 
   // 설정·응답을 다시 읽어 S 를 갱신한다.
   // 반환: 'block'(막아야 함) | 'pass'(통과·배너) | 'idle'(조사 없음/대상 아님) | 'error'(상태 유지)
@@ -518,7 +525,7 @@ window._surveyGate = (function() {
         S.opt.fetchMine('merits', 'seatKey'),
         S.opt.fetchMine('penalties', 'seatKey')
       ]);
-      const t = window._surveyCycleTotals(merits, penalties);
+      const t = window._surveyCycleTotals(merits, penalties, S.cfg && S.cfg.surveyId);
       _disc = window._surveyDiscount(S.cfg, t.M, t.P);
       paintDiscount();
     } catch (e) { console.warn('상벌점 조회 실패(할인 안내 생략):', e); }

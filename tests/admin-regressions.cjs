@@ -156,3 +156,11 @@ test('09-01 notices without pay/base use the same amount the student app showed'
   assert.equal(core.notice({won:10000,base:80000,pay:80000},300000).pay,80000);
   assert.throws(()=>core.notice({won:1000,pay:1.5},300000));
 });
+test('survey discount uses the month before the survey, not today', () => {
+  const ctx = {window:{}, document:{}};
+  ctx.window = ctx;
+  try { vm.runInNewContext(fs.readFileSync(require('node:path').join(__dirname, '../saebom-common.js'), 'utf8'), ctx); } catch {}
+  assert.equal(JSON.stringify(ctx._surveyMeritCycle('2026-10')), JSON.stringify({start:'2026-09-01', end:'2026-09-30', label:'이번 달'}));
+  assert.equal(ctx._surveyMeritCycle('2026-09').start, '2026-07-20');
+  assert.equal(ctx._surveyMeritCycle('2027-01').end, '2026-12-31');
+});
