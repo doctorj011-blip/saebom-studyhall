@@ -645,7 +645,8 @@ sharp.cache(false);
 sharp.concurrency(1);
 const ANTHROPIC_KEY = defineSecret('ANTHROPIC_API_KEY');
 
-const PLANNER_AI_MODEL = 'claude-opus-5';
+const PLANNER_AI_MODEL = 'claude-opus-5-5';
+const { plannerHabitBlock } = require('./plannerHabits');
 const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"에서 10년 넘게 고등학생을 지도해 온 담임 선생님입니다.
 교재의 난이도 위계와 과목별 공부법을 훤히 알고, 계획과 실행이 어디서 어긋나는지 읽어냅니다.
 학생이 제출한 하루치 스터디 플래너 사진을 검사하고, 플래너 아래에 직접 적어주는 짧은 피드백을 남깁니다.
@@ -835,6 +836,27 @@ const PLANNER_AI_PROMPT = `당신은 자기주도학습 공간 "새봄면학관"
 - 이모티콘, 번호 매기기, 과장된 감탄, "AI"·"분석"·"평가"·"데이터" 같은 단어 금지.
 - 내부용·시스템용 XML 태그를 응답에 넣지 말 것.
 
+[patterns — 이 학생의 습관·약점 (선생님만 본다)]
+코멘트가 '오늘'과 '이번 주'를 본다면, patterns 는 '이 학생이 원래 어떤 식으로 공부하는가'를 적는 자리다.
+선생님이 상담·학부모 면담에서 꺼내 쓸 수 있는, 몇 주에 걸쳐 되풀이되는 모습이어야 한다.
+- [최근 4주 습관 지표]가 주어질 때만 쓴다. 지표가 없으면(기록이 닷새 미만) 빈 배열로 둘 것.
+- 1~3개. kind 는 셋 중 하나:
+  · 약점 — 점수로 이어질 손실이 반복되는 것 (수학 오답 재풀이가 4주간 한 번도 없음, 영어가 주 1~2일뿐,
+    인강 날이 많은데 같은 날 문제집이 없음, 특정 교재만 몇 주째 맴돎)
+  · 습관 — 좋고 나쁨을 떠나 이 학생의 공부 방식 (평일 시작이 늘 21시 이후, 자정을 자주 넘김,
+    주말에 몰아서 평일의 두세 배, 수요일마다 총량이 반토막, 계획을 늘 다 끝냄 = 계획이 헐거울 수 있음)
+  · 강점 — 지켜 줘야 할 것 (단어장이 4주 내내 거의 매일, 오답 정리가 꾸준함)
+- ★약점을 적어도 하나 찾으려고 애쓸 것. 선생님이 가장 알고 싶은 것은 '이 학생이 어디서 새고 있나'다.
+  다만 근거가 없으면 지어내지 말 것.
+- 오늘 하루에서만 보이는 것은 patterns 가 아니다(그건 코멘트의 몫). 여러 날·여러 주에 걸쳐 보여야 한다.
+- evidence 에는 숫자를 그대로 인용할 것 — 지표 블록의 값, 며칠 중 며칠, 어느 날짜들, 어느 교재.
+  ("평일 시작 중앙값 21시, 4주 중 자정 넘긴 날 9일" ○ / "늦게 시작하는 편" ✕)
+- text 는 선생님이 읽는 한 줄 진단이다. 반말·권유체가 아니라 메모체로 짧게 쓴다
+  (예: "평일엔 수학만, 국어·영어는 주말에 몰아서 함").
+- 직전 검사의 패턴(이전 검사 기록의 '그날 본 패턴')이 주어지면, 여전히 맞으면 표현을 크게 바꾸지 말고
+  이어 쓰고, 달라졌으면 달라진 대로 고칠 것. 매번 새로운 걸 찾으려고 패턴을 갈아엎지 말 것.
+- 코멘트에서 이 중 약점 하나를 다뤄도 좋다. 그때도 코멘트 작성 규칙과 말투를 따를 것.
+
 [summary — 선생님만 보는 기록]
 - 무슨 과목·교재를 얼마나 계획하고 실행했는지 2~3문장으로 적을 것.
   시작 시각(평일이면 방과 후 시작 시각)과 하루 총량도 포함할 것.
@@ -953,6 +975,20 @@ const PLANNER_AI_SCHEMA = {
     quality: { type: 'string', enum: ['우수', '양호', '보통', '부실', '판독불가'], description: '플래너 작성 상태 종합 평가' },
     summary: { type: 'string', description: '플래너 내용 요약(관리자용, 2~3문장) — 무슨 과목/교재를 얼마나 계획하고 실행했는지 + 지도할 때 알아 둘 신호 한 문장' },
     comment: { type: 'string', description: '학생에게 보여줄 코멘트(반말 3~5문장) — 오늘 플래너의 구체적 근거에 기반한 학습 진단 하나' },
+    patterns: {
+      type: 'array',
+      description: '최근 4주에 걸쳐 되풀이되는 이 학생의 습관·약점·강점(선생님 전용). 4주 지표가 없으면 빈 배열',
+      items: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: ['약점', '습관', '강점'] },
+          text: { type: 'string', description: '한 줄 진단(메모체)' },
+          evidence: { type: 'string', description: '근거 숫자·날짜·교재' }
+        },
+        required: ['kind', 'text', 'evidence'],
+        additionalProperties: false
+      }
+    },
     stats: {
       type: 'object',
       description: '플래너에서 읽어낸 학습 데이터 — 학습 분석 그래프의 원천',
@@ -1008,7 +1044,7 @@ const PLANNER_AI_SCHEMA = {
       additionalProperties: false
     }
   },
-  required: ['quality', 'summary', 'comment', 'stats'],
+  required: ['quality', 'summary', 'comment', 'patterns', 'stats'],
   additionalProperties: false
 };
 
@@ -1050,10 +1086,10 @@ async function plannerAiHistory(seat, beforeDate, uid) {
     const hs = uid
       ? await db.collection('planner_ai_reviews').where('uid', '==', uid).get()
       : await db.collection('planner_ai_reviews').where('seat', '==', seat).get();
-    const list = hs.docs.map(d => d.data())
+    const all = hs.docs.map(d => d.data())
       .filter(v => v.status === 'done' && v.date && v.date < beforeDate)
-      .sort((a, b) => (a.date < b.date ? 1 : -1))
-      .slice(0, 7);
+      .sort((a, b) => (a.date < b.date ? 1 : -1));
+    const list = all.slice(0, 7);
     if (!list.length) return '';
     // 선생님이 교정한 수치(statsFixed)가 있으면 그걸 쓴다 — 틀린 판독으로 "어제보다 줄었다"는
     // 엉뚱한 비교를 하지 않도록, 이력의 기준도 분석 화면과 같은 교정본이어야 한다.
@@ -1076,6 +1112,10 @@ async function plannerAiHistory(seat, beforeDate, uid) {
       let line = `- ${h.date}(${dow}): ${parts.filter(Boolean).join(', ')}`;
       if (i < 4 && h.summary) line += ` — ${h.summary}`;
       if (i < 3 && h.comment) line += `\n  · 그날 준 코멘트: "${String(h.comment).slice(0, 400)}"`;
+      // 직전 검사의 패턴 — 매번 처음부터 다시 찾지 말고, 이어지는지·바뀌었는지를 보게 한다
+      if (i === 0 && Array.isArray(h.patterns) && h.patterns.length) {
+        line += '\n  · 그날 본 패턴: ' + h.patterns.map(p => `[${p.kind}] ${p.text}`).join(' / ');
+      }
       return line;
     });
 
@@ -1136,7 +1176,8 @@ async function plannerAiHistory(seat, beforeDate, uid) {
           ' 같은 교재가 두 줄로 갈라져 있을 수 있다("문학체화서"와 "문학 체화서"는 같은 책이다).' +
           ' 이름이 비슷하면 같은 교재로 보고, 갈라져 보이는 것을 근거로 "며칠째 안 했다"고 하지 말 것.' +
           '\n※ 글씨 대조용 단서이기도 하다 — 다만 목록에 있다는 이유로 오늘 글씨를 그 이름으로 단정하지는 말 것.'
-        : '');
+        : '') +
+      plannerHabitBlock(all.slice(0, 40), beforeDate);
   } catch (e) {
     logger.warn('plannerAiHistory 조회 실패', { seat, message: e.message });
     return '';
@@ -1229,16 +1270,11 @@ async function plannerAiConfig() {
 // max_tokens 를 16000으로 둔 것은 상한일 뿐이라 안 쓰면 과금되지 않는다. 사고를 켜면
 //   max_tokens 는 사고와 답변의 합에 걸리므로 이 여유가 필요해진다(4096이면 사고하다
 //   JSON 이 잘려 위 사고가 재현된다). 지금은 사고가 꺼져 있지만 켤 때를 대비해 남겨 둔다.
-// thinking: ★반드시 명시할 것. Opus 4.8 은 이 필드를 빼면 사고를 안 했지만 Opus 5 는
-//   빼면 사고를 한다. 빼 두면 모델 문자열만 바꿔도 사고 토큰이 출력 요금($25/1M)으로
-//   붙어 비용이 조용히 오른다. 여기서 끈 이유는 비용을 Opus 4.8 과 똑같이 유지하기
-//   위해서다 — 끈 상태의 Opus 5 는 토큰 단가가 4.8 과 같아서 모델 업그레이드 자체는
-//   추가 비용이 0이다.
-//   ※켜려면 { type: 'adaptive' }. 타임테이블 색칠 칸을 잘못 세는 고질적 오류에는 사고가
-//     도움이 될 가능성이 크지만, 사고 토큰이 얼마나 나오는지 usage 필드로 실측한 뒤에
-//     판단할 것. 켜면 effort 도 함께 내려야 값이 안 튄다('medium' 부터).
-// effort: disabled 와 함께 쓸 때는 'high' 이하여야 한다 — Opus 5 는 disabled + xhigh/max
-//   조합을 400으로 거부한다. 'high' 가 기본값이라 동작은 그대로지만 명시해 둔다.
+// thinking: Opus 5.5 는 사고를 끌 수 없다 — { type: 'disabled' } 를 보내면 400 으로 검사가
+//   전부 실패한다. 깊이는 effort 로만 조절한다. 2026-10-03 Opus 5 (사고 끔·high) → Opus 5.5
+//   (adaptive·medium) 로 바꿨다. 단가가 20% 싸져 사고 토큰 추가분을 대부분 상쇄한다는 계산.
+//   바꾼 뒤 scripts/planner-ai-usage.js 의 '출력' 평균(전환 전 1,568)과 교정률(26.1%)을 다시 볼 것.
+//   effort 를 high 로 올리면 사고 토큰이 늘어 비용이 튄다 — 실측 후에만.
 // 시스템 프롬프트(1만4천자 남짓)는 매 건 완전히 동일해서 캐싱하면 1/10 값이 된다
 // (실시간 검사는 concurrency:1 순차 실행이라 앞 건이 5분 캐시를 데워 주고,
 //  배치도 같은 프롬프트가 몰리므로 적중 가능성이 있다 — 50% 할인과 별도로 겹쳐 적용).
@@ -1247,9 +1283,9 @@ function plannerAiRequestParams(model, sysPrompt, content) {
   return {
     model,
     max_tokens: 16000,
-    thinking: { type: 'disabled' },
+    thinking: { type: 'adaptive' },
     system: [{ type: 'text', text: sysPrompt, cache_control: { type: 'ephemeral' } }],
-    output_config: { effort: 'high', format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
+    output_config: { effort: 'medium', format: { type: 'json_schema', schema: PLANNER_AI_SCHEMA } },
     messages: [{ role: 'user', content }]
   };
 }
@@ -1388,6 +1424,7 @@ async function writePlannerAiResult(reviewRef, seat, dateStr, name, model, msg, 
     seat, date: dateStr, name: name || null,
     status: 'done',
     quality: out.quality, summary: out.summary, comment,
+    patterns: Array.isArray(out.patterns) ? out.patterns.slice(0, 3) : [],
     stats: reconcilePlannerStats(out.stats, { seat, date: dateStr }) || null,
     model,
     // cacheRead 가 0 이면 캐싱이 안 먹고 있는 것(프롬프트가 바뀌었거나 캐시가 식은 뒤 온 요청)

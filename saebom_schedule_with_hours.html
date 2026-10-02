@@ -18439,6 +18439,10 @@ function _apcAiRenderPanel(v) {
         <button onclick="window.apcAiSummaryEdit()" title="요약 수정"
           style="background:none;border:none;color:#9ca3af;font-size:11px;cursor:pointer;padding:0 2px">✏️</button>
       </div>
+      ${(v.patterns || []).length ? `<div style="font-size:12px;color:#555555;line-height:1.55">
+        <b style="color:#1e1b4b">4주 패턴</b>
+        ${v.patterns.map(p => `<div style="margin-top:3px"><span style="font-size:11px;font-weight:700;color:${{ 약점: '#c62828', 습관: '#6b7280', 강점: '#0e7490' }[p.kind] || '#6b7280'}">${_apcEsc(p.kind)}</span> ${_apcEsc(p.text)}<div style="font-size:11px;color:#9ca3af">${_apcEsc(p.evidence)}</div></div>`).join('')}
+      </div>` : ''}
       <div id="apc-ai-stats" style="font-size:12px;color:#555555;line-height:1.55">
         <b style="color:#1e1b4b">수치</b>${v.statsFixed ? ' <span style="color:#0e7490;font-weight:700">(수정됨)</span>' : ''} · ${stLine || '판독된 수치 없음'}
         <button onclick="window.apcAiStatsEdit()" title="수치 수정 — 학습분석에 반영"
