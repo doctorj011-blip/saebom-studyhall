@@ -695,6 +695,14 @@ service cloud.firestore {
       allow delete: if isStudentSid(resource.data.sid);
     }
 
+    // 학부모 리포트(새 모바일 앱, 2026-10). 문서ID = {sid}_{YYYY-MM}.
+    // 쓰기는 서버(appauth:sendParentReport, 관리자 기기 토큰 확인)만 한다 — 클라이언트는 못 쓴다.
+    // 읽기는 그 자녀의 학부모만(앱이 `sid ==` 로 조회한다).
+    match /parent_reports/{id} {
+      allow read: if isParentOf(resource.data.sid);
+      allow write: if false;
+    }
+
     // 그 외 모든 컬렉션은 읽기·쓰기 전부 차단
     match /{document=**} {
       allow read, write: if false;
