@@ -71,6 +71,7 @@ window._computeOffset = function(M, P) {
 // 설정 문서는 하나를 계속 덮어쓰므로, 새 회차를 열 때 **회차별 상태(finalizedAt)를 반드시
 // 비운다** — 안 그러면 9월에 누른 [할인 확정] 도장이 10월 조사에 그대로 찍혀 보인다.
 // 관리앱의 [다음 달 조사] 가 이 초기화와 이월(단가·상한·제외 명단)을 한 번에 한다.
+// ★ 네이티브 앱(saebom-app lib/domain/usage_survey.dart)에도 같은 규칙으로 팝업이 있다 — 대상·병합·할인 규칙을 바꾸면 거기도 고친다.
 window._SURVEY_COL = 'usage_surveys';
 window._SURVEY_CONFIG_ID = '_config';
 
