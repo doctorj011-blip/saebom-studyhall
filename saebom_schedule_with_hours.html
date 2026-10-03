@@ -21612,6 +21612,9 @@ document.addEventListener('DOMContentLoaded', function() {
           할인은 <b>지금 기준</b>입니다. 이 회차 할인은 <b>${esc(window._surveyDateLabel(window._surveyMeritCycle(CFG.surveyId).end))}</b>에 끝나는 상벌점 주기로 계산하므로
           <b>${esc(window._surveyMonthLabel(CFG.surveyId))} 청구 직전에 [할인 확정]</b>을 누르면
           그 시점의 상벌점으로 계산해 각 응답에 박아 둡니다(다시 눌러 갱신할 수 있습니다).
+          청구 안내를 이미 띄웠다면 이어서 반영합니다 — <b>예상보다 할인이 늘어난 학생만</b> 금액을 고쳐 다시 보여 주고,
+          줄어든 학생은 안내한 금액을 그대로 둡니다.<br>
+          '희망'으로 답하면 이용기간이 <b>${esc(window._surveyMonthLabel(CFG.surveyId))} 말일까지 자동 연장</b>되고, '안 함'으로 바꾸면 되돌아갑니다.
         </div>
         ${table(done.map(r => {
           const d = r.disc, fin = r.resp.discountFinal;
@@ -21640,7 +21643,7 @@ document.addEventListener('DOMContentLoaded', function() {
           확정한 금액을 <b>학생앱·학부모앱 로그인 화면에 개인별로</b> 띄웁니다. 공지는 전체에게 같은 글이 나가지만
           이 게이트는 자기 금액만 보여 주고 [확인했습니다]를 받습니다. 확인하면 그 사람에게는 다시 뜨지 않고,
           학생과 학부모의 확인은 따로 셉니다.<br>
-          <b>[할인 확정]을 먼저 누르세요</b> — 확정값이 없는 학생은 안내에서 빠집니다.
+          확정 전에 띄우면 <b>지금 기준 예상 할인</b>으로 안내하고, [할인 확정]을 누르면 늘어난 할인만 고쳐 다시 띄웁니다.
           금액이 0원인 학생에게도 '이번 회차 할인 없음'으로 뜹니다(추가 비용은 없다고 함께 안내됩니다).
         </div>
         <div id="us-billing-status" style="margin-top:8px;font-size:12px;color:#4a3fa8"></div>
@@ -21872,6 +21875,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const targets = ROWS.filter(r => r.resp && r.resp.want);
     if (!targets.length) { alert('희망 응답이 없습니다.'); return; }
     const sum = targets.reduce((a, r) => a + r.disc.won, 0);
+    let pushAfter = false;
     if (!confirm(`희망자 ${targets.length}명의 할인을 지금 기준으로 확정합니다.\n합계 ${won(sum)}원\n\n계속할까요?`)) return;
     BUSY = true;
     try {
@@ -21887,9 +21891,15 @@ document.addEventListener('DOMContentLoaded', function() {
         }, { merge: true });
       }
       await saveCfg({ finalizedAt: stamp });
-      alert(`할인을 확정했습니다. (${targets.length}명 · ${won(sum)}원)`);
-    } catch (e) { console.error(e); alert('확정 실패: ' + e.message); }
+      // 청구 안내를 이미 띄웠으면(조사 때 예상 할인으로) 이어서 다시 띄운다 — 할인이 늘어난 학생만
+      // 새 금액으로 고치고, 나머지는 안내한 금액을 지킨 채 '예상'→'확정' 표시만 바꾼다(usPushBilling).
+      const nc = await window._fs.getDoc(doc(db, window._BILLING_COL, '_config'));
+      pushAfter = nc.exists() && nc.data().active === true && nc.data().billId === CFG.surveyId;
+      alert(`할인을 확정했습니다. (${targets.length}명 · ${won(sum)}원)`
+        + (pushAfter ? '\n\n이어서 청구 안내에 반영합니다 — 할인이 늘어난 학생만 금액이 바뀝니다.' : ''));
+    } catch (e) { console.error(e); alert('확정 실패: ' + e.message); pushAfter = false; }
     finally { BUSY = false; }
+    if (pushAfter) await window.usPushBilling();
   };
 
   // ── 앱 청구 안내 게이트 (billing_notices) ─────────────────────────────

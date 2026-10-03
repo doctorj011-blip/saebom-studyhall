@@ -26,7 +26,7 @@
  *   설정: `firebase functions:secrets:set LG_THINQ_PAT`
  */
 const { onSchedule } = require('firebase-functions/v2/scheduler');
-const { onDocumentCreated } = require('firebase-functions/v2/firestore');
+const { onDocumentCreated, onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { onRequest } = require('firebase-functions/v2/https');
 const { defineSecret } = require('firebase-functions/params');
 const logger = require('firebase-functions/logger');
@@ -2386,5 +2386,43 @@ exports.kakaoScheduleTick = onSchedule(
     });
     const { changed } = await cfSetRuleEnabled(NETBLOCK_RULES.kakao, inClass);
     if (changed) logger.info(`[NetBlock] 카카오 교시연동 → ${inClass ? '차단(교시 중)' : '허용(쉬는 시간)'}`);
+  }
+);
+
+// ---------- 이용조사 '희망' → 이용기간 한 달 연장 ----------
+// 학생·학부모가 웹앱 게이트에서 '계속 이용'을 누르면 students.expiry 를 조사한 달 말일로 늘린다.
+// '이용 안 함'으로 바꾸면 되돌린다. 판정은 surveyExtend.js(자체 검사 있음), 여기는 읽고 쓰기만.
+// 지금 회차(_config.surveyId) 응답만 본다 — 지난 회차 문서를 고쳐도 기간이 움직이지 않게.
+// 응답 문서에 extended 를 쓰면 이 트리거가 다시 불리지만 plan() 이 null 을 돌려 멈춘다.
+const surveyExtend = require('./surveyExtend');
+const { FieldValue } = require('firebase-admin/firestore');
+exports.surveyAutoExtend = onDocumentWritten(
+  { document: 'usage_surveys/{id}', region: 'us-central1', maxInstances: 3 },
+  async (event) => {
+    if (event.params.id === '_config' || !event.data.after.exists) return;
+    const resp = event.data.after.data();
+    const cfg = (await db.doc('usage_surveys/_config').get()).data() || {};
+    if (!resp.surveyId || resp.surveyId !== cfg.surveyId) return;
+    if (resp.want === true ? !!resp.extended : !resp.extended) return;  // 할 일 없는 쓰기(이미 연장·되돌릴 것 없음)는 학생 조회 전에 끊는다
+
+    let stuRef = null;
+    if (resp.uid) {
+      const q = await db.collection('students').where('uid', '==', resp.uid).limit(1).get();
+      if (!q.empty) stuRef = q.docs[0].ref;
+    }
+    if (!stuRef && resp.seat) {
+      const d = await db.collection('students').doc(String(resp.seat).replace(/\D/g, '')).get();
+      if (d.exists && d.data().name === resp.name) stuRef = d.ref;
+    }
+    if (!stuRef) { logger.warn('surveyAutoExtend: 학생 못 찾음', { id: event.params.id, name: resp.name }); return; }
+
+    await db.runTransaction(async tx => {
+      const [r, s] = await Promise.all([tx.get(event.data.after.ref), tx.get(stuRef)]);
+      const p = surveyExtend.plan(r.data(), s.data().expiry);
+      if (!p) return;
+      if (p.expiry !== null) tx.update(stuRef, { expiry: p.expiry });
+      tx.update(event.data.after.ref, { extended: p.extended || FieldValue.delete() });
+      logger.info('surveyAutoExtend', { name: resp.name, want: resp.want, from: s.data().expiry, to: p.expiry });
+    });
   }
 );
