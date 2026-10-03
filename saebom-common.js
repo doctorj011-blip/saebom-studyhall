@@ -501,10 +501,7 @@ window._surveyGate = (function() {
         ${btn(true,  '🙋', '네, 계속 이용할게요', '지금 자리와 시간표 그대로 다닐게요~')}
         ${btn(false, '👋', '아니요, 이용하지 않을게요', `${prevM(cfg)}까지만 이용하고 ${M(cfg)}엔 쉴게요~`)}
       </div>
-      <button type="button" id="survey-submit" ${_pick === null ? 'disabled' : ''}
-        style="width:100%;margin-top:14px;padding:14px;border:none;border-radius:12px;font-family:inherit;
-        font-size:14.5px;font-weight:800;color:#fff;cursor:${_pick === null ? 'default' : 'pointer'};
-        background:${_pick === null ? '#D1D5DB' : pal.key}">${mine ? '변경 저장' : '제출하기'}</button>
+      <div id="survey-submit" style="margin-top:12px;font-size:12.5px;color:#6B7280;text-align:center;min-height:18px"></div>
       ${blocking ? '' : `<button type="button" id="survey-close" style="width:100%;margin-top:8px;padding:11px;border:1px solid #E5E7EB;border-radius:12px;background:#fff;color:#6B7280;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">닫기</button>`}
       <div style="margin-top:12px;font-size:11px;color:#9CA3AF;line-height:1.6">
         마감 전까지는 언제든 바꿀 수 있어요. 학생과 학부모님 응답이 다를 경우 <b>먼저 하신 응답</b>이 반영되고,
@@ -512,10 +509,10 @@ window._surveyGate = (function() {
       </div>`;
 
     card.querySelectorAll('[data-want]').forEach(b => b.addEventListener('click', () => {
+      // 고르는 순간 저장한다 — [제출하기]를 따로 두면 고른 것으로 끝난 줄 알고 닫는 사람이 많다(2026-10-03 원장).
       _pick = b.dataset.want === 'true';
-      render(); paintDiscount();
+      render(); paintDiscount(); submit();
     }));
-    document.getElementById('survey-submit')?.addEventListener('click', submit);
     document.getElementById('survey-close')?.addEventListener('click', close);
     paintDiscount();
   }
@@ -571,7 +568,7 @@ window._surveyGate = (function() {
     if (S.busy || _pick === null) return;
     const btn = document.getElementById('survey-submit');
     S.busy = true;
-    if (btn) { btn.disabled = true; btn.textContent = '저장 중...'; }
+    if (btn) btn.textContent = '저장 중...';
     try {
       const opt = S.opt, st = opt.student || {};
       const id = window._surveyDocId(S.cfg.surveyId, st);
@@ -600,7 +597,7 @@ window._surveyGate = (function() {
     } catch (e) {
       console.error('이용 조사 저장 실패:', e);
       alert('저장에 실패했어요. 잠시 후 다시 눌러 주세요.');
-      if (btn) { btn.disabled = false; btn.textContent = '제출하기'; }
+      _pick = null; render(); paintDiscount();
     } finally { S.busy = false; }
   }
 
