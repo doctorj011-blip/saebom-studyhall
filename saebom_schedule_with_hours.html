@@ -999,7 +999,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
     <button class="tab-btn" data-group="learn" onclick="showGroup('learn',this)">학습<span class="tab-caret" aria-hidden="true">▾</span></button>
     <button class="tab-btn hide-mobile" onclick="showSection('schedule',this)">시간표</button>
     <button class="tab-btn" data-group="notify" onclick="showGroup('notify',this)">알림<span class="tab-caret" aria-hidden="true">▾</span></button>
-    <button class="tab-btn hide-mobile" onclick="showSection('billing',this)">수납</button>
+    <button class="tab-btn hide-mobile director-only" onclick="showSection('billing',this)">수납</button>
     <button class="tab-btn hide-mobile" data-group="logs" onclick="showGroup('logs',this)">기록<span class="tab-caret" aria-hidden="true">▾</span></button>
     <span class="tab-divider" aria-hidden="true"></span>
     <button class="tab-btn director-only" onclick="showSection('settings',this)">설정</button>
@@ -3041,8 +3041,8 @@ window.showSection = function(id,btn){
   if (id !== 'checkin' && !isAdminDevice()) {
     return;
   }
-  // 설정은 원장 기기 전용 (탭 복원 경로도 이 가드를 지나므로 조용히 무시)
-  if (id === 'settings' && !isDirectorDevice()) {
+  // 설정·수납은 원장 기기 전용 (탭 복원 경로도 이 가드를 지나므로 조용히 무시)
+  if ((id === 'settings' || id === 'billing') && !isDirectorDevice()) {
     return;
   }
   // 지워진 화면(신문고 등)이 sessionStorage 에 남아 복원되면 아래 getElementById 가
@@ -5511,7 +5511,7 @@ async function _validateDirectorToken() {
     _applyDirectorUI();
     // 원장 전용 화면이 열려 있었다면 대시보드로 물린다
     const cur = document.querySelector('.section.active');
-    if (cur && cur.id === 'sec-settings') {
+    if (cur && (cur.id === 'sec-settings' || cur.id === 'sec-billing')) {
       const b = document.querySelector('.tab-btn[onclick*="dashboard"]');
       if (b) window.showSection('dashboard', b);
     }
