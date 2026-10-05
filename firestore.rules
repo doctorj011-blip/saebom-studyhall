@@ -74,6 +74,10 @@ rules_version = '2';
 //                 오염된다. quality·stats 는 여전히 서버 전용
 //   - 2026-09-28  billing_notices — 확인 뒤에도 할인이 '늘어나는' 수정은 허용한다. 확정 전
 //                 예상 할인으로 먼저 안내하고, 이달 상점이 더해지면 늘어난 금액으로 고쳐 다시 띄운다.
+//   - 2026-10-05  경영앱 sm_ 를 '로그인한 누구나'에서 승인된 교직원(staff_allow/{uid})만으로.
+//                 학생·학부모 앱 계정 52개·오답노트 계정·직접 가입자가 sm_ 를 읽고 쓸 수 있었다.
+//                 원비(isFeeUser)도 승인 계정이어야 — 아직 가입 안 한 정원혁 이메일을 남이 먼저
+//                 만들면 원비가 열리던 구멍. 승인은 경영앱 서버 함수가 staff_allow 에 쓴다.
 //   - 2026-09-30  경영앱 원비(sm_tuition·sm_aca365)를 sm_ 공통 규칙에서 빼고 원비 권한자만
 //                 (doctorj011 + 이우영 sec9db4…·정원혁 seca095… 실명 계정) 읽고 쓰게 — 그전엔
 //                 로그인한 직원 누구나 가능했다.
@@ -583,13 +587,25 @@ service cloud.firestore {
 
     // 학생관리앱: sm_ 접두사 컬렉션 (프로토타입 단계: 로그인 필요)
     //   단, 원비(sm_tuition 월별 청구·강사별 매출, sm_aca365 청구·수납)는 아래 원비 권한자만 — 여기서 뺀다.
+    // 2026-10-05: 승인된 교직원 계정만 — staff_allow/{uid}(서버·관리자 REST 만 씀). 그전엔 auth != null 이라
+    //   같은 프로젝트의 학생·학부모 앱 계정, 오답노트 계정, 공개 API 키로 직접 가입한 누구나 sm_ 를 읽고 썼다.
+    //   이메일이 아니라 uid 로 묶어, 아직 가입 안 한 직원 이름(s{hex}@saebom.app)을 남이 먼저 가입해도 통과 못 한다.
+    function isSmStaff() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/staff_allow/$(request.auth.uid));
+    }
     match /{coll}/{docId} {
-      allow read, write: if coll.matches('sm_.*') && !(coll in ['sm_tuition', 'sm_aca365']) && request.auth != null;
+      allow read, write: if coll.matches('sm_.*') && !(coll in ['sm_tuition', 'sm_aca365']) && isSmStaff();
+    }
+    // 승인 목록: 본인 문서만 읽기(경영앱이 '승인 대기'를 안내하려고), 쓰기는 서버만.
+    match /staff_allow/{uid} {
+      allow get: if request.auth != null && request.auth.uid == uid;
+      allow list, write: if false;
     }
     // 경영앱 원비 — 원장이 정한 사람만(2026-09-30): 콘솔 관리자 계정 + 이우영·정원혁(경영앱 실명 가입 계정 = 이름 UTF-8 hex).
     //   경영앱 index.html 의 FEE_USERS/FEE_EMAILS 와 같게 유지. 서버 함수(Admin SDK)·REST 스크립트(IAM 토큰)는 규칙을 안 탄다.
     function isFeeUser() {
-      return request.auth != null && request.auth.token.email in [
+      return isSmStaff() && request.auth.token.email in [
         'doctorj011@gmail.com',
         'sec9db4ec9ab0ec9881@saebom.app',
         'seca095ec9b90ed9881@saebom.app'
