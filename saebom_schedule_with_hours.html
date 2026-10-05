@@ -22217,11 +22217,12 @@ document.addEventListener('DOMContentLoaded', function() {
     const d = off ? '' : ((document.getElementById('pt-start') || {}).value || '');
     if (!off && !d) { showAdminToast('⚠️ 날짜를 고르세요'); return; }
     if (!confirm(off ? '포인트 적립을 끕니다. 이미 쌓인 포인트는 그대로 남습니다. 계속할까요?'
-                     : `${d} 입실분부터 포인트를 적립합니다(그 전 세션은 소급하지 않습니다). 계속할까요?`)) return;
+                     : `${d} 입실분부터 포인트를 적립합니다. 그날 이후 이미 퇴실한 세션도 함께 계산합니다(이미 적립된 것은 다시 안 쌓입니다). 계속할까요?`)) return;
     try {
       const r = await call('adminPoints', { action: 'setStart', startDate: d });
       startDate = r.startDate || ''; renderConfig();
-      showAdminToast(startDate ? `✅ ${startDate}부터 적립` : '✅ 적립을 껐습니다');
+      showAdminToast(startDate ? `✅ ${startDate}부터 적립 — 지난 세션 ${r.applied || 0}건 소급` : '✅ 적립을 껐습니다');
+      if (startDate) await window.ptInit();
     } catch (e) { console.error(e); showAdminToast('❌ ' + (e.message || e)); }
   };
 })();
