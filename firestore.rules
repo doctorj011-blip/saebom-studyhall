@@ -79,6 +79,8 @@ rules_version = '2';
 //                 다른 교직원의 '다가오는 입학테스트' 목록은 경영앱 서버 함수(entryUpcoming)가 최소 칸만 준다.
 //   - 2026-10-05  avatar_profiles 추가 — 면학시상대 캐릭터 꾸미기(앱 1.4.3). 읽기 공개, 쓰기는
 //                 본인 sid 만·정해진 칸(성별·피부·머리·머리색·얼굴)만
+//   - 2026-10-05  point_wallets(+entries)·avatar_outfits 추가 — 순공 포인트·아이템샵(앱 1.4.4).
+//                 지갑은 본인·학부모만 읽기, 입은 옷은 공개 읽기, 쓰기는 전부 서버(appauth)만
 //   - 2026-10-05  경영앱 sm_ 를 '로그인한 누구나'에서 승인된 교직원(staff_allow/{uid})만으로.
 //                 학생·학부모 앱 계정 52개·오답노트 계정·직접 가입자가 sm_ 를 읽고 쓸 수 있었다.
 //                 원비(isFeeUser)도 승인 계정이어야 — 아직 가입 안 한 정원혁 이메일을 남이 먼저
@@ -758,6 +760,23 @@ service cloud.firestore {
         && request.resource.data.hairColor is int
         && request.resource.data.hair is string && request.resource.data.hair.size() <= 20
         && request.resource.data.face is string && request.resource.data.face.size() <= 20;
+    }
+
+    // 순공 포인트·아이템샵(새 모바일 앱, 2026-10). 쓰기는 서버(appauth 의 pointsOnSession·
+    // buyItem·adjustPoints)만 — 학생이 잔액·보유 목록을 직접 고치면 안 된다.
+    // 읽기는 본인과 그 학부모만(잔액·벌점 내역은 남이 볼 것이 아니다).
+    match /point_wallets/{sid} {
+      allow read: if isStudentSid(sid) || isParentOf(sid);
+      allow write: if false;
+      match /entries/{id} {
+        allow read: if isStudentSid(sid) || isParentOf(sid);
+        allow write: if false;
+      }
+    }
+    // 입은 옷(산 것만, equipOutfit 이 검증해 씀). 시상대에 보여야 하므로 읽기는 공개.
+    match /avatar_outfits/{sid} {
+      allow read: if true;
+      allow write: if false;
     }
 
     // 그 외 모든 컬렉션은 읽기·쓰기 전부 차단
