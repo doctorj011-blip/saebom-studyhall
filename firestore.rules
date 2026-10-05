@@ -74,6 +74,9 @@ rules_version = '2';
 //                 오염된다. quality·stats 는 여전히 서버 전용
 //   - 2026-09-28  billing_notices — 확인 뒤에도 할인이 '늘어나는' 수정은 허용한다. 확정 전
 //                 예상 할인으로 먼저 안내하고, 이달 상점이 더해지면 늘어난 금액으로 고쳐 다시 띄운다.
+//   - 2026-10-06  경영앱 '내 할 일'(todo.html — 이원장 주간 할 일 보드를 옮긴 것) 개인 일정 sm_mine 추가.
+//                 sm_ 공통 규칙에서 빼고 일일테스트 권한자 중 문서 owner(로그인 이메일) 본인만 읽고 쓴다.
+//                 할 일·수업 준비 등 나머지(sm_dailyTodo·sm_dailyPrep·sm_dailyGoals·sm_dailyIdeas·sm_dailyTodoMeta)는 sm_daily* 규칙 그대로.
 //   - 2026-10-05  경영앱 일일테스트(sm_daily*)·입학테스트(sm_entry*)를 sm_ 공통 규칙에서 빼고 권한자만
 //                 (isDailyUser = 원장 두 분, isEntryUser = 이우영·이지은·남궁준·doctorj011). 둘 다 승인(isSmStaff) 먼저.
 //                 다른 교직원의 '다가오는 입학테스트' 목록은 경영앱 서버 함수(entryUpcoming)가 최소 칸만 준다.
@@ -605,7 +608,7 @@ service cloud.firestore {
     //   권한 명단은 경영앱 저장소 perms.js·functions/perms.js 와 같게 — 권한을 바꾸면 세 곳을 같이(경영앱 CLAUDE.md '권한').
     match /{coll}/{docId} {
       allow read, write: if coll.matches('sm_.*') && (
-           (!(coll in ['sm_tuition', 'sm_aca365']) && !coll.matches('sm_(daily|entry).*') && isSmStaff())
+           (!(coll in ['sm_tuition', 'sm_aca365', 'sm_mine']) && !coll.matches('sm_(daily|entry).*') && isSmStaff())
         || (coll.matches('sm_daily.*') && isDailyUser())
         || (coll.matches('sm_entry.*') && isEntryUser()));
     }
@@ -625,6 +628,15 @@ service cloud.firestore {
         'sec9db4eca780ec9d80@saebom.app',
         'seb82a8eab681eca480@saebom.app'
       ];
+    }
+    // 2026-10-06: 경영앱 '내 할 일' 개인 일정 — 문서마다 owner = 쓴 사람 로그인 이메일, 그 본인만(일일테스트 권한자 중).
+    //   화면(todo.html)은 이우영 계정에만 개인 칸을 열고, 읽기는 where('owner','==',내 이메일) 질의로만 한다(그래야 list 가 통과).
+    match /sm_mine/{docId} {
+      allow read: if isDailyUser() && resource.data.owner == request.auth.token.email;
+      allow create: if isDailyUser() && request.resource.data.owner == request.auth.token.email;
+      allow update: if isDailyUser() && resource.data.owner == request.auth.token.email
+                    && request.resource.data.owner == request.auth.token.email;
+      allow delete: if isDailyUser() && (resource == null || resource.data.owner == request.auth.token.email);
     }
     // 승인 목록: 본인 문서만 읽기(경영앱이 '승인 대기'를 안내하려고), 쓰기는 서버만.
     match /staff_allow/{uid} {
