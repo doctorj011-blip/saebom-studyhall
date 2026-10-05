@@ -1369,6 +1369,17 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   <div id="us-body"></div>
 </div>
 
+<!-- 순공 포인트 (2026-10, 면학시상대 아이템샵) -->
+<div id="sec-points" class="section">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-size:15px;font-weight:700;color:#1e1b4b">🪙 순공 포인트</div>
+    <button onclick="ptInit()" style="padding:6px 12px;background:#eef2ff;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;color:#4a3fa8;cursor:pointer;font-weight:600">🔄 새로고침</button>
+  </div>
+  <div id="pt-config" class="card" style="margin-bottom:12px"></div>
+  <div id="pt-detail"></div>
+  <div id="pt-body"></div>
+</div>
+
 <!-- 문자 발신내역 -->
 <div id="sec-smslog" class="section">
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
@@ -2730,7 +2741,7 @@ window.isTabHiddenOnMobile = isTabHiddenOnMobile;
 // 상단바 HTML의 data-group과 목록을 항상 같이 고칠 것.
 // ══════════════════════════════════════════════════════════════════════
 const TAB_GROUPS = {
-  learn:  { items: [['planner','플래너'],['analytics','학습분석'],['hours','공부시간'],['report','리포트']] },
+  learn:  { items: [['planner','플래너'],['analytics','학습분석'],['hours','공부시간'],['report','리포트'],['points','포인트']] },
   notify: { items: [['notice','공지'],['events','이벤트']] },
   logs:   { items: [['smslog','문자'],['usagelog','사용기록'],['netlog','와이파이']] },
 };
@@ -3072,6 +3083,7 @@ window.showSection = function(id,btn){
   if (id === 'students') { if (window.refreshSummerMinutes) window.refreshSummerMinutes(); }  // ⏱ SUMMER 누적 갱신
   if (id === 'schoolcal') { if (window.scalInit) window.scalInit(); }
   if (id === 'usagesurvey') { if (window.usInit) window.usInit(); }
+  if (id === 'points') { if (window.ptInit) window.ptInit(); }
   try {
     sessionStorage.setItem('saebom_active_tab', id);
     if (SECTION_GROUP[id]) sessionStorage.setItem('saebom_group_' + SECTION_GROUP[id], id);
@@ -22067,6 +22079,150 @@ document.addEventListener('DOMContentLoaded', function() {
         학생 확인 <b>${ackS}</b> · 학부모 확인 <b>${ackP}</b>` +
         (pend.length ? `<div style="margin-top:4px;font-size:11.5px;color:#b45309">아직 안 본 사람 — ${pend.map(x => esc(x)).join(' · ')}</div>` : '');
     } catch (e) { console.error(e); if (el) el.textContent = '확인 실패: ' + e.message; }
+  };
+})();
+</script>
+
+
+<!-- ══ 순공 포인트 (point_wallets) — 학생별 잔액·내역, 부정행위 차감·지급, 적립 시작일 ══ -->
+<script>
+// 관리앱은 로그인이 없어 지갑(본인·학부모만 읽기)을 직접 못 읽는다 — 서버(appauth:adminPoints·
+// adjustPoints)가 관리자 기기 토큰을 확인하고 대신 읽고 쓴다. 규칙: 순공 1분 = 0.5P,
+// 퇴실을 안 찍고 나가면 그날 적립 없이 −30P(자동). 여기서는 사람이 판단할 것만 한다.
+(function() {
+  const FN = 'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/';
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const KIND = { earn: ['적립', '#166534'], penalty: ['퇴실 미처리', '#b3261e'], spend: ['구매', '#1d4ed8'], adjust: ['관리자 조정', '#7c3aed'] };
+  let wallets = [], startDate = '', openSid = '';
+
+  async function call(name, data) {
+    // ⚠️ ADMIN_TOKEN_KEY 와 같은 값(스크립트 블록이 달라 상수를 못 나눈다)
+    const token = localStorage.getItem('saebom_admin_token');
+    if (!token) throw new Error('관리자 기기로 등록된 PC 에서만 쓸 수 있습니다');
+    const res = await fetch(FN + name, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: Object.assign({ token }, data) }),
+      signal: AbortSignal.timeout(30000)
+    });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok || json.error) throw new Error((json.error && json.error.message) || `서버 오류 ${res.status}`);
+    return json.result || {};
+  }
+
+  const students = () => (window.STUDENTS || []).filter(s => s && s.uid);
+  const seatOf = s => parseInt(String(s.seat || '').replace('번', '')) || 0;
+  const nameOf = sid => { const s = students().find(x => x.uid === sid); return s ? s.name : sid; };
+
+  function renderConfig() {
+    const el = document.getElementById('pt-config');
+    if (!el) return;
+    const director = typeof isDirectorDevice === 'function' && isDirectorDevice();
+    el.innerHTML = `<div style="font-size:13px;line-height:1.7">
+        <b>적립 상태:</b> ${startDate ? `<b style="color:#166534">켜짐</b> — ${esc(startDate)} 입실분부터` : '<b style="color:#b3261e">꺼짐</b> (아무것도 쌓이지 않음)'}
+        <div style="color:#6B6B8A;font-size:12px">순공 1분 = 0.5P · 퇴실 미처리는 그날 적립 없이 −30P(자동) · 부정행위는 아래 표에서 학생을 골라 차감</div>
+      </div>
+      ${director ? `<div style="margin-top:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <input id="pt-start" type="date" value="${esc(startDate)}" style="padding:5px 8px;border:1.5px solid #c7c2f0;border-radius:7px;font-size:12px">
+        <button onclick="ptSetStart(false)" style="padding:5px 12px;background:#4a3fa8;color:#fff;border:0;border-radius:7px;font-size:12px;cursor:pointer">이 날부터 적립</button>
+        ${startDate ? '<button onclick="ptSetStart(true)" style="padding:5px 12px;background:#fff;color:#b3261e;border:1.5px solid #f3b4ae;border-radius:7px;font-size:12px;cursor:pointer">적립 끄기</button>' : ''}
+      </div>` : '<div style="margin-top:6px;color:#9A96B8;font-size:11.5px">적립 켜고 끄기는 원장 기기에서만</div>'}`;
+  }
+
+  function renderBody() {
+    const el = document.getElementById('pt-body');
+    if (!el) return;
+    const byId = Object.fromEntries(wallets.map(w => [w.sid, w]));
+    const rows = students().map(s => Object.assign({ name: s.name, seat: seatOf(s) },
+      byId[s.uid] || { sid: s.uid, balance: 0, earned: 0, penalty: 0, spent: 0, adjusted: 0 }, { sid: s.uid }))
+      .sort((a, b) => a.seat - b.seat);
+    const td = (v, st) => `<td style="padding:6px 8px;border-top:1px solid #eeeaf8;${st || ''}">${v}</td>`;
+    el.innerHTML = `<div class="card" style="overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:12.5px">
+      <thead><tr>${['좌석', '이름', '잔액', '적립', '퇴실 미처리', '구매', '조정', '']
+        .map(c => `<th style="padding:7px 8px;text-align:left;color:#4a3fa8;font-weight:700;white-space:nowrap">${c}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr${r.sid === openSid ? ' style="background:#f5f3ff"' : ''}>
+        ${td('<b>' + r.seat + '</b>')}${td(esc(r.name))}
+        ${td('<b>' + r.balance + 'P</b>', r.balance < 0 ? 'color:#b3261e' : '')}
+        ${td('+' + r.earned, 'color:#166534')}${td(r.penalty ? '−' + r.penalty : '0', r.penalty ? 'color:#b3261e' : 'color:#9A96B8')}
+        ${td(r.spent ? '−' + r.spent : '0', 'color:#6B6B8A')}${td(r.adjusted || 0, r.adjusted ? 'color:#7c3aed' : 'color:#9A96B8')}
+        ${td(`<button onclick="ptOpen('${esc(r.sid)}')" style="padding:3px 9px;background:#eef2ff;border:1px solid #8f82e4;border-radius:6px;font-size:11.5px;color:#4a3fa8;cursor:pointer">내역·조정</button>`)}
+      </tr>`).join('')}</tbody></table></div>`;
+  }
+
+  window.ptInit = async function() {
+    const el = document.getElementById('pt-body');
+    if (el) el.innerHTML = '<div style="text-align:center;padding:32px;color:#aaaaaa;font-size:13px">불러오는 중...</div>';
+    try {
+      const r = await call('adminPoints', { action: 'list' });
+      wallets = r.wallets || []; startDate = r.startDate || '';
+      renderConfig(); renderBody();
+      if (openSid) window.ptOpen(openSid);
+    } catch (e) { console.error(e); if (el) el.innerHTML = '<div style="color:#dc2626;padding:16px">불러오기 실패: ' + esc(e.message) + '</div>'; }
+  };
+
+  window.ptOpen = async function(sid) {
+    openSid = sid; renderBody();
+    const el = document.getElementById('pt-detail');
+    if (!el) return;
+    el.innerHTML = '<div class="card" style="margin-bottom:12px;color:#aaaaaa;font-size:13px">불러오는 중...</div>';
+    try {
+      const r = await call('adminPoints', { action: 'detail', sid });
+      const w = r.wallet || {};
+      const list = (r.entries || []).map(e => {
+        const k = KIND[e.kind] || [e.kind, '#333'];
+        return `<tr><td style="padding:4px 8px;color:#6B6B8A;white-space:nowrap">${esc(e.date)}</td>
+          <td style="padding:4px 8px;color:${k[1]};white-space:nowrap">${k[0]}</td>
+          <td style="padding:4px 8px">${esc(e.kind === 'spend' ? (e.ref + ' 구매') : e.reason)}</td>
+          <td style="padding:4px 8px;text-align:right;font-weight:700;color:${e.amount < 0 ? '#b3261e' : '#166534'}">${e.amount > 0 ? '+' : ''}${e.amount}P</td></tr>`;
+      }).join('');
+      el.innerHTML = `<div class="card" style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+          <div style="font-weight:700;color:#1e1b4b">${esc(nameOf(sid))} — 잔액 <b>${w.balance || 0}P</b></div>
+          <button onclick="ptClose()" style="padding:3px 9px;background:#fff;border:1px solid #c7c2f0;border-radius:6px;font-size:11.5px;cursor:pointer">닫기</button>
+        </div>
+        <div style="margin:10px 0;padding:10px;background:#faf9ff;border:1px solid #e4e0fb;border-radius:8px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:12.5px">
+          <select id="pt-sign" style="padding:5px;border:1.5px solid #c7c2f0;border-radius:7px"><option value="-1">차감</option><option value="1">지급</option></select>
+          <input id="pt-amount" type="number" min="1" max="10000" placeholder="포인트" style="width:90px;padding:5px 8px;border:1.5px solid #c7c2f0;border-radius:7px">
+          <input id="pt-reason" maxlength="100" placeholder="사유 (예: 대리 입실 적발 10/5)" style="flex:1;min-width:180px;padding:5px 8px;border:1.5px solid #c7c2f0;border-radius:7px">
+          <button onclick="ptAdjust()" style="padding:5px 12px;background:#b3261e;color:#fff;border:0;border-radius:7px;cursor:pointer">적용</button>
+        </div>
+        <div style="font-size:11.5px;color:#9A96B8;margin-bottom:4px">최근 50건 — 학생·학부모 앱의 포인트 내역에도 사유가 그대로 보입니다</div>
+        <table style="border-collapse:collapse;width:100%;font-size:12px">${list || '<tr><td style="padding:8px;color:#aaaaaa">아직 내역이 없습니다</td></tr>'}</table>
+      </div>`;
+    } catch (e) { console.error(e); el.innerHTML = '<div class="card" style="color:#dc2626">불러오기 실패: ' + esc(e.message) + '</div>'; }
+  };
+
+  window.ptClose = function() {
+    openSid = '';
+    const el = document.getElementById('pt-detail');
+    if (el) el.innerHTML = '';
+    renderBody();
+  };
+
+  window.ptAdjust = async function() {
+    const sign = parseInt((document.getElementById('pt-sign') || {}).value || '-1');
+    const n = parseInt((document.getElementById('pt-amount') || {}).value || '0');
+    const reason = ((document.getElementById('pt-reason') || {}).value || '').trim();
+    if (!(n > 0 && n <= 10000)) { showAdminToast('⚠️ 포인트를 1~10000 사이로 적으세요'); return; }
+    if (!reason) { showAdminToast('⚠️ 사유를 적으세요 — 학생 앱 내역에 그대로 보입니다'); return; }
+    const amount = sign * n;
+    if (!confirm(`${nameOf(openSid)} 학생 포인트를 ${amount > 0 ? '+' : ''}${amount}P ${amount < 0 ? '차감' : '지급'}합니다.\n사유: ${reason}\n계속할까요?`)) return;
+    try {
+      await call('adjustPoints', { sid: openSid, amount, reason });
+      showAdminToast(`✅ ${nameOf(openSid)} ${amount > 0 ? '+' : ''}${amount}P 적용`);
+      await window.ptInit();
+    } catch (e) { console.error(e); showAdminToast('❌ ' + (e.message || e)); }
+  };
+
+  window.ptSetStart = async function(off) {
+    const d = off ? '' : ((document.getElementById('pt-start') || {}).value || '');
+    if (!off && !d) { showAdminToast('⚠️ 날짜를 고르세요'); return; }
+    if (!confirm(off ? '포인트 적립을 끕니다. 이미 쌓인 포인트는 그대로 남습니다. 계속할까요?'
+                     : `${d} 입실분부터 포인트를 적립합니다(그 전 세션은 소급하지 않습니다). 계속할까요?`)) return;
+    try {
+      const r = await call('adminPoints', { action: 'setStart', startDate: d });
+      startDate = r.startDate || ''; renderConfig();
+      showAdminToast(startDate ? `✅ ${startDate}부터 적립` : '✅ 적립을 껐습니다');
+    } catch (e) { console.error(e); showAdminToast('❌ ' + (e.message || e)); }
   };
 })();
 </script>
