@@ -2564,6 +2564,12 @@ window.isAdminSeat = function(seat) {
 // 알림톡 시험 좌석 — 관리자석·테스트 계정이지만 알림톡만큼은 일반 학부모와 똑같이 받는다.
 // 원장 54번(2026-10): 알림톡 → 앱 푸시 전환을 실제로 겪어 보려고. 집계 제외는 그대로다.
 window.ALIMTALK_TEST_SEATS = ['54'];
+// 학부모 알림톡 종료일(이날 0시부터 안 보냄) — 입퇴실·스케줄 변경·미입실·식사 외출 전부
+// 앱 푸시(appauth:parentPush)로 넘어갔다. 서버 utils.ALIMTALK_END_DATE 와 짝.
+window.ALIMTALK_END_DATE = '2026-10-11';
+window.alimtalkEnded = function() {
+  return new Date().toLocaleDateString('sv-SE') >= window.ALIMTALK_END_DATE; // 키오스크 로컬(KST) YYYY-MM-DD
+};
 window.skipsAlimtalk = function(student) {
   if (window.ALIMTALK_TEST_SEATS.includes(String(student.seat))) return false;
   return window.isTestStudent(student.name) || window.isAdminSeat(student.seat);
@@ -7105,6 +7111,7 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
   // → 학부모 번호가 없는 관리자 등도 알림톡 실패 토스트 없이 입퇴실 처리된다.
   if (parentPhone.length < 10) return;
 
+  if (window.alimtalkEnded()) { console.log(`[알림톡] 종료(${window.ALIMTALK_END_DATE}~) — ${student.name} 입퇴실 알림톡 생략`); return; }
   // 학부모가 앱 푸시(서버가 이미 보냄)를 받고 있으면 알림톡 생략
   if (window._parentAppReach && await window._parentAppReach(student.name, isCheckout ? 'checkout' : 'checkin') > 0) {
     console.log(`[알림톡] ${student.name} 학부모 앱 푸시 수신 중 — 알림톡 생략`);
@@ -7215,6 +7222,13 @@ async function sendAwaySMS(student, isReturn, timeStr, mealName) {
   const text = isReturn
     ? `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 ${mealName} 식사 외출에서 복귀하였습니다.😊`
     : `[새봄면학관]\n${student.name} 학생이 ${timeStr}에 ${mealName} 식사를 위해 외출하였습니다.`;
+
+  // 학부모가 앱을 쓰면 푸시로 보내고 알림톡은 생략
+  if (await window._parentAppReach(student.name, 'away', text.replace('[새봄면학관]\n', '')) > 0) {
+    showAdminToast(`📱 ${student.name} ${typeLabel} 앱 푸시 발송`);
+    return;
+  }
+  if (window.alimtalkEnded()) { console.log(`[식사외출알림] 알림톡 종료 — ${student.name} 학부모 앱 미설치`); return; }
 
   console.log(`[식사외출알림] 발송 시도 → ${student.name} (${parentPhone}) ${typeLabel}`, templateId ? '알림톡' : '문자(LMS)');
 
@@ -15184,6 +15198,8 @@ function _autoHandleScheduleChange(alertObj) {
       } else if (r.success) {
         console.log(`[자동문자] ${student.name} 스케줄 변경 알림톡 발송 완료`);
         if (window.showAdminToast) window.showAdminToast(`📨 ${student.name} 스케줄 변경 알림톡 자동 발송`);
+      } else if (r.error === 'ended') {
+        console.log(`[자동문자] ${student.name}: 알림톡 종료 — 학부모 앱 미설치라 알림 없음`);
       } else if (r.error === 'no-phone') {
         console.warn(`[자동문자] ${student.name}: 학부모 번호 없음 — 발송 생략`);
       } else {
@@ -15423,6 +15439,16 @@ window.sendAbsentAlert = async function(idx) {
   const text = `[새봄면학관]
 ${a.name} 학생이 ${a.period}(${a.time}) 시작 시간이 지났으나 아직 입실하지 않았습니다. 확인부탁드립니다.(근심)`;
   showAdminToast(`📤 ${a.name} 학부모님께 발송 중...`);
+  // 학부모가 앱을 쓰면 푸시로 보내고 알림톡은 생략
+  if (await window._parentAppReach(a.name, 'absent', text.replace('[새봄면학관]\n', '').replace('(근심)', '')) > 0) {
+    showAdminToast(`📱 ${a.name} 학부모님께 앱 푸시를 보냈습니다`);
+    if (window._markAbsentSmsSent) window._markAbsentSmsSent(a.name, a.period);
+    return;
+  }
+  if (window.alimtalkEnded()) {
+    showAdminToast(`⚠️ 알림톡은 ${window.ALIMTALK_END_DATE}부터 종료 — ${a.name} 학부모가 앱을 설치하지 않아 보낼 수 없습니다`);
+    return;
+  }
   try {
     const sendFn = window.solapiAlimtalkSend;
     if (!sendFn) { showAdminToast('⚠️ 알림톡 모듈 로드 전입니다. 잠시 후 다시 시도하세요'); return; }
@@ -16813,6 +16839,7 @@ async function _sendScheduleAlimtalk(student, changes) {
   if (await window._parentAppReach(studentName, 'schedule', changeContent) > 0) {
     return { success: true, pushed: true };
   }
+  if (window.alimtalkEnded()) return { success: false, error: 'ended' };
 
   const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   try {
@@ -16849,6 +16876,8 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
     renderScheduleAlerts();
     // 문자발송됨 상태를 다른 기기에도 전파
     window._syncScheduleAlertStates({ [_getScheduleAlertId(alert)]: { s: true } });
+  } else if (r.error === 'ended') {
+    showAdminToast(`알림톡은 ${window.ALIMTALK_END_DATE}부터 종료 — 학부모가 앱을 설치해야 받습니다`);
   } else if (r.error === 'no-phone') {
     showAdminToast('⚠️ 부모님 번호가 등록되지 않았습니다');
   } else if (r.error === 'module-not-ready') {
