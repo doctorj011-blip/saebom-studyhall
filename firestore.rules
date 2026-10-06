@@ -74,6 +74,8 @@ rules_version = '2';
 //                 오염된다. quality·stats 는 여전히 서버 전용
 //   - 2026-09-28  billing_notices — 확인 뒤에도 할인이 '늘어나는' 수정은 허용한다. 확정 전
 //                 예상 할인으로 먼저 안내하고, 이달 상점이 더해지면 늘어난 금액으로 고쳐 다시 띄운다.
+//   - 2026-10-06  경영앱 새봄 문항은행 sm_bank 추가 — sm_ 공통 규칙에서 빼고 읽기는 일일테스트 권한자(원장 두 분)만,
+//                 쓰기는 관리자 REST(원장 PC bank_sync.py)만. 그림은 Storage bank/figs(규칙은 막힌 채, 토큰 주소로 봄).
 //   - 2026-10-06  경영앱 '내 할 일'(todo.html — 이원장 주간 할 일 보드를 옮긴 것) 개인 일정 sm_mine 추가.
 //                 sm_ 공통 규칙에서 빼고 일일테스트 권한자 중 문서 owner(로그인 이메일) 본인만 읽고 쓴다.
 //                 할 일·수업 준비 등 나머지(sm_dailyTodo·sm_dailyPrep·sm_dailyGoals·sm_dailyIdeas·sm_dailyTodoMeta)는 sm_daily* 규칙 그대로.
@@ -608,7 +610,7 @@ service cloud.firestore {
     //   권한 명단은 경영앱 저장소 perms.js·functions/perms.js 와 같게 — 권한을 바꾸면 세 곳을 같이(경영앱 CLAUDE.md '권한').
     match /{coll}/{docId} {
       allow read, write: if coll.matches('sm_.*') && (
-           (!(coll in ['sm_tuition', 'sm_aca365', 'sm_mine']) && !coll.matches('sm_(daily|entry).*') && isSmStaff())
+           (!(coll in ['sm_tuition', 'sm_aca365', 'sm_mine', 'sm_bank']) && !coll.matches('sm_(daily|entry).*') && isSmStaff())
         || (coll.matches('sm_daily.*') && isDailyUser())
         || (coll.matches('sm_entry.*') && isEntryUser()));
     }
@@ -637,6 +639,12 @@ service cloud.firestore {
       allow update: if isDailyUser() && resource.data.owner == request.auth.token.email
                     && request.resource.data.owner == request.auth.token.email;
       allow delete: if isDailyUser() && (resource == null || resource.data.owner == request.auth.token.email);
+    }
+    // 2026-10-06: 새봄 문항은행 — 문항 1개 = 문서 1개(+ _meta). 정본은 원장 PC 의 bank.db, 관리자 REST(bank_sync.py)만 쓴다.
+    //   시험 문항이라 학생에게 새면 안 된다 → 읽기는 일일테스트 권한자(원장 두 분)만, 화면에서 쓰기 없음.
+    match /sm_bank/{docId} {
+      allow read: if isDailyUser();
+      allow write: if false;
     }
     // 승인 목록: 본인 문서만 읽기(경영앱이 '승인 대기'를 안내하려고), 쓰기는 서버만.
     match /staff_allow/{uid} {
