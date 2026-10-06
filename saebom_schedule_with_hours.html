@@ -2561,6 +2561,13 @@ window.isAdminSeat = function(seat) {
   // 배치도 고정칸(ADMIN_FIXED)에만 있는 좌석도 관리자석으로 본다(관리자석을 늘릴 때 대비)
   return !!(window.ADMIN_FIXED && Object.values(window.ADMIN_FIXED).some(a => a.n === n));
 };
+// 알림톡 시험 좌석 — 관리자석·테스트 계정이지만 알림톡만큼은 일반 학부모와 똑같이 받는다.
+// 원장 54번(2026-10): 알림톡 → 앱 푸시 전환을 실제로 겪어 보려고. 집계 제외는 그대로다.
+window.ALIMTALK_TEST_SEATS = ['54'];
+window.skipsAlimtalk = function(student) {
+  if (window.ALIMTALK_TEST_SEATS.includes(String(student.seat))) return false;
+  return window.isTestStudent(student.name) || window.isAdminSeat(student.seat);
+};
 window.isAdminName = function(name) {
   const s = (window.STUDENTS || []).find(x => x.name === name);
   return !!(s && window.isAdminSeat && window.isAdminSeat(s.seat));
@@ -7092,11 +7099,17 @@ async function sendCheckinSMS(student, isCheckout, timeStr, totalMin) {
     return;
   }
   // 테스트 계정·관리자석(54~63번)은 입퇴실 알림톡을 보내지 않는다
-  if (window.isTestStudent(student.name) || window.isAdminSeat(student.seat)) return;
+  if (window.skipsAlimtalk(student)) return;
   const parentPhone = (student.parent || '').replace(/-/g, '');
   // 유효한 휴대폰 번호(010+8자리)만 발송. 미등록('010'만 있거나 미완성)이면 조용히 생략
   // → 학부모 번호가 없는 관리자 등도 알림톡 실패 토스트 없이 입퇴실 처리된다.
   if (parentPhone.length < 10) return;
+
+  // 학부모가 앱 푸시(서버가 이미 보냄)를 받고 있으면 알림톡 생략
+  if (window._parentAppReach && await window._parentAppReach(student.name, isCheckout ? 'checkout' : 'checkin') > 0) {
+    console.log(`[알림톡] ${student.name} 학부모 앱 푸시 수신 중 — 알림톡 생략`);
+    return;
+  }
 
   const type      = isCheckout ? 'out' : 'in';
   const typeLabel = isCheckout ? '퇴실' : '입실';
@@ -7190,7 +7203,7 @@ async function sendAwaySMS(student, isReturn, timeStr, mealName) {
   }
   if (!MEAL_AWAY_SMS) return;
   if (student.mealAwaySms !== true) return;        // 수신 희망자만 (이중 방어)
-  if (window.isTestStudent(student.name) || window.isAdminSeat(student.seat)) return;  // 테스트·관리자 계정은 발송 안 함
+  if (window.skipsAlimtalk(student)) return;  // 테스트·관리자 계정은 발송 안 함(시험 좌석 54 제외)
   const parentPhone = (student.parent || '').replace(/-/g, '');
   // 입퇴실 알림과 동일: 유효한 번호가 없으면 실패 토스트 없이 조용히 생략(관리자 등)
   if (parentPhone.length < 10) return;
@@ -15150,8 +15163,7 @@ function _autoHandleScheduleChange(alertObj) {
     if (window.buildStudentList) window.buildStudentList(document.getElementById('student-search')?.value || '');
   } catch(e) {}
   // 테스트·관리자 계정: 스케줄 적용까지만 하고 알림톡은 보내지 않는다
-  if (window.isTestStudent && window.isTestStudent(student.name)) return;
-  if (window.isAdminSeat && window.isAdminSeat(student.seat)) return;
+  if (window.skipsAlimtalk(student)) return;
   // 2) 알림톡 — 좌석별 디바운스: 마지막 변경 후 90초 뒤 최종 상태로 1회 발송
   const alertId = _getScheduleAlertId(alertObj);
   if (_autoSmsTimers[alertObj.seat]) clearTimeout(_autoSmsTimers[alertObj.seat]);
@@ -15166,7 +15178,10 @@ function _autoHandleScheduleChange(alertObj) {
       }
       if (!(await _claimAutoSms(alertId))) return;
       const r = await _sendScheduleAlimtalk(student, alertObj.changes);
-      if (r.success) {
+      if (r.pushed) {
+        console.log(`[자동문자] ${student.name} 스케줄 변경 — 학부모 앱 푸시로 보냄(알림톡 생략)`);
+        if (window.showAdminToast) window.showAdminToast(`📱 ${student.name} 스케줄 변경 앱 푸시 발송`);
+      } else if (r.success) {
         console.log(`[자동문자] ${student.name} 스케줄 변경 알림톡 발송 완료`);
         if (window.showAdminToast) window.showAdminToast(`📨 ${student.name} 스케줄 변경 알림톡 자동 발송`);
       } else if (r.error === 'no-phone') {
@@ -16575,6 +16590,30 @@ if (KIOSK_DEVICE) {
 // 다음 단계에서 규칙을 read:false 로 잠그면서 이 폴백을 지우고 솔라피 키를 교체한다.
 const SOLAPI_CFG_FN =
   'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/getSolapiConfig';
+
+// ── 알림톡 → 앱 푸시 전환 (2026-10) ──
+// 학부모가 앱 푸시를 받고 있으면 알림톡을 보내지 않는다. 서버(appauth:parentPush)가
+// 몇 대의 학부모 기기에 닿는지 돌려준다(type 'schedule' + detail 이면 푸시도 보낸다).
+// 어떤 실패든 0 → 알림톡을 보낸다. 두 번 받는 게 못 받는 것보다 낫다.
+// 입퇴실 판정(sendCheckinSMS)은 다른 스크립트 블록이라 window 로 내보낸다.
+window._parentAppReach = async function(name, type, detail) {
+  const token = localStorage.getItem(SOLAPI_ADMIN_TOKEN_KEY);
+  if (!token) return 0;
+  try {
+    const res = await fetch('https://asia-northeast3-saebom-studyhall.cloudfunctions.net/parentPush', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ data: { token, name, type, detail: detail || '' } }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!res.ok) { console.warn('[앱푸시] parentPush 실패:', res.status); return 0; }
+    const json = await res.json();
+    return Number(json && json.result && json.result.reach) || 0;
+  } catch (e) {
+    console.warn('[앱푸시] parentPush 오류 — 알림톡으로 보냄:', e && e.message);
+    return 0;
+  }
+};
 // ⚠️ 관리자 기기 토큰 키 — 다른 스크립트 블록의 ADMIN_TOKEN_KEY 와 반드시 같아야 한다
 //    (module/classic 스코프가 갈려 상수를 공유할 수 없다).
 const SOLAPI_ADMIN_TOKEN_KEY = 'saebom_admin_token';
@@ -16770,6 +16809,11 @@ async function _sendScheduleAlimtalk(student, changes) {
   const messageText =
     `[새봄면학관]\n새봄면학관을 이용중인 ${studentName} 학생의 스케줄이 변경되었습니다.\n\n${changeContent}\n\n면학관 앱에서 확인해주세요.😊`;
 
+  // 학부모가 앱을 쓰면 푸시로 보내고 알림톡은 생략(서버가 푸시를 보낸 뒤 도달 수를 센다)
+  if (await window._parentAppReach(studentName, 'schedule', changeContent) > 0) {
+    return { success: true, pushed: true };
+  }
+
   const timeStr = new Date().toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'});
   try {
     const sendFn = window.solapiAlimtalkSend;
@@ -16794,8 +16838,7 @@ window.sendKakaoSMS = async function(studentName, seat, idx) {
   }
   const student = STUDENTS.find(s => s.seat === seat);
   if (!student) return;
-  if (window.isTestStudent && window.isTestStudent(student.name)) { showAdminToast('테스트 계정은 알림톡을 보내지 않습니다'); return; }
-  if (window.isAdminSeat && window.isAdminSeat(student.seat)) { showAdminToast('관리자석은 알림톡 대상이 아닙니다'); return; }
+  if (window.skipsAlimtalk(student)) { showAdminToast('테스트·관리자 계정은 알림톡을 보내지 않습니다'); return; }
   const alert = scheduleAlerts[idx];
   if (!alert) return;
 
