@@ -882,6 +882,8 @@ async function doLogin() {
   const errEl = document.getElementById('login-error');
   errEl.textContent = '';
   if (!name) { errEl.textContent = '이름을 입력해주세요'; return; }
+  // 번호 없이 누르면 ''.endsWith('') 가 참이라 이름만으로 들어가졌다(2026-10-07).
+  if (!/^\d{4}$/.test(phone)) { errEl.textContent = '학부모 휴대폰 뒷 4자리를 입력해주세요'; return; }
 
   errEl.textContent = '확인 중...';
 
@@ -2822,7 +2824,7 @@ function _buildParentNotices() {
       <div class="notice-header" onclick="_toggleParentNotice(${i})">
         <div style="flex:1">
           <span class="notice-badge badge-${n.badge||'general'}">${n.badgeLabel||n.badge||'공지'}</span>${n.pinned ? '<span style="font-size:11px;font-weight:700;color:#1B4DFF;margin-left:6px">📌 고정</span>' : ''}
-          <div class="notice-title">${n.title||''}</div>
+          <div class="notice-title">${String(n.title||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</div>
           <div class="notice-date">${window._noticeDateLabel(n.date)}</div>
         </div>
         <span class="notice-expand" id="pnexp-${i}"><i class="ti ti-chevron-down"></i></span>

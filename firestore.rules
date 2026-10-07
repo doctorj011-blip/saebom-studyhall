@@ -149,6 +149,14 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // 관리자·원장 기기(2026-10-07) — 관리앱이 페이지를 열 때 authPassword check 로 기기 토큰을
+    //   확인받으면서 Firebase 커스텀 토큰(role:'admin')도 같이 받아 로그인한다(saebom-auth).
+    //   결제·공지·냉난방·청구 금액처럼 돈·전원에게 닿는 쓰기는 이걸로만 연다.
+    //   ⚠️ 키오스크는 관리자 기기가 아니다 — 키오스크가 쓰는 문서(입퇴실·자동문)에는 걸지 말 것.
+    function isAdminDevice() {
+      return request.auth != null && request.auth.token.get('role', '') == 'admin';
+    }
+
     // 학생·스케줄 (관리자앱 저장, 학생앱 자리선택, 학부모앱 조회)
     match /students/{id}       { allow read, write: if true; }
     match /schedules/{id}      { allow read, write: if true; }
@@ -370,7 +378,8 @@ service cloud.firestore {
     // 공지사항: list 문서 하나만 쓰기 허용
     match /notices/{id} {
       allow read: if true;
-      allow write: if id == 'list';
+      // 쓰면 전 학생·학부모 화면에 뜨고 pushOnNotice 가 전원에게 푸시한다 → 관리자 기기만(2026-10-07)
+      allow write: if id == 'list' && isAdminDevice();
     }
 
     // 조교 인수인계 메모 (문서 ID = {운영일}_{근무조}). 삭제는 막는다 —
@@ -446,7 +455,9 @@ service cloud.firestore {
       //   화면을 덮는 문서라 실수로 켜 두면 전원이 팝업을 보게 된다. 콘솔에서
       //   사람이 직접 고친다. 읽기는 로그인 뒤라 인증 read 지만 settings 는 전부
       //   미인증 read 라 그냥 열어 둔다(담긴 건 공지 문구뿐이다).
-      allow write: if id in ['solapi', 'schedule_edit', 'billing', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather', 'planner_privacy'];
+      // billing(defaultFee)은 토스 결제 금액의 기준이라 관리자 기기만 쓴다(2026-10-07).
+      allow write: if (id == 'billing' && isAdminDevice())
+                   || id in ['solapi', 'schedule_edit', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather', 'planner_privacy'];
     }
 
     // 문자 발송 로그
@@ -515,9 +526,10 @@ service cloud.firestore {
     // ── 냉방(에어컨) 제어 — 입퇴실 자동 + 대시보드 수동 제어 ──
     // 로그인 없는 정적 앱이라 기존 컬렉션과 동일하게 개방. LG 통신·PAT는 서버(Cloud Function)만.
     // ac_config: 대시보드가 설정·zone(열람실/스터디룸) 매핑을 읽고 씀
-    match /ac_config/{id} { allow read, write: if true; }
+    // 2026-10-07: 쓰기는 관리자 기기만(대시보드는 관리자 기기에만 보인다). 읽기는 그대로.
+    match /ac_config/{id} { allow read: if true; allow write: if isAdminDevice(); }
     // ac_commands: 대시보드가 수동 명령 생성(전원·온도·모드·풍량·검색). 실행 후 done/error 기록은 서버(Admin SDK)가 규칙 우회.
-    match /ac_commands/{id} { allow read, create: if true; }
+    match /ac_commands/{id} { allow read: if true; allow create: if isAdminDevice(); }
     // ac_state: 대시보드는 읽기만. 쓰기는 서버(Cloud Function, Admin SDK)만.
     match /ac_state/{id} { allow read: if true; }
 
@@ -584,16 +596,20 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow delete: if false;
-      allow create: if id == '_config'
+      // 2026-10-07: 금액(pay)이 토스 결제 금액의 1순위 기준(saebom-pay billAmount)이라
+      //   만들기·금액 수정은 관리자 기기만. 학생·학부모 앱은 확인 도장(ack*) 한 칸만 쓴다.
+      allow create: if isAdminDevice() && (id == '_config'
         ? request.resource.data.active is bool
         : (request.resource.data.billId is string
            && request.resource.data.won is int
            && request.resource.data.won >= 0
            && request.resource.data.name is string
-           && request.resource.data.name.size() <= 30);
+           && request.resource.data.name.size() <= 30));
       allow update: if id == '_config'
-        ? request.resource.data.active is bool
+        ? (isAdminDevice() && request.resource.data.active is bool)
         : (request.resource.data.billId == resource.data.billId
+           && (isAdminDevice()
+               || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ackStudent', 'ackParent']))
            && (request.resource.data.won == resource.data.won
                || request.resource.data.won > resource.data.won
                || (!('ackStudent' in resource.data) && !('ackParent' in resource.data))));
@@ -666,9 +682,12 @@ service cloud.firestore {
     match /sm_aca365/{docId}  { allow read, write: if isFeeUser(); }
 
     // 수납관리: 월별 이용료 납부 기록
+    // 2026-10-07: 쓰기·삭제는 관리자 기기만. 토스 결제 기록은 saebom-pay 함수(Admin SDK)가 쓰므로 규칙과 무관.
     match /payments/{paymentId} {
-      allow read, delete: if true;
-      allow create, update: if request.resource.data.keys().hasAll(['ym','key','amount'])
+      allow read: if true;
+      allow delete: if isAdminDevice();
+      allow create, update: if isAdminDevice()
+        && request.resource.data.keys().hasAll(['ym','key','amount'])
         && request.resource.data.amount is int
         && request.resource.data.amount > 0;
     }

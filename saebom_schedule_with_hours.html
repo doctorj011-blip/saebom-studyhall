@@ -2833,8 +2833,8 @@ window.addEventListener('load', function() {
 // ══════════════════════════════════════════════════════════════════════
 const ADMIN_TOKEN_KEY = 'saebom_admin_token';
 function isAdminDevice() { return !!localStorage.getItem(ADMIN_TOKEN_KEY); }
-function _setAdminDevice(token) { localStorage.setItem(ADMIN_TOKEN_KEY, token); _applyAdminDeviceUI(); }
-function _clearAdminDevice() { localStorage.removeItem(ADMIN_TOKEN_KEY); _applyAdminDeviceUI(); }
+function _setAdminDevice(token) { localStorage.setItem(ADMIN_TOKEN_KEY, token); _applyAdminDeviceUI(); _checkDeviceToken('admin', token); }
+function _clearAdminDevice() { localStorage.removeItem(ADMIN_TOKEN_KEY); _applyAdminDeviceUI(); if (window._adminFbSignOut) window._adminFbSignOut(); }
 window.isAdminDevice = isAdminDevice;
 
 // ★ 비밀번호 해싱(_hashPw/_randSalt)과 문서 직접 읽기·쓰기(_loadAdminAuth/_saveAdminAuth/
@@ -2896,6 +2896,11 @@ async function _authPwCall(payload) {
 async function _checkDeviceToken(kind, token) {
   if (!token) return false;
   const r = await _authPwCall({ kind, action: 'check', token });
+  if (r.ok && r.result.fbToken) {
+    // 모듈(Firebase 초기화)이 아직 안 돌았으면 맡겨 두고, 모듈이 뜨면서 로그인한다.
+    if (window._adminFbSignIn) window._adminFbSignIn(r.result.fbToken);
+    else window._pendingFbToken = r.result.fbToken;
+  }
   if (r.ok) return !!r.result.valid;
   // denied(형식 오류)든 unavailable(네트워크·5xx)이든 '모른다'로 둔다.
   // 서버에 못 닿았다고 기기를 해제해 버리면 인터넷이 잠깐 끊길 때마다 조교가 로그아웃된다.
@@ -5565,6 +5570,7 @@ window.openDirectorLogin = async function() {
       return;
     }
     localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
+    _checkDeviceToken('director', hash);   // Firebase 로그인(규칙 isAdminDevice)
     ov.remove();
     _applyDirectorUI();
     alert('✅ 이 기기가 원장 기기로 등록되었습니다.\n설정 탭과 상벌점 부여/취소를 쓸 수 있습니다.');
@@ -5601,6 +5607,7 @@ window.changeDirectorPassword = async function() {
       return;
     }
     localStorage.setItem(DIRECTOR_TOKEN_KEY, hash);
+    _checkDeviceToken('director', hash);   // Firebase 로그인(규칙 isAdminDevice)
     ov.remove();
     alert('✅ 원장 비밀번호가 변경되었습니다.\n다른 원장 기기는 새 비밀번호로 다시 등록해야 합니다.');
   });
@@ -11219,6 +11226,8 @@ import { getFirestore, initializeFirestore, persistentLocalCache, persistentMult
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app-check.js";
+import { initializeAuth, inMemoryPersistence, signInWithCustomToken, signOut }
+  from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
@@ -11253,6 +11262,15 @@ try {
 window._fs = { doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, collection, query, where, onSnapshot, serverTimestamp, runTransaction, orderBy, limit, startAfter, getCountFromServer };
 window._adminDb = db;
 window._adminApp = app;
+// 관리자·원장 기기 Firebase 로그인(2026-10-07) — 규칙 isAdminDevice() 가 결제·공지·냉난방·청구 금액
+// 쓰기를 이걸로 가른다. 토큰은 _checkDeviceToken(authPassword check)이 받아 온다.
+// ★ 메모리에만 둔다: 페이지를 열 때마다 check 를 통과해야 로그인되므로, 비밀번호를 바꾸면
+//   옛 기기는 다음 로드부터 쓰기 권한도 같이 잃는다(저장해 두면 영영 남는다).
+const _adminAuth = initializeAuth(app, { persistence: inMemoryPersistence });
+window._adminFbSignIn = (t) => signInWithCustomToken(_adminAuth, t)
+  .catch(e => console.warn('관리자 Firebase 로그인 실패:', e));
+window._adminFbSignOut = () => signOut(_adminAuth).catch(() => {});
+if (window._pendingFbToken) { window._adminFbSignIn(window._pendingFbToken); window._pendingFbToken = null; }
 // ── [테스트 전용] 로컬 Firestore 에뮬레이터 연결 (URL에 ?emu=1 일 때만) ──
 // 운영(GitHub Pages 등)에서는 이 파라미터가 없으므로 절대 활성화되지 않는다(실데이터와 완전 격리).
 if (new URLSearchParams(location.search).get('emu') === '1') {
@@ -21150,11 +21168,10 @@ document.addEventListener('DOMContentLoaded', function() {
 <!-- ❄️🔥 냉난방(에어컨) 패널 — 대시보드 탭. LG 통신은 서버(Cloud Function)만, 여기선 Firestore 문서로 연동. -->
 <script type="module">
 (async () => {
-  const CFG = { apiKey:"AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM", authDomain:"saebom-studyhall.firebaseapp.com", projectId:"saebom-studyhall", storageBucket:"saebom-studyhall.appspot.com" };
-  const appMod = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js");
-  const fs = await import("https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js");
-  const app = appMod.getApps().length ? appMod.getApp() : appMod.initializeApp(CFG);
-  const db = fs.getFirestore(app);
+  // 본 앱(11.9.0)의 db 를 쓴다 — 예전엔 10.7.1 로 따로 앱을 띄워 관리자 로그인·App Check 가 안 붙었다.
+  const fs = await import("https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js");
+  while (!window._adminDb) await new Promise(r => setTimeout(r, 100));
+  const db = window._adminDb;
   const el = document.getElementById('acPanel');
   if (!el) return;
 
