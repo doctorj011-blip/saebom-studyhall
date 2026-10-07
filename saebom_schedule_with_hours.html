@@ -2896,7 +2896,10 @@ async function _authPwCall(payload) {
 async function _checkDeviceToken(kind, token) {
   if (!token) return false;
   const r = await _authPwCall({ kind, action: 'check', token });
-  if (r.ok && r.result.fbToken) {
+  // 원장 기기는 원장 토큰(role:director)으로만 로그인한다 — 관리자 토큰 확인이 나중에 끝나
+  // 조교 권한(role:admin)으로 덮어쓰면 수납·설정 저장이 막힌다.
+  const skip = kind === 'admin' && typeof isDirectorDevice === 'function' && isDirectorDevice();
+  if (r.ok && r.result.fbToken && !skip) {
     // 모듈(Firebase 초기화)이 아직 안 돌았으면 맡겨 두고, 모듈이 뜨면서 로그인한다.
     if (window._adminFbSignIn) window._adminFbSignIn(r.result.fbToken);
     else window._pendingFbToken = r.result.fbToken;
@@ -5540,6 +5543,7 @@ async function _validateDirectorToken() {
   if (ok === false) {
     localStorage.removeItem(DIRECTOR_TOKEN_KEY);
     _applyDirectorUI();
+    _validateAdminToken();   // 원장 해제 뒤에는 조교 권한으로 다시 로그인한다
     // 원장 전용 화면이 열려 있었다면 대시보드로 물린다
     const cur = document.querySelector('.section.active');
     if (cur && (cur.id === 'sec-settings' || cur.id === 'sec-billing')) {
@@ -22011,6 +22015,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const _billId = () => CFG.surveyId;   // 조사 회차와 같은 'YYYY-MM'
   window.usPushBilling = async function() {
     if (BUSY) return;
+    if (!_requireDirector()) return;   // 청구 금액(billing_notices)은 규칙상 원장 기기만 쓴다
     if (!isCurrent()) { alert('지난 회차는 안내할 수 없습니다.'); return; }
     let BASE_FEE;
     const bid = _billId();

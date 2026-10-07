@@ -153,8 +153,12 @@ service cloud.firestore {
     //   확인받으면서 Firebase 커스텀 토큰(role:'admin')도 같이 받아 로그인한다(saebom-auth).
     //   결제·공지·냉난방·청구 금액처럼 돈·전원에게 닿는 쓰기는 이걸로만 연다.
     //   ⚠️ 키오스크는 관리자 기기가 아니다 — 키오스크가 쓰는 문서(입퇴실·자동문)에는 걸지 말 것.
+    //   role 은 둘이다(2026-10-07): director = 원장 기기(돈·설정), admin = 조교 기기(공지·냉난방).
     function isAdminDevice() {
-      return request.auth != null && request.auth.token.get('role', '') == 'admin';
+      return request.auth != null && request.auth.token.get('role', '') in ['admin', 'director'];
+    }
+    function isDirectorDevice() {
+      return request.auth != null && request.auth.token.get('role', '') == 'director';
     }
 
     // 학생·스케줄 (관리자앱 저장, 학생앱 자리선택, 학부모앱 조회)
@@ -455,9 +459,17 @@ service cloud.firestore {
       //   화면을 덮는 문서라 실수로 켜 두면 전원이 팝업을 보게 된다. 콘솔에서
       //   사람이 직접 고친다. 읽기는 로그인 뒤라 인증 read 지만 settings 는 전부
       //   미인증 read 라 그냥 열어 둔다(담긴 건 공지 문구뿐이다).
-      // billing(defaultFee)은 토스 결제 금액의 기준이라 관리자 기기만 쓴다(2026-10-07).
-      allow write: if (id == 'billing' && isAdminDevice())
-                   || id in ['solapi', 'schedule_edit', 'seatSelection', 'vacation_mode', 'meal_away_sms', 'day_break_door', 'bell_schedule', 'weather', 'planner_privacy'];
+      // 2026-10-07: 설정 탭(원장 기기 전용 화면)에서만 쓰는 문서는 원장 기기만 쓴다.
+      //   billing(defaultFee)은 토스 결제 금액의 기준이기도 하다.
+      //   예외 둘 — bell_schedule 은 타종 페이지(로그인 없음)가 쓴다.
+      //   seatSelection.effectiveDate 비우기는 좌석 예약 반영(commitPendingSeatsIfDue)이 아무 기기에서나 한다.
+      allow write: if (isDirectorDevice()
+                       && id in ['solapi', 'billing', 'schedule_edit', 'seatSelection', 'vacation_mode',
+                                 'meal_away_sms', 'day_break_door', 'weather', 'planner_privacy'])
+                   || id == 'bell_schedule'
+                   || (id == 'seatSelection' && resource != null
+                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['effectiveDate'])
+                       && request.resource.data.effectiveDate == '');
     }
 
     // 문자 발송 로그
@@ -597,8 +609,8 @@ service cloud.firestore {
       allow list: if false;
       allow delete: if false;
       // 2026-10-07: 금액(pay)이 토스 결제 금액의 1순위 기준(saebom-pay billAmount)이라
-      //   만들기·금액 수정은 관리자 기기만. 학생·학부모 앱은 확인 도장(ack*) 한 칸만 쓴다.
-      allow create: if isAdminDevice() && (id == '_config'
+      //   만들기·금액 수정은 원장 기기만. 학생·학부모 앱은 확인 도장(ack*) 한 칸만 쓴다.
+      allow create: if isDirectorDevice() && (id == '_config'
         ? request.resource.data.active is bool
         : (request.resource.data.billId is string
            && request.resource.data.won is int
@@ -606,9 +618,9 @@ service cloud.firestore {
            && request.resource.data.name is string
            && request.resource.data.name.size() <= 30));
       allow update: if id == '_config'
-        ? (isAdminDevice() && request.resource.data.active is bool)
+        ? (isDirectorDevice() && request.resource.data.active is bool)
         : (request.resource.data.billId == resource.data.billId
-           && (isAdminDevice()
+           && (isDirectorDevice()
                || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ackStudent', 'ackParent']))
            && (request.resource.data.won == resource.data.won
                || request.resource.data.won > resource.data.won
@@ -682,11 +694,11 @@ service cloud.firestore {
     match /sm_aca365/{docId}  { allow read, write: if isFeeUser(); }
 
     // 수납관리: 월별 이용료 납부 기록
-    // 2026-10-07: 쓰기·삭제는 관리자 기기만. 토스 결제 기록은 saebom-pay 함수(Admin SDK)가 쓰므로 규칙과 무관.
+    // 2026-10-07: 쓰기·삭제는 원장 기기만(수납 탭). 토스 결제 기록은 saebom-pay 함수(Admin SDK)가 쓰므로 규칙과 무관.
     match /payments/{paymentId} {
       allow read: if true;
-      allow delete: if isAdminDevice();
-      allow create, update: if isAdminDevice()
+      allow delete: if isDirectorDevice();
+      allow create, update: if isDirectorDevice()
         && request.resource.data.keys().hasAll(['ym','key','amount'])
         && request.resource.data.amount is int
         && request.resource.data.amount > 0;
