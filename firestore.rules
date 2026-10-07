@@ -83,6 +83,7 @@ rules_version = '2';
 //   - 2026-10-05  경영앱 일일테스트(sm_daily*)·입학테스트(sm_entry*)를 sm_ 공통 규칙에서 빼고 권한자만
 //                 (isDailyUser = 원장 두 분, isEntryUser = 이우영·이지은·남궁준·doctorj011). 둘 다 승인(isSmStaff) 먼저.
 //                 다른 교직원의 '다가오는 입학테스트' 목록은 경영앱 서버 함수(entryUpcoming)가 최소 칸만 준다.
+//   - 2026-10-07  avatar_profiles 에 lines(시상대 말풍선 대사 3개·20자) 추가(앱 1.4.7)
 //   - 2026-10-05  avatar_profiles 추가 — 면학시상대 캐릭터 꾸미기(앱 1.4.3). 읽기 공개, 쓰기는
 //                 본인 sid 만·정해진 칸(성별·피부·머리·머리색·얼굴)만
 //   - 2026-10-05  point_wallets(+entries)·avatar_outfits 추가 — 순공 포인트·아이템샵(앱 1.4.4).
@@ -775,12 +776,21 @@ service cloud.firestore {
     match /avatar_profiles/{sid} {
       allow read: if true;
       allow write: if isStudentSid(sid)
-        && request.resource.data.keys().hasOnly(['gender', 'skin', 'hair', 'hairColor', 'face', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['gender', 'skin', 'hair', 'hairColor', 'face', 'lines', 'updatedAt'])
         && request.resource.data.gender in ['m', 'f']
         && request.resource.data.skin is int
         && request.resource.data.hairColor is int
         && request.resource.data.hair is string && request.resource.data.hair.size() <= 20
-        && request.resource.data.face is string && request.resource.data.face.size() <= 20;
+        && request.resource.data.face is string && request.resource.data.face.size() <= 20
+        && avatarLinesOk(request.resource.data.get('lines', []));
+    }
+
+    // 시상대 말풍선 대사 — 3개까지, 한 줄 20자까지(앱은 16자로 막는다).
+    function avatarLinesOk(l) {
+      return l is list && l.size() <= 3
+        && (l.size() < 1 || (l[0] is string && l[0].size() <= 20))
+        && (l.size() < 2 || (l[1] is string && l[1].size() <= 20))
+        && (l.size() < 3 || (l[2] is string && l[2].size() <= 20));
     }
 
     // 순공 포인트·아이템샵(새 모바일 앱, 2026-10). 쓰기는 서버(appauth 의 pointsOnSession·

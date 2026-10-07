@@ -39,6 +39,16 @@ test('정해진 값만 들어간다', async () => {
   await assertFails(setDoc(doc(db, 'avatar_profiles', A), look({ hair: 'x'.repeat(21) })));
 });
 
+test('대사(lines)는 3개·20자까지', async () => {
+  const db = student(A);
+  await assertSucceeds(setDoc(doc(db, 'avatar_profiles', A), look({ lines: ['내신대박!', '오늘도 파이팅', '같이 공부하자'] })));
+  await assertSucceeds(setDoc(doc(db, 'avatar_profiles', A), look({ lines: [] })));
+  await assertFails(setDoc(doc(db, 'avatar_profiles', A), look({ lines: ['a', 'b', 'c', 'd'] })));
+  await assertFails(setDoc(doc(db, 'avatar_profiles', A), look({ lines: ['가'.repeat(21)] })));
+  await assertFails(setDoc(doc(db, 'avatar_profiles', A), look({ lines: [1] })));
+  await assertFails(setDoc(doc(db, 'avatar_profiles', A), look({ lines: '하나' })));
+});
+
 test('읽기는 누구나(시상대에 다른 학생 캐릭터가 보인다)', async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async c => { await setDoc(doc(c.firestore(), 'avatar_profiles', A), look()); });
