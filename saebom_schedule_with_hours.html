@@ -600,6 +600,18 @@ input:focus,select:focus,textarea:focus{outline:none}
 @keyframes ciPop{0%{transform:scale(.25) rotate(-12deg);opacity:0}60%{transform:scale(1.18) rotate(4deg);opacity:1}100%{transform:scale(1) rotate(0)}}
 .ci-slot.pop{animation:ciPop .36s var(--ease-spring) both}
 
+/* ── 면학시상대 캐릭터 무대 (2026-10-08) — 문 아이콘·이름 첫 글자 동그라미·완료 이모지 자리를 캐릭터가 대신한다 ── */
+.ci-stage{position:relative;height:128px;margin:-8px -12px 6px;border-radius:12px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(108,93,211,.04),rgba(108,93,211,.11))}
+.ci-stage::after{content:"";position:absolute;left:0;right:0;bottom:0;height:9px;background:rgba(108,93,211,.10)}
+.ci-stage canvas{position:absolute;inset:0;width:100%;height:100%}
+.ci-bubble{position:absolute;z-index:1;transform:translate(var(--bx,-50%),-100%);background:#ffffff;border:2px solid #1e1b4b;border-radius:12px;
+  padding:3px 9px;font-size:12px;font-weight:700;color:#1e1b4b;white-space:nowrap;pointer-events:none;box-shadow:0 2px 0 #1e1b4b;
+  animation:ciBubble .18s ease-out}
+.ci-bubble::after{content:"";position:absolute;left:var(--tail,50%);bottom:-7px;margin-left:-6px;border:6px solid transparent;border-top-color:#1e1b4b;border-bottom:0}
+@keyframes ciBubble{from{transform:translate(var(--bx,-50%),-100%) scale(.6);opacity:0}to{transform:translate(var(--bx,-50%),-100%) scale(1);opacity:1}}
+#sec-checkin .checkin-header > i.ti,#sec-checkin .confirm-avatar,#sec-checkin .done-icon{display:none}
+
 /* ===================================================================
    ☀️ 날씨 연동 키오스크 배경 — Apple 날씨앱 감성 (2026)
    =================================================================== */
@@ -1198,6 +1210,8 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
     <div class="wx-loc" id="wx-loc"></div>
   </div>
   <div class="checkin-wrap">
+    <!-- 면학시상대 캐릭터 무대 (saebom-avatar.js KioskAvatar) — 입력·확인·완료 화면에 걸쳐 그대로 남는다 -->
+    <div class="ci-stage" id="ci-stage" aria-hidden="true"></div>
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
       <div id="checkin-door-controls" style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">
@@ -2363,6 +2377,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
 <!-- 3앱 공용 유틸 (_ymKey/_normalizeHours/_phoneLast4 등) — 반드시 같은 폴더에 함께 배포 -->
 <script src="saebom-common.js"></script>
 <script src="saebom-admin-core.js"></script>
+<script src="saebom-avatar.js"></script>
 <script>
 const DAYS=['월','화','수','목','금','토'];
 const PERIODS_WEEKDAY=[
@@ -3116,8 +3131,8 @@ window.showSection = function(id,btn){
 // 키오스크 화면 크기에 맞춰 입실·퇴실 UI 확대율 계산 (세로형 대화면 대응)
 function updateKioskZoom() {
   if (!document.body.classList.contains('kiosk-mode')) return;
-  // 입력 패널(약 380px 폭, 540px 높이)이 화면 폭의 ~65%, 높이의 ~50%가 되도록
-  const z = Math.max(1, Math.min(window.innerWidth * 0.65 / 380, window.innerHeight * 0.50 / 540, 3));
+  // 입력 패널(약 380px 폭, 640px 높이 — 캐릭터 무대 포함)이 화면 폭의 ~65%, 높이의 ~50%가 되도록
+  const z = Math.max(1, Math.min(window.innerWidth * 0.65 / 380, window.innerHeight * 0.50 / 640, 3));
   document.body.style.setProperty('--kiosk-zoom', z.toFixed(2));
   document.body.style.setProperty('--kiosk-today-zoom', Math.max(1, Math.min(z * 0.72, 2)).toFixed(2));
 }
@@ -3158,6 +3173,7 @@ function stopKioskClock() {
 }
 
 window.enterKioskMode = function() {
+  window._kioskUserExit = false;
   const btn = document.querySelector('.checkin-shortcut-btn');
   if (btn) window.showSection('checkin', btn);
   document.body.classList.add('kiosk-mode');
@@ -3172,6 +3188,7 @@ window.enterKioskMode = function() {
   if (window._sdRecheck) window._sdRecheck(); // 키오스크 화면에선 스탠드 책상 승인창 숨김
 };
 window.exitKioskMode = function() {
+  window._kioskUserExit = true; // 숨은 종료 버튼으로 나간 것 — 아래 fullscreenchange 가 키오스크 모드를 붙잡지 않게
   document.body.classList.remove('kiosk-mode');
   stopKioskClock();
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
@@ -3179,8 +3196,12 @@ window.exitKioskMode = function() {
   if (window._sdRecheck) window._sdRecheck(); // 관리 화면 복귀 → 밀린 승인 요청 표시
 };
 // ESC 등으로 브라우저 전체화면이 해제되면 키오스크 모드도 함께 해제
+// — 단 #kiosk 로 켠 현관 키오스크는 예외: 전체화면만 풀리고 번호 화면은 그대로 둔다(2026-10-08).
+//   전체화면이 풀릴 때마다 관리 화면(탭·명단)이 학생들 앞에 드러났다. 전체화면은 다음 터치에
+//   다시 켠다. 키오스크 모드를 끄는 길은 오른쪽 위 숨은 종료 버튼(exitKioskMode) 하나뿐이다.
 document.addEventListener('fullscreenchange', () => {
   if (!document.fullscreenElement) {
+    if (window._kioskAuto && document.body.classList.contains('kiosk-mode') && !window._kioskUserExit) return;
     document.body.classList.remove('kiosk-mode');
     stopKioskClock();
     releaseWakeLock();
@@ -3192,12 +3213,18 @@ document.addEventListener('fullscreenchange', () => {
 // 정전·재부팅 후 브라우저가 자동 실행될 때 사람이 버튼을 누르지 않아도 입실 화면으로 복귀.
 // 예: 바로가기 대상에  ...saebom_schedule_with_hours.html#kiosk
 window._kioskAuto = /[?#&]kiosk/.test(location.search + location.hash);
-if (window._kioskAuto) {
+// 새 버전 자동 새로고침(아래 watchDeploy)으로 다시 열린 경우 — #kiosk 없이 ⛶ 로 들어갔던 기기도 키오스크 화면으로 돌아온다
+let _kioskResume = false;
+try { _kioskResume = sessionStorage.getItem('saebom_kiosk_resume') === '1'; sessionStorage.removeItem('saebom_kiosk_resume'); } catch (e) {}
+if (window._kioskAuto || _kioskResume) {
   window.addEventListener('load', () => {
     setTimeout(() => {
       window.enterKioskMode();
-      // 전체화면은 사용자 제스처 없이는 거부될 수 있으므로 첫 터치에서 한 번 더 시도
+      // 전체화면은 사용자 제스처 없이는 거부될 수 있으므로 터치할 때마다 다시 시도한다.
+      // (예전엔 첫 터치 한 번만 — 그 뒤 전체화면이 풀리면 관리 화면이 드러난 채로 남았다)
       document.addEventListener('pointerdown', function retryFs() {
+        if (window._kioskUserExit) return;
+        if (!window._kioskAuto && !document.body.classList.contains('kiosk-mode')) return; // ⛶ 기기는 ESC 로 나가면 끝
         if (!document.fullscreenElement) {
           document.body.classList.add('kiosk-mode');
           updateKioskZoom();
@@ -3205,10 +3232,69 @@ if (window._kioskAuto) {
           if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
           acquireWakeLock();
         }
-      }, { once: true });
+      });
     }, 600);
   });
 }
+
+// ── 새 버전 배포 감지 → 키오스크는 알아서 새로고침 (2026-10-08) ──
+// 배포(깃허브 페이지 푸시) 뒤 현관 키오스크 2대에 직접 가서 새로고침하지 않아도 되게 한다.
+// 5분마다 이 페이지의 ETag(없으면 Last-Modified)만 묻는다 — 본문은 받지 않는다. 깃허브 페이지는 배포할
+// 때마다 모든 파일의 ETag 가 함께 바뀌므로(배포 시각이 들어간다) 페이지 하나만 봐도 공용 js 변경까지 잡힌다.
+// 대신 규칙·문서만 바꾼 배포에도 한 번 새로고침된다 — 쉬는 순간에만 하므로 해가 없다.
+// 바뀌었으면
+//  · 키오스크 화면: 아무도 쓰지 않는 순간(입력 비어 있음·처리 중 아님·캐릭터 없음·마지막 입력 1분 경과)까지
+//    기다렸다가 새로고침하고, 키오스크 화면으로 돌아오게 sessionStorage 에 표시해 둔다.
+//  · 관리 화면: 입력하던 내용이 날아갈 수 있어 새로고침하지 않고 알림 줄만 띄운다.
+// 깃허브 페이지 캐시(최대 10분) 때문에 배포 후 반영까지 길게는 15분쯤 걸린다.
+(function watchDeploy() {
+  if (location.protocol === 'file:' || /[?&]emu=/.test(location.search)) return;
+  const FILES = [location.pathname];
+  let base = null, pending = false;
+  const inKiosk = () => document.body.classList.contains('kiosk-mode');
+  async function sig() {
+    const parts = await Promise.all(FILES.map(u => fetch(u, { method: 'HEAD', cache: 'no-store' })
+      .then(r => r.ok ? (r.headers.get('etag') || r.headers.get('last-modified') || '') : '')
+      .catch(() => '')));
+    return parts.some(x => !x) ? null : parts.join('|'); // 하나라도 못 읽으면(오프라인 등) 판단을 미룬다
+  }
+  function idle() {
+    return inKiosk() && !window._checkinProcessing && !numpadBuffer
+      && document.getElementById('checkin-input-panel')?.style.display !== 'none'
+      && !document.getElementById('sr-fullscreen')?.classList.contains('show')
+      && (!window.KioskAvatar || window.KioskAvatar.idle())
+      && Date.now() - (_numpadLastInput || 0) > 60000;
+  }
+  function reloadNow() {
+    try { sessionStorage.setItem('saebom_kiosk_resume', '1'); } catch (e) {}
+    location.reload();
+  }
+  function banner() {
+    if (document.getElementById('deploy-banner')) return;
+    const b = document.createElement('div');
+    b.id = 'deploy-banner';
+    b.style.cssText = 'position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:9998;background:#1e1b4b;color:#fff;'
+      + 'padding:10px 14px 10px 18px;border-radius:14px;font-size:13px;font-weight:600;display:flex;gap:12px;align-items:center;box-shadow:0 6px 24px rgba(0,0,0,.25)';
+    b.innerHTML = '새 버전이 배포됐어요 <button style="border:none;border-radius:9px;background:#8f82e4;color:#fff;font-weight:700;padding:6px 12px;cursor:pointer">새로고침</button>'
+      + '<button aria-label="닫기" style="border:none;background:transparent;color:#c7c2f5;font-size:16px;cursor:pointer">✕</button>';
+    b.children[0].onclick = () => location.reload();
+    b.children[1].onclick = () => b.remove();
+    document.body.appendChild(b);
+  }
+  async function check() {
+    if (pending) return;
+    const v = await sig();
+    if (!v) return;
+    if (base == null) { base = v; return; }
+    if (v === base) return;
+    pending = true;
+    console.log('[배포 감지] 새 버전 —', inKiosk() ? '키오스크: 쉬는 순간 새로고침' : '관리 화면: 알림만');
+    if (!inKiosk()) banner();
+  }
+  setTimeout(check, 15000);
+  setInterval(check, 5 * 60 * 1000);
+  setInterval(() => { if (pending && idle()) reloadNow(); }, 15000);
+})();
 
 // ── 화면 절전 방지 (Screen Wake Lock API) ──
 // 키오스크 모드 동안 OS가 화면을 끄거나 절전 모드로 들어가지 않도록 요청
@@ -6337,6 +6423,7 @@ function updateCheckinDisplay() {
     else html += '<span class="ci-slot">·</span>';
   }
   disp.innerHTML = html;
+  window.KioskAvatar?.typing(n); // 누가 누르든 같은 실루엣이 한 칸씩 — 4자리 전엔 누구인지 드러내지 않는다
 }
 
 function hideCheckinError() {
@@ -6492,6 +6579,7 @@ function showCheckinConfirmFor(student) {
     + '<button class="confirm-btn confirm-ok" id="confirm-ok-btn" onclick="checkinConfirm()">확인</button>';
 
   document.getElementById('confirm-avatar').textContent = student.name[0];
+  window.KioskAvatar?.reveal(student); // 본인 면학시상대 캐릭터 등장
   document.getElementById('confirm-name').textContent = maskName(student.name);
   document.getElementById('confirm-seat').textContent = `${student.seat} · ${maskPhone(student.phone)}`;
 
@@ -6713,6 +6801,7 @@ window.checkinConfirm = async function() {
   document.getElementById('done-name').textContent = maskName(student.name);
   document.getElementById('done-msg').textContent = doneMsg;
   document.getElementById('done-time').textContent = timeStr;
+  window.KioskAvatar?.done(student, isCheckout ? 'out' : 'in', { durationMin: _checkoutTotalMin });
 
   // 교시 중 입실이라 스터디룸으로 가야 하면 화면 전체를 덮어 안내 (그냥 좌석으로 들어가는 것 방지)
   if (assignedRoom && isDuringPeriod) showStudyroomFullscreen(assignedRoom, maskName(student.name));
@@ -6783,6 +6872,7 @@ window.checkinAway = async function() {
     _showAwayDone(student, '🚶',
       mealName ? `외출 처리 · 잘 다녀오세요 (학부모님께 ${mealName} 외출 알림 발송)`
                : '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
+    window.KioskAvatar?.done(student, 'away');
     if (mealName) sendAwaySMS(student, false, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, false, timeStr);
     // 세션 문서에 외출 시작(awayStartTs) 기록 — 사용시간 제외의 원본
@@ -6819,6 +6909,7 @@ window.checkinAwayReturn = async function() {
     _showAwayDone(student, '✅',
       mealName ? `복귀 완료 · 어서 오세요 (학부모님께 ${mealName} 복귀 알림 발송)`
                : '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
+    window.KioskAvatar?.done(student, 'return');
     // 교시 중 복귀 = 늦게 들어오는 것이므로 신규 입실과 똑같이 스터디룸으로 보낸다(예외 없음).
     // 쉬는 시간에 복귀했으면 배정 없이 바로 좌석으로 간다.
     const sr = studyroomForEntry(student);
@@ -6855,6 +6946,7 @@ window.checkinBreakReentry = function() {
     window._checkinProcessing = true;
     const timeStr = new Date().toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
     _showAwayDone(student, '✅', '어서 오세요 · 입실 유지 (문자 발송 없음)', timeStr);
+    window.KioskAvatar?.done(student, 'reentry');
     // 🚪 자동문 열기
     if (window.requestDoorOpen) window.requestDoorOpen(3);
     else if (window.doorOpenTimed) window.doorOpenTimed(3);
@@ -7461,6 +7553,7 @@ window.hideStudyroomFullscreen = function() {
 
 window.checkinReset = function() {
   hideStudyroomFullscreen();
+  window.KioskAvatar?.reset(); // 처리 끝난 학생은 옆에서 잠깐 기다리고(다음 학생과 인사), 취소면 퇴장
   window._checkinProcessing = false; // 처리 잠금 해제
   _checkinPanelShownAt = 0;
   numpadBuffer = '';
