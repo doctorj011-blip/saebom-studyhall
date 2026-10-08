@@ -1129,15 +1129,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </div>
       <div id="studyroom-overflow-list"></div>
     </div>
-    <!-- 스터디룸 신청 알림 -->
-    <div class="card" id="studyroom-req-section" style="display:none">
-      <div class="card-title" style="justify-content:space-between">
-        <span><i class="ti ti-door-enter" style="font-size:14px;color:#7c3aed"></i> 스터디룸 신청 알림</span>
-        <button onclick="window.clearAllStudyroomAlerts&&window.clearAllStudyroomAlerts()" style="font-size:11px;color:var(--color-text-tertiary);background:none;border:none;cursor:pointer">모두 지우기</button>
-      </div>
-      <div id="studyroom-req-list"></div>
-    </div>
-
     <!-- 학생 스케줄 변경 알림 (Firebase 실시간) -->
     <div class="card" id="schedule-change-section" style="display:none">
       <div class="card-title" style="justify-content:space-between">
@@ -12089,13 +12080,8 @@ async function loadStudentsFromFirebase() {
         }
         return;
       }
-      // 스터디룸 알림 닫기상태 메타 문서 — 다른 기기의 닫기 반영
-      if (change.doc.id === '_meta_studyroom_alerts') {
-        if (change.type !== 'removed' && window._applyRemoteDismissedStudyroom) {
-          window._applyRemoteDismissedStudyroom(change.doc.data().dismissed || {});
-        }
-        return;
-      }
+      // 옛 스터디룸 승인 알림 메타 문서(2026-10-08 승인제 폐지) — 학생으로 읽지 않게 건너뛴다
+      if (change.doc.id === '_meta_studyroom_alerts') return;
       // 문자 발신내역 삭제상태 메타 문서 — 다른 기기의 삭제 반영
       if (change.doc.id === '_meta_sms_deleted') {
         if (change.type !== 'removed' && window._applyRemoteSmsDeleted) {
@@ -12350,49 +12336,7 @@ subscribeSessions();
 window._resubscribeCheckinLogs = subscribeSessions; // 새벽 리셋의 날짜 전환 재구독(기존 이름 유지)
 
 // ── 스터디룸 신청 실시간 감시 ──
-const _studyroomReqAlerts = [];
 const _knownStudyroomReqs = {};
-const _dismissedStudyroomIds = (() => {
-  try {
-    const s = localStorage.getItem('saebom_dismissedStudyroomIds');
-    return new Set(s ? JSON.parse(s) : []);
-  } catch(e) { return new Set(); }
-})();
-function _saveDismissedStudyroomIds() {
-  try { localStorage.setItem('saebom_dismissedStudyroomIds', JSON.stringify([..._dismissedStudyroomIds])); } catch(e) {}
-}
-
-// ── 스터디룸 알림 닫기상태 기기 간 동기화 (students/_meta_studyroom_alerts) ──
-// 한 기기에서 알림을 닫으면 다른 키오스크·컴퓨터에서도 함께 사라진다.
-async function _syncDismissedStudyroomIds(idsMap) {
-  try {
-    await setDoc(doc(db, 'students', '_meta_studyroom_alerts'),
-      { name: '', dismissed: idsMap, updatedAt: Date.now() }, { merge: true });
-  } catch(e) { console.error('스터디룸 알림 닫기상태 동기화 실패:', e); }
-}
-
-// 다른 기기(또는 시작 시 Firebase)에서 받은 닫기상태 반영
-window._applyRemoteDismissedStudyroom = function(idsMap) {
-  if (!idsMap) return;
-  let changed = false;
-  Object.keys(idsMap).forEach(id => {
-    if (!idsMap[id] || _dismissedStudyroomIds.has(id)) return;
-    _dismissedStudyroomIds.add(id);
-    const idx = _studyroomReqAlerts.findIndex(a => a.id === id);
-    if (idx !== -1) _studyroomReqAlerts.splice(idx, 1);
-    changed = true;
-  });
-  if (changed) { _saveDismissedStudyroomIds(); renderStudyroomAlerts(); }
-};
-
-// 시작 시 저장된 닫기상태 1회 로드 (이후 변경은 students 실시간 리스너가 전달)
-(async function _loadDismissedStudyroomOnce() {
-  try {
-    const snap = await getDoc(doc(db, 'students', '_meta_studyroom_alerts'));
-    if (snap.exists()) window._applyRemoteDismissedStudyroom(snap.data().dismissed || {});
-  } catch(e) { console.error('스터디룸 알림 닫기상태 로드 실패:', e); }
-})();
-
 // ── 방학 시간표(settings/vacation_mode) 실시간 구독 ──
 // 앱 시작 시점부터 필요하다(스케줄 표의 교시 열 구성이 이 값에 달려 있음).
 // 설정 탭을 열지 않아도 반영되어야 하고, 키오스크 2대가 같은 값을 보게 실시간 구독한다.
@@ -12526,32 +12470,23 @@ setInterval(() => {
 }, 60000);
 
 onSnapshot(collection(db, 'studyroom_requests'), (snapshot) => {
-  let changed = false;
   snapshot.docChanges().forEach(change => {
     if (change.type === 'removed') {
       delete _knownStudyroomReqs[change.doc.id];
-      const idx = _studyroomReqAlerts.findIndex(a => a.id === change.doc.id);
-      if (idx !== -1) { _studyroomReqAlerts.splice(idx, 1); changed = true; }
       _syncStudyRoomStudents();
       return;
     }
     const data = { id: change.doc.id, ...change.doc.data() };
     if (change.type === 'added' && _knownStudyroomReqs[data.id] === undefined) {
       _knownStudyroomReqs[data.id] = data;
-      if (data.status === 'pending' && !_dismissedStudyroomIds.has(data.id)) { _studyroomReqAlerts.unshift(data); changed = true; }
       if (data.status === 'approved') _syncStudyRoomStudents();
       return;
     }
     const prevStatus = _knownStudyroomReqs[data.id]?.status;
     _knownStudyroomReqs[data.id] = data;
-    const existIdx = _studyroomReqAlerts.findIndex(a => a.id === data.id);
-    if (existIdx !== -1) { _studyroomReqAlerts[existIdx] = data; changed = true; }
-    else if (data.status === 'pending') { _studyroomReqAlerts.unshift(data); changed = true; }
-    else changed = true;
     // 승인/거절 상태 변경 시 배치도 동기화
     if (prevStatus !== data.status) _syncStudyRoomStudents();
   });
-  if (changed) renderStudyroomAlerts();
   renderStudyroomBoard();
 });
 
@@ -12981,52 +12916,6 @@ window._applyRemoteTabletEntries = function(entries){
 })();
 setInterval(()=>{ try{ window.renderTabletMgmt(); }catch(e){} }, 60000);
 
-function renderStudyroomAlerts() {
-  const section = document.getElementById('studyroom-req-section');
-  const list = document.getElementById('studyroom-req-list');
-  if (!section || !list) return;
-  section.style.display = _studyroomReqAlerts.length ? 'block' : 'none';
-  // 단독 사용(lock) 신청은 같은 lockGroup(여러 교시)을 한 카드로 묶는다
-  const items = [];
-  const seenGroups = new Set();
-  _studyroomReqAlerts.forEach(a => {
-    if (a.lock && a.lockGroup) {
-      if (seenGroups.has(a.lockGroup)) return;
-      seenGroups.add(a.lockGroup);
-      const g = _studyroomReqAlerts.filter(x => x.lockGroup === a.lockGroup);
-      items.push({ ...a, _groupIds: g.map(x => x.id), _periods: [...new Set(g.map(x => x.period))].sort((x,y) => x-y) });
-    } else items.push(a);
-  });
-  list.innerHTML = items.map(a => {
-    const statusBadge = a.status === 'approved'
-      ? '<span style="background:#2d7a4f;color:#ffffff;font-size:10px;padding:2px 7px;border-radius:10px">✅ 승인됨</span>'
-      : a.status === 'rejected'
-      ? '<span style="background:#c62828;color:#ffffff;font-size:10px;padding:2px 7px;border-radius:10px">❌ 거절됨</span>'
-      : '<span style="background:#8f82e4;color:#ffffff;font-size:10px;padding:2px 7px;border-radius:10px">⏳ 대기중</span>';
-    const actionBtns = a.status === 'pending' ? `
-      <div style="display:flex;gap:6px;margin-top:8px">
-        <button onclick="window.approveStudyroomReq('${a.id}')" style="flex:1;padding:7px;background:#2d7a4f;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">✅ 승인</button>
-        <button onclick="window.rejectStudyroomReq('${a.id}')" style="flex:1;padding:7px;background:#c62828;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">❌ 거절</button>
-      </div>` : `<button onclick="window.removeStudyroomAlert('${(a._groupIds||[a.id]).join(',')}')" style="margin-top:6px;padding:4px 10px;background:none;border:1px solid #dddddd;border-radius:6px;font-size:11px;color:#888888;cursor:pointer">닫기</button>`;
-    const isLock = !!a.lock;
-    const subtitle = isLock
-      ? `🔒 ${(a._periods||[a.period]).join(', ')}교시 · 1인 단독 사용 신청${a.room ? ` (스터디룸 ${a.room}번)` : ''}`
-      : `${a.period}교시 · 스터디룸 ${a.room}번 신청`;
-    return `<div style="background:${isLock?'#fff7ed':'#faf5ff'};border:1.5px solid ${isLock?'#fdba74':'#c084fc'};border-radius:12px;padding:12px 14px;margin-bottom:8px">
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-        <div style="width:34px;height:34px;border-radius:10px;background:${isLock?'#ea580c':'#7c3aed'};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#ffffff">${isLock?'🔒':(a.name||'?')[0]}</div>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:700">${a.name} <span style="color:#888888;font-weight:400">${a.seat}번</span></div>
-          <div style="font-size:11px;color:${isLock?'#ea580c':'#7c3aed'};font-weight:600">${subtitle}</div>
-        </div>
-        ${statusBadge}
-      </div>
-      ${a.reason ? `<div style="font-size:12px;color:#555555;background:${isLock?'#ffedd5':'#f3e8ff'};border-radius:6px;padding:6px 10px;margin-bottom:4px">📝 ${a.reason}</div>` : ''}
-      ${actionBtns}
-    </div>`;
-  }).join('');
-}
-
 // ── 스터디룸 중복 신청 문서 정리 ──
 // 한 학생이 같은 (운영일·교시)에 신청 문서를 2건 이상 갖는 경우가 있었다: 학생앱 수동신청은
 // 랜덤 ID(addDoc), 입실 자동배정은 고정 ID(auto_날짜_좌석_p교시)라 서로를 덮어쓰지 못한다.
@@ -13127,10 +13016,8 @@ function renderStudyroomBoard() {
   const periods = Object.keys(byPeriod).map(Number).sort((a,b) => a - b);
   section.style.display = 'block';
   if (summary) {
-    const pend = shown.filter(r => r.status === 'pending').length;
     const gone = shown.filter(r => _srCheckedOut(r.name)).length;
     summary.textContent = `신청 ${shown.length}건`
-      + (pend ? ` · 대기 ${pend}건` : '')
       + (gone ? ` · 퇴실 ${gone}건` : '');
   }
   _renderStudyroomDupBtn();
@@ -13138,15 +13025,14 @@ function renderStudyroomBoard() {
   const th = 'padding:7px 8px;font-size:11px;font-weight:700;color:#7C3AED;background:#F3E8FF;border:1px solid #E9D5FF;text-align:center';
   const td = 'padding:6px 8px;border:1px solid #EDE4F7;vertical-align:top;min-width:90px';
   const chip = (r) => {
-    const pend = r.status === 'pending';
     // 퇴실한 학생은 신청을 지우지 않고 회색·취소선으로만 구분한다 —
     // 룸이 찬 것으로 오해하지 않도록. 실제 배정·정원은 배치도 명단 기준이라 영향 없다.
     const gone = _srCheckedOut(r.name);
-    const bg = gone ? '#F3F4F6' : r.lock ? '#FEE2E2' : pend ? '#FEF3C7' : '#EDE7FF';
-    const fg = gone ? '#9CA3AF' : r.lock ? '#B91C1C' : pend ? '#B45309' : '#5B21B6';
+    const bg = gone ? '#F3F4F6' : r.lock ? '#FEE2E2' : '#EDE7FF';
+    const fg = gone ? '#9CA3AF' : r.lock ? '#B91C1C' : '#5B21B6';
     const safeReason = ((gone ? '퇴실 — ' : '') + (r.reason || '')).replace(/"/g, '&quot;');
     const nameHtml = gone ? `<span style="text-decoration:line-through">${r.name}</span>` : r.name;
-    return `<span title="${safeReason}" style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;margin:2px 2px 0 0">${r.lock ? '🔒 ' : ''}${nameHtml}<span style="color:#9ca3af;font-weight:400"> ${r.seat}</span>${pend ? ' ⏳' : ''}${gone ? ' 👋퇴실' : ''}</span>`;
+    return `<span title="${safeReason}" style="display:inline-block;background:${bg};color:${fg};font-size:11px;font-weight:600;border-radius:6px;padding:2px 7px;margin:2px 2px 0 0">${r.lock ? '🔒 ' : ''}${nameHtml}<span style="color:#9ca3af;font-weight:400"> ${r.seat}</span>${gone ? ' 👋퇴실' : ''}</span>`;
   };
   const cell = (p, room) => {
     const arr = byPeriod[p][room] || [];
@@ -13155,18 +13041,7 @@ function renderStudyroomBoard() {
     if (!arr.length) return `<td style="${td};text-align:center;color:#d8c9ec">·</td>`;
     return `<td style="${td}${locked ? ';background:#fef2f2' : ''}">${arr.map(chip).join('')}${locked ? '<div style="font-size:10px;color:#b91c1c;font-weight:700;margin-top:3px">단독 사용 — 배정 제외</div>' : ''}</td>`;
   };
-  // 승인 대기 중인 단독 사용 신청(룸 미배정 room:0)은 표 칸에 없으므로 위에 별도 안내
-  const pendingLocks = {};
-  todays.filter(r => r.lock && r.status === 'pending').forEach(r => {
-    const k = r.lockGroup || r.id || r.name;
-    (pendingLocks[k] = pendingLocks[k] || { name: r.name, seat: r.seat, periods: [] }).periods.push(r.period);
-  });
-  const pendingLockHtml = Object.values(pendingLocks).map(g =>
-    `<div style="font-size:11px;color:#b45309;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;padding:5px 10px;margin-bottom:6px">🔒 <b>${g.name}</b> (${g.seat}) · ${[...new Set(g.periods)].sort((a,b)=>a-b).join(', ')}교시 단독 사용 승인 대기중</div>`
-  ).join('');
-
   body.innerHTML = `
-    ${pendingLockHtml}
     <table style="width:100%;border-collapse:collapse;font-size:12px">
       <thead><tr>
         <th style="${th};min-width:52px">교시</th>
@@ -13984,82 +13859,6 @@ setInterval(() => {
   renderSchedVarBoard();       // 요일 경계(3시)·2시 리셋 후 목록 자동 정리
 }, 60000);
 
-// 단독 사용(lock) 신청의 같은 그룹(여러 교시) 문서 모음. lockGroup 없는 구형 문서는 단건으로 취급.
-function _lockGroupDocs(req) {
-  const today = window.studyroomDayKey();
-  return Object.values(_knownStudyroomReqs).filter(r =>
-    r.lock && r.date === today &&
-    (req.lockGroup ? r.lockGroup === req.lockGroup : r.id === req.id));
-}
-
-// ── 단독 사용(Lock) 승인: 신청한 모든 교시를 비울 수 있는 룸 하나를 찾아 그룹 전체에 배정 ──
-async function approveLockRequest(req) {
-  const today = window.studyroomDayKey();
-  const group = _lockGroupDocs(req).filter(r => r.status === 'pending');
-  if (!group.length) { showAdminToast('이미 처리된 신청입니다'); return; }
-  const periods = [...new Set(group.map(r => r.period))].sort((a,b) => a-b);
-  let room = null;
-  const conflict = {};
-  for (const cand of [1, 2, 3]) {
-    const busy = periods.filter(p => Object.values(_knownStudyroomReqs).some(r =>
-      r.date === today && r.status === 'approved' && r.period === p && r.room === cand));
-    if (!busy.length) { room = cand; break; }
-    conflict[cand] = busy;
-  }
-  if (!room) {
-    alert(`모든 신청 교시(${periods.join(', ')}교시)를 단독으로 쓸 수 있는 스터디룸이 없습니다.\n` +
-      [1,2,3].map(c => `· 스터디룸 ${c}번: ${conflict[c].join(', ')}교시 사용중`).join('\n') +
-      '\n\n해당 교시 사용자를 정리한 뒤 다시 승인하거나, 거절해주세요.');
-    return;
-  }
-  if (!confirm(`🔒 ${req.name} · ${periods.join(', ')}교시\n스터디룸 ${room}번을 1인 단독 사용으로 승인할까요?\n(승인하면 해당 교시에 이 룸은 다른 학생이 배정되지 않습니다)`)) return;
-  try {
-    for (const r of group) await setDoc(doc(db,'studyroom_requests',r.id), { status:'approved', room }, { merge:true });
-    showAdminToast(`🔒 단독 사용 승인 — 스터디룸 ${room}번 (${periods.join(', ')}교시)`);
-  } catch(e) { alert('실패: ' + e.message); }
-}
-
-window.approveStudyroomReq = async function(id) {
-  const req = _knownStudyroomReqs[id];
-  if (req && req.lock) { approveLockRequest(req); return; }
-  try { await setDoc(doc(db,'studyroom_requests',id),{status:'approved'},{merge:true}); showAdminToast('✅ 스터디룸 신청 승인됨'); }
-  catch(e) { alert('실패: '+e.message); }
-};
-window.rejectStudyroomReq = async function(id) {
-  const req = _knownStudyroomReqs[id];
-  try {
-    if (req && req.lock) {
-      // 단독 사용은 그룹(여러 교시) 전체를 함께 거절
-      for (const r of _lockGroupDocs(req)) await setDoc(doc(db,'studyroom_requests',r.id),{status:'rejected'},{merge:true});
-      showAdminToast('❌ 단독 사용 신청 거절됨');
-      return;
-    }
-    await setDoc(doc(db,'studyroom_requests',id),{status:'rejected'},{merge:true}); showAdminToast('❌ 스터디룸 신청 거절됨');
-  } catch(e) { alert('실패: '+e.message); }
-};
-window.removeStudyroomAlert = function(idOrIds) {
-  // 단독 사용(lock) 그룹 카드는 쉼표로 묶인 여러 id를 한 번에 닫는다
-  const ids = String(idOrIds).split(',').filter(Boolean);
-  const synced = {};
-  let changed = false;
-  ids.forEach(id => {
-    const idx = _studyroomReqAlerts.findIndex(a=>a.id===id);
-    if (idx!==-1) {
-      _studyroomReqAlerts.splice(idx,1); _dismissedStudyroomIds.add(id);
-      synced[id] = true; changed = true;
-    }
-  });
-  if (changed) {
-    _saveDismissedStudyroomIds(); renderStudyroomAlerts();
-    _syncDismissedStudyroomIds(synced); // 다른 기기에도 닫기 전파
-  }
-};
-window.clearAllStudyroomAlerts = function() {
-  const ids = {};
-  _studyroomReqAlerts.forEach(a=>{ _dismissedStudyroomIds.add(a.id); ids[a.id] = true; });
-  _studyroomReqAlerts.length=0; _saveDismissedStudyroomIds(); renderStudyroomAlerts();
-  if (Object.keys(ids).length) _syncDismissedStudyroomIds(ids); // 다른 기기에도 닫기 전파
-};
 
 
 // ── 실시간 스케줄 변경 감지 (schedules 컬렉션 직접 감시) ──
