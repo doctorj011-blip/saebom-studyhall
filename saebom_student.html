@@ -1757,6 +1757,39 @@ const STUDY_NAG_BY_GENDER = {
   m: { img:'nag-boy.png',  who:'장원영',      line:'{이름}, 공부에 집중하는 니 모습 너무 설레~' },
   f: { img:'nag-girl.png', who:'투바투 (TXT)', line:'{이름} 면학관 앱이라도 잠시 끄고 공부에 집중해줄래? 넌 공부할 때가 가장 예뻐~' },
 };
+// 웹앱 종료 안내(2026-10-08 원장) — 공지(notices/list)는 네이티브 앱에도 뜨고 전원 푸시가 가서 웹앱에만 띄운다.
+// '오늘 그만 보기'는 그날만 숨긴다. 웹앱을 내릴 때 이 블록도 같이 지운다.
+function showAppMoveNotice() {
+  const today = new Date().toISOString().slice(0, 10);
+  try { if (localStorage.getItem('saebom_app_move_hide') === today) return; } catch(e) {}
+  if (document.getElementById('app-move-modal')) return;
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (/Macintosh/.test(ua) && 'ontouchend' in document);
+  const isAnd = /Android/i.test(ua);
+  const ios = 'https://apps.apple.com/kr/app/id6800415075';
+  const and = 'https://play.google.com/store/apps/details?id=kr.saebom.studyhall';
+  const btn = (href, label, on) => `<a href="${href}" target="_blank" rel="noopener" style="display:block;padding:12px;border-radius:10px;text-align:center;font-size:14px;font-weight:700;text-decoration:none;margin-top:8px;${on ? 'background:#3949AB;color:#fff' : 'background:#EEF0FB;color:#3949AB'}">${label}</a>`;
+  const m = document.createElement('div');
+  m.id = 'app-move-modal';
+  m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.innerHTML = `<div style="background:#fff;border-radius:16px;padding:22px 20px 16px;max-width:360px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.25);color:#1e1b4b">
+    <div style="font-size:16px;font-weight:800;margin-bottom:10px">📢 새봄면학관 앱으로 옮겨 주세요</div>
+    <div style="font-size:13.5px;line-height:1.65;color:#333">
+      다음 주 <b>10월 12일(월)</b>부터 지금 쓰는 이 웹앱은 <b>폐기</b>되고,
+      <b>앱스토어·플레이스토어의 '새봄면학관' 앱</b>으로 대체됩니다.<br><br>
+      그 전에 앱을 설치하고 로그인해 두세요. 앱에서는 <b>면학관에 등록된 내 휴대폰 번호</b>로 문자 인증번호를 받아 로그인합니다.
+    </div>
+    ${btn(ios, ' 아이폰 — 앱스토어에서 설치', isIOS)}
+    ${btn(and, '▶ 안드로이드 — 플레이스토어에서 설치', isAnd)}
+    <button id="app-move-close" style="display:block;width:100%;margin-top:12px;padding:10px;border:none;background:none;color:#888;font-size:13px;cursor:pointer">오늘 그만 보기</button>
+  </div>`;
+  document.body.appendChild(m);
+  document.getElementById('app-move-close').onclick = () => {
+    try { localStorage.setItem('saebom_app_move_hide', today); } catch(e) {}
+    m.remove();
+  };
+}
+
 let _studyNagKey = '';
 let _studyNagGender = '';   // 지금 떠 있는 팝업이 어느 성별로 그려졌는지(뒤늦게 성별을 알면 다시 그린다)
 // settings/vacation_mode 를 아직 못 읽었으면 교시 구성이 확정 전이다.
@@ -2709,6 +2742,9 @@ function enterApp() {
   buildDailyPeriods();
   buildWeeklyTable();
   buildMyStats();
+
+  // 웹앱 종료 안내(네이티브 앱으로 이전)
+  try { showAppMoveNotice(); } catch(e) {}
 
   // 교시 중이면 잔소리 한 번 (방학 설정이 늦게 오면 subscribeVacationMode에서 다시 확인한다)
   try { maybeShowStudyNag(); } catch(e) {}
