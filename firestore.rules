@@ -693,7 +693,13 @@ service cloud.firestore {
     //   시험 문항이라 학생에게 새면 안 된다 → 읽기는 일일테스트 권한자(원장 두 분)만, 화면에서 쓰기 없음.
     //   2026-10-06 학교 기출(sm_bankExams — 시험지 하나 = 문서 하나 + _index, NGD 자료 포함)도 같은 규칙 → sm_bank* 전부.
     match /{coll}/{docId} {
-      allow read: if coll.matches('sm_bank.*') && isClinicUser();   // 10-08: 새봄클리닉 스위치 명단도(위 isClinicUser)
+      allow read: if coll.matches('sm_bank.*') && coll != 'sm_bankBooks' && isClinicUser();   // 10-08: 새봄클리닉 스위치 명단도(위 isClinicUser) — 스캔 교재(sm_bankBooks)는 빼고
+    }
+    // 2026-10-08 스캔 교재(마플교과서 3권 — 이원장 "문제집으로 고를 수 있는 기능") — 교재 한 권 = 문서 한 개(+ _index). 저작권 자료라
+    //   읽기는 원장 두 분(isDailyUser)만, 새봄클리닉 스위치 명단 선생님은 못 읽음. 쓰기는 원장 PC books_sync.py(관리자 REST)만.
+    match /sm_bankBooks/{docId} {
+      allow read: if isDailyUser();
+      allow write: if false;
     }
     // 승인 목록: 본인 문서만 읽기(경영앱이 '승인 대기'를 안내하려고), 쓰기는 서버만.
     match /staff_allow/{uid} {
