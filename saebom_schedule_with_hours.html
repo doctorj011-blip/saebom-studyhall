@@ -6871,9 +6871,9 @@ window.checkinAway = async function() {
     const mealName = mealAwayTargetFor(student, nowMs);
     _showAwayDone(student, '🚶',
       mealName ? `외출 처리 · 잘 다녀오세요 (학부모님께 ${mealName} 외출 알림 발송)`
-               : '외출 처리 · 잘 다녀오세요 (문자 발송 없음)', timeStr);
+               : '외출 처리 · 잘 다녀오세요', timeStr);
     window.KioskAvatar?.done(student, 'away');
-    if (mealName) sendAwaySMS(student, false, timeStr, mealName).catch(console.error);
+    sendAwaySMS(student, false, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, false, timeStr);
     // 세션 문서에 외출 시작(awayStartTs) 기록 — 사용시간 제외의 원본
     // checkin_logs에 외출(out·away) 감사 기록
@@ -6908,7 +6908,7 @@ window.checkinAwayReturn = async function() {
     student.awayAt = '';
     _showAwayDone(student, '✅',
       mealName ? `복귀 완료 · 어서 오세요 (학부모님께 ${mealName} 복귀 알림 발송)`
-               : '복귀 완료 · 어서 오세요 (문자 발송 없음)', timeStr);
+               : '복귀 완료 · 어서 오세요', timeStr);
     window.KioskAvatar?.done(student, 'return');
     // 교시 중 복귀 = 늦게 들어오는 것이므로 신규 입실과 똑같이 스터디룸으로 보낸다(예외 없음).
     // 쉬는 시간에 복귀했으면 배정 없이 바로 좌석으로 간다.
@@ -6919,7 +6919,7 @@ window.checkinAwayReturn = async function() {
         `스터디룸 ${sr.room}번에서 공부를 하다가 쉬는 시간에 좌석으로 이동해 주세요`;
       showStudyroomFullscreen(sr.room, maskName(student.name));
     }
-    if (mealName) sendAwaySMS(student, true, timeStr, mealName).catch(console.error);
+    sendAwaySMS(student, true, timeStr, mealName).catch(console.error);
     saveAwayToFirebase(student, true, timeStr);
     // 세션 문서에 외출 구간(awayMs) 정산 — 사용시간 제외의 원본
     // checkin_logs에 복귀(in·away) 감사 기록
@@ -7344,6 +7344,14 @@ window.mealAwayTargetFor = mealAwayTargetFor;
 
 // 식사 외출/복귀 학부모 알림. 템플릿 ID가 비어 있으면 문자(LMS)로 폴백한다.
 async function sendAwaySMS(student, isReturn, timeStr, mealName) {
+  // 식사시간이 아닌 외출·복귀는 학부모 앱 푸시만 보낸다(알림톡 없음 — 건당 유료라 식사 외출만 유지)
+  if (!mealName) {
+    if (window.skipsAlimtalk(student)) return;
+    const body = isReturn ? `${student.name} 학생이 ${timeStr}에 외출에서 복귀하였습니다.`
+                          : `${student.name} 학생이 ${timeStr}에 외출하였습니다.`;
+    await window._parentAppReach(student.name, 'away', body);
+    return;
+  }
   // 서버(appauth smsOnAway)가 보내는 중이면 여기서는 손대지 않는다(이중 발송 방지).
   // 서버는 checkin_logs 의 away 마커를 트리거로 잡으므로, 이 함수가 생략돼도
   // saveCheckinToFirebase(…, awayFlag=true) 가 그대로 돌아 알림이 나간다.
