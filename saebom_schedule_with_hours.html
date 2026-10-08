@@ -1085,6 +1085,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         <span onclick="togglePenaltyBoard()" style="cursor:pointer;user-select:none" title="벌점 현황 접기/펼치기"><i id="penalty-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#c62828;transition:transform .15s" aria-hidden="true"></i> <i class="ti ti-alert-triangle" style="font-size:14px;color:#c62828" aria-hidden="true"></i> 오늘 벌점 현황</span>
         <span style="display:flex;align-items:center;gap:8px">
           <span id="penalty-board-summary" style="font-size:11px;color:var(--color-text-tertiary);font-weight:600"></span>
+          <button id="appeal-pending-badge" onclick="showPenaltyModal()" style="display:none;padding:3px 9px;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer"></button>
           <button onclick="showPenaltyModal()" style="padding:3px 9px;border:1px solid #e5e7eb;background:#ffffff;color:#6b7280;border-radius:7px;font-size:11px;font-weight:600;cursor:pointer">전체 보기</button>
         </span>
       </div>
@@ -5246,6 +5247,7 @@ async function _renderPenaltyList(filterSeatKey) {
     let docs = [];
     snap.forEach(d => docs.push({ id: d.id, ...d.data() }));
     if (filterSeatKey && !(_pStu && _pStu.uid)) docs = window._onlyMine(docs, _nameForSeatKey(filterSeatKey));
+    const appeals = await _loadAppeals();
     if (!docs.length) {
       bodyEl.innerHTML = `<div style="text-align:center;padding:28px;color:#aaaaaa;font-size:13px">${filterSeatKey ? '부과된 벌점이 없습니다' : '벌점 기록이 없습니다'}</div>`;
       return;
@@ -5305,6 +5307,7 @@ async function _renderPenaltyList(filterSeatKey) {
                 ${doc.date.slice(5).replace('-','/')} (${doc.day||''}) ${when}${label}
                 <span style="color:#9ca3af">${meta}</span>
               </span>
+              ${_appealBadge(appeals[doc.id + '_' + pn])}
               <span style="font-weight:700;color:${p.canceled?'#9ca3af':'#c62828'};flex:0 0 auto">${p.canceled?'취소됨':pts+'점'}</span>
               <button onclick="togglePenaltyCancel('${doc.id}','${pn}')"
                 style="flex:0 0 auto;padding:3px 8px;border:1px solid ${p.canceled?'#6c5dd3':'#d1d5db'};background:#ffffff;color:${p.canceled?'#6c5dd3':'#6b7280'};border-radius:6px;font-size:11px;cursor:pointer">${p.canceled?'복구':'취소'}</button>
@@ -5336,7 +5339,7 @@ async function _renderPenaltyList(filterSeatKey) {
       bodyEl.innerHTML = `<div style="text-align:center;padding:28px;color:#aaaaaa;font-size:13px">${filterSeatKey ? '부과된 벌점이 없습니다' : '벌점 기록이 있는 학생이 없습니다'}</div>`;
       return;
     }
-    let html = curStudents.map(s => block(s, false)).join('');
+    let html = _pendingAppealsHtml(appeals, filterSeatKey) + curStudents.map(s => block(s, false)).join('');
     if (!curStudents.length) html = `<div style="text-align:center;padding:20px 0 14px;color:#aaaaaa;font-size:13px">${cyc.label} 벌점 기록이 있는 학생이 없습니다</div>`;
     if (pastOnly.length) html += fold('pastonly', `지난 달에만 기록이 있는 학생 ${pastOnly.length}명 보기`, `<div style="margin-top:6px">${pastOnly.map(s => block(s, true)).join('')}</div>`, 'margin-top:2px');
 
@@ -5399,6 +5402,123 @@ window.addManualPenalty = async function(seatKey, name){
     await _renderPenaltyList(_penaltyModalFilter);
     try { applyPenaltyBadges(); } catch(e){}
   } catch(e){ console.error('수기 벌점 부과 실패:', e); alert('부과 실패: ' + (e.message || e)); }
+};
+
+// ── 벌점 소명 (2026-10-08) ──
+// 학생·학부모가 앱에서 벌점 알림을 눌러 사유·증빙 사진을 낸다(서버 submitPenaltyAppeal → penalty_appeals/{문서}_{교시}).
+// 여기서 보고 [벌점 취소]하면 그 교시 벌점을 canceled 로 바꾸고 소명을 accepted 로, [반려]는 rejected + 사유.
+// 읽기·판정은 관리자 기기 로그인(isAdminDevice)이 있어야 된다 — 키오스크에서는 조용히 빈 목록.
+const _APPEAL_LABEL = { pending: '소명 대기', accepted: '소명 인정', rejected: '소명 반려' };
+async function _loadAppeals() {
+  const map = {};
+  try {
+    const { collection, getDocs } = window._fs;
+    (await getDocs(collection(window._adminDb, 'penalty_appeals'))).forEach(d => { map[d.id] = { id: d.id, ...d.data() }; });
+  } catch (e) { console.warn('[소명] 목록 읽기 실패(관리자 기기 로그인 전?):', e && e.code); }
+  window._appealCache = map;
+  _setAppealBadge(Object.values(map).filter(a => a.status === 'pending').length);
+  return map;
+}
+function _setAppealBadge(n) {
+  const el = document.getElementById('appeal-pending-badge');
+  if (!el) return;
+  el.style.display = n ? '' : 'none';
+  el.textContent = `📝 소명 ${n}건`;
+}
+// 대시보드 배지 — 1분마다 대기 건수만 센다(관리자 기기가 아니면 실패하고 숨긴 채로 둔다)
+async function _pollAppeals() {
+  try {
+    const { collection, getDocs, query, where } = window._fs;
+    const snap = await getDocs(query(collection(window._adminDb, 'penalty_appeals'), where('status', '==', 'pending')));
+    _setAppealBadge(snap.size);
+  } catch (e) { /* 키오스크·로그인 전 */ }
+}
+setTimeout(() => { _pollAppeals(); setInterval(_pollAppeals, 60000); }, 8000);
+
+function _appealBadge(a) {
+  if (!a) return '';
+  const c = a.status === 'pending' ? '#b45309;background:#fffbeb;border-color:#f59e0b'
+          : a.status === 'accepted' ? '#059669;background:#ecfdf5;border-color:#6ee7b7'
+          : '#6b7280;background:#f3f4f6;border-color:#d1d5db';
+  return `<button onclick="openAppealModal('${a.id}')" style="flex:0 0 auto;padding:3px 7px;border:1px solid;color:${c};border-radius:6px;font-size:11px;font-weight:700;cursor:pointer">📝 ${_APPEAL_LABEL[a.status] || '소명'}</button>`;
+}
+function _pendingAppealsHtml(appeals, filterSeatKey) {
+  const list = Object.values(appeals).filter(a => a.status === 'pending' && (!filterSeatKey || String(a.seatKey) === String(filterSeatKey)))
+    .sort((a, b) => (a.date < b.date ? 1 : -1));
+  if (!list.length) return '';
+  const esc = v => String(v || '').replace(/</g, '&lt;');
+  return `<div style="border:1.5px solid #f59e0b;background:#fffbeb;border-radius:12px;padding:10px 14px;margin-bottom:10px">
+    <div style="font-size:13px;font-weight:800;color:#b45309;margin-bottom:4px">📝 확인할 소명 ${list.length}건</div>
+    ${list.map(a => `<div onclick="openAppealModal('${a.id}')" style="cursor:pointer;font-size:12px;padding:6px 0;border-top:1px solid #fde68a">
+      <b>${esc(a.name)}</b> <span style="color:#9ca3af">${esc(a.seatKey)}번 · ${esc(a.date).slice(5).replace('-', '/')} · ${a.by === 'parent' ? '학부모' : '학생'}</span><br>
+      <span style="color:#374151">${esc(a.reason).slice(0, 60)}${(a.reason || '').length > 60 ? '…' : ''}</span>${(a.photos || []).length ? ` <span style="color:#9ca3af">· 사진 ${a.photos.length}</span>` : ''}
+    </div>`).join('')}
+  </div>`;
+}
+
+window.openAppealModal = function(id) {
+  const a = (window._appealCache || {})[id];
+  if (!a) { alert('소명을 찾을 수 없습니다. 창을 다시 열어 주세요.'); return; }
+  document.getElementById('appeal-modal')?.remove();
+  const esc = v => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  const pen = a.penalty || {};
+  const penLabel = pen.type === 'noshow' ? '무단결석' : pen.type === 'late' ? '지각' : (pen.reason || pen.type || '벌점');
+  const at = a.createdAt && a.createdAt.toDate ? a.createdAt.toDate().toLocaleString('ko-KR', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+  const ov = document.createElement('div');
+  ov.id = 'appeal-modal';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML = `<div style="background:#ffffff;border-radius:18px;padding:20px;width:min(94vw,440px);max-height:86vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.3)">
+    <div style="font-size:15px;font-weight:800;color:#1e1b4b">📝 벌점 소명 · ${_APPEAL_LABEL[a.status] || ''}</div>
+    <div style="font-size:12px;color:#6b7280;margin:4px 0 12px">${esc(a.name)} · ${esc(a.seatKey)}번 · ${esc(a.date)} ${/^\d+$/.test(a.period) ? a.period + '교시 ' : ''}${esc(penLabel)} ${pen.points || 1}점<br>${a.by === 'parent' ? '학부모' : '학생'}가 냄${at ? ' · ' + at : ''}</div>
+    <div style="font-size:13px;color:#1f2937;line-height:1.7;white-space:pre-wrap;word-break:break-word;background:#f9fafb;border-radius:10px;padding:10px 12px">${esc(a.reason)}</div>
+    ${(a.photos || []).length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${a.photos.map(u => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(u)}" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb"></a>`).join('')}</div>` : '<div style="font-size:11.5px;color:#9ca3af;margin-top:8px">증빙 사진 없음</div>'}
+    ${a.status === 'rejected' && a.decisionNote ? `<div style="font-size:12px;color:#6b7280;margin-top:10px">반려 사유: ${esc(a.decisionNote)}</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button onclick="document.getElementById('appeal-modal').remove()" style="flex:1;padding:11px;background:#f3f4f6;color:#374151;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">닫기</button>
+      ${a.status !== 'rejected' ? `<button onclick="decideAppeal('${a.id}', false)" style="flex:1;padding:11px;background:#ffffff;color:#6b7280;border:1.5px solid #d1d5db;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">반려</button>` : ''}
+      ${a.status !== 'accepted' ? `<button onclick="decideAppeal('${a.id}', true)" style="flex:1.4;padding:11px;background:#059669;color:#ffffff;border:none;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer">벌점 취소(인정)</button>` : ''}
+    </div>
+  </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+};
+
+window.decideAppeal = async function(id, accept) {
+  if (!_requireDirector()) return;
+  const a = (window._appealCache || {})[id];
+  if (!a) return;
+  let note = '';
+  if (accept) {
+    if (!confirm(`${a.name} 학생의 소명을 인정하고 이 벌점을 취소할까요?`)) return;
+  } else {
+    note = prompt('반려 사유 (학생·학부모 앱에 보입니다)', '');
+    if (note == null) return;
+  }
+  try {
+    const { doc, getDoc, setDoc, updateDoc } = window._fs;
+    const db = window._adminDb;
+    if (accept) {
+      const ref = doc(db, 'penalties', a.docId);
+      const snap = await getDoc(ref);
+      const data = snap.exists() ? snap.data() : null;
+      if (data && data.periods && data.periods[a.period] && !data.periods[a.period].canceled) {
+        const periods = { ...data.periods, [a.period]: { ...data.periods[a.period], canceled: true } };
+        await setDoc(ref, { ...data, periods });
+      }
+    }
+    await updateDoc(doc(db, 'penalty_appeals', id), {
+      status: accept ? 'accepted' : 'rejected', decisionNote: String(note).slice(0, 300),
+      decidedAt: new Date().toISOString(), updatedAt: new Date().toISOString()
+    });
+    document.getElementById('appeal-modal')?.remove();
+    _penaltyDocsTs = 0;
+    try { applyPenaltyBadges(); } catch (e) {}
+    if (document.getElementById('penalty-modal-overlay')) _renderPenaltyList(_penaltyModalFilter);
+    showAdminToast(accept ? `✅ ${a.name} 소명 인정 · 벌점 취소` : `↩️ ${a.name} 소명 반려`);
+  } catch (e) {
+    console.error('소명 판정 실패:', e);
+    alert('처리 실패: ' + (e.message || e));
+  }
 };
 
 // 교시별 벌점 취소 ↔ 복구 토글 (문서는 남기고 canceled 플래그만 변경)

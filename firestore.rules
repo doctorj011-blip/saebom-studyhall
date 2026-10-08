@@ -225,6 +225,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // 벌점 소명 (2026-10-08) — 학생·학부모 앱이 서버 함수(submitPenaltyAppeal)로만 만든다.
+    // 본인·그 학부모와 관리자 기기만 읽고, 관리자 기기는 판정 필드만 고친다(승인 = 벌점 취소는 penalties 쪽).
+    match /penalty_appeals/{id} {
+      allow read: if isAdminDevice() || isStudentSid(resource.data.uid) || isParentOf(resource.data.uid);
+      allow update: if isAdminDevice()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decisionNote', 'decidedAt', 'updatedAt'])
+        && request.resource.data.status in ['pending', 'accepted', 'rejected'];
+      allow create, delete: if false;
+    }
+
     // 상점: 관리자가 수동 부여 (사용시간 탭 상점현황). 벌점과 동일한 개방 정책.
     match /merits/{id} {
       allow read: if true;
