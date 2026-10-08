@@ -7136,6 +7136,45 @@ window.awrCommit = async function(){
   }
 };
 
+// 🚶 외출 처리 — 관리자 보정 (외출을 안 누르고 나간 학생을 관리앱에서 외출로 돌린다)
+// 시작 시각을 받아 세션 awayStartTs 로 박는다. 관리자 보정이라 학부모 알림·자동문은 건너뛴다.
+window.adminAwayStart = async function(name){
+  const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
+  if (!rec) { showAdminToast(`ℹ️ ${name} 학생은 입실 중이 아닙니다`); return; }
+  if (window.awayInfo && window.awayInfo(name)) { showAdminToast(`ℹ️ ${name} 학생은 이미 외출 중입니다`); return; }
+  const hhmm = prompt(`${name} 학생 외출 시작 시각 (HH:MM)\n학부모 알림은 발송되지 않습니다.`, _awrTimeInputValue(Date.now()));
+  if (hhmm == null) return;
+  const p = String(hhmm).trim().split(':'), h = Number(p[0]), m = Number(p[1]);
+  if (!Number.isFinite(h) || !Number.isFinite(m)) { showAdminToast('⚠️ 시각을 HH:MM 으로 입력해 주세요'); return; }
+  const n = new Date();
+  let ts = new Date(n.getFullYear(), n.getMonth(), n.getDate(), h, m, 0, 0).getTime();
+  if (ts > Date.now() + 60000) ts -= 86400000; // 자정 넘겨 처리하는 전날 밤 외출
+  if (ts > Date.now() + 60000) { showAdminToast('⚠️ 외출 시각이 현재보다 미래입니다'); return; }
+  if (rec.inTs && ts < rec.inTs) { showAdminToast('⚠️ 외출 시각이 입실 시각보다 이릅니다'); return; }
+  const timeStr = new Date(ts).toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+  const student = STUDENTS.find(s => s.name === name) || { name, seat: rec.seat || '' };
+  try {
+    // 세션(학습시간 원본)이 먼저 — 실패하면 표시를 바꾸지 않는다
+    const api = await waitSessionApi();
+    const r = await api.away(student, false, ts);
+    if (!r || r.ok === false) { showAdminToast(`⚠️ 외출 저장 실패 (${(r && r.reason) || '오류'}) — 상태를 바꾸지 않았습니다`); return; }
+    await saveAwayToFirebase(student, false, timeStr);
+    const date = new Date(ts).toLocaleDateString('ko-KR').replace(/\. /g,'-').replace('.','');
+    saveCheckinToFirebase(student, true, timeStr, date, true, ts).catch(console.error);
+    window._awayStudents[name] = timeStr;
+    window._awayStartTs = window._awayStartTs || {};
+    window._awayStartTs[name] = ts;
+    buildDashboard();
+    buildCheckinTodayList();
+    if (document.getElementById('fp-room')) buildFloorplan();
+    if (window._todayModalRender) { try { window._todayModalRender(); } catch(e){} }
+    showAdminToast(`✅ ${name} 외출 처리 (${timeStr})`);
+  } catch(e){
+    console.error('외출 처리 보정 실패:', e);
+    showAdminToast('⚠️ 외출 처리 중 오류: ' + (e && e.message ? e.message : e));
+  }
+};
+
 // 이월된 유령 입실 기록을 정리하고 "새로 입실"로 처리
 window.checkinFreshCheckin = function() {
   const btn = document.getElementById('confirm-ok-btn');
@@ -8763,8 +8802,13 @@ function showFpPopup(name, seat, phone, parent, status, statusColor, isIn) {
     : '';
   // 외출 중이면 복귀 보정 — 복귀를 안 누르고 들어온 학생을 여기서 바로 재실로 되돌린다
   const _pAw = isIn && window.awayInfo ? window.awayInfo(name) : null;
-  const awayReturnBtn = _pAw
-    ? `<button onclick="document.getElementById('fp-popup-overlay').remove();adminAwayReturn('${String(name).replace(/'/g,"\\'")}')" style="width:100%;padding:10px;background:#fef3c7;color:#b45309;border:1.5px solid #fcd34d;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:8px">🚶 외출 복귀 처리${_pAw.min != null ? ` (${_pAw.min}분째)` : ''}</button>`
+  // 재실 중이면 외출·복귀를 나란히 — 지금 상태에서 못 누르는 쪽은 흐리게
+  const _pNm = String(name).replace(/'/g,"\\'");
+  const awayReturnBtn = isIn
+    ? `<div style="display:flex;gap:6px;margin-bottom:8px">
+        <button ${_pAw ? 'disabled' : ''} onclick="document.getElementById('fp-popup-overlay').remove();adminAwayStart('${_pNm}')" style="flex:1;padding:10px;background:#ffffff;color:#b45309;border:1.5px solid #fcd34d;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;${_pAw ? 'opacity:.4;cursor:not-allowed' : ''}">🚶 외출 처리</button>
+        <button ${_pAw ? '' : 'disabled'} onclick="document.getElementById('fp-popup-overlay').remove();adminAwayReturn('${_pNm}')" style="flex:1;padding:10px;background:#fef3c7;color:#b45309;border:1.5px solid #fcd34d;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;${_pAw ? '' : 'opacity:.4;cursor:not-allowed'}">↩️ 외출 복귀${_pAw && _pAw.min != null ? ` (${_pAw.min}분째)` : ''}</button>
+      </div>`
     : '';
   // 특별관리 메모 — 있으면 상태 바로 아래에 내용을 펼쳐 준다(자리를 클릭한 이유가 대개 이것)
   const fpmMemo = fpMemoOf(name);
@@ -17444,6 +17488,12 @@ window.fpSeatContextMenu = function(e, seatNum, key) {
       style="padding:10px 14px;font-size:13px;cursor:pointer;color:#b45309;font-weight:700;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0;background:#fef3c7"
       onmouseover="this.style.background='#fde68a'" onmouseout="this.style.background='#fef3c7'">
       🚶 외출 복귀 처리${_awCtx.min != null ? ` (${_awCtx.min}분째)` : ''}
+    </div>` : ''}
+    ${isIn && !_awCtx ? `
+    <div onclick="adminAwayStart('${_nameArg}');document.getElementById('fp-ctx-menu')?.remove()"
+      style="padding:10px 14px;font-size:13px;cursor:pointer;color:#b45309;display:flex;align-items:center;gap:8px;border-top:1px solid #f0f0f0"
+      onmouseover="this.style.background='#fef3c7'" onmouseout="this.style.background=''">
+      🚶 외출 처리
     </div>` : ''}
     ${isIn ? `
     <div onclick="adminForceCheckout('${student.name}');document.getElementById('fp-ctx-menu')?.remove()"
