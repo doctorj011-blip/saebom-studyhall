@@ -9707,6 +9707,9 @@ function showPeriodStudents(periodIdx) {
 
 // ── 대시보드 1분마다 자동 갱신 (교시 변경 반영) ──
 // 날짜 변경 감지 키는 로케일 포맷이 아닌 ISO(sessIsoDate) 사용 — 메모리 비교 전용이라 저장 호환 문제 없음
+// ☁️ 2026-10-08부터 서버(functions jobsDaily 02:07·jobsMidnight 00:02·jobsIntraday)도 아래 자동 작업을 똑같이 돈다
+//    — 키오스크가 꺼진 밤에도 돌게. 코드는 이 파일에서 그대로 잘라 간다(functions/jobs/extract.mjs).
+//    벌점·상점·퇴원·새벽 리셋·좌석 예약·미퇴실 마감 코드를 고치면 `node functions/jobs/extract.mjs` 후 함수도 배포할 것.
 let _lastResetDate = sessIsoDate(Date.now());
 // 예약 퇴원은 2시 리셋과 별도로 추적한다(아래 주석 참고).
 let _lastWithdrawDate = sessIsoDate(Date.now());

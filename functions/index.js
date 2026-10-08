@@ -2426,3 +2426,41 @@ exports.surveyAutoExtend = onDocumentWritten(
     });
   }
 );
+
+// ══════════════════════════════════════════════════════════════
+// 관리앱 자동 작업 — 서버 상시 실행 (2026-10-08)
+// ══════════════════════════════════════════════════════════════
+// 미입실·지각 벌점, 주간목표·주기·플래너 상점, 예약 퇴원, 새벽 스케줄 초기화, 예약 좌석 적용,
+// 미퇴실 자동 마감, 퇴원 보관함 정리는 원래 관리앱(saebom_schedule_with_hours.html)을 켜 둔 기기
+// — 사실상 현관 키오스크 2대 — 가 돌렸다. 키오스크가 꺼진 밤에는 안 돌았고, 키오스크 화면을
+// 관리앱에서 떼어 낼 수도 없었다. 서버가 '늘 켜진 기기 하나'로 같은 코드를 돌린다.
+//
+// 코드는 관리앱에서 그대로 잘라 온다(jobs/extract.mjs → jobs/legacy.src.js, 실행은 jobs/runner.js).
+// ⚠️ 관리앱의 이 작업들을 고치면: `node functions/jobs/extract.mjs` 다시 돌리고 아래 함수를 배포한다.
+// 기기 쪽 코드는 그대로 둬도 된다 — 원래 여러 기기가 동시에 돌려도 되게(완료 표시·고정 문서ID·트랜잭션)
+// 만들어져 있어서 서버가 하나 더 끼어도 중복 부과가 없다(2026-10-08 운영 데이터 복사본으로 키오스크
+// 실행 결과와 서버 실행 결과를 대조 — 실행 시각 외 차이 0건).
+const legacyJobs = require('./jobs/runner');
+const JOB_OPTS = { timeZone: 'Asia/Seoul', region: 'us-central1', maxInstances: 1, timeoutSeconds: 540, memory: '512MiB' };
+async function _runLegacy(tag, names) {
+  const r = await legacyJobs.runJobs(names, { log: { log() {}, info() {}, warn: (...a) => logger.warn(tag, ...a), error: (...a) => logger.error(tag, ...a) } });
+  const failed = Object.entries(r).filter(([, v]) => !v || v.ok !== true).map(([k]) => k);
+  (failed.length ? logger.error : logger.info)(tag, { result: r, failed });
+}
+
+// 새벽 2시: 관리앱의 '새벽 2시 블록'(1분 틱)과 앱 시작 때 도는 판정을 한꺼번에.
+// 키오스크가 먼저 돌았으면 완료 표시를 보고 쓰기 없이 지나간다.
+exports.jobsDaily = onSchedule({ ...JOB_OPTS, schedule: '7 2 * * *' }, () => _runLegacy('jobsDaily', [
+  'autoCloseStaleSessions', 'resetSchedulesToBase', 'commitPendingSeatsIfDue', 'assessNoShowPenalties',
+  'assessWeeklyGoals', 'assessCycleMerits', 'assessPlannerExcellence', 'autoWithdrawExpired', 'cleanupWithdrawnStudents',
+]));
+
+// 자정: 예약 퇴원(withdrawAt 다음 날) — 관리앱은 날짜가 바뀐 첫 1분 틱에 돈다.
+exports.jobsMidnight = onSchedule({ ...JOB_OPTS, schedule: '2 0 * * *' }, () => _runLegacy('jobsMidnight', ['autoWithdrawExpired']));
+
+// 당일 벌점 즉시판정: 5분마다 깨어나 '방금 판정 가능해진 교시'가 있을 때만 돈다(하루 11번 안팎).
+// 매번 다 돌리면 명부·세션·로그를 통째로 읽어 하루 수십만 건 읽기가 된다.
+exports.jobsIntraday = onSchedule({ ...JOB_OPTS, schedule: 'every 5 minutes' }, async () => {
+  if (!legacyJobs.intradayDue()) return;
+  await _runLegacy('jobsIntraday', ['assessNoShowIntraday']);
+});
