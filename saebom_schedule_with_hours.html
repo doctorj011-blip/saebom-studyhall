@@ -6984,6 +6984,16 @@ async function saveAwayToFirebase(student, isBack, timeStr) {
 // 학부모 알림과 스터디룸 배정 안내는 건너뛴다 — 학생의 실제 출입이 아니라 기록 보정이므로.
 window._awrCtx = null;
 
+// 관리자가 대신 처리한 외출·복귀도 학생·학부모에게 푸시 — 늦게 처리해도 보낸다(원장 10-08: 신뢰가 우선).
+// 서버 withAdminNote(입실·퇴실)와 같은 안내를 붙인다. 알림톡은 보내지 않는다.
+const ADMIN_PUSH_NOTE = '(학생이 직접 체크하지 않아 관리자가 처리했어요 · 실제 시각과 다를 수 있어요)';
+function _adminAwayPush(student, isReturn, timeStr){
+  if (window.skipsAlimtalk(student)) return;
+  const body = (isReturn ? `${student.name} 학생이 ${timeStr}에 외출에서 복귀하였습니다.`
+                         : `${student.name} 학생이 ${timeStr}에 외출하였습니다.`) + '\n' + ADMIN_PUSH_NOTE;
+  window._parentAppReach(student.name, 'away', body).catch(console.error);
+}
+
 function _awrTimeInputValue(ms){
   const d = new Date(ms);
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
@@ -7060,7 +7070,7 @@ window.adminAwayReturn = function(name){
       <div style="font-size:12px;color:#6b7280;margin-bottom:14px">${name}${rec.seat ? ` · ${rec.seat}` : ''} · 입실 ${rec.inTime || ''}</div>
       ${body}
       <div style="font-size:11.5px;color:#6b7280;line-height:1.6;margin-top:12px;padding-top:10px;border-top:1px solid #f0f0f0">
-        관리자 보정이라 <b>학부모 알림과 스터디룸 배정 안내는 나가지 않습니다.</b>
+        학생·학부모에게 <b>'관리자 처리' 안내와 함께 푸시</b>가 갑니다(알림톡·스터디룸 안내는 없음).
         ${hasStart ? '<br>입·퇴실 기록에는 입력한 복귀 시각으로 남습니다.' : ''}
       </div>
       <div style="display:flex;gap:8px;margin-top:14px">
@@ -7093,7 +7103,7 @@ window.awrCommit = async function(){
   const mins = ctx.startTs ? Math.max(0, Math.round((retMs - ctx.startTs) / 60000)) : null;
   if (!confirm(`${name} 학생을 ${timeStr} 복귀로 처리할까요?`
       + (mins != null ? `\n외출 ${formatTotalTime(mins)}이 학습시간에서 제외됩니다.` : '\n(정산 없이 외출 표시만 해제됩니다)')
-      + '\n학부모 알림은 발송되지 않습니다.')) return;
+      + '\n학생·학부모에게 관리자 처리 안내와 함께 푸시가 갑니다.')) return;
 
   ctx.busy = true;
   const okBtn = document.getElementById('awr-ok');
@@ -7127,6 +7137,7 @@ window.awrCommit = async function(){
     buildCheckinTodayList();
     if (document.getElementById('fp-room')) buildFloorplan();
     if (window._todayModalRender) { try { window._todayModalRender(); } catch(e){} }
+    _adminAwayPush(student, true, timeStr);
     showAdminToast(`✅ ${name} 복귀 처리 완료 (${timeStr}${mins != null ? ` · 외출 ${formatTotalTime(mins)}` : ''})`);
   } catch(e){
     console.error('외출 복귀 보정 실패:', e);
@@ -7142,7 +7153,7 @@ window.adminAwayStart = async function(name){
   const rec = todayRecords.find(r => r.studentName === name && !r.outTime);
   if (!rec) { showAdminToast(`ℹ️ ${name} 학생은 입실 중이 아닙니다`); return; }
   if (window.awayInfo && window.awayInfo(name)) { showAdminToast(`ℹ️ ${name} 학생은 이미 외출 중입니다`); return; }
-  const hhmm = prompt(`${name} 학생 외출 시작 시각 (HH:MM)\n학부모 알림은 발송되지 않습니다.`, _awrTimeInputValue(Date.now()));
+  const hhmm = prompt(`${name} 학생 외출 시작 시각 (HH:MM)\n학생·학부모에게 '관리자 처리' 안내와 함께 푸시가 갑니다.`, _awrTimeInputValue(Date.now()));
   if (hhmm == null) return;
   const p = String(hhmm).trim().split(':'), h = Number(p[0]), m = Number(p[1]);
   if (!Number.isFinite(h) || !Number.isFinite(m)) { showAdminToast('⚠️ 시각을 HH:MM 으로 입력해 주세요'); return; }
@@ -7168,6 +7179,7 @@ window.adminAwayStart = async function(name){
     buildCheckinTodayList();
     if (document.getElementById('fp-room')) buildFloorplan();
     if (window._todayModalRender) { try { window._todayModalRender(); } catch(e){} }
+    _adminAwayPush(student, false, timeStr);
     showAdminToast(`✅ ${name} 외출 처리 (${timeStr})`);
   } catch(e){
     console.error('외출 처리 보정 실패:', e);
@@ -11476,7 +11488,7 @@ function _sessPtrRef(name){ return doc(db, SESS_PTR_COL, String(name)); }
 // ── 입실 (트랜잭션) ──
 // 이미 오늘 열린 세션이 있으면 거부. 전날 미퇴실 세션이 남아 있으면
 // 같은 트랜잭션 안에서 01:00 상한으로 마감하고 새 세션을 연다("새로 입실"이 원자적).
-async function sessionCheckin(student){
+async function sessionCheckin(student, openedBy){
   const seat = _sessCleanSeat(student.seat), name = student.name, uid = _sessUid(student);
   const exec = async () => runTransaction(db, async tx => {
     const now = Date.now();
@@ -11507,7 +11519,7 @@ async function sessionCheckin(student){
       sid, seat, studentName: name, ...(uid ? { uid } : {}),
       inTs: now, outTs: null, awayMs: 0, awayStartTs: null, durationMin: null,
       inDate: SH.sessIsoDate(now), monthKey: SH.sessMonthKey(now),
-      status:'open', closedBy: null, createdAt: serverTimestamp(), updatedAt: now
+      status:'open', closedBy: null, ...(openedBy ? { openedBy } : {}), createdAt: serverTimestamp(), updatedAt: now
     });
     tx.set(ptrRef, { sessionId: sid, seat, studentName: name, ...(uid ? { uid } : {}), inTs: now, inDate: SH.sessIsoDate(now), updatedAt: now });
     return { ok:true, sid, inTs: now, staleClosed };
@@ -17427,7 +17439,7 @@ window.adminForceCheckin = function(name) {
   }
 
   saveCheckinToFirebase(student, false, timeStr);
-  waitSessionApi().then(api => api.checkin(student)).catch(console.error);
+  waitSessionApi().then(api => api.checkin(student, 'admin')).catch(console.error); // 서버 푸시에 '관리자 처리' 안내가 붙는다
   sendCheckinSMS(student, false, timeStr, 0);
   buildDashboard();
   buildCheckinTodayList();
