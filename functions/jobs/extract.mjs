@@ -61,7 +61,7 @@ const parts = [
   ['클래식 — 스케줄 문자열 해석', byNames(C, ['window.parseScheduleStr'])],
   ['모듈 — 세션 상수', byNames(M, ['SESS_COL', 'SESS_PTR_COL', 'SH'])],
   ['모듈 — 미퇴실 세션 자동 마감', byNames(M, ['_sessCleanSeat', '_sessPtrRef', '_sessUid', '_sessFoldAway', 'recomputeMonthHours', 'autoCloseStaleSessions'])],
-  ['모듈 — 새벽 스케줄 초기화·예약 좌석 적용', range(M, '_dailyResetAlreadyDone', 'window.commitPendingSeatsIfDue', ['window.applyPendingSeatsNow'])],
+  ['모듈 — 새벽 스케줄 초기화', range(M, '_dailyResetAlreadyDone', 'window.resetSchedulesToBase')],
   ['모듈 — 벌점(무단결석·지각)·주간목표·주기·플래너 상점', range(M, 'NOSHOW_POINTS', '_writeCycleMerit')],
   ['모듈 — 자동 퇴원·보관함 정리', [...range(M, 'WITHDRAWN_KEEP_DAYS', 'window.autoWithdrawExpired'), ...byNames(M, ['cleanupWithdrawnStudents'])]],
 ];

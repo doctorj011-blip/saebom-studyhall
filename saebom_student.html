@@ -1337,12 +1337,6 @@ body{
         <div class="quick-card-sub">진행 중인 이벤트 확인</div>
         <div class="quick-card-bg">🎉</div>
       </div>
-      <div class="quick-card" id="home-seatmap-card" style="display:none" onclick="openSection('seatmap','#6C5DD3')">
-        <div class="quick-card-icon">🪑</div>
-        <div class="quick-card-title">자리 선택</div>
-        <div class="quick-card-sub" id="home-seatmap-deadline">배치도에서 내 자리 선택</div>
-        <div class="quick-card-bg">🪑</div>
-      </div>
     </div>
   </div>
   <nav class="bottom-nav" id="home-bottom-nav">
@@ -1469,31 +1463,8 @@ body{
       </div>
     </div>
 
-    <div id="tab-seatmap" style="display:none;padding:12px">
-      <div id="seatmap-header" style="margin-bottom:12px">
-        <div class="section-label">SEAT SELECTION · 자리 선택</div>
-        <div id="seatmap-deadline" style="font-size:12px;color:var(--red);font-weight:700"></div>
-        <div style="font-size:12px;color:var(--text2);margin-top:6px">
-          <span style="display:inline-block;width:14px;height:14px;background:#DCFCE7;border:1.5px solid #4CAF50;border-radius:3px;vertical-align:middle;margin-right:4px"></span>선택 가능
-          <span style="display:inline-block;width:14px;height:14px;background:var(--surface);border:1px solid var(--border);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>선택 불가
-          <span style="display:inline-block;width:14px;height:14px;background:var(--amber);border-radius:3px;vertical-align:middle;margin:0 4px 0 12px"></span>내 자리
-        </div>
-      </div>
-      <div id="student-seatmap" style="overflow-x:auto"></div>
-    </div>
     <!-- 플래너 탭 -->
     <div id="tab-planner" style="display:none;padding:12px">
-
-      <!-- ── 학부모 공개 설정 ── 학생 본인이 정한다.
-           선생님·관리앱·AI 검사는 이 설정과 무관하게 항상 전부 본다(검사가 멈추면 안 되므로). -->
-      <div id="pl-privacy" style="display:flex;align-items:center;gap:10px;background:var(--card);border:1.5px solid var(--border);border-radius:var(--r-md);padding:12px 14px;margin-bottom:18px;box-shadow:var(--shadow-sm)">
-        <div id="pl-privacy-ico" style="font-size:19px;line-height:1"></div>
-        <div style="flex:1;min-width:0">
-          <div id="pl-privacy-title" style="font-size:13.5px;font-weight:800;color:var(--text)"></div>
-          <div id="pl-privacy-sub" style="font-size:11.5px;color:var(--text3);margin-top:3px;line-height:1.5"></div>
-        </div>
-        <button id="pl-privacy-btn" onclick="plannerTogglePrivacy()" style="border:none;cursor:pointer;font-family:inherit;font-size:12px;font-weight:800;padding:9px 13px;border-radius:20px;white-space:nowrap"></button>
-      </div>
 
       <!-- ── 오늘의 제출 ── 업로드는 여기서만 하고, 대상 날짜는 시계가 정한다(학생이 못 고름) -->
       <div class="section-label">TODAY · 오늘의 제출</div>
@@ -2752,11 +2723,9 @@ function enterApp() {
   // Firebase에서 기존 스케줄 & 공지 로드
   if (window._firebaseReady) {
     loadStudentScheduleFromFirebase();
-    checkSeatSelectionActive();
     loadNoticesFromFirebase();
     subscribeScheduleEdit();
     subscribeVacationMode();
-    subscribePlannerPrivacy();
     refreshStudentData();
     loadActualStudyData();
     loadEventsList();
@@ -2769,12 +2738,10 @@ function enterApp() {
   } else {
     window.addEventListener('firebase-ready', () => {
       loadStudentScheduleFromFirebase();
-      checkSeatSelectionActive();
-      loadNoticesFromFirebase();
+        loadNoticesFromFirebase();
       subscribeScheduleEdit();
       subscribeVacationMode();
-      subscribePlannerPrivacy();
-      refreshStudentData();
+        refreshStudentData();
       loadActualStudyData();
       loadEventsList();
       loadMyPenalties();
@@ -2840,12 +2807,9 @@ async function refreshStudentData() {
       // 옛 세션 캐시엔 gender가 없다 — 여기서 채운다.
       const g = data.gender === 'm' ? 'm' : 'f';
       currentStudent.gender = g;
-      // 태블릿 보관 관리 동의(학부모앱에서 설정) — 동의 학생만 홈에 태블릿 카드가 열린다
-      currentStudent.tabletConsent = data.tabletConsent === true;
+      // 태블릿 보관 — 기본은 면학관 관리. 학부모가 '학생 스스로 관리'(tabletConsent=false)로 바꾼 학생만 빠진다
+      currentStudent.tabletConsent = data.tabletConsent !== false;
       try { updateTabletCard(); } catch(e) {}
-      // 플래너 학부모 공개 설정 — 다른 기기에서 바꿨을 수 있으니 문서 값을 따른다
-      currentStudent.plannerHidden = data.plannerHidden === true;
-      try { renderPlannerPrivacy(); } catch(e) {}
       try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
       buildMyStats();
       // 잔소리 팝업이 성별을 모른 채 떠 있었다면 지금 알아낸 성별로 다시 그린다.
@@ -2863,29 +2827,12 @@ function subscribeScheduleEdit() {
     const db = window._db;
     const ref = window._fsDoc(db, 'settings', 'schedule_edit');
     window._fsOnSnapshot(ref, snap => {
-      scheduleEditEnabled = snap.exists() ? !!snap.data().enabled : false;
+      // 전체 허용(enabled) 또는 원장이 지정한 학생(uids)만 허용
+      const d = snap.exists() ? snap.data() : {};
+      scheduleEditEnabled = !!d.enabled || (!!currentStudent?.uid && Array.isArray(d.uids) && d.uids.includes(currentStudent.uid));
       updateScheduleEditBanner();
       buildWeeklyTable();
     });
-  } catch(e) {}
-}
-
-// ── 플래너 비공개 기능 전체 스위치(settings/planner_privacy) ──
-// 원장이 관리앱에서 끈다. 꺼지면 학생은 새로 잠글 수 없고, 이미 잠가 둔 학생의 플래너도
-// 학부모앱에 다시 보인다. 그래서 카드에 '지금 꺼져 있다'를 반드시 띄운다 —
-// 학생이 잠긴 줄 알고 있는데 실제로는 열려 있는 상태가 제일 나쁘다.
-// ★기본값은 켜짐이다. 문서가 없거나 못 읽었을 때 꺼짐으로 보면, 규칙·네트워크 문제 하나로
-//   학생들이 걸어 둔 잠금이 통째로 풀린다. 못 읽으면 학생 설정을 존중하는 쪽으로 넘어진다.
-let PLANNER_PRIVACY_ON = true;
-function subscribePlannerPrivacy() {
-  if (!window._firebaseReady) return;
-  try {
-    window._fsOnSnapshot(window._fsDoc(window._db, 'settings', 'planner_privacy'), snap => {
-      const next = snap.exists() ? snap.data().enabled !== false : true;
-      if (next === PLANNER_PRIVACY_ON) return;
-      PLANNER_PRIVACY_ON = next;
-      try { renderPlannerPrivacy(); } catch(e) {}
-    }, e => console.warn('[Planner] 비공개 기능 스위치 구독 실패 — 켜짐으로 진행:', e && e.code));
   } catch(e) {}
 }
 
@@ -3040,7 +2987,6 @@ const SECTION_NAMES = {
   quest: '연속 출석 퀘스트',
   planner: '플래너',
   studyroom: '스터디룸 신청',
-  seatmap: '자리 선택',
   score: '상점 · 벌점'
 };
 
@@ -3092,13 +3038,11 @@ function updateBottomNav(id) {
 // ── 탭 전환 ──
 function showTab(id, btn) {
   if (window.saTrack) saTrack('tab_view', { app_name: '학생앱', tab_name: id });
-  // 자리선택 탭 이탈 시 구독 해제
-  if (id !== 'seatmap' && seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
   // 현재 탭 저장
   try { sessionStorage.setItem('saebom_active_tab_student', id); } catch(e) {}
   if (id !== 'studyroom' && typeof studyroomUnsubscribe !== 'undefined' && studyroomUnsubscribe) { try{studyroomUnsubscribe();}catch(e){} studyroomUnsubscribe = null; }
   if (id === 'studyroom') { buildStudyroomPeriodBtns(); loadStudyroomData(); }
-  ['notice','events','daily','weekly','mystats','quest','seatmap','studyroom','planner','score'].forEach(t => {
+  ['notice','events','daily','weekly','mystats','quest','studyroom','planner','score'].forEach(t => {
     document.getElementById('tab-'+t).style.display = t===id ? 'block' : 'none';
   });
   // 상벌점 화면: 열 때마다 최신으로 다시 읽는다(관리자가 방금 준 상점도 바로 보이게)
@@ -4499,93 +4443,9 @@ function buildQuest() {
   el.innerHTML = html;
 }
 
-// ── 자리선택 배치도 ──
-// 미래 적용(예약) 자리변경: 관리자가 settings/seatSelection.effectiveDate(YYYY-MM-DD)를
-// 미래로 지정하면, 학생이 고른 자리는 지금 옮겨지지 않고 pendingSeats에 '예약'만 저장된다.
-// 실제 이동은 관리자앱이 그 날 새벽 2시 리셋에서 일괄 커밋한다.
-let _seatEffectiveDate = '';
-function _localDateIso(dt){ const y=dt.getFullYear(),m=String(dt.getMonth()+1).padStart(2,'0'),d=String(dt.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
-function _effDateLabel(iso){ const p=String(iso).split('-').map(Number); const dt=new Date(p[0],p[1]-1,p[2]); const dn=['일','월','화','수','목','금','토'][dt.getDay()]; return `${p[1]}월 ${p[2]}일(${dn})`; }
-function _isDeferredSeat(){ return _seatEffectiveDate && _seatEffectiveDate > _localDateIso(new Date()); }
-
-async function checkSeatSelectionActive() {
-  const db = window._db;
-  if (!db) return;
-  try {
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
-    const tabBtn = document.getElementById('seat-tab-btn');
-    if (!snap.exists()) {
-      document.getElementById('student-seatmap').innerHTML = '<div class="empty-state"><div class="empty-icon">🪑</div><div class="empty-text">현재 자리 선택 기간이 아닙니다.</div></div>';
-      return;
-    }
-    const d = snap.data ? snap.data() : null;
-    _seatEffectiveDate = (d && d.effectiveDate) || '';
-    const now = new Date();
-    const active = d && d.active && new Date(d.start) <= now && new Date(d.end) >= now;
-    const card = document.getElementById('home-seatmap-card');
-    if (active) {
-      const deadline = new Date(d.end);
-      const deadlineStr = deadline.toLocaleString('ko-KR', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'});
-      const applyNote = _isDeferredSeat() ? ` · 실제 적용: ${_effDateLabel(_seatEffectiveDate)}` : '';
-      document.getElementById('seatmap-deadline').textContent = `⏰ 선택 마감: ${deadlineStr}${applyNote}`;
-      document.getElementById('student-seatmap').innerHTML = '';
-      if (card) { card.style.display = ''; document.getElementById('home-seatmap-deadline').textContent = `⏰ 마감: ${deadlineStr}`; }
-      buildStudentSeatmap();
-    } else {
-      document.getElementById('seatmap-deadline').textContent = '';
-      document.getElementById('student-seatmap').innerHTML =
-        '<div class="empty-state"><div class="empty-icon">🪑</div><div class="empty-text">현재 자리 선택 기간이 아닙니다.<br>관리자가 자리 선택을 허용하면 여기서 선택할 수 있어요.</div></div>';
-      if (card) card.style.display = 'none';
-    }
-  } catch(e) { console.error('자리선택 상태 확인 실패:', e); }
-}
-
-let seatmapUnsubscribe = null;
-
-function buildStudentSeatmap() {
-  const db = window._db;
-  if (!db || !currentStudent) return;
-  const el = document.getElementById('student-seatmap');
-  if (!el) return;
-
-  // 기존 구독 해제
-  if (seatmapUnsubscribe) { seatmapUnsubscribe(); seatmapUnsubscribe = null; }
-
-  el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">로딩 중...</div>';
-
-  // onSnapshot으로 실시간 감시
-  seatmapUnsubscribe = window._fsOnSnapshot(
-    window._fsCollection(db, 'students'),
-    async (snap) => {
-      const takenSeats = {};
-      snap.forEach(d => {
-        const s = d.data();
-        if (s.name && s.seat && parseInt(s.seat) > 0) takenSeats[parseInt(s.seat)] = s.name;
-      });
-      // 내 좌석 최신화
-      snap.forEach(d => {
-        const s = d.data();
-        if (s.name === currentStudent.name && s.seat) currentStudent.seat = s.seat;
-      });
-      // 예약(미래 적용) 좌석 로드 — 예약된 자리는 점유로 간주해 중복 선택을 막는다
-      const reservations = {};
-      try {
-        const psnap = await window._fsGetDocs(window._fsCollection(db, 'pendingSeats'));
-        psnap.forEach(pd => {
-          const p = pd.data();
-          const n = parseInt(p && p.toSeat);
-          if (n > 0) reservations[n] = (p.name || '');
-        });
-      } catch(e) { console.warn('예약 좌석 로드 실패:', e); }
-      renderSeatmap(takenSeats, reservations);
-    },
-    (err) => { console.error('배치도 실시간 오류:', err); }
-  );
-}
-
 // DEFAULT_SEATS와 동일한 그리드 구성 (관리자앱과 동일)
 // 학생 좌석만 (스터디룸·빈열 제외) — 관리자앱 DEFAULT_SEATS에서 양수만.
-// ★자리선택 배치도와 신규 자가등록 배치도가 함께 쓰므로 모듈 스코프에 둔다.
+// 신규 자가등록 배치도가 쓴다.
 const SEAT_GRID = [
   // [row, col, seatNum]  — 새봄 면학관 실제 배열
   [2,1,1],[3,1,2],[4,1,3],[5,1,4],
@@ -4601,217 +4461,6 @@ const SEAT_GRID = [
   [12,1,35],[12,2,34],[12,3,33],[12,4,32],[12,5,31],[12,6,30],
 ];
 const SEAT_ROWS = 12, SEAT_COLS = 7;
-
-function renderSeatmap(takenSeats, reservations) {
-  reservations = reservations || {};
-  const el = document.getElementById('student-seatmap');
-  if (!el || !currentStudent) return;
-
-  const ROWS = SEAT_ROWS, COLS = SEAT_COLS;
-  const myCurrentSeat = currentStudent.seat ? parseInt(currentStudent.seat) : 0;
-
-  let html = `<style>
-    #sm-grid { display:grid; grid-template-columns:repeat(7,1fr); grid-template-rows:repeat(12,44px); gap:3px; max-width:420px; }
-    .sm-cell { border-radius:8px; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:11px; font-weight:700; cursor:default; transition:transform 0.1s; }
-    .sm-taken { background:var(--surface); border:1px solid var(--border); color:var(--text3); }
-    .sm-available { background:#DCFCE7; border:1.5px solid #4CAF50; color:#166534; cursor:pointer; }
-    .sm-available:active { transform:scale(0.95); }
-    .sm-mine { background:var(--amber); color:#fff; border:2px solid var(--amber-dark); }
-    .sm-reserved { background:#F3F4F6; border:1.5px dashed #9CA3AF; color:#9CA3AF; }
-    .sm-myreserve { background:#EEF2FF; border:2px solid #6C5DD3; color:#4A3FA8; }
-  </style>`;
-
-  // 내가 예약한 자리 배너 (미래 적용 안내)
-  const myReserveNum = Object.keys(reservations).find(n => reservations[n] === currentStudent.name);
-  if (myReserveNum) {
-    html += `<div style="background:#EEF2FF;border:1.5px solid #8F82E4;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#4A3FA8;line-height:1.5">
-      🪑 <b>${myReserveNum}번</b> 자리를 예약했어요.<br>
-      <b>${_seatEffectiveDate ? _effDateLabel(_seatEffectiveDate) : '적용일'}</b>부터 적용되며, 그때까지는 <b>현재 자리(${myCurrentSeat || '미배정'}번)</b>를 그대로 사용하세요.
-    </div>`;
-  } else if (_isDeferredSeat()) {
-    html += `<div style="background:#FFF7ED;border:1.5px solid #FDBA74;border-radius:10px;padding:10px 12px;margin-bottom:10px;font-size:12px;color:#9A3412;line-height:1.5">
-      ⏳ 지금 고르는 자리는 <b>${_effDateLabel(_seatEffectiveDate)}</b>부터 적용돼요. 그때까지는 현재 자리를 유지합니다.
-    </div>`;
-  }
-
-  html += `<div id="sm-grid">`;
-
-  // 빈 셀 채우기
-  const occupied = {};
-  SEAT_GRID.forEach(([r,c,n]) => occupied[r+'_'+c] = n);
-
-  for (let r = 1; r <= ROWS; r++) {
-    for (let c = 1; c <= COLS; c++) {
-      const val = occupied[r+'_'+c];
-      if (!val) {
-        html += `<div style="grid-row:${r};grid-column:${c}"></div>`;
-        continue;
-      }
-      const isMyseat = val === myCurrentSeat;
-      const isTaken = !!takenSeats[val];
-      const resName = reservations[val];               // 이 자리를 예약한 사람(없으면 undefined)
-      const isMyReserve = resName === currentStudent.name;
-      const isReserved = !!resName;
-      // 우선순위: 점유(내자리/남) > 내 예약 > 남의 예약 > 공석
-      let cls, label = '';
-      if (isTaken) { cls = isMyseat ? 'sm-mine' : 'sm-taken'; if (isMyseat) label = '내 자리'; }
-      else if (isMyReserve) { cls = 'sm-myreserve'; label = '내 예약'; }
-      else if (isReserved) { cls = 'sm-reserved'; label = '예약됨'; }
-      else { cls = 'sm-available'; }
-      // 공석이면서 아직 예약되지 않은 자리만 클릭 가능
-      const clickable = !isTaken && !isReserved;
-      const clickAttr = clickable ? `onclick="selectSeat(${val})"` : '';
-      html += `<div class="sm-cell ${cls}" style="grid-row:${r};grid-column:${c}" ${clickAttr}>
-        <div>${val}번</div>
-        ${label ? `<div style="font-size:9px">${label}</div>` : ''}
-      </div>`;
-    }
-  }
-  html += '</div>';
-  el.innerHTML = html;
-}
-
-window.selectSeat = async function(seatNum) {
-  const db = window._db;
-  if (!db || !currentStudent) return;
-
-  const oldSeat = currentStudent.seat ? String(currentStudent.seat) : '';
-  const isSame = oldSeat === String(seatNum);
-  if (isSame) return; // 이미 내 자리
-
-  // 적용일(effectiveDate)을 설정 문서에서 권위있게 재확인 — 미래면 즉시 이동 대신 '예약'.
-  let effDate = _seatEffectiveDate || '';
-  try {
-    const setSnap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
-    if (setSnap.exists()) { effDate = setSnap.data().effectiveDate || ''; _seatEffectiveDate = effDate; }
-  } catch(e) {}
-  if (effDate && effDate > _localDateIso(new Date())) {
-    return reserveSeat(seatNum, oldSeat, effDate);
-  }
-
-  if (!confirm(`${seatNum}번 자리를 선택하시겠습니까?`)) return;
-
-  const ns = String(seatNum);
-  const oldId = oldSeat.replace('번','');
-  currentStudent.seat = ns;
-  try {
-    const runTx = window._fsRunTransaction;
-    // 1. 좌석 선점(경합 방지): 트랜잭션으로 대상 좌석을 원자적으로 확인·차지한다.
-    //    두 학생이 같은 공석을 동시에 눌러도 한 명만 성공(SEAT_TAKEN으로 나머지 거부).
-    //    옛 좌석 문서를 통째로 옮겨 fee·startDate·feeMemo 등 관리자 관리 필드를 보존한다.
-    //    (currentStudent에는 이 값들이 없어 재구성 저장하면 자리 이동 시 유실됨.)
-    await runTx(db, async (tx) => {
-      const newRef = window._fsDoc(db, 'students', ns);
-      const newSnap = await tx.get(newRef);
-      // 이미 다른 학생이 이름을 올려둔 좌석이면 선점 실패
-      if (newSnap.exists() && newSnap.data().name && newSnap.data().name !== currentStudent.name) {
-        throw new Error('SEAT_TAKEN');
-      }
-      // ★트랜잭션은 모든 읽기(get)를 쓰기(set/delete)보다 먼저 해야 한다.
-      let base = {};
-      const oldRef = (oldId && oldId !== ns) ? window._fsDoc(db, 'students', oldId) : null;
-      if (oldRef) {
-        const os = await tx.get(oldRef);
-        if (os.exists()) base = os.data();
-      }
-      // 옛 문서가 없을 때(로컬 샘플 로그인 등)를 대비한 하위 폴백. base(관리자 원본)가 있으면 우선.
-      const fallback = {
-        parent: currentStudent.parent || '', gender: currentStudent.gender || 'f', expiry: currentStudent.expiry || '',
-        월: currentStudent.schedule?.['월']||'-', 화: currentStudent.schedule?.['화']||'-', 수: currentStudent.schedule?.['수']||'-',
-        목: currentStudent.schedule?.['목']||'-', 금: currentStudent.schedule?.['금']||'-', 토: currentStudent.schedule?.['토']||'-',
-        hours: currentStudent.hours || {},
-      };
-      tx.set(newRef, {
-        ...fallback, ...base,
-        seat: ns, name: currentStudent.name,
-        phone: base.phone || currentStudent.phone || '',
-        phoneLast4: window._phoneLast4(base.phone || currentStudent.phone), // 입실/로그인 where 검색용 색인
-        updatedAt: window._fsServerTimestamp(),
-      });
-      if (oldRef) tx.delete(oldRef); // 옛 좌석 students 문서 공석 처리(선점과 원자적)
-    });
-
-    // 2. schedules·schedule_base 이동 (본인 데이터라 경합 없음 → 트랜잭션 밖)
-    if (oldId && oldId !== ns) {
-      for (const col of ['schedules', 'schedule_base']) {
-        try {
-          const snap = await window._fsGetDoc(window._fsDoc(db, col, oldId));
-          if (snap.exists()) {
-            await window._fsSetDoc(window._fsDoc(db, col, ns), {
-              ...snap.data(), seat: ns, name: currentStudent.name, updatedAt: window._fsServerTimestamp()
-            });
-          }
-        } catch(e) {}
-      }
-      // 3. 옛 좌석의 schedules·schedule_base + 접미사(番) 잔여 문서 정리
-      for (const col of ['schedules', 'schedule_base']) {
-        for (const id of [oldId, oldId + '번']) {
-          try { await window._fsDeleteDoc(window._fsDoc(db, col, id)); } catch(e) {}
-        }
-      }
-      try { await window._fsDeleteDoc(window._fsDoc(db, 'students', oldId + '번')); } catch(e) {}
-    }
-
-    alert(`✅ ${seatNum}번 자리로 이동됐습니다!`);
-    buildStudentSeatmap();
-  } catch(e) {
-    currentStudent.seat = oldSeat;
-    if (e && e.message === 'SEAT_TAKEN') {
-      alert('⚠️ 방금 다른 학생이 먼저 선택한 자리입니다. 다른 자리를 골라주세요.');
-      buildStudentSeatmap(); // 최신 배치도(점유 반영) 다시 그림
-    } else {
-      alert('자리 선택 실패: ' + (e && e.message ? e.message : e));
-    }
-  }
-};
-
-// ── 미래 적용(예약) 자리변경 ──
-// 지금은 자리를 옮기지 않고 pendingSeats/{좌석}에 예약만 남긴다. 예약 문서 자체가 대상
-// 좌석 선점 잠금이라 두 학생이 같은 자리를 동시에 예약하는 것을 막는다. 실제 이동은
-// 관리자앱이 effectiveDate 새벽 2시 리셋에서 커밋한다. 한 명당 예약은 1개만 유지한다.
-async function reserveSeat(seatNum, oldSeat, effDate) {
-  const db = window._db;
-  const ns = String(seatNum);
-  const fromId = String(oldSeat || '').replace('번', ''); // 좌석 문서 ID는 숫자 형식
-  const effLabel = _effDateLabel(effDate);
-  if (!confirm(`${seatNum}번 자리를 예약하시겠습니까?\n\n${effLabel}부터 적용되며, 그때까지는 현재 자리(${fromId || '미배정'}번)를 그대로 사용합니다.`)) return;
-  try {
-    const runTx = window._fsRunTransaction;
-    // 대상 좌석 선점: 이미 남이 예약(pendingSeats)했거나 사용 중(students)이면 실패
-    await runTx(db, async (tx) => {
-      const resRef = window._fsDoc(db, 'pendingSeats', ns);
-      const occRef = window._fsDoc(db, 'students', ns);
-      const resSnap = await tx.get(resRef);
-      const occSnap = await tx.get(occRef);
-      if (resSnap.exists() && resSnap.data().name && resSnap.data().name !== currentStudent.name) throw new Error('RESERVED');
-      if (occSnap.exists() && occSnap.data().name && occSnap.data().name !== currentStudent.name) throw new Error('SEAT_TAKEN');
-      tx.set(resRef, {
-        name: currentStudent.name,
-        fromSeat: fromId,
-        toSeat: ns,
-        effectiveDate: effDate,
-        createdAt: window._fsServerTimestamp(),
-      });
-    });
-    // 이전에 내가 예약해 둔 다른 자리는 해제 (한 명당 예약 1개)
-    try {
-      const psnap = await window._fsGetDocs(window._fsCollection(db, 'pendingSeats'));
-      for (const pd of psnap.docs) {
-        if (pd.id !== ns && pd.data().name === currentStudent.name) {
-          await window._fsDeleteDoc(window._fsDoc(db, 'pendingSeats', pd.id));
-        }
-      }
-    } catch(e) { console.warn('이전 예약 해제 실패:', e); }
-    alert(`✅ ${seatNum}번 자리를 예약했습니다!\n\n${effLabel}부터 적용됩니다. 그때까지는 현재 자리를 이용하세요.`);
-    buildStudentSeatmap();
-  } catch(e) {
-    if (e && e.message === 'RESERVED') alert('⚠️ 방금 다른 학생이 먼저 예약한 자리입니다. 다른 자리를 골라주세요.');
-    else if (e && e.message === 'SEAT_TAKEN') alert('⚠️ 이미 사용 중인 자리입니다. 다른 자리를 골라주세요.');
-    else alert('자리 예약 실패: ' + (e && e.message ? e.message : e));
-    buildStudentSeatmap();
-  }
-}
-
 
 // ── 스터디룸 신청 ──
 // 룸당 수용 인원. 관리앱(saebom_schedule_with_hours.html)의 STUDYROOM_CAPACITY와 반드시 같아야
@@ -5220,7 +4869,7 @@ function updateTabletCard() {
   card.style.display = '';
   if (!on) {
     const sub = document.getElementById('home-tablet-sub');
-    if (sub) sub.textContent = '🔒 학부모 동의 후 이용 가능';
+    if (sub) sub.textContent = '학생 스스로 관리 중';
   }
   if (on && !_tabletUnsub) _tabletListen();
   if (!on && _tabletUnsub) { try{_tabletUnsub();}catch(e){} _tabletUnsub=null; }
@@ -5264,15 +4913,9 @@ function showTabletConsentInfo(){
   ov.id = 'tablet-overlay';
   ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10001;display:flex;align-items:center;justify-content:center;padding:18px';
   ov.innerHTML = `<div style="background:var(--card);border-radius:var(--r-lg);padding:22px 20px;width:100%;max-width:340px;box-shadow:var(--shadow-lg)">
-    <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px">📱 태블릿 보관 관리란?</div>
-    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:10px">
-      태블릿을 면학관에 보관해 두고, <b>사용 시간을 신청하면 그 시간에만</b> 받아서 쓰는 제도예요.
-      학습용 사용은 그대로 하면서 불필요한 사용을 줄여 줍니다.
-    </div>
-    <div style="font-size:12.5px;color:#B45309;background:var(--amber-pale,#FEF3C7);border-radius:var(--r-md);padding:10px 12px;line-height:1.6;margin-bottom:14px">
-      🔒 <b>희망자만 참여</b>하는 제도라 <b>학부모님 동의</b>가 먼저 필요해요.<br>
-      참여하고 싶다면 학부모님께 말씀드려 <b>학부모앱 → 공지 탭 → '태블릿 보관 관리'</b>에서
-      동의해 달라고 부탁해 주세요. 동의가 완료되면 이 카드가 바로 열립니다.
+    <div style="font-size:16px;font-weight:800;color:var(--text);margin-bottom:8px">📱 태블릿 스스로 관리 중</div>
+    <div style="font-size:13px;color:var(--text2);line-height:1.7;margin-bottom:14px">
+      학부모님이 <b>학생 스스로 관리</b>로 설정해 면학관이 태블릿을 보관하지 않아요.
     </div>
     <button onclick="document.getElementById('tablet-overlay').remove()"
       style="width:100%;padding:11px;background:linear-gradient(135deg,#8F82E4,#6C5DD3);color:#fff;border:none;border-radius:var(--r-md);font-size:13px;font-weight:700;cursor:pointer">확인</button>
@@ -5387,9 +5030,7 @@ document.addEventListener('visibilitychange', function() {
   try { window._surveyGate?.recheck(); } catch(e) {}
   try { window._testerGate?.recheck(); } catch(e) {}
   try { window._billingGate?.recheck(); } catch(e) {}
-  // 현재 탭이 자리선택이면 재구독
   const activeTab = sessionStorage.getItem('saebom_active_tab_student');
-  if (activeTab === 'seatmap') buildStudentSeatmap();
   if (activeTab === 'studyroom') loadStudyroomData();
   // 스탠드 책상 승인 대기 중이면 리스너 재연결(대기 화면에서 백그라운드 후 복귀)
   if (_standDeskWaitId && !_standDeskUnsub) _standDeskListen();
@@ -5501,92 +5142,8 @@ async function getPlannerStorage() {
   return plannerStorageRef;
 }
 
-// ── 학부모 공개 설정 ──
-// 학생이 자기 플래너를 학부모앱에서 가릴 수 있다. 근거값은 students/{좌석}.plannerHidden 하나다.
-//  · students 문서에 둔 이유: 학부모앱 refreshParentData() 가 앱을 열 때마다 이미 그 문서를 다시
-//    읽으므로 조회가 하나도 늘지 않고, 좌석 교환(_swapSeatDocs)이 students 문서를 통째로 옮기므로
-//    설정이 학생을 따라간다. 좌석키 별도 컬렉션으로 두면 좌석이 바뀔 때 남의 설정이 된다.
-//  · ⚠️ 가려지는 건 학부모앱 화면뿐이다. 선생님·관리앱과 AI 검사는 그대로 전부 본다.
-//    Storage 사진 주소를 직접 아는 사람까지 막지는 못한다(planners 는 아직 공개 읽기 — storage.rules 참고).
-const _plStudentDocId = () => String((currentStudent && currentStudent.seat) || '').replace('번', '');
-const _plHidden = () => !!(currentStudent && currentStudent.plannerHidden === true);
-
-function renderPlannerPrivacy() {
-  const box = document.getElementById('pl-privacy');
-  if (!box) return;
-  const ico = document.getElementById('pl-privacy-ico');
-  const title = document.getElementById('pl-privacy-title');
-  const sub = document.getElementById('pl-privacy-sub');
-  const btn = document.getElementById('pl-privacy-btn');
-  const hidden = _plHidden();
-  // 원장이 기능을 껐다 — 학생이 잠가 뒀더라도 지금은 학부모에게 보이고 있다. 그 사실을 그대로 알린다.
-  if (!PLANNER_PRIVACY_ON) {
-    box.style.borderColor = 'var(--red-border)';
-    box.style.background = 'var(--red-pale)';
-    ico.textContent = '🚫';
-    title.textContent = '비공개 기능이 지금 꺼져 있어요';
-    sub.textContent = hidden
-      ? '내가 걸어 둔 잠금도 지금은 풀려 있어 부모님이 볼 수 있어요. 궁금하면 선생님께 물어보세요.'
-      : '지금은 플래너를 비공개로 바꿀 수 없어요. 궁금하면 선생님께 물어보세요.';
-    btn.style.display = 'none';
-    return;
-  }
-  btn.style.display = '';
-  if (hidden) {
-    box.style.borderColor = 'var(--amber-light)';
-    box.style.background = 'var(--amber-pale)';
-    ico.textContent = '🔒';
-    title.textContent = '부모님에게 비공개';
-    sub.textContent = '부모님 앱에는 낸 날·안 낸 날만 보여요. 선생님은 그대로 보십니다.';
-    btn.textContent = '공개로';
-    btn.style.background = 'var(--amber)';
-    btn.style.color = '#fff';
-  } else {
-    box.style.borderColor = 'var(--border)';
-    box.style.background = 'var(--card)';
-    ico.textContent = '👪';
-    title.textContent = '부모님에게 공개 중';
-    sub.textContent = '부모님이 플래너 사진과 선생님 코멘트를 볼 수 있어요.';
-    btn.textContent = '비공개로';
-    btn.style.background = 'var(--surface)';
-    btn.style.color = 'var(--text2)';
-    btn.style.border = '1.5px solid var(--border)';
-  }
-  if (hidden) btn.style.border = 'none';
-}
-
-async function plannerTogglePrivacy() {
-  if (!currentStudent) return;
-  if (!PLANNER_PRIVACY_ON) { showToast('지금은 이 기능이 꺼져 있어요'); renderPlannerPrivacy(); return; }
-  const want = !_plHidden();   // want=true 면 '비공개로 바꾼다'
-  if (want && !confirm('플래너를 부모님에게 비공개로 바꿀까요?\n\n· 부모님 앱에는 낸 날·안 낸 날만 보이고 사진과 선생님 코멘트는 잠깁니다\n· 선생님은 지금처럼 그대로 보십니다\n· 언제든 다시 공개로 바꿀 수 있어요')) return;
-  const btn = document.getElementById('pl-privacy-btn');
-  if (btn) { btn.disabled = true; btn.style.opacity = '0.5'; }
-  try {
-    const { doc, setDoc } = window._fs;
-    const db = window._db || window._fs.getFirestore();
-    const id = _plStudentDocId();
-    if (!id) throw new Error('좌석 없음');
-    // 저장이 안 됐는데 화면만 바뀌면 학생은 가려진 줄 알고 부모님은 계속 본다 — 그래서 성공한 뒤에만 반영한다.
-    await _plWithTimeout(setDoc(doc(db, 'students', id), {
-      plannerHidden: want,
-      plannerHiddenAt: new Date().toISOString()
-    }, { merge: true }), 10000);
-    currentStudent.plannerHidden = want;
-    try { sessionStorage.setItem('saebom_student', JSON.stringify(currentStudent)); } catch(e) {}
-    showToast(want ? '🔒 부모님에게 비공개로 바꿨어요' : '👪 부모님에게 공개로 바꿨어요');
-  } catch(e) {
-    console.warn('[Planner] 공개 설정 저장 실패:', e && (e.message || e));
-    showToast('설정을 저장하지 못했어요 — 잠시 후 다시 시도해 주세요');
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = ''; }
-    renderPlannerPrivacy();
-  }
-}
-
 // 플래너 탭 초기화
 async function initPlannerCalendar() {
-  renderPlannerPrivacy();  // 세션 캐시값으로 먼저 그린다(refreshStudentData 가 서버값으로 다시 맞춘다)
   renderPlannerToday();    // 카드 뼈대 먼저(로딩 중에도 빈 화면 안 보이게)
   renderPlannerCalendar(); // 즉시 달력 표시
   await Promise.all([loadPlannerToday(), loadPlannerMonthData()]);

@@ -1043,8 +1043,8 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
         </div>
         <div id="present-board-body"><div id="present-list"></div></div>
       </div>
-      <!-- 태블릿 보관함 — 학부모 동의(tabletConsent) 학생만 대상. 신청 대기→지급→수거 관리.
-           하단 동의 현황 줄을 누르면 동의/거절/미응답 명단 팝업. 접기 지원(tablet-board, 기본 펼침) -->
+      <!-- 태블릿 보관함 — 기본은 전원 면학관 관리, 학부모가 '학생 스스로 관리'(tabletConsent=false)를 고른 학생만 빠진다.
+           신청(교시)→지급→수거. 하단 현황 줄을 누르면 명단 팝업. 접기 지원(tablet-board, 기본 펼침) -->
       <div class="card" id="tablet-mgmt-section" style="display:none">
         <div class="card-title" style="justify-content:space-between">
           <span onclick="toggleTabletBoard()" style="cursor:pointer;user-select:none" title="태블릿 보관함 접기/펼치기"><i id="tablet-board-caret" class="ti ti-chevron-right" style="font-size:14px;color:#5546c4;transition:transform .15s;transform:rotate(90deg)" aria-hidden="true"></i> 📱 태블릿 보관함</span>
@@ -1737,10 +1737,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       <button id="rp-arch-btn" onclick="window.reportArchiveToggle()" title="지금까지 만든 리포트를 다시 열어 봅니다"
         style="background:#fff7ed;color:#b45309;border:1px solid #fed7aa;border-radius:8px;padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer">🗂 만든 리포트</button>
     </div>
-    <div id="rp-priv-note" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:9px 11px;margin-bottom:10px;font-size:12px;color:#b45309;line-height:1.6">
-      🔒 <b>이 학생은 플래너를 학부모에게 비공개로 설정했습니다.</b>
-      리포트에는 플래너 검사에서 뽑은 과목·시간이 그대로 들어갑니다 — 보내실지 확인해 주세요.
-    </div>
     <div style="font-size:11px;color:#9ca3af">달을 하나 골라, 그 달의 입·퇴실 기록과 플래너 검사 결과를 합쳐 학부모께 보낼 1장짜리 리포트를 만듭니다. <b>📲 학부모앱에 보내기</b>를 누르면 학부모 앱 학습 탭의 <b>학습 리포트</b>에 올라가고, 처음 올릴 때만 학부모에게 알림이 갑니다.</div>
   </div>
   <!-- 🗂 만든 리포트 — 지금까지 만들어진 리포트 목록(report_comments 문서가 곧 목록이다).
@@ -2141,37 +2137,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       <div id="withdrawn-list" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
 
-    <!-- 자리선택 허용 -->
-    <div class="card">
-      <div class="card-title" style="margin-bottom:8px">
-        <i class="ti ti-armchair" style="font-size:15px;color:#6c5dd3"></i> 자리선택 허용
-      </div>
-      <div style="font-size:12px;color:#4a3fa8;margin-bottom:12px">학생들이 학생앱에서 자리를 선택할 수 있는 기간을 설정합니다. 기간이 끝나면 아래 '비활성화'를 눌러 닫아 주세요.</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
-        <div>
-          <div style="font-size:11px;color:#4a3fa8;margin-bottom:4px">시작 시각</div>
-          <input type="datetime-local" id="seat-sel-start" style="width:100%;padding:6px 8px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;background:#f8faff">
-        </div>
-        <div>
-          <div style="font-size:11px;color:#4a3fa8;margin-bottom:4px">종료 시각</div>
-          <input type="datetime-local" id="seat-sel-end" style="width:100%;padding:6px 8px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;background:#f8faff">
-        </div>
-      </div>
-      <div style="margin-bottom:12px">
-        <div style="font-size:11px;color:#4a3fa8;margin-bottom:4px">실제 적용일 <span style="font-weight:400;color:var(--color-text-tertiary)">— 비워두면 선택 즉시 적용. 날짜를 지정하면 학생이 고른 자리는 <b>예약</b>만 되고, 그날 새벽 2시에 일괄 반영됩니다.</span></div>
-        <input type="date" id="seat-sel-effective" style="width:100%;padding:6px 8px;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;background:#f8faff">
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button onclick="saveSeatSelection()" style="padding:7px 16px;background:#6c5dd3;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">저장 및 활성화</button>
-        <button onclick="cancelSeatSelection()" style="padding:7px 16px;background:#eef2ff;border:1.5px solid #8f82e4;color:#4a3fa8;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer">비활성화</button>
-        <span id="seat-sel-status" style="font-size:12px;color:#888888"></span>
-      </div>
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e8e5f5;display:flex;gap:8px;align-items:center">
-        <button onclick="applyPendingSeatsNow()" style="padding:7px 16px;background:#f59e0b;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">⚡ 예약 즉시 적용</button>
-        <span style="font-size:11px;color:var(--color-text-tertiary)">적용일을 기다리지 않고 대기 중인 자리 예약을 지금 바로 반영합니다.</span>
-      </div>
-    </div>
-
     <!-- 학생앱 -->
     <div class="card">
       <div class="card-title" style="margin-bottom:4px">
@@ -2184,13 +2149,18 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       <!-- 주간 시간표 수정 허용 -->
       <div style="background:#eef2ff;border:1.5px solid #8f82e4;border-radius:10px;padding:12px 14px;margin-bottom:12px">
         <div style="font-size:12px;font-weight:700;color:#1e1b4b;margin-bottom:6px">📝 주간 시간표 수정 허용</div>
-        <div style="font-size:11px;color:#4a3fa8;margin-bottom:10px">활성화하면 학생이 학생앱에서 주간 시간표를 직접 수정할 수 있습니다.</div>
+        <div style="font-size:11px;color:#4a3fa8;margin-bottom:10px">전체를 열거나, 잠금 중에도 <b>지정한 학생만</b> 학생앱에서 주간 시간표를 직접 수정하게 할 수 있습니다.</div>
         <div style="display:flex;align-items:center;gap:10px">
           <button id="schedule-edit-toggle-btn" onclick="toggleScheduleEdit()"
             style="padding:8px 18px;background:#bdc1c6;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
             🔒 수정 잠금 중
           </button>
           <span id="schedule-edit-status" style="font-size:11px;color:#888888"></span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap">
+          <button onclick="openScheduleEditPicker()"
+            style="padding:7px 14px;background:#ffffff;color:#4a3fa8;border:1.5px solid #8f82e4;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">👤 학생 지정</button>
+          <span id="schedule-edit-uids" style="font-size:11px;color:#4a3fa8"></span>
         </div>
       </div>
 
@@ -2204,25 +2174,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
             📚 학기 시간표
           </button>
           <span id="vacation-mode-status" style="font-size:11px;color:#888888"></span>
-        </div>
-      </div>
-
-      <!-- 플래너 학부모 비공개 기능 -->
-      <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:10px;padding:12px 14px;margin-bottom:12px">
-        <div style="font-size:12px;font-weight:700;color:#7c2d12;margin-bottom:6px">🔒 플래너 학부모 비공개 기능</div>
-        <div style="font-size:11px;color:#9a3412;margin-bottom:10px">
-          학생앱에서 학생이 <b>자기 플래너를 학부모앱에 안 보이게</b> 잠글 수 있는 기능입니다.
-          잠가도 선생님·관리앱·AI 검사는 설정과 무관하게 전부 봅니다 — 가려지는 건 학부모 화면뿐입니다.
-          <br><b>여기서 끄면</b> 학생은 새로 잠글 수 없고, <b>이미 잠가 둔 학생의 플래너도 학부모앱에 즉시 다시 보입니다.</b>
-          학생 쪽 설정값은 지워지지 않으니 다시 켜면 그대로 복원됩니다.
-          <br>※ 학부모 항의가 커졌을 때 학생을 한 명씩 설득하지 않고 한 번에 되돌리기 위한 스위치입니다. 평소에는 켜 두세요.
-        </div>
-        <div style="display:flex;align-items:center;gap:10px">
-          <button id="planner-privacy-toggle-btn" onclick="togglePlannerPrivacy()"
-            style="padding:8px 18px;background:#bdc1c6;color:#ffffff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;transition:background 0.2s">
-            불러오는 중...
-          </button>
-          <span id="planner-privacy-status" style="font-size:11px;color:#888888"></span>
         </div>
       </div>
 
@@ -3687,78 +3638,15 @@ document.addEventListener('visibilitychange', () => {
   let rt; window.addEventListener('resize', ()=>{ clearTimeout(rt); rt=setTimeout(()=>{ if(curKind) render(curKind); }, 400); });
 })();
 
-// ── 자리선택 허용 관리 ──
-window.saveSeatSelection = async function() {
-  const start = document.getElementById('seat-sel-start').value;
-  const end = document.getElementById('seat-sel-end').value;
-  const effective = document.getElementById('seat-sel-effective').value || '';
-  if (!start || !end) { alert('시작/종료 시각을 모두 입력해주세요'); return; }
-  if (start >= end) { alert('종료 시각이 시작 시각보다 늦어야 합니다'); return; }
-  const _today = window._sessHelpers.sessIsoDate(Date.now());
-  if (effective && effective < _today) { alert('실제 적용일은 오늘 이후로 지정해주세요'); return; }
-  const db = window._adminDb;
-  if (!db) { alert('Firebase 연결이 필요합니다'); return; }
-  try {
-    await window._fsSetDoc(window._fsDoc(db, 'settings', 'seatSelection'), {
-      active: true, start, end, effectiveDate: effective, updatedAt: window._fsServerTimestamp()
-    });
-    const deferred = effective && effective > _today;
-    document.getElementById('seat-sel-status').textContent = deferred ? `✅ 활성화됨 · ${effective} 적용 예정` : '✅ 활성화됨';
-    document.getElementById('seat-sel-status').style.color = '#2d7a4f';
-    showAdminToast(deferred ? `✅ 자리선택 설정 완료 — ${effective} 새벽 2시에 일괄 적용됩니다` : '✅ 자리선택 기간이 설정됐습니다');
-  } catch(e) { alert('저장 실패: ' + e.message); }
-};
-
-window.cancelSeatSelection = async function() {
-  const db = window._adminDb;
-  if (!db) return;
-  try {
-    await window._fsSetDoc(window._fsDoc(db, 'settings', 'seatSelection'), {
-      active: false, start: '', end: '', updatedAt: window._fsServerTimestamp()
-    });
-    document.getElementById('seat-sel-status').textContent = '비활성화됨';
-    document.getElementById('seat-sel-status').style.color = '#888888';
-    showAdminToast('자리선택이 비활성화됐습니다');
-  } catch(e) { alert('실패: ' + e.message); }
-};
-
-async function loadSeatSelectionStatus() {
-  try {
-    const db = await window.waitDb();   // 위 loadScheduleEditStatus 와 같은 이유 (모듈 로드 경합)
-    if (!db) throw new Error('DB 연결 대기 시간 초과');
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'seatSelection'));
-    if (!snap.exists()) return;
-    const d = snap.data();
-    if (d.start) document.getElementById('seat-sel-start').value = d.start;
-    if (d.end) document.getElementById('seat-sel-end').value = d.end;
-    if (d.effectiveDate) document.getElementById('seat-sel-effective').value = d.effectiveDate;
-    const _today = window._sessHelpers.sessIsoDate(Date.now());
-    const deferred = d.effectiveDate && d.effectiveDate > _today;
-    const statusEl = document.getElementById('seat-sel-status');
-    if (d.active) {
-      statusEl.textContent = deferred ? `✅ 활성화됨 · ${d.effectiveDate} 적용 예정` : '✅ 활성화됨';
-      statusEl.style.color = '#2d7a4f';
-    } else if (deferred) {
-      statusEl.textContent = `⏳ ${d.effectiveDate} 적용 대기 중`;
-      statusEl.style.color = '#b45309';
-    } else {
-      statusEl.textContent = '비활성화됨';
-      statusEl.style.color = '#888888';
-    }
-  } catch(e) { console.error('좌석 선택 상태 조회 실패:', e); }
-}
-
 function loadSettingsTab() {
   // ★ SOLAPI_API_KEY/SECRET/SENDER 는 module 스크립트 최상위 let 이라 '그 모듈 안에서만' 보인다.
   //   classic 인 이 함수에서 식별자로 읽으면 항상 ReferenceError → 함수가 그 줄에서 중단되어
-  //   아래 상태 조회 두 개가 영영 실행되지 않았다(좌석 선택·주간 시간표 수정 허용 표시가 계속 초기값).
+  //   아래 상태 조회가 영영 실행되지 않았다(주간 시간표 수정 허용 표시가 계속 초기값).
   //   탭 복원 경로의 catch(e){} 가 에러를 삼켜 콘솔에도 안 보였다.
   //   → 상태 조회를 먼저 하고, 입력칸은 localStorage 캐시로 채운 뒤
   //     module 의 loadSolapiConfigFromCloud() 가 최신값으로 덮어쓰게 한다.
-  loadSeatSelectionStatus();
   loadScheduleEditStatus();
   loadVacationModeStatus();
-  loadPlannerPrivacyStatus();
   loadMealAwaySmsStatus();
   // 낮 자동문은 module 쪽에 있다(문을 여는 코드와 같이 둬야 판단이 한 곳에 모인다).
   // 실시간 구독이 이미 버튼을 채우지만, 구독 전에 탭을 열었을 때를 위해 한 번 더 읽는다.
@@ -3784,7 +3672,9 @@ async function loadScheduleEditStatus() {
     if (!db) throw new Error('DB 연결 대기 시간 초과');
     const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'schedule_edit'));
     const enabled = snap.exists() ? !!snap.data().enabled : false;
+    _scheduleEditUids = (snap.exists() && Array.isArray(snap.data().uids)) ? snap.data().uids : [];
     updateScheduleEditBtn(enabled);
+    _renderScheduleEditUids();
   } catch(e) {
     console.error('주간 시간표 수정 허용 상태 조회 실패:', e);
     updateScheduleEditBtn(null);
@@ -3833,9 +3723,57 @@ window.toggleScheduleEdit = async function() {
     await window._fsSetDoc(window._fsDoc(db, 'settings', 'schedule_edit'), {
       enabled: next,
       updatedAt: window._fsServerTimestamp()
-    });
+    }, { merge: true });   // 지정 학생(uids)은 전체 스위치와 따로 남긴다
     updateScheduleEditBtn(next);
     showAdminToast(next ? '✅ 주간 시간표 수정 허용됨' : '🔒 주간 시간표 수정 잠금됨');
+  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
+};
+// ── 지정 학생만 시간표 수정 허용 (settings/schedule_edit.uids) ──
+// 전체 스위치(enabled)가 잠금이어도 uids 에 든 학생(불변 학생ID)은 학생앱에서 고칠 수 있다.
+let _scheduleEditUids = [];
+function _scheduleEditStudents() {
+  return (window.STUDENTS || []).filter(s => s.name && s.uid && !window.isNonStudent?.(s.name))
+    .sort((a, b) => parseInt(a.seat) - parseInt(b.seat));
+}
+function _renderScheduleEditUids() {
+  const el = document.getElementById('schedule-edit-uids');
+  if (!el) return;
+  const names = _scheduleEditStudents().filter(s => _scheduleEditUids.includes(s.uid)).map(s => s.name);
+  el.textContent = names.length ? `지정 ${names.length}명: ${names.join(', ')}` : '지정한 학생 없음';
+}
+window.openScheduleEditPicker = function() {
+  document.getElementById('sched-edit-pop')?.remove();
+  const list = _scheduleEditStudents();
+  const ov = document.createElement('div');
+  ov.id = 'sched-edit-pop';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9998;display:flex;align-items:center;justify-content:center';
+  ov.innerHTML = `<div style="background:#ffffff;border-radius:16px;width:min(94vw,440px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:0.5px solid #eeeeee;background:#eef2ff;font-size:14px;font-weight:700;color:#1e1b4b">📝 시간표 수정을 열어 줄 학생</div>
+    <div style="overflow-y:auto;padding:10px 18px;display:grid;grid-template-columns:1fr 1fr;gap:4px 10px">
+      ${list.map(s => `<label style="font-size:12.5px;display:flex;align-items:center;gap:6px;padding:4px 0;cursor:pointer">
+        <input type="checkbox" value="${s.uid}" ${_scheduleEditUids.includes(s.uid) ? 'checked' : ''}> ${s.name} <span style="color:#888888">${String(s.seat).replace('번','')}</span></label>`).join('')}
+    </div>
+    <div style="display:flex;gap:8px;padding:12px 18px;border-top:0.5px solid #eeeeee">
+      <button onclick="document.querySelectorAll('#sched-edit-pop input').forEach(c=>c.checked=false)" style="padding:9px 12px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:12.5px;cursor:pointer">모두 해제</button>
+      <span style="flex:1"></span>
+      <button onclick="document.getElementById('sched-edit-pop').remove()" style="padding:9px 14px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:12.5px;cursor:pointer">취소</button>
+      <button onclick="saveScheduleEditUids()" style="padding:9px 18px;background:#6c5dd3;color:#ffffff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer">저장</button>
+    </div>
+  </div>`;
+  ov.addEventListener('click', e => { if (e.target === ov) ov.remove(); });
+  document.body.appendChild(ov);
+};
+window.saveScheduleEditUids = async function() {
+  const uids = [...document.querySelectorAll('#sched-edit-pop input:checked')].map(c => c.value);
+  try {
+    const db = await window.waitDb();
+    if (!db) throw new Error('DB 연결 실패');
+    await window._fsSetDoc(window._fsDoc(db, 'settings', 'schedule_edit'),
+      { uids, updatedAt: window._fsServerTimestamp() }, { merge: true });
+    _scheduleEditUids = uids;
+    _renderScheduleEditUids();
+    document.getElementById('sched-edit-pop')?.remove();
+    showAdminToast(uids.length ? `✏️ ${uids.length}명 시간표 수정 허용` : '🔒 지정 학생 해제');
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 // ── 방학 시간표 토글 (settings/vacation_mode) ──
@@ -3915,91 +3853,6 @@ window.toggleVacationMode = async function() {
     });
     applyVacationMode(next);
     showAdminToast(next ? '🌞 방학 시간표로 전환됨 (평일 1~10교시)' : '📚 학기 시간표로 전환됨 (평일 7~11교시)');
-  } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
-};
-
-// ── 플래너 학부모 비공개 기능 전체 스위치 (settings/planner_privacy) ──
-// 학생앱·학부모앱이 같은 문서를 구독한다. 끄면 학생이 걸어 둔 잠금이 전부 무시된다.
-// ★문서가 없으면 '켜짐'이다. 못 읽었다고 꺼짐으로 보면 규칙·네트워크 문제 하나로
-//   학생들이 걸어 둔 잠금이 통째로 풀린다 — 세 앱 모두 같은 기본값을 쓴다.
-window.PLANNER_PRIVACY_ON = true;
-function applyPlannerPrivacy(enabled) {
-  window.PLANNER_PRIVACY_ON = enabled !== false;
-  updatePlannerPrivacyBtn(enabled === null ? null : window.PLANNER_PRIVACY_ON);
-  // 플래너 현황판 배지 문구가 이 값에 달려 있다(잠긴 학생인데 스위치가 꺼져 있으면 실제로는 공개 중)
-  try { if (window._apcRefresh) window._apcRefresh(); } catch(e) {}
-}
-window.applyPlannerPrivacy = applyPlannerPrivacy;
-
-// 지금 잠금을 켜 둔 학생 수 — 끄기 전 확인창에서 "몇 명이 영향받는지"를 보여주는 데 쓴다
-function _plannerHiddenCount() {
-  return (window.STUDENTS || []).filter(s => s.plannerHidden === true).length;
-}
-
-function updatePlannerPrivacyBtn(enabled) {
-  const btn = document.getElementById('planner-privacy-toggle-btn');
-  const status = document.getElementById('planner-privacy-status');
-  if (!btn) return;
-  if (enabled === null) {
-    btn.textContent = '⚠️ 상태 확인 실패';
-    btn.style.background = '#e0a800';
-    if (status) { status.textContent = '새로고침 후 다시 확인하세요'; status.style.color = '#b45309'; }
-    btn.dataset.enabled = '';
-    return;
-  }
-  const n = _plannerHiddenCount();
-  if (enabled) {
-    btn.textContent = '🔒 기능 켜짐';
-    btn.style.background = '#b45309';
-    if (status) { status.textContent = n ? `지금 ${n}명이 잠가 두었습니다` : '잠가 둔 학생이 아직 없습니다'; status.style.color = '#9a3412'; }
-  } else {
-    btn.textContent = '🔓 기능 꺼짐';
-    btn.style.background = '#bdc1c6';
-    if (status) { status.textContent = n ? `${n}명의 잠금이 무시되어 학부모에게 보이는 중` : '학생이 잠글 수 없습니다'; status.style.color = '#888888'; }
-  }
-  btn.dataset.enabled = enabled ? '1' : '0';
-}
-
-async function loadPlannerPrivacyStatus() {
-  try {
-    const db = await window.waitDb();
-    if (!db) throw new Error('DB 연결 대기 시간 초과');
-    const snap = await window._fsGetDoc(window._fsDoc(db, 'settings', 'planner_privacy'));
-    applyPlannerPrivacy(snap.exists() ? snap.data().enabled !== false : true);
-  } catch(e) {
-    console.error('플래너 비공개 기능 상태 조회 실패:', e);
-    updatePlannerPrivacyBtn(null);
-  }
-}
-window.loadPlannerPrivacyStatus = loadPlannerPrivacyStatus;
-
-window.togglePlannerPrivacy = async function() {
-  try {
-    const db = await window.waitDb();
-    if (!db) { showAdminToast('❌ DB 연결 실패 — 잠시 후 다시 시도하세요'); return; }
-    const btn = document.getElementById('planner-privacy-toggle-btn');
-    // 상태 조회에 실패했으면(dataset 비어 있음) 화면값을 믿지 않고 실제 값을 다시 읽는다
-    if (btn.dataset.enabled !== '0' && btn.dataset.enabled !== '1') {
-      await loadPlannerPrivacyStatus();
-      showAdminToast('🔄 현재 상태를 불러왔습니다 — 다시 눌러 변경하세요');
-      return;
-    }
-    const next = btn.dataset.enabled !== '1';
-    const n = _plannerHiddenCount();
-    // 끄는 쪽만 무겁게 묻는다 — 학생이 가려 둔 것을 학생 동의 없이 여는 동작이라서.
-    if (!next && !confirm(
-      `플래너 비공개 기능을 끌까요?\n\n`
-      + (n ? `· 지금 ${n}명이 잠가 두었습니다. 그 학생들의 플래너 사진·코멘트·학습분석이 학부모앱에 즉시 다시 보입니다\n`
-           : `· 지금 잠가 둔 학생은 없습니다\n`)
-      + `· 학생앱에는 "기능이 꺼져 있다"고 표시되지만, 학생이 앱을 열어보기 전에는 모릅니다\n`
-      + `· 학생 설정값은 지워지지 않아 다시 켜면 그대로 복원됩니다`)) return;
-    if (next && !confirm('플래너 비공개 기능을 다시 켤까요?\n\n전에 잠가 두었던 학생들의 잠금이 그대로 복원되어 학부모앱에서 다시 가려집니다.')) return;
-    await window._fsSetDoc(window._fsDoc(db, 'settings', 'planner_privacy'), {
-      enabled: next,
-      updatedAt: window._fsServerTimestamp()
-    });
-    applyPlannerPrivacy(next);
-    showAdminToast(next ? '🔒 플래너 비공개 기능 켜짐' : '🔓 플래너 비공개 기능 꺼짐 — 전원 공개 상태입니다');
   } catch(e) { showAdminToast('❌ 저장 실패: ' + e.message); }
 };
 
@@ -9888,8 +9741,6 @@ setInterval(() => {
     if (window.loadTodayCheckinFromFirebase) window.loadTodayCheckinFromFirebase();
     // 변동 스케줄(학생 당일변경)을 고정 시간표(schedule_base)로 자동 복구
     if (window.resetSchedulesToBase) window.resetSchedulesToBase();
-    // 예약된(미래 적용) 자리변경 반영 — 적용일(effectiveDate)이 오늘이면 일괄 커밋
-    commitPendingSeatsIfDue().catch(e => console.error('예약 좌석 반영 오류:', e));
     // 스터디룸 신청현황도 함께 갱신 (운영일은 3시에 넘어가며, 실제 전환은 매분 틱이 처리)
     if (window._syncStudyRoomStudents) window._syncStudyRoomStudents();
     if (window.renderStudyroomBoard) window.renderStudyroomBoard();
@@ -11506,7 +11357,7 @@ window.scalRefreshAll = async function() {
 <!-- Firebase 실시간 연동 -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction, orderBy, limit, startAfter, getCountFromServer }
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, collection, onSnapshot, doc, setDoc, updateDoc, getDoc, getDocs, deleteDoc, serverTimestamp, query, where, runTransaction, orderBy, limit, startAfter, getCountFromServer, arrayUnion }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
 import { initializeAppCheck, ReCaptchaV3Provider }
   from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app-check.js";
@@ -11911,10 +11762,6 @@ async function saveStudentToFirebase(student) {
     ...(typeof student.mealAwaySms === 'boolean' ? { mealAwaySms: student.mealAwaySms } : {}),
     // 태블릿 보관 관리 동의(학부모앱) — 같은 이유로 보존
     ...(typeof student.tabletConsent === 'boolean' ? { tabletConsent: student.tabletConsent } : {}),
-    // 플래너 학부모 비공개(학생앱에서 학생 본인이 켠 값) — 관리자 저장으로 지워지면
-    // 학생은 가려 뒀다고 믿는데 학부모앱에는 다시 보이게 된다. 반드시 보존한다.
-    ...(student.plannerHidden === true ? { plannerHidden: true } : {}),
-    ...(student.plannerHidden === true && student.plannerHiddenAt ? { plannerHiddenAt: String(student.plannerHiddenAt) } : {}),
     updatedAt: serverTimestamp()
   });
   // 좌석을 다시 받은 학생이면 배석 해제 때 만들어 둔 문서를 치운다(없으면 무해).
@@ -12206,10 +12053,6 @@ async function loadStudentsFromFirebase() {
           mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
           // 태블릿 보관 관리 동의(학부모앱) — true인 학생만 태블릿 보관함 카드에 표시
           tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null),
-          // 플래너 학부모 비공개(학생앱에서 학생 본인이 켠다) — ★여기서 안 읽으면 관리자가
-          // 학생 정보를 한 번 저장하는 순간 설정이 지워져 학생 몰래 학부모에게 다시 공개된다.
-          plannerHidden: v.plannerHidden === true,
-          plannerHiddenAt: v.plannerHiddenAt || ''
         });
       });
       STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));
@@ -12310,9 +12153,6 @@ async function loadStudentsFromFirebase() {
         mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
         // 태블릿 보관 관리 동의 — 학부모가 토글하면 이 스냅샷으로 보관함 카드에 즉시 반영
         tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null),
-        // 플래너 학부모 비공개 — 학생이 학생앱에서 켜면 이 스냅샷으로 플래너 현황판 배지에 즉시 반영
-        plannerHidden: v.plannerHidden === true,
-        plannerHiddenAt: v.plannerHiddenAt || ''
       };
       // 외출 상태 동기화: 다른 키오스크에서 외출/복귀 처리한 것을 이 기기에도 반영.
       // ★ 원본은 세션 문서의 awayStartTs 다(= _awayStartTs 에 이름이 있으면 세션 기준 외출).
@@ -12563,15 +12403,6 @@ onSnapshot(doc(db, 'settings', 'vacation_mode'), (snap) => {
   console.error('❌ 방학 시간표 구독 에러:', error);
 });
 
-// ── 플래너 학부모 비공개 기능(settings/planner_privacy) 실시간 구독 ──
-// 설정 탭을 열지 않아도 플래너 현황판 배지가 실제 상태를 말해야 한다.
-// 문서가 없으면 켜진 것으로 본다(학생이 걸어 둔 잠금을 존중하는 쪽).
-onSnapshot(doc(db, 'settings', 'planner_privacy'), (snap) => {
-  const enabled = snap.exists() ? snap.data().enabled !== false : true;
-  if (window.applyPlannerPrivacy) window.applyPlannerPrivacy(enabled);
-}, (error) => {
-  console.error('❌ 플래너 비공개 기능 구독 에러:', error);
-});
 
 // ── 식사시간 외출 알림(settings/meal_away_sms) 실시간 구독 ──
 // 설정 탭을 열지 않아도 반영되어야 하고(발송 판단이 키오스크에서 일어난다),
@@ -12941,9 +12772,11 @@ onSnapshot(collection(db, STANDDESK_COL), (snapshot) => {
 window._sdRecheck = () => { try { _standDeskPump(); } catch(e) {} };
 
 // ══════════════════════════════════════════════════════════════
-// 📱 태블릿 보관함 — 학부모 동의(students.tabletConsent=true) 학생의 태블릿을 보관하고,
-// 학생이 신청한 시간(start~end)에만 지급했다가 수거한다. 대시보드 카드에서 관리.
+// 📱 태블릿 보관함 — 기본은 전원 면학관이 보관하고(2026-10-08 원장), 학부모가 '학생 스스로 관리'
+// (students.tabletConsent=false)를 고른 학생만 빠진다. 학생이 신청한 교시(periods, start~end 는
+// 그 교시들의 시작~끝)에만 지급했다가 수거한다. 대시보드 카드에서 관리.
 // 상태 공유 = students/_meta_tablet 문서(entries.{좌석숫자}), 학생앱과 동일 구조.
+// 지급·수거 이력 = tablet_logs/{uid}_{운영일} events[] — 학부모앱이 읽는다(관리자 기기만 쓴다).
 //   requested(신청 대기, [지급]/[거절]) → out(사용 중, [수거] — 종료시각 지나면 빨간 연체 표시)
 // 실물을 주고받는 행위가 곧 승인이므로 별도 승인 팝업은 없다. 새 신청은 알림음+토스트.
 // ══════════════════════════════════════════════════════════════
@@ -12961,15 +12794,14 @@ window.renderTabletMgmt = function(){
   // 동의 현황 집계 — 실학생만(조교·관리자·테스트 계정 제외). 카드는 항상 표시해
   // 원장이 '누가 동의했는지'를 여기서 확인한다(동의 0명이어도 현황 줄은 보인다).
   const all=(window.STUDENTS||[]).filter(s=>s.name && !window.isNonStudent?.(s.name));
-  const students=all.filter(s=>s.tabletConsent===true);
-  const declined=all.filter(s=>s.tabletConsent===false);
-  const noResp=all.filter(s=>typeof s.tabletConsent!=='boolean');
+  const students=all.filter(s=>s.tabletConsent!==false);
+  const self=all.filter(s=>s.tabletConsent===false);
   sec.style.display='block';
   const stEl=document.getElementById('tablet-consent-status');
-  if(stEl) stEl.innerHTML=`🙋 학부모 동의 현황 — <b style="color:#1e7a46">동의 ${students.length}</b> · <b style="color:#c62828">거절 ${declined.length}</b> · 미응답 ${noResp.length} <span style="color:#8f82e4;font-weight:700">명단 보기 ›</span>`;
+  if(stEl) stEl.innerHTML=`🙋 <b style="color:#1e7a46">면학관 관리 ${students.length}</b> · <b style="color:#6b7280">학생 스스로 관리 ${self.length}</b> <span style="color:#8f82e4;font-weight:700">명단 보기 ›</span>`;
   if(!students.length){
     if(sum) sum.textContent='';
-    list.innerHTML='<div style="text-align:center;padding:14px;color:#9ca3af;font-size:12px">아직 동의한 가정이 없습니다 — 학부모앱 공지 탭에서 동의하면 그 학생이 여기에 나타납니다</div>';
+    list.innerHTML='<div style="text-align:center;padding:14px;color:#9ca3af;font-size:12px">면학관이 관리하는 학생이 없습니다</div>';
     return;
   }
   const today=_tabletToday(), nowHM=_tabletNowHM();
@@ -12978,7 +12810,8 @@ window.renderTabletMgmt = function(){
     let e=_tabletEntries[k];
     if(e && e.date!==today) e=null;               // 지난 날짜 잔재는 보관 중으로
     const st=e?.status||'stored';
-    const overdue=(st==='out' && e.end && nowHM>e.end);
+    // 끝이 시작보다 이르면(11교시 00:00~01:00) 자정을 넘긴 것 — 그 사이 저녁 시각은 지연이 아니다
+    const overdue=(st==='out' && e.end && nowHM>e.end && !(e.start && e.end<e.start && nowHM>=e.start));
     return {s,k,e,st,overdue};
   }).sort((a,b)=>{
     const rank=x=>x.st==='requested'?0 : x.st==='out'?(x.overdue?1:2) : 3;
@@ -12995,12 +12828,12 @@ window.renderTabletMgmt = function(){
         btns=`<button onclick="tabletDirectIssue('${k}')" style="padding:6px 12px;background:#ffffff;color:#2d7a4f;border:1px solid #a7d9bc;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">📤 바로 지급</button>`;
     if(st==='requested'){
       bg='#fff7ed'; bd='#fdba74';
-      badge=`<span style="font-size:10.5px;font-weight:800;color:#ea580c">⏳ 신청 ${e.start}~${e.end}</span>`;
+      badge=`<span style="font-size:10.5px;font-weight:800;color:#ea580c">⏳ 신청 ${_tabletWhen(e)}</span>`;
       btns=`<button onclick="tabletIssue('${k}')" style="padding:6px 12px;background:#2d7a4f;color:#ffffff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">📤 지급</button>
             <button onclick="tabletReject('${k}')" style="padding:6px 10px;background:#ffffff;color:#c62828;border:1px solid #c62828;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">거절</button>`;
     } else if(st==='out'){
       bg=overdue?'#FEE2E2':'#EFF6FF'; bd=overdue?'#EF4444':'#93C5FD';
-      badge=`<span style="font-size:10.5px;font-weight:800;color:${overdue?'#dc2626':'#2563eb'}">${overdue?'⚠️ 반납 지연':'📱 사용 중'} ~${e.end}</span>`;
+      badge=`<span style="font-size:10.5px;font-weight:800;color:${overdue?'#dc2626':'#2563eb'}">${overdue?'⚠️ 반납 지연':'📱 사용 중'} ${e.periods?.length ? e.periods.join('·')+'교시 ' : ''}~${e.end}</span>`;
       btns=`<button onclick="tabletReturn('${k}')" style="padding:6px 12px;background:${overdue?'#dc2626':'#2563eb'};color:#ffffff;border:none;border-radius:8px;font-size:11.5px;font-weight:700;cursor:pointer">📥 수거 완료</button>`;
     }
     return `<div style="display:flex;align-items:center;gap:10px;background:${bg};border:1.5px solid ${bd};border-radius:10px;padding:8px 12px;margin-bottom:6px">
@@ -13011,15 +12844,34 @@ window.renderTabletMgmt = function(){
   }).join('');
 };
 
+// '7·8교시 (18:00~20:20)' — 앱 신청은 교시, 예전 웹 신청·바로 지급은 시각만 있다
+function _tabletWhen(e){ return e?.periods?.length ? `${e.periods.join('·')}교시 (${e.start}~${e.end})` : `${e?.start}~${e?.end}`; }
+
+// 지급·수거 이력 — 학부모앱이 날짜별로 본다. 실패해도 상태 전환은 막지 않는다(실물 주고받기가 먼저).
+async function _tabletLog(k, type, entry){
+  const s=(window.STUDENTS||[]).find(x=>String(x.seat).replace(/[^0-9]/g,'')===k);
+  if(!s?.uid) return;
+  const date=_tabletToday();
+  try{
+    await setDoc(doc(db,'tablet_logs',`${s.uid}_${date}`), {
+      uid:s.uid, name:s.name, seat:k, date, updatedAt:Date.now(),
+      events: arrayUnion({ type, at:Date.now(), ...(type==='out' && entry?.end ? { end:entry.end } : {}),
+        ...(type==='out' && entry?.periods?.length ? { periods:entry.periods } : {}) })
+    }, { merge:true });
+  } catch(e){ console.warn('태블릿 이력 기록 실패:', e && e.code); }
+}
+
 // 상태 전환 쓰기 — entry 전체를 명시해 이전 사이클 잔재 필드가 남지 않게 한다(merge는 필드 보존이므로)
 async function _tabletWrite(k, patch){
   const s=(window.STUDENTS||[]).find(x=>String(x.seat).replace(/[^0-9]/g,'')===k);
   const prev=_tabletEntries[k]||{};
   const entry={ name:s?.name||prev.name||'', seat:s?.seat||prev.seat||k,
-    status:'stored', date:_tabletToday(), start:prev.start||null, end:prev.end||null,
+    status:'stored', date:_tabletToday(), start:prev.start||null, end:prev.end||null, periods:prev.periods||null,
     requestedAt:prev.requestedAt||null, issuedAt:prev.issuedAt||null, returnedAt:prev.returnedAt||null,
     ...patch };
   await setDoc(doc(db,'students','_meta_tablet'), { name:'', updatedAt:Date.now(), entries:{ [k]: entry } }, { merge:true });
+  if(patch.status==='out') await _tabletLog(k,'out',entry);
+  if(patch.status==='stored' && prev.status==='out') await _tabletLog(k,'in',entry);
 }
 window.tabletIssue = async function(k){
   try{ await _tabletWrite(k,{status:'out', issuedAt:Date.now()}); if(window.showAdminToast) showAdminToast('📤 태블릿 지급 — 시간이 끝나면 수거하세요'); }
@@ -13027,8 +12879,8 @@ window.tabletIssue = async function(k){
 };
 window.tabletReject = async function(k){
   const e=_tabletEntries[k];
-  if(!confirm(`${e?.name||''} 학생의 태블릿 사용 신청(${e?.start}~${e?.end})을 거절할까요?`)) return;
-  try{ await _tabletWrite(k,{status:'stored', start:null, end:null, requestedAt:null, issuedAt:null}); if(window.showAdminToast) showAdminToast('❌ 신청 거절됨'); }
+  if(!confirm(`${e?.name||''} 학생의 태블릿 사용 신청(${_tabletWhen(e)})을 거절할까요?`)) return;
+  try{ await _tabletWrite(k,{status:'stored', start:null, end:null, periods:null, requestedAt:null, issuedAt:null}); if(window.showAdminToast) showAdminToast('❌ 신청 거절됨'); }
   catch(e2){ alert('거절 처리 실패: '+e2.message); }
 };
 window.tabletReturn = async function(k){
@@ -13068,7 +12920,7 @@ window.showTabletConsentList = function(){
   document.getElementById('tablet-consent-pop')?.remove();
   const all=(window.STUDENTS||[]).filter(s=>s.name && !window.isNonStudent?.(s.name))
     .sort((a,b)=>parseInt(a.seat)-parseInt(b.seat));
-  const grp=(t)=>all.filter(s=> t==='yes' ? s.tabletConsent===true : t==='no' ? s.tabletConsent===false : typeof s.tabletConsent!=='boolean');
+  const grp=(t)=>all.filter(s=> t==='yes' ? s.tabletConsent!==false : s.tabletConsent===false);
   const chip=(s,c,bg)=>`<span style="display:inline-block;font-size:11.5px;font-weight:600;color:${c};background:${bg};border-radius:14px;padding:3px 9px;margin:2px">${s.name} <span style="opacity:0.6">${String(s.seat).replace('번','')}</span></span>`;
   const section=(title,color,arr,c,bg)=>`
     <div style="margin-bottom:12px">
@@ -13080,14 +12932,13 @@ window.showTabletConsentList = function(){
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:9998;display:flex;align-items:center;justify-content:center';
   ov.innerHTML=`<div style="background:#ffffff;border-radius:16px;width:min(94vw,440px);max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.2);overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:0.5px solid #eeeeee;background:#eef2ff">
-      <div style="font-size:14px;font-weight:700;color:#1e1b4b">📱 태블릿 보관 관리 — 학부모 동의 현황</div>
+      <div style="font-size:14px;font-weight:700;color:#1e1b4b">📱 태블릿 보관 — 관리 현황</div>
       <button onclick="document.getElementById('tablet-consent-pop').remove()" style="background:rgba(0,0,0,0.08);border:none;width:28px;height:28px;border-radius:50%;font-size:14px;cursor:pointer">✕</button>
     </div>
     <div style="overflow-y:auto;padding:14px 18px">
-      ${section('✅ 동의 (참여 중)','#1E7A46',grp('yes'),'#1E7A46','#E8F5E9')}
-      ${section('❌ 거절 (참여 안 함)','#C62828',grp('no'),'#C62828','#FDECEC')}
-      ${section('⏳ 미응답','#6B7280',grp('none'),'#4B5563','#F3F4F6')}
-      <div style="font-size:11px;color:#9ca3af;line-height:1.5">동의는 학부모앱 → 공지 탭 → '태블릿 보관 관리 (선택)' 카드에서 학부모가 직접 응답합니다.<br>미응답 가정에는 안내 문자·알림을 보내 응답을 요청하세요.</div>
+      ${section('📦 면학관 관리','#1E7A46',grp('yes'),'#1E7A46','#E8F5E9')}
+      ${section('🙋 학생 스스로 관리','#6B7280',grp('no'),'#4B5563','#F3F4F6')}
+      <div style="font-size:11px;color:#9ca3af;line-height:1.5">기본은 면학관 관리입니다. 학부모가 앱 더보기 → 태블릿 보관에서 '학생 스스로 관리'를 켜면 이 카드에서 빠집니다.</div>
     </div>
   </div>`;
   ov.addEventListener('click',e=>{ if(e.target===ov) ov.remove(); });
@@ -13101,7 +12952,7 @@ window.tabletDirectIssueGo = async function(k){
   if(end<=now){ alert('종료 시각이 지금보다 늦어야 합니다.'); return; }
   document.getElementById('tablet-issue-pop')?.remove();
   try{
-    await _tabletWrite(k,{status:'out', start:now, end, requestedAt:null, issuedAt:Date.now(), returnedAt:null});
+    await _tabletWrite(k,{status:'out', start:now, end, periods:null, requestedAt:null, issuedAt:Date.now(), returnedAt:null});
     if(window.showAdminToast) showAdminToast(`📤 태블릿 지급 (~${end}) — 시간이 끝나면 수거하세요`);
   } catch(e){ alert('지급 처리 실패: '+e.message); }
 };
@@ -13113,7 +12964,7 @@ window._applyRemoteTabletEntries = function(entries){
   Object.keys(_tabletEntries).forEach(k=>{
     const now=_tabletEntries[k], old=prev[k];
     if(now.status==='requested' && old?.status!=='requested' && now.date===_tabletToday() && _sdEligible()){
-      if(window.showAdminToast) showAdminToast(`📱 ${now.name} 태블릿 사용 신청 (${now.start}~${now.end})`);
+      if(window.showAdminToast) showAdminToast(`📱 ${now.name} 태블릿 사용 신청 (${_tabletWhen(now)})`);
       _sdBeep();
     }
   });
@@ -14554,98 +14405,6 @@ window.resetSchedulesToBase = async function() {
   try { await updateDoc(doc(db, 'students', '_meta_auto_sms'), { keys: {} }); } catch(e) {}
   _resetLocalAfterDailyReset(count);
 };
-
-// ── 예약된(미래 적용) 자리변경 커밋 ──
-// 학생앱이 pendingSeats에 남긴 예약 중, 적용일(effectiveDate)이 오늘 이하인 것을
-// 실제 좌석 이동으로 반영한다. 새벽 2시 리셋 블록에서 하루 한 번 호출된다.
-// 여러 기기가 동시에 돌아도 각 예약을 트랜잭션으로 '집어들며' 처리해 중복 이동을 막는다.
-// forceAll=true면 적용일과 무관하게 대기 중인 모든 예약을 지금 커밋한다('예약 즉시 적용' 버튼).
-async function commitPendingSeatsIfDue(forceAll) {
-  const _db = window._adminDb || db;
-  if (!_db) return 0;
-  let psnap;
-  try { psnap = await getDocs(collection(_db, 'pendingSeats')); } catch(e) { return 0; }
-  if (!psnap || psnap.empty) return 0;
-  const todayIso = SH.sessIsoDate(Date.now());
-  const due = [];
-  psnap.forEach(pd => {
-    const p = pd.data();
-    const eff = p.effectiveDate || '';
-    if (forceAll || !eff || eff <= todayIso) {
-      due.push({ id: pd.id, name: p.name || '', fromSeat: p.fromSeat || '', toSeat: String(p.toSeat || pd.id), studentData: p.studentData || null });
-    }
-  });
-  if (!due.length) return 0;
-  let done = 0;
-  for (const res of due) {
-    try { await _commitOneReservation(_db, res); done++; }
-    catch(e) { console.error('예약 반영 실패:', res, e); }
-  }
-  // 남은 예약이 없으면 설정의 effectiveDate도 비워 둔다(다음 학생 선택은 즉시 적용).
-  try {
-    const remain = await getDocs(collection(_db, 'pendingSeats'));
-    if (remain.empty) await setDoc(doc(_db, 'settings', 'seatSelection'), { effectiveDate: '' }, { merge: true });
-  } catch(e) {}
-  // 화면 반영
-  try { if (window.loadStudentsFromFirebase) await window.loadStudentsFromFirebase(); } catch(e) {}
-  try { if (window.buildFloorplan) buildFloorplan(); } catch(e) {}
-  try { if (window.buildDashboard) buildDashboard(); } catch(e) {}
-  if (done) showAdminToast(`🪑 예약된 자리변경 ${done}건이 적용됐습니다`);
-  return done;
-}
-
-// '예약 즉시 적용' 버튼 — 대기 중인 예약 수를 확인하고, 관리자 확인 후 적용일과 무관하게 전부 커밋.
-window.applyPendingSeatsNow = async function() {
-  const _db = window._adminDb;
-  if (!_db) { alert('Firebase 연결이 필요합니다'); return; }
-  let cnt = 0;
-  try { const snap = await getDocs(collection(_db, 'pendingSeats')); cnt = snap.size; } catch(e) {}
-  if (!cnt) { showAdminToast('대기 중인 예약이 없습니다'); return; }
-  if (!confirm(`대기 중인 자리변경 예약 ${cnt}건을 지금 바로 적용할까요?\n\n(적용일을 기다리지 않고 즉시 좌석이 이동됩니다)`)) return;
-  const done = await commitPendingSeatsIfDue(true);
-  if (window.loadSeatSelectionStatus) window.loadSeatSelectionStatus();
-  alert(`✅ 예약 ${done}건을 적용했습니다.`);
-};
-
-// 예약 1건을 실제 좌석 이동으로 반영. 예약 문서 삭제를 이동과 원자적으로 처리(트랜잭션)해
-// 두 기기가 동시에 커밋해도 이동이 한 번만 일어나게 한다.
-async function _commitOneReservation(_db, res) {
-  const to = String(res.toSeat);
-  const from = res.fromSeat ? String(res.fromSeat) : '';
-  await runTransaction(_db, async (tx) => {
-    const resRef = doc(_db, 'pendingSeats', res.id);
-    const rs = await tx.get(resRef);
-    if (!rs.exists()) return; // 다른 기기가 이미 처리함
-    const toRef = doc(_db, 'students', to);
-    const toSnap = await tx.get(toRef);
-    // 원본 좌석 데이터(관리자 관리 필드 보존) — 없으면 예약에 담긴 스냅샷 사용(랜덤 예약)
-    let base = res.studentData || {};
-    const fromRef = (from && from !== to) ? doc(_db, 'students', from) : null;
-    if (fromRef) { const fs = await tx.get(fromRef); if (fs.exists()) base = fs.data(); }
-    // 대상이 이미 다른 학생 점유면(이론상 없음 — 예약은 빈자리만) 이동 없이 예약만 정리
-    if (toSnap.exists() && toSnap.data().name && toSnap.data().name !== res.name) { tx.delete(resRef); return; }
-    tx.set(toRef, { ...base, seat: to, name: res.name, updatedAt: serverTimestamp() });
-    if (fromRef) tx.delete(fromRef);
-    tx.delete(resRef);
-  });
-  // schedules / schedule_base 이동 (본인 데이터라 경합 낮음 → 트랜잭션 밖, 멱등)
-  if (from && from !== to) {
-    for (const col of ['schedules', 'schedule_base']) {
-      try {
-        const snap = await getDoc(doc(_db, col, from));
-        if (snap.exists()) await setDoc(doc(_db, col, to), { ...snap.data(), seat: to, name: res.name, updatedAt: serverTimestamp() });
-      } catch(e) {}
-    }
-    for (const col of ['schedules', 'schedule_base']) {
-      for (const id of [from, from + '번']) {
-        try { await deleteDoc(doc(_db, col, id)); } catch(e) {}
-      }
-    }
-    try { await deleteDoc(doc(_db, 'students', from + '번')); } catch(e) {}
-  }
-}
-// 수동 적용/테스트용 노출 (2시 리셋 자동 호출과 별개로 관리자가 즉시 커밋 가능)
-window.commitPendingSeatsIfDue = commitPendingSeatsIfDue;
 
 // ── 무단결석(교시당 2점) · 지각(교시당 1점) 벌점 판정 ──
 // 규칙: 그날 유효 스케줄(고정 base + 당일변경 daily_reports)에서 출석 예정(o/△)이던 교시에
@@ -18496,16 +18255,6 @@ function _apcRender() {
     if (sub && ai && ai.status === 'running') aiRunning++;
     if (sub && ai && ai.status === 'error') aiError++;
     const name = _apcEsc(s.name);
-    // 학부모 비공개 배지 — 학부모가 "플래너가 안 보인다"고 문의했을 때 선생님이 이유를 바로 알도록.
-    // 선생님이 보는 화면과 검사는 이 설정과 무관하게 그대로다(가려지는 건 학부모앱뿐).
-    // 전체 스위치가 꺼져 있으면 학생이 잠가 뒀어도 실제로는 학부모에게 보이는 중이다 —
-    // 그때 '🔒 비공개'라고 띄우면 선생님이 반대로 안다.
-    const privOn = window.PLANNER_PRIVACY_ON !== false;
-    const privBadge = (s.plannerHidden === true)
-      ? (privOn
-          ? `<div style="position:absolute;top:5px;left:5px;background:#b45309;color:#ffffff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px" title="학생이 학부모에게 비공개로 설정했습니다">🔒 학부모 비공개</div>`
-          : `<div style="position:absolute;top:5px;left:5px;background:#6b7280;color:#ffffff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px" title="학생은 비공개로 뒀지만 전체 스위치가 꺼져 있어 지금은 학부모에게 보입니다">🔓 잠금 정지 중</div>`)
-      : '';
     const badge = n
       ? `<div style="position:absolute;top:5px;right:5px;background:#6c5dd3;color:#ffffff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px">💬 ${n}</div>`
       : '';
@@ -18517,7 +18266,7 @@ function _apcRender() {
         <div style="aspect-ratio:3/4;background:#f3f4f6;position:relative">
           <img src="${_apcEsc(sub.url)}" loading="lazy" alt=""
             style="width:100%;height:100%;object-fit:cover;display:block">
-          ${badge}${aiBadge}${privBadge}
+          ${badge}${aiBadge}
         </div>
         <div style="padding:6px 8px;font-size:12px;font-weight:700;color:#1e1b4b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
           ${name} <span style="font-weight:500;color:#9ca3af">${_apcEsc(s.seat)}</span>
@@ -18527,7 +18276,7 @@ function _apcRender() {
     return `<div onclick="window.apcOpen(${idx})" title="${name}"
       style="border:1.5px dashed #e5e7eb;border-radius:12px;overflow:hidden;cursor:pointer;background:#fafafa">
       <div style="aspect-ratio:3/4;position:relative;display:flex;align-items:center;justify-content:center;color:#c9cdd4;font-size:12px;font-weight:600">
-        미제출${badge}${privBadge}
+        미제출${badge}
       </div>
       <div style="padding:6px 8px;font-size:12px;font-weight:600;color:#9ca3af;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
         ${name} <span style="font-weight:500;color:#c9cdd4">${_apcEsc(s.seat)}</span>
@@ -18536,7 +18285,6 @@ function _apcRender() {
   });
 
   gridEl.innerHTML = cards.join('');
-  window._apcRefresh = _apcRender;   // 전체 스위치가 바뀌면 배지를 다시 그려야 한다
   if (sumEl) {
     sumEl.innerHTML = `제출 <b style="color:#6c5dd3">${done}</b> · 미제출 <b style="color:#c62828">${students.length - done}</b> · 코멘트 <b>${cmted}</b> · 검사 <b style="color:#4c3fb8">${aied}</b> <span style="color:#c9cdd4">/ 전체 ${students.length}명</span>`;
   }
@@ -18581,10 +18329,7 @@ window.apcOpen = function(idx) {
   _apcStudent = s; _apcSeat = slot.key; _apcForeign = slot.foreign;
   _apcCurrentDate = _apcDate;   // 코멘트는 지금 보고 있는 학습일에 달린다
   const [y, m, d] = _apcDate.split('-').map(Number);
-  titleEl.textContent = `${s.name} (${s.seat}번)` + (_apcForeign || slot.key !== _apcSeatKey(s.seat) ? ` · 제출 좌석 ${slot.key}` : '') + ` — ${m}월 ${d}일`
-    + ((s && s.plannerHidden === true)
-        ? (window.PLANNER_PRIVACY_ON !== false ? '  🔒 학부모 비공개' : '  🔓 잠금 정지 중(전체 스위치 꺼짐)')
-        : '');
+  titleEl.textContent = `${s.name} (${s.seat}번)` + (_apcForeign || slot.key !== _apcSeatKey(s.seat) ? ` · 제출 좌석 ${slot.key}` : '') + ` — ${m}월 ${d}일`;
   const sub = slot.sub;
   if (sub && sub.url) {
     img.src = sub.url; img.style.display = 'block'; nophoto.style.display = 'none';
@@ -20156,9 +19901,6 @@ async function _rpAttendance(studentName, startISO, endISO) {
 window.reportRender = async function() {
   const box = document.getElementById('rp-content');
   const stu = _rpStudent();
-  const privNote = document.getElementById('rp-priv-note');
-  if (privNote) privNote.style.display =
-    (stu && stu.plannerHidden === true && window.PLANNER_PRIVACY_ON !== false) ? 'block' : 'none';
   const range = window.reportMonthSync();   // 달 → 실제 구간(hidden 칸)까지 여기서 확정한다
   const startISO = range ? range.startISO : '';
   const endISO   = range ? range.endISO   : '';

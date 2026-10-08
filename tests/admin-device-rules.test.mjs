@@ -52,21 +52,17 @@ test('냉난방: 명령·설정 쓰기는 관리자 기기만', async () => {
   await assertSucceeds(getDoc(doc(anon(), 'ac_config', 'main')));
 });
 
-test('settings: 설정 탭 문서는 원장 기기만, 타종·좌석 예약 비우기는 예외', async () => {
+test('settings: 설정 탭 문서는 원장 기기만, 타종은 예외', async () => {
   await env.clearFirestore();
-  for (const id of ['billing', 'vacation_mode', 'schedule_edit', 'planner_privacy', 'meal_away_sms', 'day_break_door', 'weather', 'solapi']) {
+  for (const id of ['billing', 'vacation_mode', 'schedule_edit', 'meal_away_sms', 'day_break_door', 'weather', 'solapi']) {
     await assertFails(setDoc(doc(anon(), 'settings', id), { enabled: true }));
     await assertFails(setDoc(doc(admin(), 'settings', id), { enabled: true }));
     await assertSucceeds(setDoc(doc(director(), 'settings', id), { enabled: true }));
   }
   await assertSucceeds(getDoc(doc(anon(), 'settings', 'billing')));
   await assertSucceeds(setDoc(doc(anon(), 'settings', 'bell_schedule'), { times: [] }));
-  // 좌석 예약: 원장이 날짜를 걸고, 아무 기기(키오스크)나 반영 뒤 비울 수만 있다
-  await assertFails(setDoc(doc(anon(), 'settings', 'seatSelection'), { effectiveDate: '2026-10-10' }));
-  await assertSucceeds(setDoc(doc(director(), 'settings', 'seatSelection'), { effectiveDate: '2026-10-10', open: true }));
-  await assertFails(setDoc(doc(anon(), 'settings', 'seatSelection'), { open: false }, { merge: true }));
-  await assertFails(setDoc(doc(anon(), 'settings', 'seatSelection'), { effectiveDate: '2026-12-01' }, { merge: true }));
-  await assertSucceeds(setDoc(doc(anon(), 'settings', 'seatSelection'), { effectiveDate: '' }, { merge: true }));
+  // 폐지된 기능(2026-10-08)은 원장도 못 쓴다
+  for (const id of ['seatSelection', 'planner_privacy']) await assertFails(setDoc(doc(director(), 'settings', id), { enabled: true }));
 });
 
 test('자동문은 키오스크가 써야 하므로 그대로 열려 있다', async () => {

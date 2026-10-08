@@ -1,5 +1,5 @@
 // ⚠️ 자동 생성 파일 — 손으로 고치지 말 것. functions/jobs/extract.mjs 가 관리앱에서 잘라 만든다.
-// 원본: saebom_schedule_with_hours.html (생성 2026-10-08T06:36:59.734Z)
+// 원본: saebom_schedule_with_hours.html (생성 2026-10-08T13:36:43.428Z)
 // 서버(runner.js)가 node:vm 안에서 window·db·Firestore 함수 흉내(fsCompat)를 넣고 실행한다.
 
 // ════ saebom-common.js — 공용 헬퍼 ════
@@ -282,7 +282,7 @@ async function autoCloseStaleSessions(){
   } catch(e){ console.warn('[세션] 자동 마감 스캔 실패:', e); }
 }
 
-// ════ 모듈 — 새벽 스케줄 초기화·예약 좌석 적용 ════
+// ════ 모듈 — 새벽 스케줄 초기화 ════
 async function _dailyResetAlreadyDone(dateStr) {
   try {
     const snap = await getDoc(doc(db, 'students', '_meta_daily_reset'));
@@ -368,75 +368,6 @@ window.resetSchedulesToBase = async function() {
   try { await updateDoc(doc(db, 'students', '_meta_auto_sms'), { keys: {} }); } catch(e) {}
   _resetLocalAfterDailyReset(count);
 };
-async function commitPendingSeatsIfDue(forceAll) {
-  const _db = window._adminDb || db;
-  if (!_db) return 0;
-  let psnap;
-  try { psnap = await getDocs(collection(_db, 'pendingSeats')); } catch(e) { return 0; }
-  if (!psnap || psnap.empty) return 0;
-  const todayIso = SH.sessIsoDate(Date.now());
-  const due = [];
-  psnap.forEach(pd => {
-    const p = pd.data();
-    const eff = p.effectiveDate || '';
-    if (forceAll || !eff || eff <= todayIso) {
-      due.push({ id: pd.id, name: p.name || '', fromSeat: p.fromSeat || '', toSeat: String(p.toSeat || pd.id), studentData: p.studentData || null });
-    }
-  });
-  if (!due.length) return 0;
-  let done = 0;
-  for (const res of due) {
-    try { await _commitOneReservation(_db, res); done++; }
-    catch(e) { console.error('예약 반영 실패:', res, e); }
-  }
-  // 남은 예약이 없으면 설정의 effectiveDate도 비워 둔다(다음 학생 선택은 즉시 적용).
-  try {
-    const remain = await getDocs(collection(_db, 'pendingSeats'));
-    if (remain.empty) await setDoc(doc(_db, 'settings', 'seatSelection'), { effectiveDate: '' }, { merge: true });
-  } catch(e) {}
-  // 화면 반영
-  try { if (window.loadStudentsFromFirebase) await window.loadStudentsFromFirebase(); } catch(e) {}
-  try { if (window.buildFloorplan) buildFloorplan(); } catch(e) {}
-  try { if (window.buildDashboard) buildDashboard(); } catch(e) {}
-  if (done) showAdminToast(`🪑 예약된 자리변경 ${done}건이 적용됐습니다`);
-  return done;
-}
-async function _commitOneReservation(_db, res) {
-  const to = String(res.toSeat);
-  const from = res.fromSeat ? String(res.fromSeat) : '';
-  await runTransaction(_db, async (tx) => {
-    const resRef = doc(_db, 'pendingSeats', res.id);
-    const rs = await tx.get(resRef);
-    if (!rs.exists()) return; // 다른 기기가 이미 처리함
-    const toRef = doc(_db, 'students', to);
-    const toSnap = await tx.get(toRef);
-    // 원본 좌석 데이터(관리자 관리 필드 보존) — 없으면 예약에 담긴 스냅샷 사용(랜덤 예약)
-    let base = res.studentData || {};
-    const fromRef = (from && from !== to) ? doc(_db, 'students', from) : null;
-    if (fromRef) { const fs = await tx.get(fromRef); if (fs.exists()) base = fs.data(); }
-    // 대상이 이미 다른 학생 점유면(이론상 없음 — 예약은 빈자리만) 이동 없이 예약만 정리
-    if (toSnap.exists() && toSnap.data().name && toSnap.data().name !== res.name) { tx.delete(resRef); return; }
-    tx.set(toRef, { ...base, seat: to, name: res.name, updatedAt: serverTimestamp() });
-    if (fromRef) tx.delete(fromRef);
-    tx.delete(resRef);
-  });
-  // schedules / schedule_base 이동 (본인 데이터라 경합 낮음 → 트랜잭션 밖, 멱등)
-  if (from && from !== to) {
-    for (const col of ['schedules', 'schedule_base']) {
-      try {
-        const snap = await getDoc(doc(_db, col, from));
-        if (snap.exists()) await setDoc(doc(_db, col, to), { ...snap.data(), seat: to, name: res.name, updatedAt: serverTimestamp() });
-      } catch(e) {}
-    }
-    for (const col of ['schedules', 'schedule_base']) {
-      for (const id of [from, from + '번']) {
-        try { await deleteDoc(doc(_db, col, id)); } catch(e) {}
-      }
-    }
-    try { await deleteDoc(doc(_db, 'students', from + '번')); } catch(e) {}
-  }
-}
-window.commitPendingSeatsIfDue = commitPendingSeatsIfDue;
 
 // ════ 모듈 — 벌점(무단결석·지각)·주간목표·주기·플래너 상점 ════
 const NOSHOW_POINTS = 2;
@@ -1182,10 +1113,6 @@ async function __loadStudents() {
           mealAwaySms: (typeof v.mealAwaySms === 'boolean' ? v.mealAwaySms : null),
           // 태블릿 보관 관리 동의(학부모앱) — true인 학생만 태블릿 보관함 카드에 표시
           tabletConsent: (typeof v.tabletConsent === 'boolean' ? v.tabletConsent : null),
-          // 플래너 학부모 비공개(학생앱에서 학생 본인이 켠다) — ★여기서 안 읽으면 관리자가
-          // 학생 정보를 한 번 저장하는 순간 설정이 지워져 학생 몰래 학부모에게 다시 공개된다.
-          plannerHidden: v.plannerHidden === true,
-          plannerHiddenAt: v.plannerHiddenAt || ''
         });
   });
   STUDENTS.sort((a,b) => parseInt(a.seat) - parseInt(b.seat));

@@ -2451,7 +2451,7 @@ async function _runLegacy(tag, names) {
 // 새벽 2시: 관리앱의 '새벽 2시 블록'(1분 틱)과 앱 시작 때 도는 판정을 한꺼번에.
 // 키오스크가 먼저 돌았으면 완료 표시를 보고 쓰기 없이 지나간다.
 exports.jobsDaily = onSchedule({ ...JOB_OPTS, schedule: '7 2 * * *' }, () => _runLegacy('jobsDaily', [
-  'autoCloseStaleSessions', 'resetSchedulesToBase', 'commitPendingSeatsIfDue', 'assessNoShowPenalties',
+  'autoCloseStaleSessions', 'resetSchedulesToBase', 'assessNoShowPenalties',
   'assessWeeklyGoals', 'assessCycleMerits', 'assessPlannerExcellence', 'autoWithdrawExpired', 'cleanupWithdrawnStudents',
 ]));
 

@@ -77,6 +77,8 @@ rules_version = '2';
 //   - 2026-10-06  학교 기출 sm_bankExams 추가(NGD 포함, 원장 "전부 올려조") — sm_bank* 로 묶어 같은 규칙.
 //   - 2026-10-06  경영앱 새봄 문항은행 sm_bank 추가 — sm_ 공통 규칙에서 빼고 읽기는 일일테스트 권한자(원장 두 분)만,
 //                 쓰기는 관리자 REST(원장 PC bank_sync.py)만. 그림은 Storage bank/figs(규칙은 막힌 채, 토큰 주소로 봄).
+//   - 2026-10-08  planner_privacy·seatSelection·pendingSeats 삭제(기능 폐지), tablet_logs 추가(태블릿 지급·수거 이력),
+//                 settings/schedule_edit 에 uids(지정 학생만 시간표 수정 허용).
 //   - 2026-10-06  경영앱 '내 할 일'(todo.html — 이원장 주간 할 일 보드를 옮긴 것) 개인 일정 sm_mine 추가.
 //                 sm_ 공통 규칙에서 빼고 일일테스트 권한자 중 문서 owner(로그인 이메일) 본인만 읽고 쓴다.
 //                 할 일·수업 준비 등 나머지(sm_dailyTodo·sm_dailyPrep·sm_dailyGoals·sm_dailyIdeas·sm_dailyTodoMeta)는 sm_daily* 규칙 그대로.
@@ -167,9 +169,6 @@ service cloud.firestore {
     match /schedule_base/{id}  { allow read, write: if true; }
     match /daily_reports/{id}  { allow read, write: if true; }
 
-    // 예약된 자리변경 (학생앱이 미래 적용일에 고른 자리 / 관리자앱이 새벽 2시에 커밋)
-    // 문서 ID = 대상 좌석번호. 예약 문서 자체가 좌석 선점 잠금 역할을 한다.
-    match /pendingSeats/{seat} { allow read, write: if true; }
 
     // 입퇴실 기록(감사용): 형식 검증 (type은 in/out만, 이름 30자 이내)
     match /checkin_logs/{id} {
@@ -233,6 +232,18 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decisionNote', 'decidedAt', 'updatedAt'])
         && request.resource.data.status in ['pending', 'accepted', 'rejected'];
       allow create, delete: if false;
+    }
+
+    // 태블릿 지급·수거 이력 (2026-10-08) — 문서ID {uid}_{운영일}, events[{type:'out'|'in', at, end?, periods?}].
+    // 관리앱(관리자 기기)이 지급·수거 때 쓰고, 학생 본인·그 학부모가 읽는다. 지금 상태는 students/_meta_tablet.
+    match /tablet_logs/{id} {
+      allow read: if isAdminDevice() || isStudentSid(resource.data.uid) || isParentOf(resource.data.uid);
+      allow create, update: if isAdminDevice()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'seat', 'date', 'events', 'updatedAt'])
+        && request.resource.data.uid is string
+        && id == request.resource.data.uid + '_' + request.resource.data.date
+        && request.resource.data.events is list;
+      allow delete: if false;
     }
 
     // 상점: 관리자가 수동 부여 (사용시간 탭 상점현황). 벌점과 동일한 개방 정책.
@@ -453,13 +464,11 @@ service cloud.firestore {
     //    공개이므로, 호출 한도가 문제되면 school_calendars 와 함께 서버 중개로 옮길 것.
     match /settings/{id} {
       allow read: if id in ['solapi', 'billing',
-                            'seatSelection', 'vacation_mode', 'schedule_edit',
+                            'vacation_mode', 'schedule_edit',
                             'meal_away_sms', 'summerInvites', 'alimtalk_server',
                             'day_break_door', 'bell_schedule', 'weather',
-                            'planner_privacy', 'app_version', 'popup_notice'];
-      // planner_privacy — 플래너 학부모 비공개 기능의 전체 스위치(원장 전용, 관리앱에서만 쓴다).
-      // ★읽기를 못 하면 학생·학부모앱은 '기능 켜짐'으로 간주한다(학생이 걸어 둔 잠금을 존중하는 쪽).
-      //   그래서 이 규칙을 배포하지 않으면 스위치를 꺼도 아무 일도 일어나지 않는다.
+                            'app_version', 'popup_notice'];
+      // schedule_edit — enabled(전체 허용) + uids(지정 학생만 허용, 불변 학생ID 목록).
       // app_version — 모바일 앱 업데이트 안내(iosLatest·iosMin·androidLatest·androidMin·note).
       //   로그인 전에 읽으므로 미인증 read 다. 담긴 건 버전 문자열뿐이라 열려도 잃을 것이 없다.
       // 🔴 write 는 일부러 뺐다 — min 을 잘못 올리면 앱이 통째로 잠기는 문서다.
@@ -471,15 +480,11 @@ service cloud.firestore {
       //   미인증 read 라 그냥 열어 둔다(담긴 건 공지 문구뿐이다).
       // 2026-10-07: 설정 탭(원장 기기 전용 화면)에서만 쓰는 문서는 원장 기기만 쓴다.
       //   billing(defaultFee)은 토스 결제 금액의 기준이기도 하다.
-      //   예외 둘 — bell_schedule 은 타종 페이지(로그인 없음)가 쓴다.
-      //   seatSelection.effectiveDate 비우기는 좌석 예약 반영(commitPendingSeatsIfDue)이 아무 기기에서나 한다.
+      //   예외 — bell_schedule 은 타종 페이지(로그인 없음)가 쓴다.
       allow write: if (isDirectorDevice()
-                       && id in ['solapi', 'billing', 'schedule_edit', 'seatSelection', 'vacation_mode',
-                                 'meal_away_sms', 'day_break_door', 'weather', 'planner_privacy'])
-                   || id == 'bell_schedule'
-                   || (id == 'seatSelection' && resource != null
-                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['effectiveDate'])
-                       && request.resource.data.effectiveDate == '');
+                       && id in ['solapi', 'billing', 'schedule_edit', 'vacation_mode',
+                                 'meal_away_sms', 'day_break_door', 'weather'])
+                   || id == 'bell_schedule';
     }
 
     // 문자 발송 로그
