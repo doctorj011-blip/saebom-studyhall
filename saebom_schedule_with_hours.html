@@ -276,7 +276,8 @@ body.admin-device .subtab-bar.on{display:flex}
 .confirm-btn.away-mode{background:#eef2ff;color:#4338a8;border:1.5px solid #8f82e4}
 
 /* 완료 패널 */
-.checkin-done-panel{padding:16px 0}
+.checkin-done-panel{padding:6px 0 10px}
+.checkin-wrap.ci-done #checkin-input-panel .checkin-header,.checkin-wrap.ci-done #checkin-door-controls{display:none}
 .done-icon{font-size:48px;margin-bottom:12px}
 .done-name{font-size:20px;font-weight:600;margin-bottom:6px}
 .done-msg{font-size:14px;color:var(--color-text-secondary);margin-bottom:6px}
@@ -1204,6 +1205,13 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   <div class="checkin-wrap">
     <!-- 면학시상대 캐릭터 무대 (saebom-avatar.js KioskAvatar) — 입력·확인·완료 화면에 걸쳐 그대로 남는다 -->
     <div class="ci-stage" id="ci-stage" aria-hidden="true"></div>
+    <!-- 완료 패널 — 번호판 위에 잠깐 뜬다. 번호판은 가리지 않는다(다음 학생이 바로 누를 수 있게, 2026-10-09) -->
+    <div class="checkin-done-panel" id="checkin-done-panel" style="display:none">
+      <div class="done-icon" id="done-icon"></div>
+      <div class="done-name" id="done-name"></div>
+      <div class="done-msg" id="done-msg"></div>
+      <div class="done-time" id="done-time"></div>
+    </div>
     <!-- 번호 입력 패널 -->
     <div class="checkin-panel" id="checkin-input-panel">
       <div id="checkin-door-controls" style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px;flex-wrap:wrap">
@@ -1257,13 +1265,6 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
       </div>
     </div>
 
-    <!-- 완료 패널 -->
-    <div class="checkin-done-panel" id="checkin-done-panel" style="display:none">
-      <div class="done-icon" id="done-icon"></div>
-      <div class="done-name" id="done-name"></div>
-      <div class="done-msg" id="done-msg"></div>
-      <div class="done-time" id="done-time"></div>
-    </div>
   </div>
 
   <!-- 교시 중 입실 스터디룸 배정 전체화면 안내 (화면 아무데나 누르면 닫힘) -->
@@ -3206,7 +3207,7 @@ if (window._kioskAuto || _kioskResume) {
   }
   function idle() {
     return inKiosk() && !window._checkinProcessing && !numpadBuffer
-      && document.getElementById('checkin-input-panel')?.style.display !== 'none'
+      && document.getElementById('checkin-input-panel')?.style.display !== 'none' && !_doneShowing()
       && !document.getElementById('sr-fullscreen')?.classList.contains('show')
       && (!window.KioskAvatar || window.KioskAvatar.idle())
       && Date.now() - (_numpadLastInput || 0) > 60000;
@@ -6359,6 +6360,7 @@ setInterval(() => {
 }, 5000);
 
 window.numpadInput = function(d) {
+  if (_doneShowing()) checkinReset(); // 앞 학생 완료 문구를 걷고 바로 이 학생 입력으로
   if (numpadBuffer.length >= 4) return;
   _numpadLastInput = Date.now();
   numpadBuffer += d;
@@ -6369,12 +6371,14 @@ window.numpadInput = function(d) {
 }
 
 window.numpadDelete = function() {
+  if (_doneShowing()) { checkinReset(); return; }
   numpadBuffer = numpadBuffer.slice(0, -1);
   updateCheckinDisplay();
   hideCheckinError();
 }
 
 window.numpadClear = function() {
+  if (_doneShowing()) { checkinReset(); return; }
   numpadBuffer = '';
   updateCheckinDisplay();
   hideCheckinError();
@@ -6741,9 +6745,7 @@ window.checkinConfirm = async function() {
   }
 
   // 완료 패널
-  document.getElementById('checkin-confirm-panel').style.display = 'none';
-  const donePanel = document.getElementById('checkin-done-panel');
-  donePanel.style.display = 'block';
+  _showDonePanel();
 
   // 입실 시 교시 중이면 스터디룸 배정 (외출 복귀도 같은 규칙 — checkinAwayReturn 참고)
   let assignedRoom = null;
@@ -6795,9 +6797,7 @@ window.checkinConfirm = async function() {
   if (window.requestDoorOpen) window.requestDoorOpen(3);
   else if (window.doorOpenTimed) window.doorOpenTimed(3);
 
-  setTimeout(() => {
-    checkinReset();
-  }, isDuringPeriod && assignedRoom ? 9000 : 2200);
+  _doneAutoReset(isDuringPeriod && assignedRoom ? 9000 : 2200);
   } catch(e) {
     // 처리 중 예외가 나도 잠금(_checkinProcessing)이 풀리고 첫 화면으로 복귀하도록 보장
     // (기존엔 예외 시 잠금이 걸린 채 확인 화면에 멈춰 키오스크가 먹통이 됐음)
@@ -6811,10 +6811,28 @@ window.checkinConfirm = async function() {
 // 입실 기록은 그대로 유지되고(이용시간 계속 집계), 외출 상태만 표시·기록한다.
 window._awayStudents = window._awayStudents || {}; // 이름 → 외출 시작 시각
 
-function _showAwayDone(student, icon, msg, timeStr) {
+// ── 완료 화면: 번호판을 가리지 않는다 (2026-10-09 원장) ──
+// 예전엔 완료 패널이 번호판 자리를 2.2초(스터디룸 안내면 9초) 차지해, 나가고 들어오는 학생이
+// 몰리면 다음 학생이 번호를 못 눌렀다. 이제 완료 문구는 번호판 위에 뜨고 번호판은 그대로 눌린다.
+// 다음 학생이 숫자를 누르면 그 자리에서 완료 문구를 걷고(checkinReset) 새 입력을 받는다.
+// 자동으로 걷히는 타이머는 _doneSeq 로 묶어, 다음 학생이 이미 입력 중이면 건드리지 않는다.
+let _doneSeq = 0;
+function _showDonePanel() {
+  _doneSeq++;
   document.getElementById('checkin-confirm-panel').style.display = 'none';
-  const donePanel = document.getElementById('checkin-done-panel');
-  donePanel.style.display = 'block';
+  document.getElementById('checkin-done-panel').style.display = 'block';
+  document.getElementById('checkin-input-panel').style.display = 'block';
+  document.querySelector('#sec-checkin .checkin-wrap')?.classList.add('ci-done');
+  numpadBuffer = ''; updateCheckinDisplay(); // 앞 학생이 누른 4칸을 비워 둔다 — 다음 학생 입력 칸
+}
+function _doneShowing() { return document.getElementById('checkin-done-panel')?.style.display === 'block'; }
+function _doneAutoReset(ms) {
+  const seq = _doneSeq;
+  setTimeout(() => { if (seq === _doneSeq && _doneShowing()) checkinReset(); }, ms);
+}
+
+function _showAwayDone(student, icon, msg, timeStr) {
+  _showDonePanel();
   document.getElementById('done-icon').textContent = icon;
   document.getElementById('done-name').textContent = maskName(student.name);
   document.getElementById('done-msg').textContent = msg;
@@ -6849,7 +6867,7 @@ window.checkinAway = async function() {
     // 🚪 자동문 열기
     if (window.requestDoorOpen) window.requestDoorOpen(3);
     else if (window.doorOpenTimed) window.doorOpenTimed(3);
-    setTimeout(() => { checkinReset(); }, 2200);
+    _doneAutoReset(2200);
   } catch(e) {
     console.error('외출 처리 오류:', e);
     showAdminToast('⚠️ 외출 처리 중 오류: ' + (e && e.message ? e.message : e));
@@ -6896,7 +6914,7 @@ window.checkinAwayReturn = async function() {
     if (window.requestDoorOpen) window.requestDoorOpen(3);
     else if (window.doorOpenTimed) window.doorOpenTimed(3);
     // 스터디룸 안내가 떴으면 입실 때와 같이 오래 보여준다(2.2초는 읽기 전에 사라진다)
-    setTimeout(() => { checkinReset(); }, (sr.room && sr.duringPeriod) ? 9000 : 2200);
+    _doneAutoReset((sr.room && sr.duringPeriod) ? 9000 : 2200);
   } catch(e) {
     console.error('복귀 처리 오류:', e);
     showAdminToast('⚠️ 복귀 처리 중 오류: ' + (e && e.message ? e.message : e));
@@ -6917,7 +6935,7 @@ window.checkinBreakReentry = function() {
     // 🚪 자동문 열기
     if (window.requestDoorOpen) window.requestDoorOpen(3);
     else if (window.doorOpenTimed) window.doorOpenTimed(3);
-    setTimeout(() => { checkinReset(); }, 2200);
+    _doneAutoReset(2200);
   } catch(e) {
     console.error('재입실 처리 오류:', e);
     showAdminToast('⚠️ 재입실 처리 중 오류: ' + (e && e.message ? e.message : e));
@@ -7588,6 +7606,7 @@ window.checkinReset = function() {
   document.getElementById('checkin-confirm-panel').style.display = 'none';
   document.getElementById('checkin-done-panel').style.display = 'none';
   document.getElementById('checkin-input-panel').style.display = 'block';
+  document.querySelector('#sec-checkin .checkin-wrap')?.classList.remove('ci-done');
   // 확인 버튼 영역을 기본(취소/확인) 2버튼으로 복구
   const btnWrap = document.getElementById('confirm-btns');
   if (btnWrap) {
