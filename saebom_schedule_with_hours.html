@@ -22166,11 +22166,41 @@ document.addEventListener('DOMContentLoaded', function() {
     } catch (e) { console.error(e); if (el) el.innerHTML = '<div style="color:#dc2626;font-size:12.5px">음료 주문 불러오기 실패: ' + esc(e.message) + '</div>'; }
   };
 
+  // 새 주문 알림 — 관리자 기기(토큰 있는 PC)에서만 1분마다 확인해 화면 위 알약으로 보여 준다.
+  // 키오스크 등 토큰 없는 화면은 돌지 않는다. 누르면 포인트 탭의 주문 카드로 간다.
+  let pillSeen = -1;
+  async function drinkPill() {
+    if (!localStorage.getItem('saebom_admin_token')) return;
+    try {
+      const rows = (await call('adminPoints', { action: 'drinks' })).orders || [];
+      const wait = rows.filter(o => o.status === 'pending');
+      let el = document.getElementById('pt-drink-pill');
+      if (!el) {
+        el = document.createElement('button');
+        el.id = 'pt-drink-pill';
+        el.style.cssText = 'position:fixed;top:10px;right:10px;z-index:9999;display:none;padding:8px 14px;background:#4a3fa8;color:#fff;border:0;border-radius:999px;font-size:13px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.25);cursor:pointer';
+        el.onclick = () => { if (typeof window.showSection === 'function') window.showSection('points'); };
+        document.body.appendChild(el);
+      }
+      const seatOfSid = sid => String((students().find(s => s.uid === sid) || {}).seat || '').replace('번', '');
+      el.textContent = '🥤 음료 주문 ' + wait.length + '건 — ' + wait.slice(0, 3).map(o => (seatOfSid(o.sid) ? seatOfSid(o.sid) + '번 ' : '') + o.name).join(', ') + (wait.length > 3 ? ' 외' : '');
+      el.style.display = wait.length ? 'block' : 'none';
+      if (pillSeen >= 0 && wait.length > pillSeen && typeof showAdminToast === 'function') showAdminToast('🥤 새 음료 주문이 들어왔습니다');
+      pillSeen = wait.length;
+      if (document.getElementById('sec-points') && document.getElementById('sec-points').classList.contains('active')) { drinkRows = rows; renderDrinks(); }
+    } catch (e) { console.warn('음료 주문 확인 실패', e); }
+  }
+  setTimeout(drinkPill, 8000);
+  setInterval(drinkPill, 60000);
+
   window.ptDrinkDone = async function(id) {
     try {
       await call('adminPoints', { action: 'drinkDone', id });
       drinkRows = drinkRows.map(o => o.id === id ? Object.assign({}, o, { status: 'done' }) : o);
       renderDrinks();
+      pillSeen = drinkRows.filter(o => o.status === 'pending').length;
+      const pill = document.getElementById('pt-drink-pill');
+      if (pill && !pillSeen) pill.style.display = 'none';
       showAdminToast('✅ 수령 처리했습니다');
     } catch (e) { console.error(e); showAdminToast('❌ ' + (e.message || e)); }
   };
