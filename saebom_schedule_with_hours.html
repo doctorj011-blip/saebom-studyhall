@@ -1384,6 +1384,7 @@ body.rp-capturing .rp-sheet [contenteditable]{background:transparent !important;
   </div>
   <div id="pt-config" class="card" style="margin-bottom:12px"></div>
   <div id="pt-detail"></div>
+  <div id="pt-drinks" class="card" style="margin-bottom:12px"></div>
   <div id="pt-lines" class="card" style="margin-bottom:12px"></div>
   <div id="pt-body"></div>
 </div>
@@ -22101,6 +22102,7 @@ document.addEventListener('DOMContentLoaded', function() {
       renderConfig(); renderBody();
       if (openSid) window.ptOpen(openSid);
       window.ptLines();
+      window.ptDrinks();
     } catch (e) { console.error(e); if (el) el.innerHTML = '<div style="color:#dc2626;padding:16px">불러오기 실패: ' + esc(e.message) + '</div>'; }
   };
 
@@ -22116,7 +22118,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const k = KIND[e.kind] || [e.kind, '#333'];
         return `<tr><td style="padding:4px 8px;color:#6B6B8A;white-space:nowrap">${esc(e.date)}</td>
           <td style="padding:4px 8px;color:${k[1]};white-space:nowrap">${k[0]}</td>
-          <td style="padding:4px 8px">${esc(e.kind === 'spend' ? (e.ref + ' 구매') : e.reason)}</td>
+          <td style="padding:4px 8px">${esc(e.kind === 'spend' && !String(e.ref).startsWith('drink_') ? (e.ref + ' 구매') : e.reason)}</td>
           <td style="padding:4px 8px;text-align:right;font-weight:700;color:${e.amount < 0 ? '#b3261e' : '#166534'}">${e.amount > 0 ? '+' : ''}${e.amount}P</td></tr>`;
       }).join('');
       el.innerHTML = `<div class="card" style="margin-bottom:12px">
@@ -22134,6 +22136,43 @@ document.addEventListener('DOMContentLoaded', function() {
         <table style="border-collapse:collapse;width:100%;font-size:12px">${list || '<tr><td style="padding:8px;color:#aaaaaa">아직 내역이 없습니다</td></tr>'}</table>
       </div>`;
     } catch (e) { console.error(e); el.innerHTML = '<div class="card" style="color:#dc2626">불러오기 실패: ' + esc(e.message) + '</div>'; }
+  };
+
+  // ── 음료 주문 — 학생이 앱 상점에서 300P 로 산 음료. 건네고 '수령 완료' 를 누른다 ──
+  let drinkRows = [];
+  function renderDrinks() {
+    const el = document.getElementById('pt-drinks');
+    if (!el) return;
+    const wait = drinkRows.filter(o => o.status === 'pending');
+    const done = drinkRows.filter(o => o.status !== 'pending').slice(0, 10);
+    const seatOfSid = sid => String((students().find(s => s.uid === sid) || {}).seat || '').replace('번', '');
+    const row = (o, btn) => `<tr><td style="padding:5px 8px;border-top:1px solid #eeeaf8;white-space:nowrap;width:1%"><b>${esc(seatOfSid(o.sid))}</b></td>
+      <td style="padding:5px 8px;border-top:1px solid #eeeaf8;white-space:nowrap;width:1%">${esc(nameOf(o.sid))}</td>
+      <td style="padding:5px 8px;border-top:1px solid #eeeaf8">${esc(o.name)} <span style="color:#9A96B8;font-size:11.5px">${esc(o.date)}</span></td>
+      <td style="padding:5px 8px;border-top:1px solid #eeeaf8;text-align:right">${btn}</td></tr>`;
+    el.innerHTML = `<div style="font-weight:700;color:#1e1b4b;margin-bottom:4px">🥤 음료 주문 <span style="font-weight:400;color:#9A96B8;font-size:12px">수령 대기 ${wait.length}건 · 한 캔 300P</span></div>
+      <div style="color:#6B6B8A;font-size:12px;margin-bottom:8px">학생이 앱 아이템샵에서 산 음료입니다. 학생에게 건넨 뒤 '수령 완료'를 누르세요. 잘못 산 건 위 표에서 포인트를 지급(조정)해 돌려주세요.</div>
+      ${wait.length ? `<table style="border-collapse:collapse;width:100%;font-size:12.5px">${wait.map(o => row(o,
+        `<button onclick="ptDrinkDone('${esc(o.id)}')" style="padding:3px 10px;background:#4a3fa8;color:#fff;border:0;border-radius:6px;font-size:11.5px;cursor:pointer">수령 완료</button>`)).join('')}</table>`
+        : '<div style="color:#aaaaaa;font-size:12.5px">수령 대기 중인 주문이 없습니다</div>'}
+      ${done.length ? `<div style="margin-top:10px;color:#9A96B8;font-size:11.5px">최근 수령 완료</div><table style="border-collapse:collapse;width:100%;font-size:12px;color:#6B6B8A">${done.map(o => row(o, '✓')).join('')}</table>` : ''}`;
+  }
+
+  window.ptDrinks = async function() {
+    const el = document.getElementById('pt-drinks');
+    try {
+      drinkRows = (await call('adminPoints', { action: 'drinks' })).orders || [];
+      renderDrinks();
+    } catch (e) { console.error(e); if (el) el.innerHTML = '<div style="color:#dc2626;font-size:12.5px">음료 주문 불러오기 실패: ' + esc(e.message) + '</div>'; }
+  };
+
+  window.ptDrinkDone = async function(id) {
+    try {
+      await call('adminPoints', { action: 'drinkDone', id });
+      drinkRows = drinkRows.map(o => o.id === id ? Object.assign({}, o, { status: 'done' }) : o);
+      renderDrinks();
+      showAdminToast('✅ 수령 처리했습니다');
+    } catch (e) { console.error(e); showAdminToast('❌ ' + (e.message || e)); }
   };
 
   // ── 시상대 말풍선 대사 — 학생이 꾸미기에서 쓴 대사(3개까지)를 보고 지운다 ──
