@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<script>
+// 호스팅 이전(2026-10-12): 깃허브 페이지(공개 저장소) → https://saebom-admin.web.app
+//   옛 주소로 열리면 이 기기의 localStorage(관리자·원장·키오스크 등록 토큰 포함)를 주소의 # 뒤에 실어
+//   새 주소로 넘긴다(# 뒤는 서버로 가지 않는다). 새 주소는 받은 값 중 없는 것만 채우고 # 을 원래대로 돌린다.
+//   그래서 기기 등록을 다시 하지 않아도 된다. 이 블록은 다른 스크립트보다 먼저 돌아야 한다.
+(function () {
+  var NEW = 'https://saebom-admin.web.app', TAG = '__mig=';
+  if (/\.github\.io$/.test(location.hostname)) {
+    var d = {};
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i), v = localStorage.getItem(k); if (v != null && v.length < 200000) d[k] = v; } } catch (e) {}
+    var file = location.pathname.split('/').pop() || 'saebom_schedule_with_hours.html';
+    var rest = location.hash.replace(/^#/, '');
+    var blob = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))));
+    location.replace(NEW + '/' + file + location.search + '#' + TAG + blob + (rest ? '&' + rest : ''));
+    document.write('<plaintext style="display:none">');   // 이 아래 문서·스크립트는 옛 주소에서 돌지 않게 삼킨다
+    return;
+  }
+  var h = location.hash.replace(/^#/, '');
+  if (h.indexOf(TAG) !== 0) return;
+  var amp = h.indexOf('&'), body = amp < 0 ? h.slice(TAG.length) : h.slice(TAG.length, amp), rest2 = amp < 0 ? '' : h.slice(amp + 1);
+  try {
+    var got = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(body)))));
+    for (var key in got) if (localStorage.getItem(key) == null) localStorage.setItem(key, got[key]);
+  } catch (e) { console.warn('저장값 옮기기 실패', e); }
+  history.replaceState(null, '', location.pathname + location.search + (rest2 ? '#' + rest2 : ''));
+})();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>새봄 면학관 타종</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔔</text></svg>">
+<!--
+  새봄 면학관 쉬는시간 타종 — 독립 실행 페이지
+
+  ⚠️ 이 파일은 면학관 관리앱(saebom_schedule_with_hours.html)의 화면·동선과 **완전히 분리**되어
+     있다. 관리앱에 넣었다가 뺀 이유가 이것이다 — 조교가 업무 중에 누른 버튼 하나가 진짜
+     종소리를 내보내 면학관에 혼선을 일으켰다. 여기서는 무엇을 눌러도 학생에게 들리는 종은
+     나가지 않는다(아래 '시험' 규칙 참고).
+
+  🔑 이 페이지의 핵심 규칙: **설정은 어디서나, 소리는 지정한 한 대에서만.**
+     - 설정(요일×교시·종소리·음량)은 Firestore `settings/bell_schedule` 에 있어, 원장이 폰에서
+       고치면 데스크톱이 새로고침 없이 받는다.
+     - '소리를 내는 기기'는 Firestore 에 **없다.** 기기별 localStorage(saebomBellSpeaker) 다.
+       이게 서버에 있으면 원장이 폰으로 설정을 열어보는 순간 폰에서도 종이 울린다.
+     - 네트워크가 끊겨도 마지막 설정이 localStorage 에 남아 있어 종은 계속 울린다.
+       Firebase 로딩 자체가 실패해도 이 기기 설정만으로 동작한다.
+
+  🔊 소리 시험 규칙
+     - 잠금 해제, 종소리 고르기, 음량 조절 → **아주 작은 확인음(삑)** 만 난다. 종이 아니다.
+     - 진짜 종소리는 '실제 종소리 듣기' 버튼을 눌러 **확인 창에서 한 번 더 동의해야** 난다.
+       그 버튼에는 지금이 수업 중인지 쉬는시간인지도 같이 띄운다.
+
+  쓰는 법: 스피커 물린 데스크톱에서 이 페이지를 띄워 두고, 요일×교시를 고른 뒤 '타종 켜기'.
+
+  ⚠️ 브라우저 자동재생 정책 때문에, 그냥 열면 사람이 화면을 한 번 눌러야 소리가 깨어난다.
+     면학관 메인컴은 `타종_로컬설치/타종시작.bat` 으로 띄운다 — 크롬을
+     `--autoplay-policy=no-user-gesture-required` 로 실행해 이 클릭이 필요 없게 만든다.
+     (그 스크립트 없이 크롬에 파일을 그냥 끌어다 놓으면 옵션이 안 붙어 다시 클릭이 필요하다)
+-->
+<style>
+:root{
+  --bg:#FDFBF6; --card:#fff; --ink:#3A3226; --muted:#8A7F6D;
+  --line:#E8DFCE; --accent:#B8860B; --accent-ink:#6B4E06; --accent-soft:#FDF6E3;
+  --on:#16A34A; --off:#B0A895; --warn:#DC2626;
+}
+*{box-sizing:border-box}
+body{margin:0;padding:24px 20px 60px;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif}
+.wrap{max-width:860px;margin:0 auto}
+h1{font-size:19px;margin:0 0 2px;display:flex;align-items:center;gap:8px}
+.sub{font-size:12px;color:var(--muted);margin:0 0 18px}
+
+/* ── 큰 상태판: 방 건너편에서도 읽혀야 한다 ── */
+.board{background:var(--card);border:1.5px solid var(--line);border-radius:14px;
+  padding:18px 20px;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.clock{font-size:38px;font-weight:700;letter-spacing:.5px;line-height:1.1;font-variant-numeric:tabular-nums}
+.clock small{font-size:15px;font-weight:600;color:var(--muted);margin-left:8px}
+.next{font-size:15px;margin-top:8px;font-weight:600}
+.next.ok{color:var(--on)} .next.none{color:var(--accent-ink)} .next.off{color:var(--muted)}
+.lastrang{font-size:12px;color:var(--muted);margin-top:6px;min-height:16px}
+.badges{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.badge{font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px;
+  background:#F2ECE0;color:var(--muted);white-space:nowrap}
+.badge.good{background:#E7F6EC;color:#15803D}
+.badge.warn{background:#FDECEC;color:var(--warn)}
+
+/* ── 잠김 배너 ── */
+#lock{display:none;background:var(--warn);color:#fff;border-radius:12px;padding:16px 18px;
+  margin-bottom:16px;cursor:pointer;font-size:15px;font-weight:700;text-align:center;
+  border:none;width:100%;font-family:inherit;animation:pulse 2s ease-in-out infinite}
+#lock.show{display:block}
+#lock small{display:block;font-weight:500;font-size:12px;opacity:.9;margin-top:4px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.82}}
+
+/* ── 격자 ── */
+.gridbox{overflow-x:auto;margin-bottom:6px}
+table{border-collapse:collapse;background:var(--card);font-size:13px}
+th,td{border:1px solid var(--line);padding:7px 10px;text-align:center;user-select:none}
+th{background:var(--accent-soft);color:var(--accent-ink);font-weight:700;cursor:pointer;white-space:nowrap}
+th.corner{cursor:default;color:var(--muted);font-weight:600;font-size:11px}
+td{cursor:pointer;color:#D8D0C0;min-width:38px}
+td.on{background:var(--accent);color:#fff}
+.hint{font-size:11.5px;color:var(--muted);margin:0 0 16px;line-height:1.6}
+
+/* ── 조작줄 ── */
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+label.f{display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer}
+select,input[type=range]{font-family:inherit}
+select{padding:6px 10px;border:1.5px solid var(--line);border-radius:8px;font-size:13px;
+  color:var(--ink);background:var(--card);cursor:pointer}
+input[type=range]{width:120px;cursor:pointer}
+button{font-family:inherit;font-size:13px;font-weight:700;border-radius:9px;cursor:pointer;
+  padding:9px 16px;border:1.5px solid var(--line);background:var(--card);color:var(--ink)}
+button.primary{border-color:transparent;background:var(--off);color:#fff;font-size:14px;padding:10px 20px}
+button.primary.on{background:var(--accent)}
+button.quiet{color:var(--muted)}
+.foot{font-size:11.5px;color:var(--muted);line-height:1.7;border-top:1px solid var(--line);
+  padding-top:14px;margin-top:22px}
+.foot b{color:var(--accent-ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🔔 새봄 면학관 타종</h1>
+  <p class="sub">설정은 어느 기기에서나 바꿀 수 있고, 소리는 <b>스피커로 지정한 한 대</b>에서만 납니다.</p>
+
+  <button id="lock">🔇 소리가 잠겨 있습니다 — 여기를 눌러 주세요
+    <small>브라우저를 새로 켜면 한 번 눌러야 합니다. 눌러도 종은 울리지 않습니다.</small></button>
+
+  <div class="board">
+    <div class="clock" id="clock">--:--:--<small id="today"></small></div>
+    <div class="next off" id="next">타종이 꺼져 있습니다</div>
+    <div class="lastrang" id="lastrang"></div>
+    <div class="badges">
+      <span class="badge" id="b-speaker"></span>
+      <span class="badge" id="b-sync"></span>
+    </div>
+  </div>
+
+  <div class="gridbox">
+    <table id="grid"></table>
+  </div>
+  <p class="hint">
+    칸을 눌러 켜고 끕니다. 왼쪽 <b>요일</b>이나 위쪽 <b>교시 번호</b>를 누르면 그 줄 전체가 바뀝니다.
+    고른 교시의 <b>시작·끝 양쪽</b>에 울려서, 쉬는시간이 종으로 둘러싸입니다.
+    바꾸면 곧바로 저장됩니다.
+  </p>
+
+  <div class="row">
+    <label class="f"><input type="checkbox" id="ringStart"> 시작종</label>
+    <label class="f"><input type="checkbox" id="ringEnd"> 종료종</label>
+    <label class="f">종소리 <select id="tone"></select></label>
+    <label class="f">음량 <input type="range" id="volume" min="10" max="100"></label>
+    <span id="vol-num" style="font-size:12px;color:var(--muted);min-width:34px"></span>
+  </div>
+
+  <div class="row">
+    <button class="primary" id="power">🔔 타종</button>
+    <button id="speaker">🔇 이 기기에서 소리 내기</button>
+    <button class="quiet" id="demo">실제 종소리 듣기</button>
+  </div>
+
+  <div class="foot">
+    <b>스피커 기기는 한 대만</b> — 위 <b>「이 기기에서 소리 내기」</b>는 스피커가 물린 컴퓨터에서만 켜세요.
+    폰이나 다른 컴퓨터에서는 꺼 두면, 그 기기는 설정만 바꾸고 소리는 내지 않습니다.<br>
+    <b>매일 확인할 것</b> — 스피커 기기에서 시계가 움직이고 빨간 줄이 안 보이면 정상입니다.<br>
+    <b>소리가 안 나면</b> ① 빨간 줄이 있나 → 누르기 ② 컴퓨터 볼륨·스피커 전원 ③ 이 탭을 새로고침한 뒤 화면 한 번 누르기<br>
+    <b>스피커 기기에서 이 페이지를 닫으면 종이 울리지 않습니다.</b> 늘 띄워 두세요.
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ── 교시 시각 (그날 자정 기준 분). 관리앱 NOSHOW_PERIOD_TIMES 와 같은 값이다.
+//    11교시는 익일 00:00~01:00 = 1440~1500분.
+const PERIODS = {
+  1:[540,600], 2:[610,670], 3:[680,750], 4:[810,870], 5:[880,940], 6:[950,1020],
+  7:[1080,1130], 8:[1140,1220], 9:[1230,1320], 10:[1350,1430], 11:[1440,1500]
+};
+const NUMS = [1,2,3,4,5,6,7,8,9,10,11];
+const DAYS = ['월','화','수','목','금','토'];
+const DOW  = ['일','월','화','수','목','금','토'];
+
+// 부드러움은 고역을 줄이는 데서 나온다 — 배음을 그대로 두면 '땡' 하고 때리는 소리가 된다.
+// strikes: at=시작 후 초, f=기준 음 대비 배율, g=그 타점의 세기.
+const TONES = {
+  bell:  { label:'은은한 종 (3초)', freq:523.25, decay:2.6,
+           strikes:[{at:0,f:1},{at:0.55,f:1.5}],
+           ratios:[1,2,2.4,3.2], gains:[1,0.3,0.15,0.07], cutoff:2400 },
+  // 웨스트민스터 하행 4음(솔♯–파♯–미–시) '딩–동–댕–동' 을 두 번. 두 번째는 순서를 바꿔
+  // 두었다 — 똑같이 반복하면 녹음을 두 번 튼 것처럼 들린다.
+  chime: { label:'맑은 차임 (12초)', freq:659.25, decay:3.9,
+           strikes:[{at:0,f:1.2599},{at:0.9,f:1.1225},{at:1.8,f:1},{at:2.7,f:0.7492,g:1.15},
+                    {at:5.4,f:1},{at:6.3,f:1.2599},{at:7.2,f:1.1225},{at:8.1,f:0.7492,g:1.15}],
+           ratios:[1,2,3], gains:[1,0.22,0.08], cutoff:3000 },
+  bowl:  { label:'낮은 싱잉볼 (3초)', freq:261.63, decay:3.0,
+           strikes:[{at:0,f:1}], ratios:[1,2.7,5.4], gains:[1,0.28,0.1], cutoff:1800 },
+};
+
+const STORE = 'saebomBell';
+const SPEAKER_KEY = 'saebomBellSpeaker';
+const DEFAULT = { on:false, tone:'chime', volume:0.6, ringStart:true, ringEnd:true, days:{} };
+
+function normalize(raw) {
+  const c = Object.assign({}, DEFAULT, raw || {});
+  c.days = Object.assign({}, (raw && raw.days) || {});
+  for (const d of DAYS) if (!Array.isArray(c.days[d])) c.days[d] = [];
+  if (!TONES[c.tone]) c.tone = DEFAULT.tone;
+  if (typeof c.volume !== 'number' || !(c.volume >= 0 && c.volume <= 1)) c.volume = DEFAULT.volume;
+  return c;
+}
+function load() {
+  try { return normalize(JSON.parse(localStorage.getItem(STORE) || '{}')); }
+  catch (e) { return normalize(null); }
+}
+let CFG = load();
+
+// ── 이 기기가 소리를 내는가 (기기별, 서버에 없다) ──
+// 서버에 두면 원장이 폰으로 설정을 열어보는 순간 폰에서도 종이 울린다.
+// 이 스위치가 생기기 전부터 쓰던 기기(=이미 설정을 저장해 둔 기기)는 계속 울려야 한다.
+// 새 기기(폰 등)는 꺼진 채로 열려 설정만 바꾼다.
+let SPEAKER;
+{
+  const saved = localStorage.getItem(SPEAKER_KEY);
+  SPEAKER = saved === null ? localStorage.getItem(STORE) !== null : saved === '1';
+  localStorage.setItem(SPEAKER_KEY, SPEAKER ? '1' : '0');
+}
+
+function saveLocal() { localStorage.setItem(STORE, JSON.stringify(CFG)); }
+
+// ── 시각 계산 ──
+// 11교시가 자정을 넘기므로, 새벽 3시 전은 '전날' 시간표로 친다.
+function now(d) {
+  d = d || new Date();
+  let dow = d.getDay(), mins = d.getHours()*60 + d.getMinutes();
+  if (d.getHours() < 3) { dow = (dow+6)%7; mins += 1440; }
+  return { day: DOW[dow], mins };
+}
+function dayMidnight(d) {
+  const m = new Date(d.getTime());
+  if (m.getHours() < 3) m.setDate(m.getDate()-1);
+  m.setHours(0,0,0,0);
+  return m.getTime();
+}
+function hhmm(m) { m = ((m%1440)+1440)%1440;
+  return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+
+function targetsFor(day) {
+  const out = [];
+  for (const n of CFG.days[day] || []) {
+    const w = PERIODS[n]; if (!w) continue;
+    if (CFG.ringStart) out.push({ mins:w[0], label:n+'교시 시작' });
+    if (CFG.ringEnd)   out.push({ mins:w[1], label:n+'교시 끝' });
+  }
+  return out.sort((a,b)=>a.mins-b.mins);
+}
+function nextInfo() {
+  const cur = now();
+  const i = DOW.indexOf(cur.day);
+  for (let ahead=0; ahead<=7; ahead++) {
+    const day = DOW[(i+ahead)%7];
+    for (const t of targetsFor(day)) {
+      if (ahead===0 && t.mins <= cur.mins) continue;
+      return { day, label:t.label, mins:t.mins, deltaMin: t.mins-cur.mins+ahead*1440 };
+    }
+  }
+  return null;
+}
+// 지금이 어느 교시 안인가 / 쉬는시간인가 — '실제 종소리 듣기' 경고에 쓴다
+function whatNow() {
+  const cur = now();
+  for (const n of NUMS) {
+    const w = PERIODS[n];
+    if (cur.mins >= w[0] && cur.mins < w[1]) return { inClass:true, text:n+'교시 수업 중' };
+  }
+  return { inClass:false, text:'교시 사이(쉬는시간·식사시간)' };
+}
+
+// ── 소리 ──
+let ctx = null;
+function audio() {
+  if (!ctx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    ctx = new AC();
+  }
+  // resume() 은 비동기다. 바로 뒤에서 state 를 보면 아직 'suspended' 라 화면이 안 바뀐다.
+  // 잠겨 있던 오디오가 풀리면, 멈춘 시계에 기대어 걸어 둔 예약은 전부 버린다.
+  // 다음 점검에서 살아 있는 시계로 다시 건다.
+  if (ctx.state === 'suspended') {
+    ctx.resume().then(() => { cancelArmed(); paint(); }).catch(()=>{});
+  }
+  return ctx;
+}
+
+// 진짜 종. delaySec 만큼 뒤에 울리도록 **오디오 시계에 미리 걸어 둔다**(스로틀링 무관).
+function ring(toneKey, volume, delaySec) {
+  const c = audio(); if (!c) return null;
+  const t = TONES[toneKey] || TONES.bell;
+  const t0 = c.currentTime + 0.05 + (delaySec || 0);
+  const nodes = [];
+  const master = c.createGain();
+  master.gain.value = Math.max(0, Math.min(1, volume)) * 0.5; // 배음이 겹쳐 클리핑되지 않게
+  const lp = c.createBiquadFilter();
+  lp.type='lowpass'; lp.frequency.value=t.cutoff; lp.Q.value=0.7;
+  master.connect(lp); lp.connect(c.destination);
+  for (const st of t.strikes) {
+    const at = t0 + st.at;
+    t.ratios.forEach((ratio,i) => {
+      const osc = c.createOscillator();
+      osc.type='sine'; osc.frequency.value = t.freq * st.f * ratio;
+      const g = c.createGain();
+      // 높은 배음일수록 빨리 죽는다 — 실제 종이 그렇다. 전부 같은 길이면 삐 소리가 남는다.
+      const dec = t.decay / (1 + i*0.6);
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(t.gains[i] * (st.g||1), at+0.015); // 0이면 딸깍거린다
+      g.gain.exponentialRampToValueAtTime(0.0001, at+dec);
+      osc.connect(g); g.connect(master);
+      osc.start(at); osc.stop(at+dec+0.1);
+      nodes.push(osc);
+    });
+  }
+  // audioAt = 이 종이 울릴 '오디오 시계' 시각. 벽시계와 어긋났는지 판정하는 데 쓴다.
+  return { nodes, audioAt: t0 };
+}
+
+// 오디오 시계가 실제로 흐르고 있는가.
+// suspended 면 currentTime 이 멈춰 있어, 여기에 대고 "120초 뒤"를 예약해 봐야
+// 그 120초가 언제 올지 알 수 없다 — 2026-08-17 09:03 사고의 원인이 이것이다.
+function audioRunning() { return !!ctx && ctx.state === 'running'; }
+
+// 확인음 — **종이 아니다.** 아주 짧고 작은 삑 소리.
+// 관리앱 시절, 잠금 해제 버튼이 진짜 종소리를 그대로 내보내 면학관에 혼선이 났다.
+// 학생 귀에 종으로 들릴 수 있는 소리는 사람이 확인 창에서 동의했을 때만 나가야 한다.
+function blip() {
+  const c = audio(); if (!c) return;
+  const t0 = c.currentTime + 0.02;
+  const osc = c.createOscillator(), g = c.createGain();
+  osc.type='sine'; osc.frequency.value=880;
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(0.03, t0+0.01);   // 종(0.5)의 1/16 — 방 건너편엔 안 들린다
+  g.gain.exponentialRampToValueAtTime(0.0001, t0+0.12);
+  osc.connect(g); g.connect(c.destination);
+  osc.start(t0); osc.stop(t0+0.15);
+}
+
+// ── 타종 엔진 ──
+// 크롬은 백그라운드 탭의 타이머를 5분 뒤부터 1분에 한 번으로 조인다. '지금이 정확히
+// 18:50인가' 로 보면 그때 타종이 통째로 사라진다. 그래서 두 겹으로 간다.
+//   ① 2분 전에 오디오 시계에 미리 건다 — 오디오 스레드는 스로틀링을 안 받아 초 단위로 정확
+//   ② 예약조차 못 걸었으면 90초까지는 늦게라도 울린다. 절전에서 깨어난 경우는 흘려보낸다
+//      (아침에 컴퓨터를 켰더니 어젯밤 종이 몰아치면 안 된다)
+const ARM_AHEAD = 120*1000, LATE_OK = 90*1000, RESYNC_GAP = 10*60*1000;
+let armed = new Map();     // 절대시각(ms) → 오실레이터 목록
+let lastCheck = 0;
+let lastRang = null;
+
+function cancelArmed() {
+  const t = Date.now();
+  for (const [at, a] of armed) {
+    if (at <= t) continue;
+    for (const o of a.nodes) { try { o.stop(); } catch (e) {} }
+    armed.delete(at);
+  }
+}
+
+// 오디오 시계가 멈춰 있던 탓에 '울려야 할 시각'을 이미 지나쳐 버린 예약을 버린다.
+// 이게 없으면, 잠겨 있던 오디오가 풀리는 순간 밀려 있던 종이 엉뚱한 때 울린다.
+function dropStaleArmed() {
+  const t = Date.now();
+  for (const [at, a] of armed) {
+    if (t <= at + LATE_OK) continue;              // 아직 늦지 않았다
+    if (!ctx || ctx.currentTime >= a.audioAt) continue; // 이미 울렸다 — 놔둔다
+    for (const o of a.nodes) { try { o.stop(); } catch (e) {} }
+    armed.delete(at);
+    console.warn('오디오 시계가 멈춰 있어 놓친 타종을 버립니다:', new Date(at).toTimeString().slice(0,8));
+  }
+}
+
+function tick() {
+  const ms = Date.now(), prev = lastCheck;
+  lastCheck = ms;
+  if (!SPEAKER || !CFG.on) return;   // 스피커로 지정되지 않은 기기는 설정만 바꾼다
+  dropStaleArmed();
+  // 🔴 오디오가 잠겨 있으면(빨간 줄이 뜬 상태) 아무것도 예약하지 않는다.
+  //    예약하면 '걸어 뒀다'고 기록만 되고 실제로는 울리지 않다가, 나중에 사람이 잠금을
+  //    푸는 순간 멈춰 있던 오디오 시계가 다시 흐르면서 밀려 있던 종이 엉뚱한 때 울린다.
+  //    2026-08-17 09:03 사고가 정확히 이것이다 — 원장이 빨간 줄을 눌러 잠금을 풀자
+  //    09:00 에 울렸어야 할 1교시 시작종이 그제서야 울렸다.
+  if (!audioRunning()) return;
+  const d = new Date(ms), base = dayMidnight(d);
+  const woke = prev && (ms - prev) <= RESYNC_GAP;
+  for (const t of targetsFor(now(d).day)) {
+    const at = base + t.mins*60000;
+    if (armed.has(at)) continue;
+    if (at > ms && at - ms <= ARM_AHEAD) {
+      const o = ring(CFG.tone, CFG.volume, (at-ms)/1000);
+      if (o) armed.set(at, o);
+    } else if (woke && at > prev && at <= ms && ms - at <= LATE_OK) {
+      const o = ring(CFG.tone, CFG.volume);
+      if (o) armed.set(at, o);
+    }
+  }
+  // 방금 울린 것을 화면에 남긴다 (조교가 '아까 울렸나'를 확인할 수 있게)
+  for (const [at] of armed) {
+    if (at <= ms && ms - at < 60000) {
+      const t = targetsFor(now(new Date(at)).day).find(x => base + x.mins*60000 === at);
+      if (t) lastRang = hhmm(t.mins) + ' ' + t.label;
+    }
+  }
+  if (armed.size > 40) for (const at of armed.keys()) if (at < ms - 3600*1000) armed.delete(at);
+}
+setInterval(tick, 1000);
+
+// ── 화면 ──
+function paint() {
+  const d = new Date(), cur = now(d);
+  document.getElementById('clock').firstChild.nodeValue = d.toTimeString().slice(0,8);
+  document.getElementById('today').textContent =
+    `${d.getMonth()+1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일`;
+
+  // 잠김 경고는 소리를 낼 기기에서만 의미가 있다 — 폰에서 설정만 볼 때 빨간 줄이 뜨면 잔소리다
+  const locked = SPEAKER && (!ctx || ctx.state !== 'running');
+  document.getElementById('lock').classList.toggle('show', locked);
+
+  const bs = document.getElementById('b-speaker');
+  bs.textContent = SPEAKER ? '🔊 이 기기에서 소리 남' : '🔇 이 기기는 설정만 — 소리 안 남';
+  bs.className = 'badge' + (SPEAKER ? ' good' : '');
+  const by = document.getElementById('b-sync');
+  by.textContent = sync.state === 'on' ? '☁️ 원격 설정 연결됨'
+                 : sync.state === 'off' ? '⚠️ 원격 연결 안 됨 — 이 기기 설정으로만'
+                 : '⏳ 원격 설정 연결 중…';
+  by.className = 'badge' + (sync.state === 'on' ? ' good' : sync.state === 'off' ? ' warn' : '');
+
+  const nx = document.getElementById('next');
+  if (!CFG.on) { nx.textContent = '타종이 꺼져 있습니다'; nx.className = 'next off'; }
+  else if (!SPEAKER) { nx.textContent = '켜져 있습니다 — 소리는 스피커 기기에서 납니다'; nx.className = 'next off'; }
+  else if (locked) { nx.textContent = '소리가 잠겨 있어 울릴 수 없습니다'; nx.className = 'next none'; }
+  else {
+    const n = nextInfo();
+    if (!n) { nx.textContent = '울릴 교시가 없습니다 — 아래 표에서 골라 주세요'; nx.className = 'next none'; }
+    else {
+      const h = Math.floor(n.deltaMin/60), m = n.deltaMin%60;
+      nx.textContent = `다음 타종 · ${n.day} ${hhmm(n.mins)} ${n.label} — ${h?h+'시간 ':''}${m}분 후`;
+      nx.className = 'next ok';
+    }
+  }
+  document.getElementById('lastrang').textContent = lastRang ? '방금 울림 · ' + lastRang : '';
+
+  const p = document.getElementById('power');
+  p.textContent = CFG.on ? '🔔 타종 켜짐' : '🔕 타종 꺼짐';
+  p.classList.toggle('on', CFG.on);
+
+  // 원격에서 바뀐 값을 폼에도 반영한다. 격자만 갱신하고 여기를 빠뜨리면, 폰에서 음량을
+  // 올려도 데스크톱 슬라이더는 옛 값을 보여 준다 — 실제 동작(CFG)과 화면이 어긋난다.
+  // 지금 만지고 있는 컨트롤은 건드리지 않는다(끌던 슬라이더가 튄다).
+  const ae = document.activeElement;
+  const tn = document.getElementById('tone');       if (ae !== tn) tn.value = CFG.tone;
+  const rs = document.getElementById('ringStart');  if (ae !== rs) rs.checked = CFG.ringStart;
+  const re = document.getElementById('ringEnd');    if (ae !== re) re.checked = CFG.ringEnd;
+  const vl = document.getElementById('volume');
+  if (ae !== vl) {
+    vl.value = Math.round(CFG.volume * 100);
+    document.getElementById('vol-num').textContent = vl.value + '%';
+  }
+
+  const sp = document.getElementById('speaker');
+  sp.textContent = SPEAKER ? '🔊 이 기기에서 소리 냄' : '🔇 이 기기에서 소리 내기';
+  const dm = document.getElementById('demo');
+  dm.disabled = !SPEAKER;                       // 소리 안 내는 기기에서 눌러도 아무 일 없다
+  dm.style.opacity = SPEAKER ? '' : '.4';
+  dm.style.cursor = SPEAKER ? '' : 'not-allowed';
+}
+
+function paintGrid() {
+  let h = '<tr><th class="corner">요일＼교시</th>';
+  h += NUMS.map(n => `<th data-col="${n}" title="${n}교시 ${hhmm(PERIODS[n][0])}~${hhmm(PERIODS[n][1])}">${n}</th>`).join('') + '</tr>';
+  for (const day of DAYS) {
+    const on = CFG.days[day] || [];
+    h += `<tr><th data-row="${day}">${day}</th>`;
+    h += NUMS.map(n => `<td class="${on.includes(n)?'on':''}" data-day="${day}" data-n="${n}"
+      title="${day} ${n}교시 · ${hhmm(PERIODS[n][0])}~${hhmm(PERIODS[n][1])}">${on.includes(n)?'🔔':'·'}</td>`).join('');
+    h += '</tr>';
+  }
+  document.getElementById('grid').innerHTML = h;
+}
+
+// ── 원격 설정 동기화 (Firestore settings/bell_schedule) ──
+// 설정만 서버에 둔다. '어느 기기가 소리를 내는가'는 절대 올리지 않는다(SPEAKER 주석 참고).
+// 서버가 안 되더라도 종은 울려야 하므로, localStorage 를 캐시로 두고 Firebase 는 얹기만 한다.
+const FB = {
+  apiKey: "AIzaSyCluCTPdMYxob84VRBjmAQ7VJ3DFToPGBM",
+  authDomain: "saebom-studyhall.firebaseapp.com",
+  projectId: "saebom-studyhall",
+  storageBucket: "saebom-studyhall.firebasestorage.app",
+  messagingSenderId: "273169263882",
+  appId: "1:273169263882:web:cb3c2abe45f76602d99ef3"
+};
+let sync = { state:'connecting', push:null };   // state: connecting | on | off
+
+// 오프라인(로컬 파일로 띄운 면학관 메인컴이 인터넷이 끊긴 경우)에는 CDN 요청이 응답 없이
+// 오래 매달린다. 그동안 뱃지가 '연결 중…'에 멈춰 있으면 고장인지 아닌지 알 수가 없다.
+// 12초 안에 못 붙으면 '연결 안 됨'으로 확정한다 — 나중에 붙으면 스냅샷이 알아서 되돌린다.
+setTimeout(() => { if (sync.state === 'connecting') { sync.state = 'off'; paint(); } }, 12000);
+
+(async () => {
+  try {
+    const V = 'https://www.gstatic.com/firebasejs/11.9.0/';
+    const [{ initializeApp }, fs] = await Promise.all([
+      import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js')
+    ]);
+    const db = fs.getFirestore(initializeApp(FB));
+    const ref = fs.doc(db, 'settings', 'bell_schedule');
+
+    fs.onSnapshot(ref, snap => {
+      sync.state = 'on';
+      if (snap.exists()) {
+        const remote = normalize(snap.data());
+        // 서버 설정을 그대로 따른다. 편집 중이어도 마찬가지 — 이 페이지는 누를 때마다
+        // 곧바로 올리므로 '저장 안 한 편집'이라는 상태 자체가 없다.
+        CFG = remote;
+        saveLocal();
+        cancelArmed();   // 옛 설정으로 걸어 둔 예약은 버린다
+        paintGrid();
+      }
+      paint();
+    }, err => {
+      console.warn('원격 설정 구독 실패 — 이 기기 설정으로만 동작합니다', err);
+      sync.state = 'off';
+      paint();
+    });
+
+    sync.push = () => fs.setDoc(ref, Object.assign({}, CFG, { updatedAt: fs.serverTimestamp() }))
+      .catch(e => { console.warn('원격 설정 저장 실패', e); sync.state = 'off'; paint(); });
+  } catch (e) {
+    // CDN 차단·오프라인 등 — 원격 없이도 이 기기 설정만으로 정상 동작한다
+    console.warn('원격 설정을 쓸 수 없습니다 — 이 기기 설정으로만 동작합니다', e);
+    sync.state = 'off';
+    paint();
+  }
+})();
+
+// 설정이 바뀌면 걸어 둔 예약은 옛 설정이다 — 버리고 다음 점검에서 다시 건다
+function changed() {
+  saveLocal();
+  if (sync.push) sync.push();
+  cancelArmed(); paintGrid(); paint();
+}
+
+document.getElementById('grid').addEventListener('click', e => {
+  const td = e.target.closest('td');
+  if (td) {
+    const day = td.dataset.day, n = +td.dataset.n;
+    const list = CFG.days[day];
+    const i = list.indexOf(n);
+    if (i >= 0) list.splice(i,1); else { list.push(n); list.sort((a,b)=>a-b); }
+    return changed();
+  }
+  const th = e.target.closest('th');
+  if (!th) return;
+  if (th.dataset.row) {
+    const day = th.dataset.row;
+    CFG.days[day] = CFG.days[day].length === NUMS.length ? [] : NUMS.slice();
+    return changed();
+  }
+  if (th.dataset.col) {
+    const n = +th.dataset.col;
+    const all = DAYS.every(d => CFG.days[d].includes(n));
+    for (const d of DAYS) {
+      const i = CFG.days[d].indexOf(n);
+      if (all) { if (i>=0) CFG.days[d].splice(i,1); }
+      else if (i<0) { CFG.days[d].push(n); CFG.days[d].sort((a,b)=>a-b); }
+    }
+    return changed();
+  }
+});
+
+const $ = id => document.getElementById(id);
+
+$('ringStart').onchange = () => { CFG.ringStart = $('ringStart').checked; changed(); };
+$('ringEnd').onchange   = () => { CFG.ringEnd   = $('ringEnd').checked;   changed(); };
+$('tone').onchange      = () => { CFG.tone = $('tone').value; changed(); blip(); };
+$('volume').oninput     = () => { CFG.volume = +$('volume').value/100; $('vol-num').textContent = $('volume').value + '%'; };
+$('volume').onchange    = () => { changed(); blip(); };
+
+$('power').onclick = () => {
+  if (!CFG.on) {
+    const cnt = DAYS.reduce((a,d) => a + CFG.days[d].length, 0);
+    if (!cnt) { alert('울릴 교시를 먼저 표에서 골라 주세요.'); return; }
+  }
+  CFG.on = !CFG.on;
+  audio();          // 이 클릭이 자동재생 정책이 요구하는 제스처다
+  blip();
+  changed();
+};
+
+// 이 기기를 스피커로 쓸지. 서버에 올리지 않는다 — 올리면 폰에서도 종이 울린다.
+$('speaker').onclick = () => {
+  SPEAKER = !SPEAKER;
+  localStorage.setItem(SPEAKER_KEY, SPEAKER ? '1' : '0');
+  cancelArmed();                 // 껐는데 미리 걸어 둔 종이 울리면 안 된다
+  if (SPEAKER) { audio(); blip(); }   // 이 클릭이 자동재생 정책이 요구하는 제스처다
+  paint();
+};
+
+// 진짜 종소리는 여기서만 난다 — 지금이 수업 중인지 알려주고, 한 번 더 동의를 받는다.
+$('demo').onclick = () => {
+  if (!SPEAKER) return;
+  audio();
+  const w = whatNow();
+  const msg = `실제 종소리를 스피커로 내보냅니다.\n\n지금은 ${w.text}입니다.\n` +
+    (w.inClass ? '⚠️ 수업 중이라 학생들이 종으로 알아들을 수 있습니다.\n' : '⚠️ 학생들이 쉬는시간이 끝난 줄 알 수 있습니다.\n') +
+    `\n(${TONES[CFG.tone].label} · 음량 ${Math.round(CFG.volume*100)}%)\n\n정말 들려줄까요?`;
+  if (!confirm(msg)) return;
+  ring(CFG.tone, CFG.volume);
+};
+
+// 화면 아무 데나 눌러도 소리가 깨어나게 — 잠긴 줄 모르고 헤매지 않도록.
+// 소리를 안 내는 기기(폰)에서는 오디오를 깨울 이유가 없다.
+$('lock').onclick = () => { audio(); blip(); paint(); };
+document.addEventListener('click', () => {
+  if (SPEAKER && (!ctx || ctx.state !== 'running')) { audio(); paint(); }
+});
+
+// 초기화
+$('tone').innerHTML = Object.entries(TONES).map(([k,t]) => `<option value="${k}">${t.label}</option>`).join('');
+$('tone').value = CFG.tone;
+$('ringStart').checked = CFG.ringStart;
+$('ringEnd').checked = CFG.ringEnd;
+$('volume').value = Math.round(CFG.volume*100);
+$('vol-num').textContent = Math.round(CFG.volume*100) + '%';
+paintGrid();
+paint();
+setInterval(paint, 1000);
+</script>
+</body>
+</html>

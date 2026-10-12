@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<script>
+// 호스팅 이전(2026-10-12): 깃허브 페이지(공개 저장소) → https://saebom-admin.web.app
+//   옛 주소로 열리면 이 기기의 localStorage(관리자·원장·키오스크 등록 토큰 포함)를 주소의 # 뒤에 실어
+//   새 주소로 넘긴다(# 뒤는 서버로 가지 않는다). 새 주소는 받은 값 중 없는 것만 채우고 # 을 원래대로 돌린다.
+//   그래서 기기 등록을 다시 하지 않아도 된다. 이 블록은 다른 스크립트보다 먼저 돌아야 한다.
+(function () {
+  var NEW = 'https://saebom-admin.web.app', TAG = '__mig=';
+  if (/\.github\.io$/.test(location.hostname)) {
+    var d = {};
+    try { for (var i = 0; i < localStorage.length; i++) { var k = localStorage.key(i), v = localStorage.getItem(k); if (v != null && v.length < 200000) d[k] = v; } } catch (e) {}
+    var file = location.pathname.split('/').pop() || 'saebom_schedule_with_hours.html'; if (file === 'index.html') file = 'saebom_schedule_with_hours.html';
+    var rest = location.hash.replace(/^#/, '');
+    var blob = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(d)))));
+    location.replace(NEW + '/' + file + location.search + '#' + TAG + blob + (rest ? '&' + rest : ''));
+    document.write('<plaintext style="display:none">');   // 이 아래 문서·스크립트는 옛 주소에서 돌지 않게 삼킨다
+    return;
+  }
+  var h = location.hash.replace(/^#/, '');
+  if (h.indexOf(TAG) !== 0) return;
+  var amp = h.indexOf('&'), body = amp < 0 ? h.slice(TAG.length) : h.slice(TAG.length, amp), rest2 = amp < 0 ? '' : h.slice(amp + 1);
+  try {
+    var got = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(body)))));
+    for (var key in got) if (localStorage.getItem(key) == null) localStorage.setItem(key, got[key]);
+  } catch (e) { console.warn('저장값 옮기기 실패', e); }
+  history.replaceState(null, '', location.pathname + location.search + (rest2 ? '#' + rest2 : ''));
+})();
+</script>
+<title>새봄 면학관 — 주소가 바뀌었습니다</title>
+</head>
+<body>
+<p>새봄 면학관 주소가 바뀌었습니다: <a href="https://saebom-admin.web.app/">https://saebom-admin.web.app/</a></p>
+</body>
+</html>
