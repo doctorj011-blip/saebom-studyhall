@@ -137,6 +137,7 @@ button.quiet{color:var(--muted)}
     <div class="badges">
       <span class="badge" id="b-speaker"></span>
       <span class="badge" id="b-sync"></span>
+      <span class="badge" id="b-auth"></span>
     </div>
   </div>
 
@@ -161,6 +162,7 @@ button.quiet{color:var(--muted)}
     <button class="primary" id="power">🔔 타종</button>
     <button id="speaker">🔇 이 기기에서 소리 내기</button>
     <button class="quiet" id="demo">실제 종소리 듣기</button>
+    <button class="quiet" id="register" style="display:none">🔑 이 기기 등록(설정 저장용)</button>
   </div>
 
   <div class="foot">
@@ -435,6 +437,13 @@ function paint() {
                  : sync.state === 'off' ? '⚠️ 원격 연결 안 됨 — 이 기기 설정으로만'
                  : '⏳ 원격 설정 연결 중…';
   by.className = 'badge' + (sync.state === 'on' ? ' good' : sync.state === 'off' ? ' warn' : '');
+  // 기기 등록(2026-10-12) — 설정을 서버에 저장하려면 키오스크와 같은 기기 등록이 필요하다. 종은 등록과 무관하게 울린다.
+  const ba = document.getElementById('b-auth');
+  ba.textContent = sync.authed ? '🔑 등록된 기기 — 설정 저장됨'
+                 : sync.hasToken ? '⏳ 기기 로그인 중…'
+                 : '⚠️ 등록 전 — 바꾼 설정은 이 컴퓨터에만 적용';
+  ba.className = 'badge' + (sync.authed ? ' good' : sync.hasToken ? '' : ' warn');
+  document.getElementById('register').style.display = sync.authed || sync.hasToken ? 'none' : '';
 
   const nx = document.getElementById('next');
   if (!CFG.on) { nx.textContent = '타종이 꺼져 있습니다'; nx.className = 'next off'; }
@@ -500,7 +509,7 @@ const FB = {
   messagingSenderId: "273169263882",
   appId: "1:273169263882:web:cb3c2abe45f76602d99ef3"
 };
-let sync = { state:'connecting', push:null };   // state: connecting | on | off
+let sync = { state:'connecting', push:null, authed:false, hasToken:false };   // state: connecting | on | off
 
 // 오프라인(로컬 파일로 띄운 면학관 메인컴이 인터넷이 끊긴 경우)에는 CDN 요청이 응답 없이
 // 오래 매달린다. 그동안 뱃지가 '연결 중…'에 멈춰 있으면 고장인지 아닌지 알 수가 없다.
@@ -510,10 +519,50 @@ setTimeout(() => { if (sync.state === 'connecting') { sync.state = 'off'; paint(
 (async () => {
   try {
     const V = 'https://www.gstatic.com/firebasejs/11.9.0/';
-    const [{ initializeApp }, fs] = await Promise.all([
-      import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js')
+    const [{ initializeApp }, fs, au] = await Promise.all([
+      import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js'), import(V + 'firebase-auth.js')
     ]);
-    const db = fs.getFirestore(initializeApp(FB));
+    const app = initializeApp(FB);
+    const db = fs.getFirestore(app);
+    // 설정 쓰기는 등록된 기기만(2026-10-12 보안 점검) — 키오스크와 같은 등록(authPassword kind:'kiosk')을 쓴다.
+    //   등록 토큰은 이 컴퓨터(전용 크롬 프로필)의 localStorage 에 두고, 열 때마다 Firebase 로그인 토큰으로 바꾼다.
+    const auth = au.initializeAuth(app, { persistence: au.inMemoryPersistence });
+    const FN = 'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/authPassword';
+    const TOKEN_KEY = 'saebom_kiosk_token';
+    const callAuth = async (data) => {
+      const r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }), signal: AbortSignal.timeout(10000) });
+      const j = await r.json().catch(() => null);
+      if (j && j.error) throw new Error(j.error.message || '요청 실패');
+      return j && j.result;
+    };
+    const signIn = async () => {
+      const token = localStorage.getItem(TOKEN_KEY);
+      sync.hasToken = !!token;
+      if (!token) { paint(); return false; }
+      try {
+        const r = await callAuth({ kind: 'kiosk', action: 'check', token });
+        if (r && r.fbToken) { await au.signInWithCustomToken(auth, r.fbToken); sync.authed = true; paint(); return true; }
+        if (r && r.valid === false) { localStorage.removeItem(TOKEN_KEY); sync.hasToken = false; }   // 등록이 무효가 됐다
+      } catch (e) { console.warn('기기 로그인 실패 — 1분 뒤 다시 시도합니다', e); }
+      paint();
+      return false;
+    };
+    if (!(await signIn())) {
+      const iv = setInterval(async () => { if (sync.authed || await signIn()) clearInterval(iv); }, 60000);
+    }
+    document.getElementById('register').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const pw = prompt('관리자 비밀번호를 입력하세요.\n이 컴퓨터를 타종 기기로 한 번만 등록합니다.');
+      if (!pw) return;
+      try {
+        const r = await callAuth({ kind: 'kiosk', action: 'register', password: pw });
+        if (!r || !r.token) throw new Error('등록 토큰을 받지 못했습니다');
+        localStorage.setItem(TOKEN_KEY, r.token);
+        if (await signIn()) alert('등록했습니다. 이제 바꾼 설정이 서버에 저장됩니다.');
+        else alert('등록은 됐지만 로그인에 실패했습니다. 잠시 뒤 다시 시도합니다.');
+      } catch (err) { alert('등록 실패: ' + err.message); }
+    });
     const ref = fs.doc(db, 'settings', 'bell_schedule');
 
     fs.onSnapshot(ref, snap => {
@@ -534,8 +583,11 @@ setTimeout(() => { if (sync.state === 'connecting') { sync.state = 'off'; paint(
       paint();
     });
 
-    sync.push = () => fs.setDoc(ref, Object.assign({}, CFG, { updatedAt: fs.serverTimestamp() }))
-      .catch(e => { console.warn('원격 설정 저장 실패', e); sync.state = 'off'; paint(); });
+    sync.push = () => {
+      if (!sync.authed) { paint(); return; }   // 등록 전 — 이 컴퓨터에만 적용(배지가 알려 준다)
+      return fs.setDoc(ref, Object.assign({}, CFG, { updatedAt: fs.serverTimestamp() }))
+        .catch(e => { console.warn('원격 설정 저장 실패', e); sync.state = 'off'; paint(); });
+    };
   } catch (e) {
     // CDN 차단·오프라인 등 — 원격 없이도 이 기기 설정만으로 정상 동작한다
     console.warn('원격 설정을 쓸 수 없습니다 — 이 기기 설정으로만 동작합니다', e);
