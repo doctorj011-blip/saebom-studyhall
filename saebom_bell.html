@@ -174,6 +174,9 @@ button.quiet{color:var(--muted)}
   </div>
 </div>
 
+<!-- 학원(Firebase 프로젝트) 선택 — 관리웹 안(iframe)이나 호스팅 주소로 열 때만 있다. 로컬 파일 설치본은
+     이 파일이 없어도 아래 면학관 값으로 돈다(2026-10-16 여러 학원). -->
+<script src="saebom-common.js"></script>
 <script>
 'use strict';
 
@@ -428,6 +431,8 @@ function paint() {
   // 잠김 경고는 소리를 낼 기기에서만 의미가 있다 — 폰에서 설정만 볼 때 빨간 줄이 뜨면 잔소리다
   const locked = SPEAKER && (!ctx || ctx.state !== 'running');
   document.getElementById('lock').classList.toggle('show', locked);
+  // 관리웹 안에 숨겨 띄웠을 때(2026-10-16) — 빨간 줄이 안 보이므로 관리웹이 대신 알린다.
+  if (window.parent !== window) { try { window.parent.postMessage({ saebomBellLocked: locked }, location.origin); } catch (_) {} }
 
   const bs = document.getElementById('b-speaker');
   bs.textContent = SPEAKER ? '🔊 이 기기에서 소리 남' : '🔇 이 기기는 설정만 — 소리 안 남';
@@ -522,12 +527,12 @@ setTimeout(() => { if (sync.state === 'connecting') { sync.state = 'off'; paint(
     const [{ initializeApp }, fs, au] = await Promise.all([
       import(V + 'firebase-app.js'), import(V + 'firebase-firestore.js'), import(V + 'firebase-auth.js')
     ]);
-    const app = initializeApp(FB);
+    const app = initializeApp(window.SAEBOM_FIREBASE || FB);
     const db = fs.getFirestore(app);
     // 설정 쓰기는 등록된 기기만(2026-10-12 보안 점검) — 키오스크와 같은 등록(authPassword kind:'kiosk')을 쓴다.
     //   등록 토큰은 이 컴퓨터(전용 크롬 프로필)의 localStorage 에 두고, 열 때마다 Firebase 로그인 토큰으로 바꾼다.
     const auth = au.initializeAuth(app, { persistence: au.inMemoryPersistence });
-    const FN = 'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/authPassword';
+    const FN = window.SAEBOM_FN ? window.SAEBOM_FN('authPassword') : 'https://asia-northeast3-saebom-studyhall.cloudfunctions.net/authPassword';
     const TOKEN_KEY = 'saebom_kiosk_token';
     const callAuth = async (data) => {
       const r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json' },
