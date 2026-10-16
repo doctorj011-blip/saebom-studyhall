@@ -386,10 +386,18 @@ function dropStaleArmed() {
   }
 }
 
+// 같은 기기·같은 주소에서 타종이 여러 개 열려도(관리웹 탭 여러 개) 한 곳만 울린다(2026-10-16).
+// 브라우저 잠금(Web Locks)을 먼저 잡은 쪽이 울리고, 그 탭이 닫히면 다음 탭이 이어받는다.
+let RING_OWNER = !navigator.locks;   // 잠금을 모르는 옛 브라우저는 예전처럼 울린다
+if (navigator.locks) navigator.locks.request('saebom-bell-speaker', () => {
+  RING_OWNER = true; paint();
+  return new Promise(() => {});      // 이 페이지가 닫힐 때까지 쥐고 있는다
+});
+
 function tick() {
   const ms = Date.now(), prev = lastCheck;
   lastCheck = ms;
-  if (!SPEAKER || !CFG.on) return;   // 스피커로 지정되지 않은 기기는 설정만 바꾼다
+  if (!SPEAKER || !CFG.on || !RING_OWNER) return;   // 스피커로 지정되지 않은 기기는 설정만 바꾼다
   dropStaleArmed();
   // 🔴 오디오가 잠겨 있으면(빨간 줄이 뜬 상태) 아무것도 예약하지 않는다.
   //    예약하면 '걸어 뒀다'고 기록만 되고 실제로는 울리지 않다가, 나중에 사람이 잠금을
@@ -429,13 +437,14 @@ function paint() {
     `${d.getMonth()+1}월 ${d.getDate()}일 ${DOW[d.getDay()]}요일`;
 
   // 잠김 경고는 소리를 낼 기기에서만 의미가 있다 — 폰에서 설정만 볼 때 빨간 줄이 뜨면 잔소리다
-  const locked = SPEAKER && (!ctx || ctx.state !== 'running');
+  const locked = SPEAKER && RING_OWNER && (!ctx || ctx.state !== 'running');   // 울리지 않는 탭은 잠김을 알릴 필요가 없다
   document.getElementById('lock').classList.toggle('show', locked);
   // 관리웹 안에 숨겨 띄웠을 때(2026-10-16) — 빨간 줄이 안 보이므로 관리웹이 대신 알린다.
   if (window.parent !== window) { try { window.parent.postMessage({ saebomBellLocked: locked }, location.origin); } catch (_) {} }
 
   const bs = document.getElementById('b-speaker');
-  bs.textContent = SPEAKER ? '🔊 이 기기에서 소리 남' : '🔇 이 기기는 설정만 — 소리 안 남';
+  bs.textContent = !SPEAKER ? '🔇 이 기기는 설정만 — 소리 안 남'
+                 : RING_OWNER ? '🔊 이 기기에서 소리 남' : '🔊 이 기기의 다른 탭에서 소리 남';
   bs.className = 'badge' + (SPEAKER ? ' good' : '');
   const by = document.getElementById('b-sync');
   by.textContent = sync.state === 'on' ? '☁️ 원격 설정 연결됨'
