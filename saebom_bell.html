@@ -679,9 +679,10 @@ $('demo').onclick = () => {
 // 화면 아무 데나 눌러도 소리가 깨어나게 — 잠긴 줄 모르고 헤매지 않도록.
 // 소리를 안 내는 기기(폰)에서는 오디오를 깨울 이유가 없다.
 $('lock').onclick = () => { audio(); blip(); paint(); };
-document.addEventListener('click', () => {
-  if (SPEAKER && (!ctx || ctx.state !== 'running')) { audio(); paint(); }
-});
+const wake = () => { if (SPEAKER && (!ctx || ctx.state !== 'running')) { audio(); paint(); } };
+document.addEventListener('click', wake);
+// 관리웹 안(iframe)에 띄웠을 때 관리웹이 부른다(2026-10-16) — 로그인·화면 클릭 한 번으로 소리가 풀린다. 확인음은 안 낸다.
+window.saebomBellWake = wake;
 
 // 초기화
 $('tone').innerHTML = Object.entries(TONES).map(([k,t]) => `<option value="${k}">${t.label}</option>`).join('');
